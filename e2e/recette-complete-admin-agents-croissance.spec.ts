@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { simulerEtablissement, ids, preuve, stabiliserLectures } from './helpers/recette-complete-etablissement';
 
-// Réponses backend simulées : aucun brouillon réel, aucun email, aucun CRM réel.
+// Réponses backend simulées : aucun brouillon réel, aucun email, aucun appel, aucun CRM réel.
 // Le serveur simulé garde l'état des brouillons pour prouver la reprise après rechargement.
 
 type Statut = 'BROUILLON' | 'VALIDE' | 'REJETE' | 'ENVOYE' | 'EXPIRE';
@@ -43,6 +43,45 @@ function fixtures(): Brouillon[] {
   ];
 }
 
+const SCRIPT_APPEL = [
+  'Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui organise les remplacements de soignants ?',
+  'Jolene est une plateforme de mise en relation directe entre les établissements de santé et des soignants vérifiés, pour des missions et remplacements ponctuels.',
+  'Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne.',
+  'Jolene facture à l\'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez.',
+  'Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ?',
+  'Je vous appelle au numéro de votre établissement, publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.',
+].join('\n\n');
+
+const ID_APPEL = '99110000-0000-4000-8000-000000000011';
+const ID_APPEL_OPPOSITION = '99110000-0000-4000-8000-000000000012';
+const ID_APPEL_STOP = '99110000-0000-4000-8000-000000000013';
+const ID_APPEL_ENTRE_TEMPS = '99110000-0000-4000-8000-000000000014';
+const ID_APPEL_CONSTAT = '99110000-0000-4000-8000-000000000015';
+const SOURCE_NUMERO = 'Annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé)';
+
+function fichesAppel(): Brouillon[] {
+  const fiche = { ...base, agent: 'APPEL_ETABLISSEMENT', canal: 'TELEPHONE', cible_type: 'PROSPECT_ETABLISSEMENT', destinataire_email: null, corps: SCRIPT_APPEL, statut: 'BROUILLON' as Statut, cree_le: '2026-11-24T05:50:00Z', expire_le: '2026-12-08T05:50:00Z' };
+  return [
+    { ...fiche, id: ID_APPEL, cible_id: '750000011', destinataire_nom: 'EHPAD Les Glycines — recette', departement: '75', score: 40,
+      contexte: { type_etablissement: 'EHPAD', ville: 'Paris', telephone: '01 00 00 10 01', source: SOURCE_NUMERO, semaine: '2026-S48', score: { type: 40, signal_boamp_90j: 0, tension_bmo_as: 0 } } },
+    { ...fiche, id: ID_APPEL_OPPOSITION, cible_id: '920000012', destinataire_nom: 'Hôpital Opposition — recette', departement: '92', score: 35,
+      contexte: { type_etablissement: 'HOPITAL', ville: 'Nanterre', telephone: '01 00 00 10 02', semaine: '2026-S48', score: { type: 35, signal_boamp_90j: 0, tension_bmo_as: 0 } } },
+    { ...fiche, id: ID_APPEL_STOP, cible_id: '560000013', destinataire_nom: 'SSIAD du Port — recette', departement: '56', score: 25,
+      contexte: { type_etablissement: 'DOMICILE', ville: 'Lorient', telephone: '02.00.00.10.03', source: SOURCE_NUMERO, semaine: '2026-S48', score: { type: 25, signal_boamp_90j: 0, tension_bmo_as: 0 } } },
+    { ...fiche, id: ID_APPEL_ENTRE_TEMPS, cible_id: '750000014', destinataire_nom: 'Clinique Entre-temps — recette', departement: '75', score: 35,
+      contexte: { type_etablissement: 'HOPITAL', ville: 'Paris', telephone: '01 00 00 10 04', source: SOURCE_NUMERO, semaine: '2026-S48', score: { type: 35, signal_boamp_90j: 0, tension_bmo_as: 0 } } },
+    { ...fiche, id: ID_APPEL_CONSTAT, cible_id: '920000015', destinataire_nom: 'EHPAD Constat — recette', departement: '92', score: 40,
+      contexte: { type_etablissement: 'EHPAD', ville: 'Antony', telephone: '01 00 00 10 05', source: SOURCE_NUMERO, semaine: '2026-S48', score: { type: 40, signal_boamp_90j: 0, tension_bmo_as: 0 } } },
+  ];
+}
+
+// Constat de production du 20/11/2026 (lecture seule) : aucune adresse utilisable, 2 017 téléphones.
+const cibles = {
+  departements: ['56', '75', '92'], etablissements_cibles: 2318, adresses_fermees: 656,
+  adresses_utilisables: 0, adresses_restantes: 0, telephones_utilisables: 2017, telephones_restants: 2017,
+};
+const RESULTATS_APPEL = ['APPEL_REPONDU', 'SANS_REPONSE', 'INTERESSE', 'A_RAPPELER', 'PAS_INTERESSE', 'STOP'];
+
 const entonnoir = {
   periode: { debut: '2026-11-01T11:00:00Z', fin: '2026-11-08T11:00:00Z' }, genere_le: '2026-11-08T11:00:00Z', cohorte: 'REELLE',
   soignants: { inscrits_total: 2, inscrits_periode: 0, avec_document: 1, documents_valides: 1, onboarding_termine: 0, ayant_candidate: 0, ayant_realise_mission: 0, actifs_periode: 0 },
@@ -53,13 +92,19 @@ const entonnoir = {
   sources_inscriptions_periode: {}, exclus_cohorte_test: { soignants_test: 1100, etablissements_test: 917 },
 };
 
-async function simulerAgents(page: Page) {
+async function simulerAgents(page: Page, { appels = false }: { appels?: boolean } = {}) {
   const { etat } = await simulerEtablissement(page);
   etat.overrides.set('fn_get_my_role', { role: 'ADMIN_PLATEFORME' });
   etat.overrides.set('fn_admin_mes_acces', { acces_total: true, groupes: [] });
-  const brouillons = fixtures();
+  const brouillons = appels ? fichesAppel() : fixtures();
   const decisions: Array<{ p_id: string; p_action: string; p_sujet: string | null }> = [];
-  let executions: Array<Record<string, unknown>> = [];
+  const resultats: Array<{ p_id: string; p_motif: string | null }> = [];
+  // Passage automatique du matin : l'agent email ne prépare rien et le dit, l'agent d'appels a préparé trois fiches.
+  let executions: Array<Record<string, unknown>> = appels ? [
+    { id: 11, agent: 'APPEL_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:01Z', brouillons_crees: 5, erreur: null, details: { brouillons_crees: 5, fiches_appel: 5, places_de_la_semaine: 30, places_non_pourvues: 25, quota_semaine: 30, fiches_de_la_semaine: 5, file_max: 60, fiches_en_file: 5, candidats_examines: 8, exclus_stop: 2, numeros_deja_en_file: 1 } },
+    { id: 10, agent: 'PROSPECTION_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:00Z', brouillons_crees: 0, erreur: null, details: { premiers_contacts: 0, places_du_jour: 20, places_non_pourvues: 20, cibles } },
+  ] : [];
+  const rapports = appels ? [{ semaine_debut: '2026-11-16', donnees: { ...entonnoir, prospection: { ...entonnoir.prospection, fiches_appel_notees_periode: 2, cibles_agent: cibles } } }] : [];
   let lancements = 0;
   let planifActive = false;
   const bascules: Array<boolean | null> = [];
@@ -75,8 +120,16 @@ async function simulerAgents(page: Page) {
     const rows = brouillons.filter((b) => statuts.includes(b.statut) && (!agent || b.agent === agent));
     return route.fulfill({ json: rows, headers: { ...cors, 'content-range': rows.length ? `0-${rows.length - 1}/${rows.length}` : '*/0' } });
   });
-  await page.route('**/rest/v1/growth_rapports_hebdo**', (route) => route.fulfill({ json: [], headers: { ...cors, 'content-range': '*/0' } }));
-  await page.route('**/rest/v1/growth_agent_executions**', (route) => route.fulfill({ json: executions, headers: cors }));
+  await page.route('**/rest/v1/growth_rapports_hebdo**', (route) => route.fulfill({ json: rapports, headers: { ...cors, 'content-range': rapports.length ? `0-${rapports.length - 1}/${rapports.length}` : '*/0' } }));
+  await page.route('**/rest/v1/growth_agent_executions**', (route) => {
+    // Mêmes filtres que PostgREST : agent, exécutions sans erreur, limite (lignes déjà triées du plus récent au plus ancien).
+    const url = new URL(route.request().url());
+    const agent = url.searchParams.get('agent')?.replace(/^eq\./, '');
+    const sansErreur = url.searchParams.get('erreur') === 'is.null';
+    const limite = Number(url.searchParams.get('limit') ?? '100');
+    const rows = executions.filter((e) => (!agent || e.agent === agent) && (!sansErreur || e.erreur === null)).slice(0, limite);
+    return route.fulfill({ json: rows, headers: cors });
+  });
   await page.route('**/rest/v1/rpc/fn_admin_growth_entonnoir', async (route) => {
     expect(route.request().postDataJSON()).toEqual({ p_jours: 7 });
     return route.fulfill({ json: entonnoir, headers: cors });
@@ -90,17 +143,44 @@ async function simulerAgents(page: Page) {
   });
   await page.route('**/rest/v1/rpc/fn_admin_growth_executer_agents', async (route) => {
     lancements++;
-    executions = ['PROSPECTION_ETABLISSEMENT', 'POST_SOCIAL', 'MISSION_A_POURVOIR', 'REACTIVATION'].map((agent, i) => ({
+    executions = ['PROSPECTION_ETABLISSEMENT', 'APPEL_ETABLISSEMENT', 'POST_SOCIAL', 'MISSION_A_POURVOIR', 'REACTIVATION'].map((agent, i) => ({
       id: i + 1, agent, declencheur: 'ADMIN', debut_le: '2026-11-08T11:05:00Z', brouillons_crees: agent === 'PROSPECTION_ETABLISSEMENT' ? 20 : agent === 'POST_SOCIAL' ? 7 : 0, erreur: null,
     }));
     return route.fulfill({ json: { declencheur: 'ADMIN', expires: 0, agents: {
-      PROSPECTION_ETABLISSEMENT: { brouillons_crees: 20 }, POST_SOCIAL: { brouillons_crees: 7 },
+      PROSPECTION_ETABLISSEMENT: { brouillons_crees: 20 }, APPEL_ETABLISSEMENT: { brouillons_crees: 0 }, POST_SOCIAL: { brouillons_crees: 7 },
       MISSION_A_POURVOIR: { brouillons_crees: 0 }, REACTIVATION: { brouillons_crees: 0 } } }, headers: cors });
   });
   await page.route('**/rest/v1/rpc/fn_admin_growth_brouillon_decider', async (route) => {
     const p = route.request().postDataJSON();
     decisions.push({ p_id: p.p_id, p_action: p.p_action, p_sujet: p.p_sujet });
     const b = brouillons.find((x) => x.id === p.p_id)!;
+    if (b.canal === 'TELEPHONE') {
+      // Fiche d'appel, comme le décideur SQL : VALIDER est rejouable et revérifie tout à chaque demande d'appel ;
+      // le résultat est exigé au constat ; un résultat ordinaire sur une cible passée en opposition est refusé au CRM.
+      if (p.p_action === 'VALIDER') {
+        const dejaValidee = b.statut === 'VALIDE';
+        if (b.id === ID_APPEL_OPPOSITION || (b.id === ID_APPEL_ENTRE_TEMPS && dejaValidee)) {
+          b.statut = 'REJETE'; b.motif_rejet = 'Opposition (STOP) ou contact perdu';
+          return route.fulfill({ json: { success: false, id: b.id, statut: 'REJETE', raison: 'Contact en opposition (STOP) ou perdu : ne pas appeler' }, headers: cors });
+        }
+        // Numéro modifié dans l'annuaire entre la validation et l'appel : la fiche le suit.
+        if (b.id === ID_APPEL_STOP && dejaValidee) b.contexte = { ...b.contexte, telephone: '02 00 00 10 99' };
+        b.statut = 'VALIDE'; b.valide_le = '2026-11-24T09:10:00Z';
+        return route.fulfill({ json: { success: true, id: b.id, statut: 'VALIDE', contact_crm_id: null, telephone: b.contexte.telephone }, headers: cors });
+      }
+      if (p.p_action === 'MARQUER_ENVOYE') {
+        resultats.push({ p_id: p.p_id, p_motif: p.p_motif });
+        if (b.statut !== 'VALIDE' || !RESULTATS_APPEL.includes(p.p_motif)) {
+          return route.fulfill({ status: 400, json: { code: 'P0001', message: 'Résultat d\'appel requis : APPEL_REPONDU, SANS_REPONSE, INTERESSE, A_RAPPELER, PAS_INTERESSE ou STOP' }, headers: cors });
+        }
+        if (b.id === ID_APPEL_CONSTAT) {
+          b.statut = 'REJETE'; b.motif_rejet = 'Opposition (STOP) ou contact perdu'; b.contexte = { ...b.contexte, resultat_appel: p.p_motif };
+          return route.fulfill({ json: { success: false, id: b.id, statut: 'REJETE', raison: 'Contact en opposition (STOP) ou perdu : appel non enregistré au CRM' }, headers: cors });
+        }
+        b.statut = 'ENVOYE'; b.envoye_le = '2026-11-24T09:12:00Z'; b.contexte = { ...b.contexte, resultat_appel: p.p_motif };
+        return route.fulfill({ json: { success: true, id: b.id, statut: 'ENVOYE', contact_crm_id: '99110000-0000-4000-8000-0000000000c2' }, headers: cors });
+      }
+    }
     if (p.p_action === 'VALIDER' && b.destinataire_email?.startsWith('rh@centre-opposition')) {
       b.statut = 'REJETE'; b.motif_rejet = 'Opposition (STOP) ou contact perdu';
       return route.fulfill({ json: { success: false, id: b.id, statut: 'REJETE', raison: 'Contact en opposition (STOP) ou perdu : aucun envoi possible' }, headers: cors });
@@ -120,7 +200,7 @@ async function simulerAgents(page: Page) {
     (window as unknown as { __ouverts: string[] }).__ouverts = [];
     window.open = ((url?: string | URL) => { (window as unknown as { __ouverts: string[] }).__ouverts.push(String(url)); return null; }) as typeof window.open;
   }, { id: ids.user });
-  return { etat, brouillons, decisions, lancements: () => lancements, bascules };
+  return { etat, brouillons, decisions, resultats, lancements: () => lancements, bascules };
 }
 
 test('admin — agents de croissance : file, validation Gmail, constat d’envoi, opposition, reprise, entonnoir', async ({ page }, info) => {
@@ -203,7 +283,7 @@ test('admin — agents de croissance : file, validation Gmail, constat d’envoi
   await page.getByRole('tab', { name: 'Agents' }).click();
   const planification = page.getByTestId('planification-croissance');
   await expect(planification.getByText('En pause', { exact: true })).toBeVisible();
-  await expect(page.getByText('Dernier passage : aucun pour l’instant')).toHaveCount(4);
+  await expect(page.getByText('Dernier passage : aucun pour l’instant')).toHaveCount(5);
   await planification.getByRole('button', { name: 'Activer la préparation automatique' }).click();
   await expect(planification.getByText('Activée', { exact: true })).toBeVisible();
   await expect(planification.getByRole('button', { name: 'Mettre en pause' })).toBeVisible();
@@ -212,13 +292,205 @@ test('admin — agents de croissance : file, validation Gmail, constat d’envoi
   await page.getByRole('button', { name: 'Préparer maintenant' }).click();
   await expect(page.getByText('27 nouveau(x) brouillon(s). Rien n’a été envoyé.')).toBeVisible();
   await expect(page.getByText(/Dernier passage : .*\(manuel\) · 20 brouillon\(s\)/)).toBeVisible();
-  await expect(page.getByText('Brouillons seulement', { exact: true })).toHaveCount(4);
+  await expect(page.getByText('Brouillons seulement', { exact: true })).toHaveCount(5);
+  // Sans décompte dans le dernier passage, aucun avertissement n'est inventé.
+  await expect(page.getByTestId('alerte-cibles-prospection')).toHaveCount(0);
   expect(sim.lancements()).toBe(1);
   await preuve(page, 'agents-croissance-agents', info);
 
   // Aucune écriture hors des trois RPC prévues, aucune requête externe.
   expect(sim.decisions.map((d) => d.p_action)).toEqual(['VALIDER', 'VALIDER', 'MARQUER_ENVOYE']);
   expect(sim.bascules).toEqual([null, true, null, null]);
+  expect(sim.etat.ecritures).toEqual([]);
+  expect(sim.etat.inconnues).toEqual([]);
+  expect(sim.etat.erreurs).toEqual([]);
+});
+
+test('admin — zéro visible et liste d’appels : avertissement, fiche, appel revérifié, résultat, oppositions, reprise', async ({ page }, info) => {
+  const sim = await simulerAgents(page, { appels: true });
+  await page.goto('/admin/fondateur/agents');
+  // Les deux formats de référence de la recette : iPhone 390 × 844 et ordinateur 1440 × 900.
+  if (info.project.name === 'iphone') expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+  if (info.project.name === 'ordinateur') expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
+  const sansDebordement = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const ouverts = () => page.evaluate(() => (window as unknown as { __ouverts: string[] }).__ouverts);
+
+  // État 1 — le zéro n'est plus muet : avertissement en haut de page, dès l'arrivée.
+  await expect(page.getByRole('heading', { name: 'Agents de croissance', exact: true })).toBeVisible();
+  await expect(page.getByText(/Aucun envoi automatique\. Chaque email reste un brouillon jusqu’à votre validation, aucun appel n’est passé à votre place/)).toBeVisible();
+  const alerte = page.getByTestId('alerte-cibles-prospection');
+  await expect(alerte).toHaveAttribute('role', 'status');
+  await expect(alerte.getByText('Prospection par email à l’arrêt', { exact: true })).toBeVisible();
+  await expect(alerte).toContainText(/Aucune adresse utilisable parmi les 2\s318 établissements ciblés \(56, 75, 92\)\. 656 ont une adresse, toutes en messagerie de santé fermée \(MSSanté, Apicrypt\), où un email envoyé depuis Gmail est rejeté\. 2\s017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements »\./);
+  await expect(alerte.getByText('Constat du dernier passage de l’agent, le 24/11/2026 06:50.', { exact: true })).toBeVisible();
+  const cartes = page.getByTestId('brouillon-croissance');
+  await expect(cartes).toHaveCount(5);
+  await sansDebordement();
+  await preuve(page, 'agents-appels-avertissement', info);
+
+  // État 2 — filtre « email » : la file vide s'explique.
+  await page.getByRole('group', { name: 'Filtrer par agent' }).getByRole('button', { name: 'Prospection établissements' }).click();
+  await expect(page.getByText('Aucun email à valider : aucune adresse utilisable parmi les établissements ciblés (voir l’avertissement en haut de page).', { exact: true })).toBeVisible();
+  await expect(cartes).toHaveCount(0);
+
+  // État 3 — de l'avertissement aux fiches d'appel : numéro, origine, raisons, script ; aucun moyen d'appeler avant validation.
+  await alerte.getByRole('button', { name: 'Voir les fiches d’appel' }).click();
+  await expect(page.getByRole('group', { name: 'Filtrer par agent' }).getByRole('button', { name: 'Appels établissements (5)' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(cartes).toHaveCount(5);
+  const glycines = cartes.filter({ hasText: 'EHPAD Les Glycines — recette' });
+  await expect(glycines.getByText('Appels établissements', { exact: true })).toBeVisible();
+  await expect(glycines.getByText('Téléphone', { exact: true })).toBeVisible();
+  await expect(glycines.getByText('À valider', { exact: true })).toBeVisible();
+  await expect(glycines.getByText('Téléphone : 01 00 00 10 01', { exact: true })).toBeVisible();
+  await expect(glycines.getByText('Source du numéro : Annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé)', { exact: true })).toBeVisible();
+  await expect(glycines.getByText('Pourquoi : EHPAD · Paris · dépt 75', { exact: true })).toBeVisible();
+  await expect(glycines.getByLabel('Script d’appel')).toHaveValue(/Jolene facture à l'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée[\s\S]*Jolene ne vous rappellera plus\.$/);
+  await expect(glycines.getByLabel('Objet')).toHaveCount(0);
+  await expect(glycines.getByText(/Étape/)).toHaveCount(0);
+  await expect(glycines.getByRole('link')).toHaveCount(0);
+  await expect(glycines.getByRole('button', { name: /^Appeler/ })).toHaveCount(0);
+  await expect(glycines.getByRole('group', { name: 'Résultat de l’appel' })).toHaveCount(0);
+  await expect(glycines.getByRole('button', { name: 'Valider la fiche' })).toBeEnabled();
+  await expect(glycines.getByRole('button', { name: 'Ne pas appeler' })).toBeEnabled();
+  await sansDebordement();
+  await preuve(page, 'agents-appels-file', info);
+
+  // État 4 — validation : rien n'est composé ni ouvert. « Appeler » revérifie la fiche côté serveur,
+  // puis ouvre le composeur ; le lien direct n'apparaît qu'après cette revérification.
+  await glycines.getByRole('button', { name: 'Valider la fiche' }).click();
+  await expect(page.getByText('Fiche validée. Appelez, puis notez le résultat de l’appel.')).toBeVisible();
+  await expect(glycines.getByText('Validée, à appeler', { exact: true })).toBeVisible();
+  const resultat = glycines.getByRole('group', { name: 'Résultat de l’appel' });
+  await expect(resultat.getByRole('button')).toHaveText(['A répondu', 'Sans réponse', 'Intéressé', 'À rappeler', 'Pas intéressé', 'STOP']);
+  await expect(glycines.getByRole('button', { name: 'Valider la fiche' })).toHaveCount(0);
+  await expect(glycines.getByRole('link')).toHaveCount(0);
+  await expect(glycines.getByText('Cliquez sur « Appeler » avant chaque appel, même si vous composez le numéro vous-même : la fiche est revérifiée à ce moment-là.', { exact: true })).toBeVisible();
+  await expect(glycines.getByLabel('Script d’appel')).toHaveValue(/publié dans les annuaires publics des établissements de santé \(répertoire FINESS et Annuaire Santé\)\. Si vous préférez ne pas être rappelé/);
+  expect(await ouverts()).toEqual([]);
+  expect(sim.decisions).toEqual([{ p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: '' }]);
+  await glycines.getByRole('button', { name: 'Appeler le 01 00 00 10 01' }).click();
+  await expect(glycines.getByText(/Fiche revérifiée à l’instant\. Si l’appel ne s’est pas lancé :/)).toBeVisible();
+  await expect(glycines.getByRole('link', { name: 'composer le 01 00 00 10 01' })).toHaveAttribute('href', 'tel:0100001001');
+  expect(await ouverts()).toEqual(['tel:0100001001']);
+  // La revérification avant appel ne renvoie pas le texte : elle ne peut pas écraser un script modifié ailleurs.
+  expect(sim.decisions).toEqual([{ p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: '' }, { p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: null }]);
+  expect(sim.resultats).toEqual([]);
+  await sansDebordement();
+  await preuve(page, 'agents-appels-validee', info);
+
+  // État 5 — opposition arrivée avant la validation : la fiche est refusée et quitte la file.
+  const opposition = cartes.filter({ hasText: 'Hôpital Opposition — recette' });
+  await opposition.getByRole('button', { name: 'Valider la fiche' }).click();
+  await expect(page.getByText('Contact en opposition (STOP) ou perdu : ne pas appeler').first()).toBeVisible();
+  await expect(cartes.filter({ hasText: 'Hôpital Opposition — recette' })).toHaveCount(0);
+  await expect(cartes).toHaveCount(4);
+
+  // État 6 — opposition arrivée ENTRE la validation et l'appel : « Appeler » la voit, aucun appel n'est lancé.
+  const entreTemps = cartes.filter({ hasText: 'Clinique Entre-temps — recette' });
+  await entreTemps.getByRole('button', { name: 'Valider la fiche' }).click();
+  await expect(entreTemps.getByText('Validée, à appeler', { exact: true })).toBeVisible();
+  await entreTemps.getByRole('button', { name: 'Appeler le 01 00 00 10 04' }).click();
+  await expect(cartes.filter({ hasText: 'Clinique Entre-temps — recette' })).toHaveCount(0);
+  await expect(cartes).toHaveCount(3);
+  expect(await ouverts()).toEqual(['tel:0100001001']);
+
+  // État 7 — appel noté « sans réponse » : la fiche sort de la file, la suite est au CRM.
+  await resultat.getByRole('button', { name: 'Sans réponse' }).click();
+  await expect(page.getByText('Appel noté dans le CRM. La suite est dans Prospects, « Actions du jour ».')).toBeVisible();
+  await expect(cartes.filter({ hasText: 'EHPAD Les Glycines — recette' })).toHaveCount(0);
+  expect(sim.resultats).toEqual([{ p_id: ID_APPEL, p_motif: 'SANS_REPONSE' }]);
+
+  // État 8 — opposition arrivée pendant l'appel : le résultat n'entre pas au CRM, le serveur le dit, la fiche le garde.
+  const constat = cartes.filter({ hasText: 'EHPAD Constat — recette' });
+  await constat.getByRole('button', { name: 'Valider la fiche' }).click();
+  await constat.getByRole('button', { name: 'Appeler le 01 00 00 10 05' }).click();
+  await expect(constat.getByRole('link', { name: 'composer le 01 00 00 10 05' })).toHaveAttribute('href', 'tel:0100001005');
+  await constat.getByRole('group', { name: 'Résultat de l’appel' }).getByRole('button', { name: 'A répondu' }).click();
+  await expect(page.getByText('Contact en opposition (STOP) ou perdu : appel non enregistré au CRM')).toBeVisible();
+  await expect(cartes.filter({ hasText: 'EHPAD Constat — recette' })).toHaveCount(0);
+  await expect(cartes).toHaveCount(1);
+
+  // État 9 — numéro modifié dans l'annuaire : le composeur prend le numéro revérifié. Puis STOP :
+  // confirmation explicite ; un refus de la confirmation ne note rien, un accord est définitif.
+  const ssiad = cartes.filter({ hasText: 'SSIAD du Port — recette' });
+  await expect(ssiad.getByText('Téléphone : 02.00.00.10.03', { exact: true })).toBeVisible();
+  await ssiad.getByRole('button', { name: 'Valider la fiche' }).click();
+  await ssiad.getByRole('button', { name: 'Appeler le 02.00.00.10.03' }).click();
+  await expect(ssiad.getByText('Téléphone : 02 00 00 10 99', { exact: true })).toBeVisible();
+  await expect(ssiad.getByRole('link', { name: 'composer le 02 00 00 10 99' })).toHaveAttribute('href', 'tel:0200001099');
+  expect(await ouverts()).toEqual(['tel:0100001001', 'tel:0100001005', 'tel:0200001099']);
+  const messages: string[] = [];
+  page.once('dialog', (d) => { messages.push(d.message()); void d.dismiss(); });
+  await ssiad.getByRole('group', { name: 'Résultat de l’appel' }).getByRole('button', { name: 'STOP' }).click();
+  await expect.poll(() => messages.length).toBe(1);
+  expect(messages[0]).toBe('STOP : ne plus jamais solliciter SSIAD du Port — recette, par téléphone comme par email ?');
+  expect(sim.resultats).toHaveLength(2);
+  await expect(ssiad.getByText('Validée, à appeler', { exact: true })).toBeVisible();
+  page.once('dialog', (d) => { messages.push(d.message()); void d.accept(); });
+  await ssiad.getByRole('group', { name: 'Résultat de l’appel' }).getByRole('button', { name: 'STOP' }).click();
+  await expect(page.getByText('Appel noté. Cet établissement ne sera plus sollicité.')).toBeVisible();
+  await expect(cartes).toHaveCount(0);
+  await expect(page.getByText('Aucun brouillon en attente. Les agents passent chaque matin vers 6 h 50, ou cliquez sur « Préparer maintenant ».', { exact: true })).toBeVisible();
+  expect(sim.resultats).toEqual([
+    { p_id: ID_APPEL, p_motif: 'SANS_REPONSE' }, { p_id: ID_APPEL_CONSTAT, p_motif: 'APPEL_REPONDU' }, { p_id: ID_APPEL_STOP, p_motif: 'STOP' },
+  ]);
+
+  // Reprise après rechargement : l'avertissement et l'historique viennent du serveur ; plus aucun moyen d'appeler.
+  await stabiliserLectures(page); await page.reload();
+  await expect(page.getByTestId('alerte-cibles-prospection').getByText('Prospection par email à l’arrêt', { exact: true })).toBeVisible();
+  await expect(cartes).toHaveCount(0);
+  await page.getByRole('button', { name: 'Voir l’historique' }).click();
+  await expect(cartes).toHaveCount(5);
+  const note = cartes.filter({ hasText: 'EHPAD Les Glycines — recette' });
+  await expect(note.getByText('Appel noté', { exact: true })).toBeVisible();
+  await expect(note.getByText('Résultat de l’appel : Sans réponse', { exact: true })).toBeVisible();
+  await expect(note.getByLabel('Script d’appel')).toBeDisabled();
+  await expect(note.getByRole('button')).toHaveCount(0);
+  await expect(note.getByRole('link')).toHaveCount(0);
+  for (const nom of ['Hôpital Opposition — recette', 'Clinique Entre-temps — recette']) {
+    const rejetee = cartes.filter({ hasText: nom });
+    await expect(rejetee.getByText('Rejeté', { exact: true })).toBeVisible();
+    await expect(rejetee.getByText('Motif : Opposition (STOP) ou contact perdu', { exact: true })).toBeVisible();
+    await expect(rejetee.getByRole('button')).toHaveCount(0);
+    await expect(rejetee.getByRole('link')).toHaveCount(0);
+  }
+  const refuse = cartes.filter({ hasText: 'EHPAD Constat — recette' });
+  await expect(refuse.getByText('Motif : Opposition (STOP) ou contact perdu', { exact: true })).toBeVisible();
+  await expect(refuse.getByText('Résultat de l’appel : A répondu', { exact: true })).toBeVisible();
+  const stoppe = cartes.filter({ hasText: 'SSIAD du Port — recette' });
+  await expect(stoppe.getByText('Résultat de l’appel : STOP', { exact: true })).toBeVisible();
+  await expect(stoppe.getByText('Téléphone : 02 00 00 10 99', { exact: true })).toBeVisible();
+  await sansDebordement();
+  await preuve(page, 'agents-appels-historique', info);
+
+  // État 10 — onglet Agents : chaque agent explique son dernier passage (plus de cible email, liste d'appels épuisée).
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  await expect(page.getByText('Aucune cible joignable', { exact: true })).toHaveCount(1);
+  await expect(page.getByTestId('cibles-prospection')).toHaveText(/^Cibles : 2\s318 établissements ciblés · 0 adresse utilisable · 656 en messagerie fermée · 2\s017 téléphones$/);
+  await expect(page.getByText('Liste épuisée', { exact: true })).toHaveCount(1);
+  await expect(page.getByTestId('passage-appels')).toHaveText('30 places restaient sur 30 cette semaine · 2 cibles écartées pour opposition · 1 numéro déjà proposé · 25 places sans cible appelable');
+  await expect(page.getByText('Brouillons seulement', { exact: true })).toHaveCount(3);
+  await expect(page.getByRole('heading', { name: 'Appels établissements', exact: true })).toBeVisible();
+  await expect(page.getByText('Dernier passage : 24/11/2026 06:50 (automatique) · 5 brouillon(s)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Dernier passage : 24/11/2026 06:50 (automatique) · 0 brouillon(s)', { exact: true })).toBeVisible();
+  await sansDebordement();
+  await preuve(page, 'agents-appels-agents', info);
+
+  // État 11 — rapport hebdomadaire : fiches d'appel notées et adresses utilisables figées avec la semaine.
+  await page.getByRole('tab', { name: 'Entonnoir' }).click();
+  await expect(page.getByRole('columnheader', { name: 'Fiches d’appel notées' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Adresses utilisables' })).toBeVisible();
+  const semaine = page.getByRole('row').filter({ hasText: '16/11/2026' });
+  await expect(semaine.getByRole('cell')).toHaveText(['16/11/2026', '0', '0', '0', '0', '0', '2', '0']);
+  await expect(page.getByTestId('alerte-cibles-prospection')).toBeVisible();
+  await preuve(page, 'agents-appels-entonnoir', info);
+
+  // Chaque appel lancé a été précédé d'une revérification ; aucune écriture hors du décideur, aucune requête externe.
+  expect(sim.decisions.map((d) => `${d.p_action}:${d.p_id.slice(-2)}`)).toEqual([
+    'VALIDER:11', 'VALIDER:11', 'VALIDER:12', 'VALIDER:14', 'VALIDER:14', 'MARQUER_ENVOYE:11',
+    'VALIDER:15', 'VALIDER:15', 'MARQUER_ENVOYE:15', 'VALIDER:13', 'VALIDER:13', 'MARQUER_ENVOYE:13',
+  ]);
+  expect(sim.lancements()).toBe(0);
   expect(sim.etat.ecritures).toEqual([]);
   expect(sim.etat.inconnues).toEqual([]);
   expect(sim.etat.erreurs).toEqual([]);

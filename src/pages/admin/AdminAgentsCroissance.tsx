@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bot, Copy, ExternalLink, Filter, Mail, PlayCircle, RefreshCw, Send, ShieldCheck, TrendingUp, X } from 'lucide-react';
+import { AlertTriangle, Bot, Copy, ExternalLink, Filter, Mail, Phone, PlayCircle, RefreshCw, Send, ShieldCheck, TrendingUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { LayoutAdmin } from '@/components/LayoutAdmin';
@@ -18,20 +18,34 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   AGENTS,
   LIBELLE_CANAL,
-  LIBELLE_STATUT,
+  RESULTATS_APPEL,
   actionsPossibles,
+  alerteCibles,
+  estAppel,
   estEmail,
   etapesEtablissements,
   etapesSoignants,
   goulot,
   groupesSuggeres,
+  libelleResultatAppel,
+  libelleStatut,
   lienGmail,
+  lienTel,
+  lireCibles,
+  lirePassage,
   raisonsCible,
+  resumeAppels,
+  resumeCibles,
+  sourceFiche,
+  telephoneFiche,
   type ActionBrouillon,
   type AgentCroissance,
   type BrouillonCroissance,
+  type CiblesProspection,
+  type PassageProspection,
   type EntonnoirCroissance,
   type EtapeEntonnoir,
+  type ResultatAppel,
 } from '@/lib/agentsCroissance';
 
 type Vue = 'file' | 'entonnoir' | 'agents';
@@ -44,7 +58,17 @@ interface Execution {
   debut_le: string;
   brouillons_crees: number;
   erreur: string | null;
+  details?: Record<string, unknown> | null;
 }
+
+interface RapportCibles {
+  le: string;
+  cibles: CiblesProspection;
+  passage: PassageProspection | null;
+}
+
+/** Durée pendant laquelle le lien d'appel direct reste affiché après une revérification réussie. */
+const FENETRE_APPEL_MS = 2 * 60 * 1000;
 
 interface Planification {
   actif: boolean;
@@ -69,18 +93,34 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   const [sujet, setSujet] = useState(b.sujet ?? '');
   const [corps, setCorps] = useState(b.corps);
   const [enCours, setEnCours] = useState<ActionBrouillon | null>(null);
+  const [resultatEnCours, setResultatEnCours] = useState<ResultatAppel | null>(null);
+  // Numéro que le serveur vient de revérifier : le lien d'appel direct n'existe que pendant deux minutes.
+  const [numeroVerifie, setNumeroVerifie] = useState<string | null>(null);
+  const [verification, setVerification] = useState(false);
+  const derniereReponse = useRef<{ telephone?: string | null } | null>(null);
+  useEffect(() => {
+    if (!numeroVerifie) return undefined;
+    const minuterie = window.setTimeout(() => setNumeroVerifie(null), FENETRE_APPEL_MS);
+    return () => window.clearTimeout(minuterie);
+  }, [numeroVerifie]);
   const modifie = sujet !== (b.sujet ?? '') || corps !== b.corps;
   const actions = actionsPossibles(b.statut);
   const raisons = raisonsCible(b);
   const groupes = groupesSuggeres(b.contexte);
+  const appel = estAppel(b);
+  const numero = appel ? telephoneFiche(b.contexte) : null;
+  const source = appel ? sourceFiche(b.contexte) : null;
+  const resultatNote = appel ? libelleResultatAppel(b.contexte?.resultat_appel) : null;
 
-  const decider = async (action: ActionBrouillon, motif?: string) => {
+  // `sansTexte` : une revérification avant appel ne réécrit pas le script (un autre onglet a pu le modifier).
+  const decider = async (action: ActionBrouillon, motif?: string, sansTexte = false) => {
     setEnCours(action);
+    const avecTexte = !sansTexte && (action === 'MODIFIER' || action === 'VALIDER');
     const { data, error } = await db.rpc('fn_admin_growth_brouillon_decider', {
       p_id: b.id,
       p_action: action,
-      p_sujet: action === 'MODIFIER' || action === 'VALIDER' ? sujet : null,
-      p_corps: action === 'MODIFIER' || action === 'VALIDER' ? corps : null,
+      p_sujet: avecTexte ? sujet : null,
+      p_corps: avecTexte ? corps : null,
       p_motif: motif ?? null,
     });
     setEnCours(null);
@@ -93,14 +133,33 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
       onChange();
       return false;
     }
+    derniereReponse.current = data ?? null;
     onChange();
     return true;
+  };
+
+  // Demande d'appel : la fiche est revérifiée côté serveur (opposition, cible passée au CRM,
+  // numéro modifié) juste avant, puis le composeur s'ouvre sur le numéro que le serveur renvoie.
+  // Rien n'est composé à la place de la fondatrice : elle confirme l'appel sur son téléphone.
+  const appeler = async () => {
+    setVerification(true);
+    const ok = await decider('VALIDER', undefined, true);
+    setVerification(false);
+    if (!ok) { setNumeroVerifie(null); return; }
+    const verifie = derniereReponse.current?.telephone ?? numero;
+    const lien = lienTel(verifie);
+    if (!lien) { toast.error('Numéro incomplet : appel impossible depuis cette fiche.'); return; }
+    setNumeroVerifie(verifie ?? null);
+    window.open(lien, '_self');
   };
 
   const validerEtOuvrir = async () => {
     const ok = await decider('VALIDER');
     if (!ok) return;
-    if (estEmail(b) && b.destinataire_email) {
+    if (appel) {
+      // Aucun appel n'est lancé : le numéro devient un lien que la fondatrice touche elle-même.
+      toast.success('Fiche validée. Appelez, puis notez le résultat de l’appel.');
+    } else if (estEmail(b) && b.destinataire_email) {
       window.open(lienGmail(b.destinataire_email, sujet, corps), '_blank', 'noopener');
       toast.success('Validé. Envoyez depuis Gmail, puis cliquez sur « J’ai envoyé ».');
     } else {
@@ -132,7 +191,20 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   const rejeter = async () => {
     const motif = window.prompt('Motif du rejet (facultatif)');
     if (motif === null) return; // « Annuler » ne rejette pas.
-    if (await decider('REJETER', motif)) toast.success('Brouillon rejeté');
+    if (await decider('REJETER', motif)) toast.success(appel ? 'Fiche d’appel écartée' : 'Brouillon rejeté');
+  };
+
+  // Constat d'appel : le résultat part dans p_motif, le serveur alimente le CRM existant.
+  const noterAppel = async (resultat: (typeof RESULTATS_APPEL)[number]) => {
+    if (resultat.definitif
+      && !window.confirm(`${resultat.libelle} : ne plus jamais solliciter ${b.destinataire_nom ?? 'cet établissement'}, par téléphone comme par email ?`)) return;
+    setResultatEnCours(resultat.code);
+    const ok = await decider('MARQUER_ENVOYE', resultat.code);
+    setResultatEnCours(null);
+    if (!ok) return;
+    toast.success(resultat.definitif
+      ? 'Appel noté. Cet établissement ne sera plus sollicité.'
+      : 'Appel noté dans le CRM. La suite est dans Prospects, « Actions du jour ».');
   };
 
   return (
@@ -142,7 +214,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
           <BadgeY2K variant="info" size="sm">{AGENTS[b.agent].libelle}</BadgeY2K>
           <BadgeY2K variant="premium" size="sm">{LIBELLE_CANAL[b.canal]}</BadgeY2K>
           <BadgeY2K variant={b.statut === 'VALIDE' ? 'warning' : b.statut === 'ENVOYE' ? 'success' : b.statut === 'BROUILLON' ? 'info' : 'error'} size="sm">
-            {LIBELLE_STATUT[b.statut]}
+            {libelleStatut(b)}
           </BadgeY2K>
           {b.sequence_etape ? <span className="text-xs text-muted-foreground">Étape {b.sequence_etape}/3</span> : null}
           <span className="ml-auto text-xs text-muted-foreground">Créé le {fmtDate(b.cree_le)}</span>
@@ -156,6 +228,12 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
           {b.destinataire_email ? (
             <p className="text-sm text-muted-foreground break-all">{b.destinataire_email}</p>
           ) : null}
+          {numero ? (
+            <p className="text-sm text-muted-foreground">
+              Téléphone : <span className="font-medium tabular-nums text-foreground">{numero}</span>
+            </p>
+          ) : null}
+          {source ? <p className="text-xs text-muted-foreground">Source du numéro : {source}</p> : null}
           {raisons.length > 0 ? (
             <p className="mt-1 text-xs text-muted-foreground">Pourquoi : {raisons.join(' · ')}</p>
           ) : null}
@@ -175,14 +253,14 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
         ) : null}
         <div className="space-y-1">
           <label htmlFor={`corps-${b.id}`} className="text-xs font-medium text-muted-foreground">
-            {estEmail(b) ? 'Message' : 'Texte du post'}
+            {estEmail(b) ? 'Message' : appel ? 'Script d’appel' : 'Texte du post'}
           </label>
           <Textarea
             id={`corps-${b.id}`}
             value={corps}
             onChange={(e) => setCorps(e.target.value)}
             disabled={actions.length === 0}
-            rows={estEmail(b) ? 12 : 7}
+            rows={estEmail(b) || appel ? 12 : 7}
             className="text-base md:text-sm font-normal"
           />
         </div>
@@ -206,6 +284,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
         ) : null}
 
         {b.motif_rejet ? <p className="text-xs text-destructive">Motif : {b.motif_rejet}</p> : null}
+        {resultatNote ? <p className="text-xs text-muted-foreground">Résultat de l’appel : {resultatNote}</p> : null}
 
         {actions.length > 0 ? (
           <div className="flex flex-wrap gap-2 pt-1">
@@ -214,10 +293,44 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
                 size="sm"
                 onClick={validerEtOuvrir}
                 loading={enCours === 'VALIDER'}
-                iconeGauche={estEmail(b) ? <Mail className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                iconeGauche={appel ? <Phone className="h-4 w-4" /> : estEmail(b) ? <Mail className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               >
-                {estEmail(b) ? 'Valider et ouvrir Gmail' : 'Valider et copier'}
+                {appel ? 'Valider la fiche' : estEmail(b) ? 'Valider et ouvrir Gmail' : 'Valider et copier'}
               </BoutonY2K>
+            ) : appel ? (
+              <div className="w-full space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <BoutonY2K size="sm" onClick={appeler} loading={verification} iconeGauche={<Phone className="h-4 w-4" />}>
+                    Appeler le {numero}
+                  </BoutonY2K>
+                  {numeroVerifie && lienTel(numeroVerifie) ? (
+                    <span className="text-xs text-muted-foreground">
+                      Fiche revérifiée à l’instant. Si l’appel ne s’est pas lancé :{' '}
+                      <a href={lienTel(numeroVerifie) ?? undefined} className="font-medium text-primary underline underline-offset-2">
+                        composer le {numeroVerifie}
+                      </a>
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cliquez sur « Appeler » avant chaque appel, même si vous composez le numéro vous-même : la fiche est revérifiée à ce moment-là.
+                </p>
+                <div role="group" aria-label="Résultat de l’appel" className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Après l’appel :</span>
+                  {RESULTATS_APPEL.map((r) => (
+                    <BoutonY2K
+                      key={r.code}
+                      size="sm"
+                      variant={r.definitif ? 'ghost' : 'secondary'}
+                      onClick={() => noterAppel(r)}
+                      loading={resultatEnCours === r.code}
+                      disabled={resultatEnCours !== null && resultatEnCours !== r.code}
+                    >
+                      {r.libelle}
+                    </BoutonY2K>
+                  ))}
+                </div>
+              </div>
             ) : (
               <>
                 <BoutonY2K
@@ -239,7 +352,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
               </BoutonY2K>
             ) : null}
             <BoutonY2K size="sm" variant="ghost" onClick={rejeter} loading={enCours === 'REJETER'} iconeGauche={<X className="h-4 w-4" />}>
-              Rejeter
+              {appel ? 'Ne pas appeler' : 'Rejeter'}
             </BoutonY2K>
           </div>
         ) : null}
@@ -294,6 +407,9 @@ export default function AdminAgentsCroissance() {
   const [planif, setPlanif] = useState<Planification | null>(null);
   const [bascule, setBascule] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [rapportCibles, setRapportCibles] = useState<RapportCibles | null>(null);
+  // Erreur propre au décompte : un autre chargement réussi ne doit pas l'effacer.
+  const [erreurCibles, setErreurCibles] = useState<string | null>(null);
 
   const chargerFile = useCallback(async () => {
     let q = db.from('growth_brouillons').select('*').order('cree_le', { ascending: false }).limit(150);
@@ -319,12 +435,28 @@ export default function AdminAgentsCroissance() {
   const chargerExecutions = useCallback(async () => {
     const [exec, plan] = await Promise.all([
       db.from('growth_agent_executions')
-        .select('id, agent, declencheur, debut_le, brouillons_crees, erreur')
+        .select('id, agent, declencheur, debut_le, brouillons_crees, erreur, details')
         .order('debut_le', { ascending: false }).limit(40),
       db.rpc('fn_admin_growth_planification', { p_actif: null }),
     ]);
     if (!exec.error) setExecutions((exec.data ?? []) as Execution[]);
     if (plan.error) setErreur(plan.error.message); else setPlanif(plan.data as Planification);
+  }, []);
+
+  // Décompte des cibles du dernier passage réussi de l'agent email : un zéro
+  // brouillon s'explique en haut de page, quel que soit l'onglet ouvert.
+  const chargerCibles = useCallback(async () => {
+    const { data, error } = await db.from('growth_agent_executions')
+      .select('debut_le, details')
+      .eq('agent', 'PROSPECTION_ETABLISSEMENT')
+      .is('erreur', null)
+      .order('debut_le', { ascending: false })
+      .limit(1);
+    if (error) { setErreurCibles(`Décompte des cibles illisible : ${error.message}`); return; }
+    setErreurCibles(null);
+    const dernier = ((data ?? []) as Array<{ debut_le: string; details: Record<string, unknown> | null }>)[0];
+    const cibles = lireCibles(dernier?.details?.cibles);
+    setRapportCibles(dernier && cibles ? { le: dernier.debut_le, cibles, passage: lirePassage(dernier.details) } : null);
   }, []);
 
   const basculerPlanification = async (actif: boolean) => {
@@ -338,6 +470,7 @@ export default function AdminAgentsCroissance() {
       : 'Préparation automatique en pause.');
   };
 
+  useEffect(() => { void chargerCibles(); }, [chargerCibles]);
   useEffect(() => { if (vue === 'file') void chargerFile(); }, [vue, chargerFile]);
   useEffect(() => { if (vue === 'entonnoir') void chargerEntonnoir(); }, [vue, chargerEntonnoir]);
   useEffect(() => { if (vue === 'agents') void chargerExecutions(); }, [vue, chargerExecutions]);
@@ -358,6 +491,14 @@ export default function AdminAgentsCroissance() {
     toast.success(`${total} nouveau(x) brouillon(s). Rien n’a été envoyé.`);
     void chargerExecutions();
     void chargerFile();
+    void chargerCibles();
+  };
+
+  const alerte = alerteCibles(rapportCibles?.cibles ?? null, rapportCibles?.passage ?? null);
+  const voirFichesAppel = () => {
+    setHistorique(false);
+    setFiltre('APPEL_ETABLISSEMENT');
+    changerVue('file');
   };
 
   const comptes = useMemo(() => {
@@ -378,7 +519,7 @@ export default function AdminAgentsCroissance() {
         <AdminPageHeader
           eyebrow="Acquisition"
           title="Agents de croissance"
-          description="Les agents préparent chaque jour des emails et des posts. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail ou publiez, puis vous le notez ici."
+          description="Les agents préparent chaque jour des emails et des posts, et chaque semaine une liste d’appels. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail, publiez ou appelez, puis vous le notez ici."
           icon={<Bot className="h-6 w-6" />}
           actions={
             <BoutonY2K size="sm" variant="secondary" onClick={lancerAgents} loading={lancement} iconeGauche={<PlayCircle className="h-4 w-4" />}>
@@ -390,12 +531,35 @@ export default function AdminAgentsCroissance() {
         <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <p>
-            Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, et les contacts en opposition (STOP) sont
-            exclus avant la rédaction puis vérifiés de nouveau à la validation.
+            Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, aucun appel n’est passé à votre place, et
+            les contacts en opposition (STOP) sont exclus avant la rédaction puis vérifiés de nouveau à la validation.
           </p>
         </div>
 
+        {alerte && rapportCibles ? (
+          <div
+            role="status"
+            data-testid="alerte-cibles-prospection"
+            className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${alerte.niveau === 'alerte'
+              ? 'border-amber-300/60 bg-amber-50/70 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200'
+              : 'border-border bg-muted/30 text-muted-foreground'}`}
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 space-y-2">
+              <p className="font-semibold">{alerte.titre}</p>
+              <p>{alerte.texte}</p>
+              <p className="text-xs">Constat du dernier passage de l’agent, le {fmtDate(rapportCibles.le)}.</p>
+              {rapportCibles.cibles.telephones_utilisables > 0 ? (
+                <BoutonY2K size="sm" variant="secondary" onClick={voirFichesAppel} iconeGauche={<Phone className="h-4 w-4" />}>
+                  Voir les fiches d’appel
+                </BoutonY2K>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {erreur ? <p role="alert" className="text-sm text-destructive">{erreur}</p> : null}
+        {erreurCibles ? <p role="alert" className="text-sm text-destructive">{erreurCibles}</p> : null}
 
         <Tabs value={vue} onValueChange={changerVue}>
           <AdminTabsList disposition="grid" colonnes={3} className="sm:w-fit" aria-label="Vues des agents de croissance">
@@ -424,7 +588,11 @@ export default function AdminAgentsCroissance() {
             ) : brouillons.length === 0 ? (
               <CardY2K hoverLift={false}>
                 <CardY2KContent className="py-8 text-center text-sm text-muted-foreground">
-                  {historique ? 'Aucun brouillon traité pour ce filtre.' : 'Aucun brouillon en attente. Les agents passent chaque matin vers 6 h 50, ou cliquez sur « Préparer maintenant ».'}
+                  {historique
+                    ? 'Aucun brouillon traité pour ce filtre.'
+                    : filtre === 'PROSPECTION_ETABLISSEMENT' && alerte?.niveau === 'alerte'
+                      ? 'Aucun email à valider : aucune adresse utilisable parmi les établissements ciblés (voir l’avertissement en haut de page).'
+                      : 'Aucun brouillon en attente. Les agents passent chaque matin vers 6 h 50, ou cliquez sur « Préparer maintenant ».'}
                 </CardY2KContent>
               </CardY2K>
             ) : (
@@ -464,7 +632,7 @@ export default function AdminAgentsCroissance() {
                       <p className="text-sm text-muted-foreground">Le premier rapport sera figé lundi matin pour la semaine écoulée.</p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="w-full min-w-[560px] text-sm">
+                        <table className="w-full min-w-[760px] text-sm">
                           <thead>
                             <tr className="text-left text-xs text-muted-foreground">
                               <th className="py-1 pr-3 font-medium">Semaine du</th>
@@ -473,6 +641,8 @@ export default function AdminAgentsCroissance() {
                               <th className="py-1 pr-3 font-medium">Missions publiées</th>
                               <th className="py-1 pr-3 font-medium">Pourvues</th>
                               <th className="py-1 pr-3 font-medium">Emails envoyés</th>
+                              <th className="py-1 pr-3 font-medium">Fiches d’appel notées</th>
+                              <th className="py-1 pr-3 font-medium">Adresses utilisables</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -484,6 +654,8 @@ export default function AdminAgentsCroissance() {
                                 <td className="py-1 pr-3">{r.donnees?.missions?.publiees_periode ?? 0}</td>
                                 <td className="py-1 pr-3">{r.donnees?.missions?.pourvues_periode ?? 0}</td>
                                 <td className="py-1 pr-3">{Number(r.donnees?.prospection?.emails_journalises_periode ?? 0)}</td>
+                                <td className="py-1 pr-3">{Number(r.donnees?.prospection?.fiches_appel_notees_periode ?? 0)}</td>
+                                <td className="py-1 pr-3">{lireCibles(r.donnees?.prospection?.cibles_agent)?.adresses_utilisables.toLocaleString('fr-FR') ?? '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -527,25 +699,38 @@ export default function AdminAgentsCroissance() {
             <div className="grid gap-4 lg:grid-cols-2">
               {(Object.keys(AGENTS) as AgentCroissance[]).map((a) => {
                 const derniere = derniereParAgent.get(a);
+                const sansCible = a === 'PROSPECTION_ETABLISSEMENT' && alerte?.niveau === 'alerte';
+                const appels = a === 'APPEL_ETABLISSEMENT' && !derniere?.erreur ? resumeAppels(derniere?.details) : null;
                 return (
                   <CardY2K key={a} hoverLift={false}>
                     <CardY2KContent className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold text-foreground">{AGENTS[a].libelle}</h3>
-                        {derniere?.erreur ? <BadgeY2K variant="error" size="sm">Erreur</BadgeY2K> : <BadgeY2K variant="success" size="sm">Brouillons seulement</BadgeY2K>}
+                        {derniere?.erreur
+                          ? <BadgeY2K variant="error" size="sm">Erreur</BadgeY2K>
+                          : sansCible
+                            ? <BadgeY2K variant="warning" size="sm">Aucune cible joignable</BadgeY2K>
+                            : appels?.epuisee
+                              ? <BadgeY2K variant="warning" size="sm">Liste épuisée</BadgeY2K>
+                              : <BadgeY2K variant="success" size="sm">Brouillons seulement</BadgeY2K>}
                       </div>
                       <p className="text-sm text-muted-foreground">{AGENTS[a].description}</p>
                       <p className="text-xs text-muted-foreground">
                         Dernier passage : {derniere ? `${fmtDate(derniere.debut_le)} (${derniere.declencheur === 'CRON' ? 'automatique' : 'manuel'}) · ${derniere.brouillons_crees} brouillon(s)` : 'aucun pour l’instant'}
                       </p>
                       {derniere?.erreur ? <p className="text-xs text-destructive break-words">{derniere.erreur}</p> : null}
+                      {appels ? <p className="text-xs text-muted-foreground" data-testid="passage-appels">{appels.texte}</p> : null}
+                      {a === 'PROSPECTION_ETABLISSEMENT' && rapportCibles ? (
+                        <p className="text-xs text-muted-foreground" data-testid="cibles-prospection">Cibles : {resumeCibles(rapportCibles.cibles)}</p>
+                      ) : null}
                     </CardY2KContent>
                   </CardY2K>
                 );
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Horaires (heure de Paris en hiver) : agents chaque jour à 6 h 50, rapport hebdomadaire le lundi à 6 h 15. Réglages dans
+              Horaires (heure de Paris en hiver) : agents chaque jour à 6 h 50, liste d’appels complétée à ce passage dans la limite de la
+              semaine, rapport hebdomadaire le lundi à 6 h 15. Réglages dans
               growth_config (départements cibles, quota quotidien, signature, mention d’opposition).
             </p>
           </TabsContent>

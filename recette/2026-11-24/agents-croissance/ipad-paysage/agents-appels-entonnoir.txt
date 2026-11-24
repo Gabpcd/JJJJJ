@@ -1,0 +1,74 @@
+- main:
+  - text: Acquisition
+  - heading "Agents de croissance" [level=1]
+  - text: "Les agents préparent chaque jour des emails et des posts, et chaque semaine une liste d’appels. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail, publiez ou appelez, puis vous le notez ici."
+  - button "Préparer maintenant":
+    - img
+    - text: Préparer maintenant
+  - paragraph: Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, aucun appel n’est passé à votre place, et les contacts en opposition (STOP) sont exclus avant la rédaction puis vérifiés de nouveau à la validation.
+  - status:
+    - paragraph: Prospection par email à l’arrêt
+    - paragraph: "Aucune adresse utilisable parmi les 2 318 établissements ciblés (56, 75, 92). 656 ont une adresse, toutes en messagerie de santé fermée (MSSanté, Apicrypt), où un email envoyé depuis Gmail est rejeté. 2 017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements »."
+    - paragraph: Constat du dernier passage de l’agent, le 24/11/2026 06:50.
+    - button "Voir les fiches d’appel":
+      - img
+      - text: Voir les fiches d’appel
+  - tablist "Vues des agents de croissance":
+    - tab "À valider"
+    - tab "Entonnoir" [selected]
+    - tab "Agents"
+  - tabpanel "Entonnoir":
+    - button "7 jours" [pressed]
+    - button "30 jours"
+    - button "90 jours"
+    - text: "Cohorte réelle uniquement : les comptes de test sont exclus. Soignants inscrits (période)"
+    - paragraph: "0"
+    - text: 2 au total Établissements inscrits (période)
+    - paragraph: "0"
+    - text: 0 au total Missions publiées (période)
+    - paragraph: "0"
+    - text: 0 pourvue(s) Emails de prospection (période)
+    - paragraph: "0"
+    - text: 23 brouillon(s) en attente
+    - heading "Soignants (cumul)" [level=3]
+    - list "Soignants (cumul)":
+      - listitem: Inscrits 2
+      - listitem: Au moins un document 150 %
+      - listitem: Documents validés 1100 %
+      - listitem: Ont candidaté 00 %
+      - listitem: Ont réalisé une mission 0
+    - paragraph:
+      - text: "Goulot actuel :"
+      - strong: Ont candidaté
+    - heading "Établissements (cumul)" [level=3]
+    - list "Établissements (cumul)":
+      - listitem: Prospects avec email 30 633
+      - listitem: Contactés 00 %
+      - listitem: Inscrits 0
+      - listitem: Peuvent publier 0
+      - listitem: Ont publié 0
+    - paragraph:
+      - text: "Goulot actuel :"
+      - strong: Contactés
+    - heading "Rapports hebdomadaires" [level=3]
+    - table:
+      - rowgroup:
+        - row "Semaine du Soignants Établissements Missions publiées Pourvues Emails envoyés Fiches d’appel notées Adresses utilisables":
+          - columnheader "Semaine du"
+          - columnheader "Soignants"
+          - columnheader "Établissements"
+          - columnheader "Missions publiées"
+          - columnheader "Pourvues"
+          - columnheader "Emails envoyés"
+          - columnheader "Fiches d’appel notées"
+          - columnheader "Adresses utilisables"
+      - rowgroup:
+        - row "16/11/2026 0 0 0 0 0 2 0":
+          - cell "16/11/2026"
+          - cell "0"
+          - cell "0"
+          - cell "0"
+          - cell "0"
+          - cell "0"
+          - cell "2"
+          - cell "0"
