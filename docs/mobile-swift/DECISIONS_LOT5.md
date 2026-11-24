@@ -407,6 +407,82 @@ juridique ; aucun texte juridique n'est ajouté.
    aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
    `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
+## Précisions relevées par la tranche T9 (publication d'une mission, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Mention du type de contrat non affichée (HARD STOP n°4).** La description de l'option « Salarié »
+   (`TextesWeb.PublicationEtablissement`, `FormulaireMission.tsx` l.766) reste verrouillée (`VALIDES` vide dans
+   `contrats-etablissement-ios.node.mjs`) : le récapitulatif n'affiche aucun type de contrat
+   (`PublicationPresentation.mentionContrat == nil`, `publier-recap-contrat` absent). Après la validation d'écran de
+   Gabrielle : `mentionContrat` rend les deux constantes verbatim et `PublicationEtablissement` entre dans `VALIDES`.
+   **Gap verrouillé** : tant que la mention n'est pas affichée, l'espace établissement ne s'ouvre pas hors démo
+   (`PublicationPresentationTests.testMentionContratExigeeAvantToutEspaceOuvertHorsDemo`) ; T13 et T14 ne peuvent pas
+   ouvrir STAGING ni la production sans elle. La carte de la mission publiée porte, elle, le libellé de contrat de la
+   liste des missions (T5, `badgeContrat`).
+2. **Périmètre fixé par la charge (D8).** `PublicationPayload` envoie les seize paramètres de la signature SQL, dont sept
+   constants : `p_type_contrat_recherche 'SALARIE'`, `p_mode_remuneration 'TAUX_HORAIRE'`, rétrocession, nature de TVA et
+   spécialité `NULL`, `p_accepte_internes false`. L'écran ne propose ni n'affiche aucun type de contrat ni mode
+   d'exercice ; `fn_mode_exercice` n'est ni appelée ni décodée. Une profession `MEDECIN` n'est jamais retenue par le
+   modèle et est refusée avant réseau par les deux gateways.
+3. **Renvois web (D8).** Quatre lignes « Autres options », texte neutre du blueprint mot pour mot (« Cette option se
+   configure sur jolene.app. »), titres composés des libellés du web : « Type de contrat proposé : Tous profils ou
+   Libéral », « Profession requise : Médecin », « Sélection rapide des dates : Lundi–vendredi, 1 semaine civile sur 2 »,
+   « Dupliquer une mission ». Les trois premières ouvrent `/etablissement/missions/creer`, la duplication
+   `/etablissement/missions` (elle part d'une mission). Un lien `…/missions/creer?dupliquer=<id>` reste un renvoi web
+   (`LinkRouter.etablissementDestination`), le formulaire natif ne reprenant aucune mission source. « Récurrence
+   avancée » = la sélection rapide du web (« Toutes les dates », « Lundi–vendredi », « 1 semaine civile sur 2 »,
+   « Aucune ») ; « Appliquer le 1er horaire aux jours sélectionnés » est natif.
+4. **État dérivé.** Dates vides au départ (aucune date fictive) ; « Choisir la date » pose le jour civil de Paris de
+   l'horloge de la session (la dernière date reprend la première si elle existe) ; boutons « Jour précédent » / « Jour
+   suivant » et sélecteur. Toute modification d'une borne re-dérive les jours par `PlanningDerive.rederiver` : jour
+   resté dans la période conservé (état, créneaux, exceptions), jour nouveau au repos avec le créneau 07:00-19:00 du
+   web, jour sorti supprimé, période vide ou inversée sans aucun jour (parité `FormulaireRecurrence.tsx` l.164-178).
+   Erreurs, créneaux matérialisés et total d'heures sont recalculés à chaque lecture, jamais stockés.
+5. **Validation locale structurelle seulement (D9).** Champs obligatoires (intitulé d'au moins trois caractères,
+   profession de la liste, taux supérieur à zéro, niveau 1 à 3 si urgente), période, jour travaillé sans créneau, créneau
+   invalide, chevauchement. Non portés : minimum du champ taux du web (`min="11.65"`), « créneau déjà commencé », taux
+   conseillé, estimation, commission, contrôle par semaine civile, couleurs de durée : le serveur refuse, son texte est
+   affiché mot pour mot.
+6. **Issue `.nonConfirmee(missionId)` ajoutée à `PublicationOutcome`** : le serveur a répondu `success:true` mais la
+   relecture est impossible ou différente de l'envoi (comparaison par instants, `PublicationRelecture.confirme`). Le
+   blueprint disait « erreur » ; l'issue porte l'identifiant et n'est jamais un succès. Une erreur levée pendant l'envoi
+   (délai, transport) est une issue inconnue : « La publication n'a pas pu être confirmée par une relecture. Vérifiez
+   vos missions avant de recommencer. », aucun renvoi automatique. Seul un refus de session (`28000`, « Non
+   authentifié ») dit que rien n'a été publié.
+7. **Relecture par la gateway.** `missions` (`id, etablissement_id, statut, nb_creneaux, debut_le, fin_le,
+   type_contrat_recherche`, établissement confirmé) puis `mission_creneaux` PREVISIONNEL par le pager exact de T5 ;
+   aucun montant relu. Le modèle ne relit pas une seconde fois : le port ne rend `.publiee` qu'après cette relecture.
+8. **Niveaux d'urgence.** Libellés réduits au premier mot des options du web (« Modéré », « Élevé », « Critique ») : la
+   suite (« — besoin sous 48h ») porte la marque d'un plafond d'heures que la garde des textes refuse hors de
+   `TextesWeb.swift`. À reprendre en entier par une constante de `TextesWeb.swift` si Gabrielle le souhaite.
+9. **Blocage de publication.** Pas de pré-contrôle natif (les textes de blocage de l'Accueil sont verrouillés, T4) : le
+   blocage vient du serveur à l'envoi (`fn_blocage_publication_etab`, `message` mot pour mot, `publier-blocage`), avec
+   « Voir sur jolene.app » vers `/etablissement/facturation` (`PUBLICATION_SUSPENDUE`, `FACTURES_IMPAYEES`) ou
+   `/etablissement/activer` (les trois autres codes), comme les liens du web.
+10. **Identifiants.** Récapitulatif sur `ConfirmationSheet` : `publier-recap` (+ `-title`, `-message`, `-confirm`,
+    `-cancel`) au lieu de `publier-confirmer` ; bouton du formulaire `publier-ouvrir-recap` ; créneaux
+    `publier-creneau-{date}-{i}` avec `i` à partir de 0 (comme le `data-testid` du web), lignes du récapitulatif
+    `publier-recap-creneau-{n}` à partir de 1 (`SlotList`) ; dates `publier-date-{debut|fin}` (+ `-choisir`,
+    `-precedent`, `-suivant`).
+11. **Monde démo.** Aucune fixture JSON nouvelle : `DemoEtabEtatPublication` (acteur de session) reçoit la mission
+    créée et journalise la charge ; les gateways démo des missions et des candidatures le relisent (la mission apparaît
+    « Ouverte »). `-JOLENE_DEMO_BLOCAGE 1` → `PUBLICATION_SUSPENDUE` au texte du serveur. Refus rejoués : aucun créneau,
+    début dans le passé (horloge démo), droit `missions` absent (`CREATION_MISSION_INDISPONIBLE`) ; aucune règle du
+    temps de travail n'est rejouée.
+12. **`EtabDestination.publication.ecranLivre = true`** : « Publier » (barre de Missions), « Publier une mission »
+    (Accueil) et `/etablissement/missions/creer` ouvrent l'écran natif (`EtabRouteTests`, `DeepLinkCoordinatorTests`,
+    `DemoEtabSessionTests` migrés). XCUITest `DemoEtabPublicationTests` (quatre tests) dans l'éclat
+    « lot5-etablissement » du job `ui-lot1`, jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement
+    (aucun simulateur) : preuve CI ; durée de l'éclat à relever au premier run.
+13. **Textes natifs ajoutés (non juridiques)** : « Autres options », « Ouvrir sur jolene.app », « Choisir la date »,
+    « Jour précédent », « Jour suivant », « Voir mes missions », « Voir la mission », « Publier une autre mission »,
+    « Voir sur jolene.app », « La publication n'a pas pu être confirmée par une relecture. Vérifiez vos missions avant
+    de recommencer. », « Le planning n'a pas pu être préparé. Vérifiez les dates et les horaires. », « La publication
+    n'a pas pu aboutir. Vérifiez votre connexion. », et les quatre titres de renvoi du point 3. Émojis décoratifs du web
+    non repris (titre du récapitulatif, « Publier », « Modifier », succès).
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
@@ -422,7 +498,10 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
    de case « cadre étudiant » et renvoi web (T6) ; publication native limitée au salariat et texte du renvoi
    « libéral / tous contrats » (T9) ; titre de suspension de publication (T4) ; écran de signature OTP établissement
    avec la mention art. 1366-1367 (T10) ; description verbatim de l'option « Salarié » au récapitulatif (T9) ;
-   absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25).
+   absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25). T9 livrée (24/11) : à
+   relire avec ces points, le libellé du taux repris du web (« Taux horaire brut * (€/h) », `FormulaireMission.tsx`
+   l.917, affiché) et les quatre titres de renvoi web (précision 3 de la tranche T9) ; la description de l'option
+   « Salarié » n'est pas affichée tant que cette validation manque (précision 1).
 5. **STAGING** : numéro de recette SMS pour `etablissements.telephone_contact` (preuve OTP établissement facultative
    de T10) ; confirmation qu'aucun abonnement SMS/e-mail réel n'existe sur les comptes de recette ; valeur de
    `parametres_systeme.inscriptions_publiques_actives`.

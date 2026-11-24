@@ -77,7 +77,14 @@ final class DeepLinkCoordinatorTests: XCTestCase {
                        .naviguerEtablissement(CibleEtablissement(onglet: .missions, destination: .detailMission(id: "m-1")),
                                               route: .missionDetail(id: "m-1"), epoch: 7), "T5 livrée : détail natif")
         let publication = url("https://jolene.app/etablissement/missions/creer?source=mail")
-        XCTAssertEqual(aiguillage.recevoir(url: publication), .renvoiWeb(.etablissement(publication)), "T9 non livrée")
+        XCTAssertEqual(aiguillage.recevoir(url: publication),
+                       .naviguerEtablissement(CibleEtablissement(onglet: .missions, destination: .publication),
+                                              route: .publierMission, epoch: 7), "T9 livrée : publication native")
+        let duplication = url("https://jolene.app/etablissement/missions/creer?dupliquer=m-1")
+        XCTAssertEqual(aiguillage.recevoir(url: duplication), .renvoiWeb(.etablissement(duplication)),
+                       "T9 (D8) : la duplication reste sur le web")
+        let presences = url("https://jolene.app/etablissement/presences/mission/m-1")
+        XCTAssertEqual(aiguillage.recevoir(url: presences), .renvoiWeb(.etablissement(presences)), "T8 non livrée")
         let soignantLien = url("https://jolene.app/soignant/missions/m-1")
         XCTAssertEqual(aiguillage.recevoir(url: soignantLien), .renvoiWeb(.safari(soignantLien)),
                        "un lien soignant n'ouvre jamais l'espace soignant depuis l'espace établissement")

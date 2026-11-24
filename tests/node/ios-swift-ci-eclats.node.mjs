@@ -111,7 +111,8 @@ const ECLATS_LOT1 = new Map([
   // Stabilité de la CI (23/11/2026) : deux éclats du job `ui` atteignaient leurs 30 min (« presences » : 27 à 30 min sur
   // iPad ; « lot3-notifications » : 23 à 30 min, runs 44475153698, 44555091967 et 44797977486). Les classes qui les
   // faisaient déborder tournent ici, le job `ui` étant à son plafond de onze éclats.
-  ['lot5-etablissement', ['DemoEtabLiensTests', 'DemoEtabMissionsTests', 'DemoEtabCandidaturesTests']],
+  // L5-T9 : DemoEtabPublicationTests (quatre tests) rejoint les écrans de l'onglet Missions.
+  ['lot5-etablissement', ['DemoEtabLiensTests', 'DemoEtabMissionsTests', 'DemoEtabCandidaturesTests', 'DemoEtabPublicationTests']],
   ['lot3-profil', ['DemoProfilTests']],
 ]);
 
@@ -142,7 +143,8 @@ test('lot 5 : session et liens établissement hors du socle, chacun dans son éc
   // 30 min sur iPad) vers l'éclat « lot5-etablissement » du job `ui-lot1`.
   const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'lot5-etablissement'],
     ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'lot5-etablissement'],
-    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
+    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo'],
+    ['DemoEtabPublicationTests', 'lot5-etablissement']]); // L5-T9
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = [...domaines, ...parEtapeLot1].filter(e => classesDe(e).includes(classe)).map(e => e.nom);

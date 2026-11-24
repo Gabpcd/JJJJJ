@@ -38,7 +38,7 @@ struct EtabDestinationEcran: View {
         case .conversation:
             provisoire("Message", "La conversation arrive dans une prochaine version de l'application.") // T11
         case .publication:
-            provisoire("Publier une mission", "La publication d'une mission arrive dans une prochaine version de l'application.") // T9
+            PublicationScreen(session: session, snapshot: snapshot) // T9
         }
     }
 

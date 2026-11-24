@@ -12,7 +12,7 @@ import Foundation
 /// |---|---|
 /// | `/etablissement/tableau-de-bord`, alias `/etablissement/dashboard` (`Navigate`) | `.accueil` |
 /// | `/etablissement/missions` (`?statut=`, `?periode=` tels que reçus, `ListeMissions.tsx` l.48-50) | `.missions` |
-/// | `/etablissement/missions/creer` | `.publierMission` |
+/// | `/etablissement/missions/creer` (avec `?dupliquer=` : renvoi web, D8) | `.publierMission` |
 /// | `/etablissement/missions/{id}` | `.missionDetail(id:)` |
 /// | `/etablissement/presences` (`?tab=` tel que reçu, `PresencesEtablissement.tsx` l.56) | `.presences(onglet:)` |
 /// | `/etablissement/presences/mission/{id}` | `.presencesMission(id:)` |
@@ -148,7 +148,7 @@ extension EtabDestination {
         case .candidatures: return true          // T6
         case .pointage: return true              // T7
         case .presencesMission: return false     // T8
-        case .publication: return false          // T9
+        case .publication: return true           // T9
         case .contrat: return false              // T10
         case .conversation: return false         // T11
         }
@@ -174,7 +174,10 @@ extension LinkRouter {
         switch path {
         case "/etablissement/tableau-de-bord", "/etablissement/dashboard": return .accueil
         case "/etablissement/missions": return .missions(statut: parametres.get("statut"), periode: parametres.get("periode"))
-        case "/etablissement/missions/creer": return .publierMission
+        // T9 (D8) : la duplication (`?dupliquer=<id>`, `Boolean(searchParams.get('dupliquer'))` de
+        // `FormulaireMission.tsx` l.334) reste sur le web ; le formulaire natif ne reprend aucune mission source.
+        case "/etablissement/missions/creer":
+            return (parametres.get("dupliquer") ?? "").isEmpty ? .publierMission : .safari(canonique)
         case "/etablissement/presences": return .presences(onglet: parametres.get("tab"))
         case "/etablissement/contrats": return .contrats(statut: parametres.get("statut"))
         // Alias `Navigate` (`src/App.tsx` l.424, l.434) : la redirection ne reprend pas la query du lien.

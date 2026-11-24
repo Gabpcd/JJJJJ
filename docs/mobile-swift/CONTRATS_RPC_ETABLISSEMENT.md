@@ -54,7 +54,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_contester_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
 | `fn_creer_notation_mission` | à venir | 5 (T8, best-effort) — partagée si le lot 2 la suit | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0001` |
 | `fn_declarer_fin_retroactive` | à venir | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501` ×3 (dont RBAC ×2), `23514` |
-| `fn_creer_mission_multi_jours_v4` | à venir | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
+| `fn_creer_mission_multi_jours_v4` | consommée (T9) | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_audit_connexion` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -490,7 +490,12 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id"
 
 ## fn_creer_mission_multi_jours_v4
 
-- **Statut natif** : à venir (lot 5, T9 publication simple ou urgente, salariée, taux horaire, D8).
+- **Statut natif** : consommée (lot 5, T9 : `SupabaseEtabPublicationGateway.publier`, port `EtabPublicationPort` ;
+  publication simple ou urgente, salariée, taux horaire, D8). Une seule requête, aucun renvoi ; brouillon
+  structurellement invalide, profession `MEDECIN` ou liste de créneaux vide : refus avant tout appel. La charge est
+  `PublicationPayload` (JoleneCore) : ses seize clés sont comparées à la signature SQL de `rpc-contracts.json`
+  (`SupabaseEtabPublicationGatewayTests`). `{success:true, mission_id}` n'est jamais tenu pour confirmé : relecture
+  ci-dessous, sinon issue `.nonConfirmee(missionId)` (ni succès, ni renvoi).
 - **Usage** : 16 paramètres exacts (T9) : `p_type_contrat_recherche 'SALARIE'`, `p_mode_remuneration 'TAUX_HORAIRE'`,
   `p_retrocession_pct` NULL, `p_nature_tva_prestation` NULL, `p_specialite_medicale_requise` NULL,
   `p_accepte_internes false`, profession hors `MEDECIN`, `p_creneaux = [{debut,fin}]` ISO `Z`.
@@ -525,6 +530,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitul
 - **Relecture** : relire `missions` (id, statut `OUVERTE`, `nb_creneaux`, `debut_le`, `fin_le`,
   `type_contrat_recherche == SALARIE`) et `mission_creneaux` PREVISIONNEL : multiset `(debut, fin)` égal à l'envoi ;
   sinon erreur, jamais succès (le trigger libéral peut muter `TOUS → SALARIE` en silence, correction 7).
+  T9 : `missions` relue par `id` et `etablissement_id` confirmé, colonnes `id, etablissement_id, statut, nb_creneaux,
+  debut_le, fin_le, type_contrat_recherche` (aucun montant) ; créneaux par le pager exact de T5 ; comparaison par
+  **instants** (`PublicationRelecture.confirme` : le serveur rend `+00:00`, l'envoi porte `Z`), bornes `debut_le` /
+  `fin_le` comprises ; lecture en panne, ligne illisible ou d'un autre établissement → `.nonConfirmee`.
 
 ## fn_obtenir_conversation
 

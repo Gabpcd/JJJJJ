@@ -55,6 +55,7 @@ final class EtabRouteTests: XCTestCase {
             ("https://jolene.app/etablissement/tableau-de-bord/", .accueil),
             ("/etablissement/missions", .missions(statut: nil, periode: nil)),
             ("/etablissement/missions/creer", .publierMission),
+            ("/etablissement/missions/creer?dupliquer=", .publierMission),
             ("/etablissement/missions/m%201", .missionDetail(id: "m 1")),
             ("/etablissement/presences", .presences(onglet: nil)),
             ("/etablissement/presences/mission/m-2", .presencesMission(id: "m-2")),
@@ -113,10 +114,24 @@ final class EtabRouteTests: XCTestCase {
             XCTAssertEqual(cible.onglet, onglet)
             XCTAssertNil(cible.destination)
         }
-        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
+        XCTAssertEqual(EtabRoute.publierMission.presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .publication)),
+                       "T9 livrée : la publication est empilée sur l'onglet Missions")
+        for route: EtabRoute in [.presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
                                  .messagerie(conversation: "conv")] {
             XCTAssertEqual(route.presentation(canonique: canonique), .renvoiWeb(canonique), "\(route)")
         }
+    }
+
+    /// T9 (D8) : la duplication reste sur le web. Un lien `…/missions/creer?dupliquer=<id>` n'ouvre jamais le
+    /// formulaire natif, qui ne reprend aucune mission source ; sans identifiant, c'est une publication ordinaire.
+    func testDuplicationRenvoyeeAuWeb() throws {
+        let lien = "/etablissement/missions/creer?dupliquer=m-1&debut=2026-11-25T06%3A00%3A00Z"
+        let canonique = try XCTUnwrap(URL(string: "https://jolene.app\(lien)"))
+        let resolue = try XCTUnwrap(LinkRouter.etablissementDestination(link: lien))
+        XCTAssertEqual(resolue.route, .safari(canonique))
+        XCTAssertEqual(resolue.route.presentation(canonique: resolue.canonique), .renvoiWeb(canonique), "query conservée")
+        XCTAssertEqual(try route("/etablissement/missions/creer?source=mail"), .publierMission)
     }
 
     func testCiblesDesEcransEmpiles() {
@@ -134,7 +149,8 @@ final class EtabRouteTests: XCTestCase {
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
         XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
-        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
+        XCTAssertTrue(EtabDestination.publication.ecranLivre, "T9")
+        for destination: EtabDestination in [.presencesMission(missionId: "m"), .contrat(id: "c"),
                                              .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }

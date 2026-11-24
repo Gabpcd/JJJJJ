@@ -277,7 +277,7 @@ export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },
   { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 5 },
   { name: 'fn_declarer_fin_retroactive', statut: 'a_venir', lot: 5 },
-  { name: 'fn_creer_mission_multi_jours_v4', statut: 'a_venir', lot: 5 },
+  { name: 'fn_creer_mission_multi_jours_v4', statut: 'consommee', lot: 5 }, // T9 : SupabaseEtabPublicationGateway.publier
   { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 5 },
 ];
 

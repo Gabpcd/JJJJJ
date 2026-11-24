@@ -134,3 +134,41 @@ test('lot 5 : textes [juridique] de TextesWeb et plafond d heures refusés en du
   assert.equal(fautesLitteraux({ fichiers: [{ chemin: TEXTES_WEB, contenu: textesWebSource }], interdits: avecTextes }).length, 0,
     'TextesWeb.swift reste l exception');
 });
+
+// L5-T9 (LOT5_PLAN §3 T9, D8, HARD STOP n°4) : la publication native ne choisit ni n'affiche aucun mode d'exercice.
+// Chaque fichier Swift de la tranche est lu par la garde, ne porte aucun littéral interdit, et rougirait pour chaque
+// valeur de la table paramétrée des modes d'exercice (CHECK du dump : niveaux, catégories, forces de source), pour une
+// source de la matrice, pour le nom de la table ou de sa fonction, et pour le texte de l'option « Salarié » recopié.
+test('L5-T9 : aucun littéral de la table des modes d exercice dans les fichiers de la publication', () => {
+  const coeur = 'ios-native/Packages/JoleneCore/Sources/JoleneCore';
+  const fichiers = [
+    `${coeur}/Etablissement/Publication/PublicationMission.swift`,
+    `${coeur}/Etablissement/Publication/PublicationPayload.swift`,
+    `${coeur}/Etablissement/Publication/PublicationModel.swift`,
+    `${coeur}/Etablissement/Publication/PublicationPresentation.swift`,
+    `${coeur}/Demo/Etablissement/DemoEtabPublicationGateway.swift`,
+    'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Etablissement/SupabaseEtabPublicationGateway.swift',
+    'ios-native/Jolene/Screens/Etablissement/Publication/PublicationScreen.swift',
+    'ios-native/Jolene/Screens/Etablissement/Publication/PlanningJoursEditor.swift',
+    'ios-native/Jolene/Screens/Etablissement/Publication/RecapPublicationSheet.swift',
+  ];
+  const textesWebSource = readFileSync(join(ROOT, TEXTES_WEB), 'utf8');
+  const avecTextes = valeursInterdites({ schemaSource, migrations: migrationsMatrice(ROOT), textesWebSource });
+  const urlMatrice = avecTextes.sousChaines.find(s => s.startsWith('https://www.legifrance.gouv.fr/'));
+  assert.ok(urlMatrice, 'aucune source de la matrice lue dans les migrations');
+  const refuses = [...avecTextes.exactes, 'fn_mode_exercice', 'matrice_modes_exercice', urlMatrice,
+    'Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine'];
+  assert.equal(avecTextes.exactes.length, 11, 'les onze valeurs des CHECK de la matrice');
+  for (const chemin of fichiers) {
+    assert.equal(estLivre(chemin), true, `${chemin} : hors du Swift livré, donc hors de la garde`);
+    const contenu = readFileSync(join(ROOT, chemin), 'utf8');
+    assert.deepEqual(fautesLitteraux({ fichiers: [{ chemin, contenu }], interdits: avecTextes }), [], chemin);
+    for (const valeur of refuses) {
+      const empoisonne = `${contenu}\nlet valeurInterdite = ${JSON.stringify(valeur)}\n`;
+      assert.ok(fautesLitteraux({ fichiers: [{ chemin, contenu: empoisonne }], interdits: avecTextes }).length >= 1,
+        `${chemin} : « ${valeur} » accepté en dur`);
+    }
+    // Ni appel ni décodage de la résolution du mode d'exercice, commentaires compris pour les identifiants de code.
+    assert.doesNotMatch(contenu, /\.rpc\(\s*"fn_mode_exercice|liberalEstSelectionnable|ModeExerciceMission/, chemin);
+  }
+});

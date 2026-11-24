@@ -33,9 +33,11 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         let publier = element("etab-missions-publier")
         require("« Publier » est offert au propriétaire (permission missions)") { self.visible(publier) }
         tap("etab-missions-publier")
+        // T9 livrée : la destination `.publication` rend l'écran de publication, plus le provisoire.
         require("Le registre de destinations ouvre la publication") {
-            self.containerVisible(self.element("placeholder-etab-publication"))
+            self.containerVisible(self.element("publier-screen"))
         }
+        XCTAssertFalse(element("placeholder-etab-publication").exists)
         record("\(proofPrefix)-etab-publication")
 
         ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "placeholder-etab-presences")

@@ -2998,7 +2998,7 @@
     },
     {
       "name": "fn_creer_mission_multi_jours_v4",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_accepte_internes: boolean; p_accepte_non_specialises: boolean; p_creneaux: Json; p_description: string | null; p_est_urgente: boolean; p_intitule: string; p_mode_attribution: string; p_mode_remuneration: string; p_nature_tva_prestation: string | null; p_niveau_urgence: number; p_profession_requise: Database[\"public\"][\"Enums\"][\"type_profession\"]; p_retrocession_pct: number | null; p_service: string | null; p_specialite_medicale_requise: string | null; p_taux_horaire_base: number; p_type_contrat_recherche: string }",

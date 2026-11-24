@@ -15,7 +15,7 @@ public enum SupabaseEtablissementGateways {
             candidatures: SupabaseEtabCandidaturesGateway(client: client), // T6
             pointage: SupabaseEtabPointageGateway(client: client), // T7
             presences: UnwiredEtabPresencesPort(),        // T8
-            publication: UnwiredEtabPublicationPort(),    // T9
+            publication: SupabaseEtabPublicationGateway(client: client), // T9
             audit: SupabaseEtabAuditGateway(client: client)
         )
     }

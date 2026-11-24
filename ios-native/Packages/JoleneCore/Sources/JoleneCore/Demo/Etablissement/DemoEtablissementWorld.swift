@@ -55,14 +55,16 @@ public enum DemoEtablissementWorld {
                                 identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
         // T6 : décisions de la session partagées par les missions, les candidatures et le pointage (une seule source relue).
         let decisions = DemoEtabEtatCandidatures(planningModifie: configuration.planningModifie)
+        // T9 : missions publiées pendant la session, relues par les missions et les candidatures (une seule source).
+        let publications = DemoEtabEtatPublication()
         return EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
             dashboard: DemoEtabDashboardGateway(),        // T4
-            missions: DemoEtabMissionsGateway(etat: decisions), // T5
-            candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
+            missions: DemoEtabMissionsGateway(etat: decisions, publications: publications), // T5
+            candidatures: DemoEtabCandidaturesGateway(etat: decisions, publications: publications), // T6
             pointage: DemoEtabPointageGateway(decisions: decisions, cadence: configuration.cadencePointage), // T7
             presences: UnwiredEtabPresencesPort(),        // T8
-            publication: UnwiredEtabPublicationPort(),    // T9
+            publication: DemoEtabPublicationGateway(etat: publications, blocage: configuration.blocage), // T9
             audit: DemoEtabAuditGateway()
         )
     }
