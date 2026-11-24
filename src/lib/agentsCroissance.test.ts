@@ -1,14 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENTS,
+  LIBELLE_CANAL,
+  RESULTATS_APPEL,
   actionsPossibles,
+  alerteCibles,
+  estAppel,
+  estEmail,
   etapesEtablissements,
   etapesSoignants,
   goulot,
   groupesSuggeres,
+  libelleResultatAppel,
+  libelleStatut,
   lienGmail,
+  lienTel,
+  lireCibles,
   raisonsCible,
+  resumeCibles,
+  telephoneFiche,
   type EntonnoirCroissance,
 } from './agentsCroissance';
+
+/** Les séparateurs de milliers français sont des espaces insécables fines : on compare le texte lu. */
+const lisible = (texte: string | undefined) => (texte ?? '').replace(/[\u00a0\u202f]/g, ' ');
 
 const entonnoir = (s: Record<string, number>, p: Record<string, number>, e: Record<string, number>): EntonnoirCroissance => ({
   periode: { debut: '2026-11-01T00:00:00Z', fin: '2026-11-08T00:00:00Z' },
@@ -90,5 +105,128 @@ describe('agents de croissance — règles pures', () => {
       {},
     );
     expect(goulot(etapesSoignants(e))?.cle).toBe('avec_document');
+  });
+});
+
+describe('agents de croissance — fiches d’appel', () => {
+  it('déclare l’agent et le canal téléphone', () => {
+    expect(Object.keys(AGENTS)).toEqual([
+      'PROSPECTION_ETABLISSEMENT', 'APPEL_ETABLISSEMENT', 'POST_SOCIAL', 'MISSION_A_POURVOIR', 'REACTIVATION',
+    ]);
+    expect(LIBELLE_CANAL.TELEPHONE).toBe('Téléphone');
+    expect(estAppel({ canal: 'TELEPHONE' })).toBe(true);
+    expect(estAppel({ canal: 'EMAIL' })).toBe(false);
+    expect(estEmail({ canal: 'TELEPHONE' })).toBe(false);
+  });
+
+  it('ne dit jamais qu’une fiche d’appel est « envoyée »', () => {
+    expect(libelleStatut({ canal: 'TELEPHONE', statut: 'BROUILLON' })).toBe('À valider');
+    expect(libelleStatut({ canal: 'TELEPHONE', statut: 'VALIDE' })).toBe('Validée, à appeler');
+    expect(libelleStatut({ canal: 'TELEPHONE', statut: 'ENVOYE' })).toBe('Appel noté');
+    expect(libelleStatut({ canal: 'TELEPHONE', statut: 'REJETE' })).toBe('Rejeté');
+    expect(libelleStatut({ canal: 'EMAIL', statut: 'VALIDE' })).toBe('Validé, à envoyer');
+    expect(libelleStatut({ canal: 'EMAIL', statut: 'ENVOYE' })).toBe('Envoyé');
+  });
+
+  it('construit un lien tel: seulement pour un numéro que le serveur sait comparer', () => {
+    expect(telephoneFiche({ telephone: ' 01 00 00 10 01 ' })).toBe('01 00 00 10 01');
+    expect(telephoneFiche({ telephone: '' })).toBeNull();
+    expect(telephoneFiche({})).toBeNull();
+    expect(lienTel('01 00 00 10 01')).toBe('tel:0100001001');
+    expect(lienTel('01.00.00.10.01')).toBe('tel:0100001001');
+    expect(lienTel('+33 1 00 00 10 01')).toBe('tel:+33100001001');
+    expect(lienTel('12345')).toBeNull();
+    expect(lienTel(null)).toBeNull();
+  });
+
+  it('propose les résultats du CRM, dont deux définitifs', () => {
+    expect(RESULTATS_APPEL.map((r) => r.code)).toEqual([
+      'APPEL_REPONDU', 'SANS_REPONSE', 'INTERESSE', 'A_RAPPELER', 'PAS_INTERESSE', 'STOP',
+    ]);
+    expect(RESULTATS_APPEL.filter((r) => r.definitif).map((r) => r.code)).toEqual(['PAS_INTERESSE', 'STOP']);
+    expect(libelleResultatAppel('SANS_REPONSE')).toBe('Sans réponse');
+    expect(libelleResultatAppel('INSCRIT')).toBeNull();
+    expect(libelleResultatAppel(undefined)).toBeNull();
+  });
+
+  it('explique le classement d’une fiche d’appel sans chiffre BMO', () => {
+    expect(raisonsCible({
+      agent: 'APPEL_ETABLISSEMENT',
+      departement: '75',
+      contexte: { type_etablissement: 'CENTRE_SANTE', ville: 'Paris', score: { type: 20, signal_boamp_90j: 20, tension_bmo_as: 3 } },
+    })).toEqual(['CENTRE SANTE', 'Paris', 'dépt 75', 'avis BOAMP récent']);
+  });
+});
+
+describe('agents de croissance — un zéro n’est plus muet', () => {
+  const constat = {
+    departements: ['56', '75', '92'], etablissements_cibles: 2318, adresses_fermees: 656,
+    adresses_utilisables: 0, adresses_restantes: 0, telephones_utilisables: 2017, telephones_restants: 2017,
+  };
+
+  it('ne lit qu’un décompte complet', () => {
+    expect(lireCibles(constat)).toEqual(constat);
+    expect(lireCibles({ ...constat, adresses_utilisables: undefined })).toBeNull();
+    expect(lireCibles({ ...constat, telephones_restants: '2017' })).toBeNull();
+    expect(lireCibles(null)).toBeNull();
+    expect(lireCibles(undefined)).toBeNull();
+    expect(lireCibles({ ...constat, departements: 'ZZ' })?.departements).toEqual([]);
+  });
+
+  it('avertit quand aucune adresse n’est utilisable (constat du 20/11/2026)', () => {
+    const a = alerteCibles(lireCibles(constat));
+    expect(a?.niveau).toBe('alerte');
+    expect(a?.titre).toBe('Prospection par email à l’arrêt');
+    expect(lisible(a?.texte)).toBe(
+      'Aucune adresse utilisable parmi les 2 318 établissements ciblés (56, 75, 92). '
+      + '656 ont une adresse, toutes en messagerie de santé fermée (MSSanté, Apicrypt), où un email envoyé depuis Gmail est rejeté. '
+      + '2 017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements ».',
+    );
+  });
+
+  it('accorde au singulier et dit quand il n’y a pas de téléphone non plus', () => {
+    const a = alerteCibles({ ...constat, etablissements_cibles: 3, adresses_fermees: 1, telephones_utilisables: 0, telephones_restants: 0 });
+    expect(lisible(a?.texte)).toBe(
+      'Aucune adresse utilisable parmi les 3 établissements ciblés (56, 75, 92). '
+      + '1 a une adresse, en messagerie de santé fermée (MSSanté, Apicrypt), où un email envoyé depuis Gmail est rejeté. '
+      + 'Aucun n’a de téléphone non plus.',
+    );
+    const b = alerteCibles({ ...constat, adresses_fermees: 0, telephones_utilisables: 1 });
+    expect(lisible(b?.texte)).toBe(
+      'Aucune adresse utilisable parmi les 2 318 établissements ciblés (56, 75, 92). '
+      + '1 a un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements ».',
+    );
+  });
+
+  it('informe quand toutes les adresses utilisables sont déjà traitées', () => {
+    const a = alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 0 });
+    expect(a?.niveau).toBe('info');
+    expect(a?.titre).toBe('Plus aucune adresse à contacter par email');
+    expect(lisible(a?.texte)).toBe(
+      'Les 12 adresses utilisables des 2 318 établissements ciblés (56, 75, 92) sont déjà contactées, au CRM ou en file. '
+      + '2 017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements ».',
+    );
+    expect(lisible(alerteCibles({ ...constat, adresses_utilisables: 1, adresses_restantes: 0 })?.texte))
+      .toContain('La seule adresse utilisable des 2 318 établissements ciblés (56, 75, 92) est déjà contactée, au CRM ou en file.');
+  });
+
+  it('se tait tant qu’il reste une adresse à contacter, ou sans décompte', () => {
+    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 })).toBeNull();
+    expect(alerteCibles(null)).toBeNull();
+  });
+
+  it('signale un ciblage vide', () => {
+    const a = alerteCibles({ ...constat, departements: ['ZZ'], etablissements_cibles: 0, adresses_fermees: 0, telephones_utilisables: 0, telephones_restants: 0 });
+    expect(a).toEqual({
+      niveau: 'alerte',
+      titre: 'Prospection sans cible',
+      texte: 'Aucun établissement ne correspond aux départements et aux types ciblés (ZZ). Les agents de prospection ne peuvent rien préparer.',
+    });
+  });
+
+  it('résume le décompte sur la carte de l’agent', () => {
+    expect(lisible(resumeCibles(constat))).toBe('2 318 établissements ciblés · 0 adresse utilisable · 656 en messagerie fermée · 2 017 téléphones');
+    expect(lisible(resumeCibles({ ...constat, etablissements_cibles: 1, adresses_utilisables: 2, telephones_utilisables: 1 })))
+      .toBe('1 établissement ciblé · 2 adresses utilisables · 656 en messagerie fermée · 1 téléphone');
   });
 });

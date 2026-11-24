@@ -1,16 +1,18 @@
 /**
  * Agents de croissance — logique pure partagée par la page admin.
  * Les agents SQL écrivent des brouillons ; rien n'est envoyé automatiquement.
- * Source : supabase/migrations/20261109140000_agents_croissance_brouillons.sql
+ * Sources : supabase/migrations/20261109140000_agents_croissance_brouillons.sql,
+ * 20261124123500_prospection_zero_visible_liste_appels.sql (décompte des cibles, fiches d'appel).
  */
 
 export type AgentCroissance =
   | 'PROSPECTION_ETABLISSEMENT'
+  | 'APPEL_ETABLISSEMENT'
   | 'POST_SOCIAL'
   | 'MISSION_A_POURVOIR'
   | 'REACTIVATION';
 
-export type CanalBrouillon = 'EMAIL' | 'LINKEDIN' | 'FACEBOOK_GROUPE';
+export type CanalBrouillon = 'EMAIL' | 'TELEPHONE' | 'LINKEDIN' | 'FACEBOOK_GROUPE';
 export type StatutBrouillon = 'BROUILLON' | 'VALIDE' | 'REJETE' | 'ENVOYE' | 'EXPIRE';
 export type ActionBrouillon = 'MODIFIER' | 'VALIDER' | 'REJETER' | 'MARQUER_ENVOYE';
 
@@ -44,6 +46,11 @@ export const AGENTS: Record<AgentCroissance, { libelle: string; description: str
     description:
       'Chaque matin, jusqu’à 20 premiers emails et les relances dues, pour les établissements des marchés pilotes (FINESS), en excluant les oppositions.',
   },
+  APPEL_ETABLISSEMENT: {
+    libelle: 'Appels établissements',
+    description:
+      'Chaque semaine, jusqu’à 30 fiches d’appel pour les établissements des marchés pilotes qui ont un téléphone, classées par potentiel, oppositions exclues. Vous appelez vous-même, puis vous notez le résultat.',
+  },
   POST_SOCIAL: {
     libelle: 'Posts sociaux',
     description:
@@ -63,6 +70,7 @@ export const AGENTS: Record<AgentCroissance, { libelle: string; description: str
 
 export const LIBELLE_CANAL: Record<CanalBrouillon, string> = {
   EMAIL: 'Email',
+  TELEPHONE: 'Téléphone',
   LINKEDIN: 'LinkedIn',
   FACEBOOK_GROUPE: 'Groupe Facebook',
 };
@@ -78,6 +86,51 @@ export const LIBELLE_STATUT: Record<StatutBrouillon, string> = {
 /** Un email part du Gmail de la fondatrice ; un post est copié-collé. */
 export function estEmail(b: Pick<BrouillonCroissance, 'canal'>): boolean {
   return b.canal === 'EMAIL';
+}
+
+/** Une fiche d'appel : la fondatrice appelle elle-même, puis note le résultat. */
+export function estAppel(b: Pick<BrouillonCroissance, 'canal'>): boolean {
+  return b.canal === 'TELEPHONE';
+}
+
+/** Libellé du statut : une fiche d'appel ne « s'envoie » pas. */
+export function libelleStatut(b: Pick<BrouillonCroissance, 'canal' | 'statut'>): string {
+  if (estAppel(b) && b.statut === 'VALIDE') return 'Validée, à appeler';
+  if (estAppel(b) && b.statut === 'ENVOYE') return 'Appel noté';
+  return LIBELLE_STATUT[b.statut];
+}
+
+/**
+ * Résultats d'un appel, mêmes codes que « Actions du jour » du CRM
+ * (fn_admin_crm_effectuer_action). `definitif` : le contact ne sera plus sollicité, tous canaux.
+ */
+export const RESULTATS_APPEL = [
+  { code: 'APPEL_REPONDU', libelle: 'A répondu', definitif: false },
+  { code: 'SANS_REPONSE', libelle: 'Sans réponse', definitif: false },
+  { code: 'INTERESSE', libelle: 'Intéressé', definitif: false },
+  { code: 'A_RAPPELER', libelle: 'À rappeler', definitif: false },
+  { code: 'PAS_INTERESSE', libelle: 'Pas intéressé', definitif: true },
+  { code: 'STOP', libelle: 'STOP', definitif: true },
+] as const;
+
+export type ResultatAppel = (typeof RESULTATS_APPEL)[number]['code'];
+
+export function libelleResultatAppel(code: unknown): string | null {
+  return RESULTATS_APPEL.find((r) => r.code === code)?.libelle ?? null;
+}
+
+/** Numéro d'une fiche d'appel, tel que l'annuaire le donne. */
+export function telephoneFiche(contexte: Record<string, unknown>): string | null {
+  const brut = contexte?.telephone;
+  return typeof brut === 'string' && brut.trim() ? brut.trim() : null;
+}
+
+/** Lien `tel:` (chiffres seuls, « + » initial conservé). Null sous 9 chiffres, comme la règle STOP du serveur. */
+export function lienTel(numero: string | null): string | null {
+  const brut = (numero ?? '').trim();
+  const chiffres = brut.replace(/\D/g, '');
+  if (chiffres.length < 9) return null;
+  return `tel:${brut.startsWith('+') ? '+' : ''}${chiffres}`;
 }
 
 /** Actions proposées pour un statut donné (miroir des règles SQL). */
@@ -120,7 +173,7 @@ export function groupesSuggeres(contexte: Record<string, unknown>): GroupeSugger
 export function raisonsCible(b: Pick<BrouillonCroissance, 'agent' | 'contexte' | 'departement'>): string[] {
   const c = b.contexte ?? {};
   const raisons: string[] = [];
-  if (b.agent === 'PROSPECTION_ETABLISSEMENT') {
+  if (b.agent === 'PROSPECTION_ETABLISSEMENT' || b.agent === 'APPEL_ETABLISSEMENT') {
     if (typeof c.type_etablissement === 'string') raisons.push(c.type_etablissement.replace(/_/g, ' '));
     if (typeof c.ville === 'string' && c.ville) raisons.push(c.ville);
     if (b.departement) raisons.push(`dépt ${b.departement}`);
@@ -146,6 +199,96 @@ export function raisonsCible(b: Pick<BrouillonCroissance, 'agent' | 'contexte' |
     }
   }
   return raisons;
+}
+
+// ---------------------------------------------------------------------------
+// Cibles de la prospection : un zéro ne doit pas rester muet
+// ---------------------------------------------------------------------------
+
+/** Décompte de private.fn_growth_cibles_prospection() (résultat de l'agent email, entonnoir). */
+export interface CiblesProspection {
+  departements: string[];
+  etablissements_cibles: number;
+  adresses_fermees: number;
+  adresses_utilisables: number;
+  adresses_restantes: number;
+  telephones_utilisables: number;
+  telephones_restants: number;
+}
+
+const CLES_CIBLES = [
+  'etablissements_cibles', 'adresses_fermees', 'adresses_utilisables', 'adresses_restantes',
+  'telephones_utilisables', 'telephones_restants',
+] as const;
+
+/** Lit un décompte ; null s'il est absent ou incomplet (passage antérieur à la migration). */
+export function lireCibles(brut: unknown): CiblesProspection | null {
+  if (typeof brut !== 'object' || brut === null) return null;
+  const c = brut as Record<string, unknown>;
+  if (!CLES_CIBLES.every((cle) => typeof c[cle] === 'number' && Number.isFinite(c[cle]))) return null;
+  return {
+    departements: Array.isArray(c.departements) ? c.departements.map(String) : [],
+    etablissements_cibles: c.etablissements_cibles as number,
+    adresses_fermees: c.adresses_fermees as number,
+    adresses_utilisables: c.adresses_utilisables as number,
+    adresses_restantes: c.adresses_restantes as number,
+    telephones_utilisables: c.telephones_utilisables as number,
+    telephones_restants: c.telephones_restants as number,
+  };
+}
+
+export interface AlerteCibles {
+  /** « alerte » : aucune adresse utilisable ; « info » : toutes déjà traitées. */
+  niveau: 'alerte' | 'info';
+  titre: string;
+  texte: string;
+}
+
+const fr = (n: number) => n.toLocaleString('fr-FR');
+const pluriel = (n: number, un: string, plusieurs: string) => (n > 1 ? plusieurs : un);
+
+/** Avertissement à afficher quand l'agent email ne peut plus rien préparer, sinon null. */
+export function alerteCibles(c: CiblesProspection | null): AlerteCibles | null {
+  if (!c) return null;
+  const marches = c.departements.length > 0 ? ` (${c.departements.join(', ')})` : '';
+  if (c.etablissements_cibles === 0) {
+    return {
+      niveau: 'alerte',
+      titre: 'Prospection sans cible',
+      texte: `Aucun établissement ne correspond aux départements et aux types ciblés${marches}. Les agents de prospection ne peuvent rien préparer.`,
+    };
+  }
+  const telephones = c.telephones_utilisables > 0
+    ? ` ${fr(c.telephones_utilisables)} ${pluriel(c.telephones_utilisables, 'a', 'ont')} un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements ».`
+    : ' Aucun n’a de téléphone non plus.';
+  if (c.adresses_utilisables === 0) {
+    const fermees = c.adresses_fermees > 0
+      ? ` ${fr(c.adresses_fermees)} ${pluriel(c.adresses_fermees, 'a une adresse, en', 'ont une adresse, toutes en')} messagerie de santé fermée (MSSanté, Apicrypt), où un email envoyé depuis Gmail est rejeté.`
+      : '';
+    return {
+      niveau: 'alerte',
+      titre: 'Prospection par email à l’arrêt',
+      texte: `Aucune adresse utilisable parmi les ${fr(c.etablissements_cibles)} établissements ciblés${marches}.${fermees}${telephones}`,
+    };
+  }
+  if (c.adresses_restantes === 0) {
+    return {
+      niveau: 'info',
+      titre: 'Plus aucune adresse à contacter par email',
+      texte: `${pluriel(c.adresses_utilisables, 'La seule adresse utilisable', `Les ${fr(c.adresses_utilisables)} adresses utilisables`)} des ${fr(c.etablissements_cibles)} établissements ciblés${marches} ${pluriel(c.adresses_utilisables, 'est déjà contactée, au CRM ou en file', 'sont déjà contactées, au CRM ou en file')}.${telephones}`,
+    };
+  }
+  return null;
+}
+
+/** Résumé d'une ligne pour la carte de l'agent. */
+export function resumeCibles(c: CiblesProspection): string {
+  return [
+    `${fr(c.etablissements_cibles)} ${pluriel(c.etablissements_cibles, 'établissement ciblé', 'établissements ciblés')}`,
+    `${fr(c.adresses_utilisables)} ${pluriel(c.adresses_utilisables, 'adresse utilisable', 'adresses utilisables')}`,
+    `${fr(c.adresses_fermees)} en messagerie fermée`,
+    `${fr(c.telephones_utilisables)} ${pluriel(c.telephones_utilisables, 'téléphone', 'téléphones')}`,
+  ].join(' · ');
 }
 
 // ---------------------------------------------------------------------------
