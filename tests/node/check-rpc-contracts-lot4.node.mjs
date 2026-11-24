@@ -111,6 +111,8 @@ const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 // quatre RPC du swipe de T3a.
 const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const GATEWAY_LITIGES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Litiges/SupabaseLitigesGateway.swift';
+const GATEWAY_RECLAMATIONS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Reclamations/SupabaseReclamationsGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
   ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
@@ -120,6 +122,8 @@ const LOT4_CONSOMMEES = new Map([
   ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_ajouter_message_litige', ['T8', GATEWAY_LITIGES]],
+  ['fn_soumettre_reclamation', ['T8', GATEWAY_RECLAMATIONS]],
 ]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
@@ -377,10 +381,13 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
     if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
     const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
     const consommee = LOT4_CONSOMMEES.get(name);
-    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)'
+    // Partagée (`fn_ouvrir_litige_rate_limited`) : consommée par T8 du lot 4 (type `AUTRE`), l'entrée de `RPC_SUIVIES`
+    // restant celle du lot 2 ; sa gateway du lot 4 l'appelle par son littéral.
+    const statut = partagee ? `- **Statut natif (lot 4)** : consommée (lot 4, T8) par \`${GATEWAY_LITIGES.split('/Sources/')[1]}\``
       : consommee ? `- **Statut natif** : consommée (lot 4, ${consommee[0]}) par \`${consommee[1].split('/Sources/')[1]}\``
         : '- **Statut natif** : à venir (lot 4';
     assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent (${statut})`);
+    if (partagee) assert.ok(read(GATEWAY_LITIGES).includes(`"${name}"`), `${name} : littéral absent de ${GATEWAY_LITIGES}`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {
         total++;

@@ -10,8 +10,9 @@ import JoleneDesign
 /// Écarts consignés : le code de pointage de la présence (« Code : … », l.722-726) n'est pas affiché (aucune colonne
 /// `code_*` n'est lue, gap B1-ter) ; « Détail » (l.695-698) ouvre le détail natif des présences (T5a,
 /// `DetailPresencesScreen`) ; la ligne elle-même reste non cliquable (le panneau de contestation de T5b s'y monte) ;
-/// « Voir ou signaler un litige » renvoie vers `/soignant/litiges` (lot 4), rendu seulement avec le présentateur
-/// injecté par T10 : jamais un bouton sans effet.
+/// « Voir ou signaler un litige » ouvre les litiges natifs (lot 4, T8 : cible `PresencesRenvois.litiges`, présentée par
+/// l'espace, `contexteSecondaire`), ou leur renvoi web tant que l'écran n'est pas livré ; rendu seulement si la cible
+/// est présentable : jamais un bouton sans effet.
 /// Point d'extension T5b : le panneau de contestation d'une présence non validée (l.728-738) se monte sous la grille,
 /// après le go HARD STOP n°4 de Gabrielle (Q9).
 struct PresenceHistoriqueRow: View {
@@ -20,6 +21,7 @@ struct PresenceHistoriqueRow: View {
     let session: SessionStore
     let snapshot: SessionSnapshot
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    @Environment(\.contexteSecondaire) private var contexteSecondaire
 
     var body: some View {
         let resume = ligne.resume
@@ -106,8 +108,9 @@ struct PresenceHistoriqueRow: View {
                 .font(JoleneFont.caption)
                 .foregroundStyle(JoleneColor.bubblegum)
                 .fixedSize(horizontal: false, vertical: true)
-            if let presentateurRenvoiWeb, let route = PresencesRenvois.litiges {
-                Button(LibellesWeb.LignePresence.voirOuSignalerLitige) { presentateurRenvoiWeb.presenter(route) }
+            if let contexteSecondaire, let cible = PresencesRenvois.litiges,
+               cible.estPresentable(renvoiWebDisponible: presentateurRenvoiWeb != nil) {
+                Button(LibellesWeb.LignePresence.voirOuSignalerLitige) { contexteSecondaire.ouvrir(cible) }
                     .font(JoleneFont.callout.weight(.semibold))
                     .foregroundStyle(JoleneColor.rose800)
                     .frame(minHeight: 44)

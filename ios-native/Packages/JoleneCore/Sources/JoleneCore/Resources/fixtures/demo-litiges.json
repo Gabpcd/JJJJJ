@@ -1,0 +1,50 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "litiges": [
+    {
+      "id": "demo-litige-001",
+      "mission_id": "demo-litige-mission-001",
+      "etablissement_id": "demo-etab-1",
+      "statut": "OUVERT",
+      "type_litige": "AUTRE",
+      "motif": "Démonstration · Désaccord sur le poste occupé pendant la mission.",
+      "resolution": null,
+      "cree_le": "2026-11-01T04:00:00.000Z",
+      "missions": {
+        "id": "demo-litige-mission-001",
+        "intitule": "Démonstration · Mission en litige 1",
+        "debut_le": "2026-10-30T07:00:00.000Z"
+      }
+    },
+    {
+      "id": "demo-litige-002",
+      "mission_id": "demo-litige-mission-002",
+      "etablissement_id": "demo-etab-2",
+      "statut": "EN_MEDIATION",
+      "type_litige": "AUTRE",
+      "motif": "Démonstration · Désaccord sur l’heure de fin de la mission.",
+      "resolution": null,
+      "cree_le": "2026-10-27T00:00:00.000Z",
+      "missions": {
+        "id": "demo-litige-mission-002",
+        "intitule": "Démonstration · Mission en litige 2",
+        "debut_le": "2026-10-24T07:00:00.000Z"
+      }
+    },
+    {
+      "id": "demo-litige-003",
+      "mission_id": "demo-litige-mission-003",
+      "etablissement_id": "demo-etab-3",
+      "statut": "RESOLU_ACCORD_PARTIES",
+      "type_litige": "AUTRE",
+      "motif": "Démonstration · Désaccord sur la durée de la pause.",
+      "resolution": "Démonstration · Accord trouvé entre les parties.",
+      "cree_le": "2026-10-13T00:00:00.000Z",
+      "missions": {
+        "id": "demo-litige-mission-003",
+        "intitule": "Démonstration · Mission en litige 3",
+        "debut_le": "2026-10-09T07:00:00.000Z"
+      }
+    }
+  ]
+}

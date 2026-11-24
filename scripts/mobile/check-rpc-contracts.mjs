@@ -138,8 +138,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
   { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },
   // T8 — litiges et réclamations générales (`fn_ouvrir_litige_rate_limited` : RPC_PARTAGEES_LOT4)
-  { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
-  { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },
+  { name: 'fn_ajouter_message_litige', statut: 'consommee', lot: 4 }, // L4-T8 : SupabaseLitigesGateway.ajouterMessage
+  { name: 'fn_soumettre_reclamation', statut: 'consommee', lot: 4 }, // L4-T8 : SupabaseReclamationsGateway.soumettre
   // T9 — score, contestation et évaluations
   { name: 'fn_mon_breakdown_actuel', statut: 'a_venir', lot: 4 },
   { name: 'fn_mes_evenements_score', statut: 'a_venir', lot: 4 },

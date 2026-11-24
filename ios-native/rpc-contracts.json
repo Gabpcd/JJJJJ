@@ -1679,7 +1679,7 @@
     },
     {
       "name": "fn_ajouter_message_litige",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_contenu: string; p_litige_id: string }",
@@ -1708,7 +1708,7 @@
     },
     {
       "name": "fn_soumettre_reclamation",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_categorie: string; p_details: string; p_mission_id?: string; p_sujet: string }",

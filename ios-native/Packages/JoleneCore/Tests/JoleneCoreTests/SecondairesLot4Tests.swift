@@ -48,11 +48,16 @@ final class SecondairesLot4Tests: XCTestCase {
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
         .recherches, // T4
+        .litiges(onglet: nil, litigeId: nil), // T8 — onglet Litiges
+        .litiges(onglet: .reclamations, litigeId: nil), // T8 — onglet Réclamations (coupe-circuit propre)
     ]
+
+    /// Écran livré quels que soient ses paramètres (identifiant de litige…) : comparé par son nom de coupe-circuit (T8).
+    static func livre(_ ecran: EcranSecondaire) -> Bool { livres.contains { $0.nom == ecran.nom } }
 
     func testSeulsLesEcransDesTranchesLivreesSontLivres() {
         for ecran in Self.tous {
-            XCTAssertEqual(ecran.estLivre, Self.livres.contains(ecran), "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
+            XCTAssertEqual(ecran.estLivre, Self.livre(ecran), "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
         }
     }
 
@@ -76,7 +81,7 @@ final class SecondairesLot4Tests: XCTestCase {
         for ecran in Self.tous {
             let url = try XCTUnwrap(ecran.urlWeb, "\(ecran)")
             let lien = try XCTUnwrap(DestinationLien(url: url), "\(ecran)")
-            if Self.livres.contains(ecran) {
+            if Self.livre(ecran) {
                 XCTAssertEqual(CibleNotification(lien), .secondaire(ecran), "\(ecran) : écran livré")
                 continue
             }
@@ -129,11 +134,16 @@ final class SecondairesLot4Tests: XCTestCase {
     // MARK: - Entrées du hub
 
     func testEntreesDuHubSuiventLeWebEtNeMontrentQueLesEcransLivres() {
-        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sections(livre: Self.livres.contains),
+        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sections(livre: Self.livre),
                        "entrées natives des seuls écrans livrés, renvois web inchangés pour les autres")
-        XCTAssertEqual(EntreesHubLot4.sections(), [EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
-            EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
-        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96)")
+        XCTAssertEqual(EntreesHubLot4.sections(), [
+            EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
+                EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
+            ]),
+            EntreesHubLot4.Section(titre: "Suivi", entrees: [
+                EntreesHubLot4.Entree(ecran: .litiges(onglet: nil, litigeId: nil), libelle: "Litiges & contestations"),
+            ]),
+        ], "T4 : « Recherches sauvegardées » (MonCompteSoignant.tsx l.94-96) ; T8 : « Litiges & contestations » sous « Suivi » (l.107-109)")
         let toutes = EntreesHubLot4.sections(livre: { _ in true })
         XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb)
         XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi"], "MonCompteSoignant.tsx l.94, l.107")

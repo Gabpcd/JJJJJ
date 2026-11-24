@@ -134,80 +134,9 @@ public enum ApplicationParrainage: Equatable, Sendable {
 
 // MARK: - Litiges et réclamations (T8)
 
-public struct Litige: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var missionId: String?
-    public var statut: String
-    public var typeLitige: String?
-    public var motif: String?
-    public var creeLe: Date?
-
-    public init(id: String, missionId: String?, statut: String, typeLitige: String?, motif: String?, creeLe: Date?) {
-        self.id = id; self.missionId = missionId; self.statut = statut; self.typeLitige = typeLitige
-        self.motif = motif; self.creeLe = creeLe
-    }
-}
-
-/// Mission assignée EN_COURS / TERMINEE sans litige ouvert (web `LitigesSoignant.tsx` l.137-146).
-public struct MissionContestable: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var intitule: String?
-    public var etablissementId: String?
-
-    public init(id: String, intitule: String?, etablissementId: String?) {
-        self.id = id; self.intitule = intitule; self.etablissementId = etablissementId
-    }
-}
-
-/// Issue de `fn_ouvrir_litige_rate_limited` (3 arguments, `AUTRE`) : `ouvert` après relecture par `litige_id`.
-public enum OuvertureLitigeOutcome: Equatable, Sendable {
-    case ouvert(id: String, informatif: Bool)
-    case refuse(message: String)
-}
-
-public struct MessageLitige: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var auteurId: String?
-    public var contenu: String
-    public var creeLe: Date?
-
-    public init(id: String, auteurId: String?, contenu: String, creeLe: Date?) {
-        self.id = id; self.auteurId = auteurId; self.contenu = contenu; self.creeLe = creeLe
-    }
-}
-
-/// Issue de `fn_ajouter_message_litige` : le fil relu, ou le refus serveur verbatim.
-public enum IssueMessageLitige: Equatable, Sendable {
-    case ajoute([MessageLitige])
-    case refuse(message: String)
-}
-
-/// Catégories de `reclamations_categorie_check` (liste fermée côté app : hors liste → 23514).
-public enum CategorieReclamation: String, Equatable, Sendable, CaseIterable {
-    case mission = "MISSION"
-    case paiement = "PAIEMENT"
-    case technique = "TECHNIQUE"
-    case comportement = "COMPORTEMENT"
-    case autre = "AUTRE"
-}
-
-public struct Reclamation: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var categorie: String
-    public var sujet: String
-    public var statut: String
-    public var creeLe: Date?
-
-    public init(id: String, categorie: String, sujet: String, statut: String, creeLe: Date?) {
-        self.id = id; self.categorie = categorie; self.sujet = sujet; self.statut = statut; self.creeLe = creeLe
-    }
-}
-
-/// Issue de `fn_soumettre_reclamation` (`{id, statut}`, ni `success` ni `ok`) : la ligne relue par `id`.
-public enum IssueReclamation: Equatable, Sendable {
-    case soumise(Reclamation)
-    case refusee(message: String)
-}
+// `Litige`, `MissionContestable`, `OuvertureLitigeOutcome`, `MessageLitige`, `IssueMessageLitige` : `Models/Litiges.swift` ;
+// `CategorieReclamation`, `Reclamation`, `IssueReclamation` : `Models/Reclamations.swift` (déplacés par T8 avec leur
+// décodage tolérant, comme `Models/Swipe.swift` par T3a).
 
 // MARK: - Score et évaluations (T9)
 

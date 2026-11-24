@@ -8,9 +8,10 @@ import JoleneDesign
 ///
 /// - Bouton « Contester cette présence » (`contestation-ouvrir-<presenceId>`) seulement si le serveur dit la fenêtre
 ///   ouverte (`fn_fenetre_contestation_ouverte`) ; rien sinon, ni pendant la lecture, ni sur erreur (fail-closed).
-/// - Litige relu : en-tête « Contestation » et libellé de statut du web (`contestation-statut-<presenceId>`) ; réponse et
-///   clôture restent sur le web (lot 4) : « Voir ou signaler un litige » (`contestation-litiges-web`), rendu seulement avec
-///   le présentateur des renvois web (jamais un bouton sans effet).
+/// - Litige relu : en-tête « Contestation » et libellé de statut du web (`contestation-statut-<presenceId>`) ; la réponse
+///   se fait dans les litiges natifs (lot 4, T8) : « Voir ou signaler un litige » (`contestation-litiges-web`) ouvre la
+///   cible `PresencesRenvois.litiges` par l'espace (`contexteSecondaire`), renvoi web tant que l'écran n'est pas livré ;
+///   rendu seulement si la cible est présentable (jamais un bouton sans effet).
 /// - **Aucun texte de délai** (Q9, D12 : la garde `ANCRES_Q9` les refuse) : ni « 72h pour répondre », ni l'escalade, ni
 ///   la fenêtre de 72 h du formulaire du web. Un refus du serveur s'affiche tel quel dans la feuille (envoi désactivé),
 ///   puis dans le panneau à la place du bouton (`contestation-refus-<presenceId>`). Une erreur de transport laisse la
@@ -18,6 +19,7 @@ import JoleneDesign
 struct ContestationPanneau: View {
     @StateObject private var model: ContestationModel
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    @Environment(\.contexteSecondaire) private var contexteSecondaire
 
     init(presenceId: String, missionId: String, valideLe: String?, session: SessionStore, snapshot: SessionSnapshot) {
         _model = StateObject(wrappedValue: ContestationModel(presenceId: presenceId, missionId: missionId, valideLe: valideLe,
@@ -57,8 +59,9 @@ struct ContestationPanneau: View {
                 JoleneBadge(model.libelleStatut ?? "", tone: Self.ton(litige.statut))
                     .accessibilityIdentifier("contestation-statut-\(model.presenceId)")
             }
-            if let presentateurRenvoiWeb, let route = PresencesRenvois.litiges {
-                JoleneButton(LibellesWeb.LignePresence.voirOuSignalerLitige, style: .secondary) { presentateurRenvoiWeb.presenter(route) }
+            if let contexteSecondaire, let cible = PresencesRenvois.litiges,
+               cible.estPresentable(renvoiWebDisponible: presentateurRenvoiWeb != nil) {
+                JoleneButton(LibellesWeb.LignePresence.voirOuSignalerLitige, style: .secondary) { contexteSecondaire.ouvrir(cible) }
                     .accessibilityIdentifier("contestation-litiges-web")
             }
         }

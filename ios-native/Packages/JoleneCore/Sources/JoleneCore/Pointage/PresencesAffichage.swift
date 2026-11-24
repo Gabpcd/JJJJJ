@@ -200,9 +200,11 @@ public enum PresencesRenvois {
         return JoleneLink.canonicalURL(link: "/soignant/presences" + requete).map(JoleneRoute.safari)
     }
 
-    /// `navigate('/soignant/litiges')` (`PresencesSoignant.tsx` l.752).
-    public static var litiges: JoleneRoute? {
-        AccueilPresentation.renvoiWeb("/soignant/litiges")
+    /// `navigate('/soignant/litiges')` (`PresencesSoignant.tsx` l.752). Lot 4, T8 (lien croisé du lot 2) : la page des
+    /// litiges est native ; la cible suit `DestinationLien` — l'écran natif tant qu'il est livré, sinon le renvoi web
+    /// canonique. `AccueilPresentation.renvoiWeb` rend nil depuis T8 : le bouton aurait disparu sans bruit.
+    public static var litiges: CibleNotification? {
+        DestinationLien(link: "/soignant/litiges").map { CibleNotification($0) }
     }
 
     /// Récapitulatif financier d'une mission (`DetailPresencesMission.tsx` l.705-800 : taux, bruts, IFM/ICP calculés

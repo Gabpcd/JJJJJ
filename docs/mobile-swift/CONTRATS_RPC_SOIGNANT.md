@@ -865,7 +865,7 @@ récemment. Réessayez plus tard. » (l.46687) ; `p_facture_id` NULL → délég
 
 ### Usage du lot 4 (T8, type `AUTRE`)
 
-- **Statut natif (lot 4)** : à venir (lot 4, T8). Aucun statut propre au lot 4 : l'entrée partagée garde celui du lot qui la suit (passage en `consommee` par la tranche T5b du lot 2, ou par T15 du lot 4 si l'entrée est la sienne).
+- **Statut natif (lot 4)** : consommée (lot 4, T8) par `JoleneSupabase/Litiges/SupabaseLitigesGateway.swift` (`ouvrir`, trois clés exactes, `p_type_litige = 'AUTRE'`, litige relu par son identifiant). Aucun statut propre au lot 4 dans `RPC_SUIVIES` : l'entrée partagée garde celui du lot qui la suit (`consommee`, `lot: 2`, tranche T5b du lot 2).
 - **Usage prévu** : Ouverture d'un litige de type `AUTRE` sur une mission `EN_COURS` ou `TERMINEE` assignée au soignant (missions contestables = celles-ci moins celles déjà en litige, web l.137-146). L'app appelle **uniquement** la signature canonique à 3 arguments nommés (`p_mission_id`, `p_type_litige = 'AUTRE'`, `p_motif`), équivalente au wrapper déprécié à 2 arguments que le web appelle encore (`LitigesSoignant.tsx` l.172) ; fiche « Surcharges ».
 - **Contrat de réponse** : 3 arguments (l.46379) : succès `{success:true, litige_id, est_informatif, facture_id}` (l.46551-46556), `litige_id` exigé (`requiredString`) puis relecture de `litiges` par id ; refus `{error}` **sans** `success` (HTTP 200), affichés verbatim (`RPCResponse.leverSiErreur`) : `'Accès refusé'` (l.46400, non authentifié ou compte inactif), `'Le motif doit contenir entre 10 et 2 000 caractères.'` (l.46405), `'Mission introuvable'` (l.46416), `"Vous n'êtes pas partie prenante de cette mission."` (l.46432), `'Un litige de ce type est déjà ouvert pour cette mission.'` (l.46447), `'Trop de litiges ouverts récemment. Réessayez plus tard.'` (l.46469, `rate_limit_litiges_par_heure`, défaut 3), et deux refus inatteignables avec `AUTRE` : `'Aucune facture contestable (ÉMISE, EN RETARD ou PAYÉE) pour cette mission.'` (l.46488, types facture), `'Fenêtre de contestation fermée pour ce type de litige. Contactez le support.'` (l.46518 ; la fenêtre de `AUTRE` est toujours ouverte, `fn_fenetre_contestation_ouverte` l.36596). Wrapper à 2 arguments (l.46354) : `'Accès refusé'` puis délégation en `AUTRE`. Effets : trigger `dec_litige_48h` (l.75396) sans `RAISE`, audit `LITIGE_OUVERTURE` serveur.
 - **Exemple de réponse STAGING** : **obligatoire** dans le run T14 (plan l.209 : litige ouvert et relu ; D20).
@@ -2528,9 +2528,9 @@ concernée à jour **dans la même PR**.
 | `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
-| `fn_ajouter_message_litige` | à venir | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_soumettre_reclamation` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_ouvrir_litige_rate_limited` | consommée lot 2 (T5b) et lot 4 (T8) | partagée : entrée du lot 2 (T5b) ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
+| `fn_ajouter_message_litige` | consommée lot 4 (T8) | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_soumettre_reclamation` | consommée lot 4 (T8) | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mon_breakdown_actuel` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_mes_evenements_score` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_evolution_score_soignant` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -2827,7 +2827,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_appliquer_parrainage"("p_code" "text") R
 
 ## fn_ajouter_message_litige
 
-- **Statut natif** : à venir (lot 4, T8).
+- **Statut natif** : consommée (lot 4, T8) par `JoleneSupabase/Litiges/SupabaseLitigesGateway.swift` (`ajouterMessage` : `message_id` exigé, fil relu qui le contient), appelée par `LitigeFilModel` (JoleneCore).
 - **Usage prévu** : Fil d'un litige : ajout d'un message de 10 caractères au moins ; champ masqué si le litige est résolu (`estResolu`, golden T2). Lecture du fil par PostgREST `messages_litige` (RLS `pol_messages_litige_select` l.79349). Accords amiables et clôture : renvoi web (D9).
 - **Signature SQL** (`supabase/schema/public.sql` l.16835) :
 
@@ -2845,7 +2845,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_ajouter_message_litige"("p_litige_id" "u
 
 ## fn_soumettre_reclamation
 
-- **Statut natif** : à venir (lot 4, T8).
+- **Statut natif** : consommée (lot 4, T8) par `JoleneSupabase/Reclamations/SupabaseReclamationsGateway.swift` (`soumettre` : `id` exigé, ligne relue par cet identifiant ; `23514` → libellé générique du web), appelée par `ReclamationsModel` (JoleneCore).
 - **Usage prévu** : Réclamation générale (onglet `?tab=reclamations` de `/soignant/litiges`) : catégorie dans la liste fermée du web (`MISSION`, `PAIEMENT`, `TECHNIQUE`, `COMPORTEMENT`, `AUTRE`, `MesReclamations.tsx` l.22-28), sujet, détails, mission optionnelle. Liste par PostgREST `reclamations` (RLS `reclamations_select_own` l.79820).
 - **Signature SQL** (`supabase/schema/public.sql` l.57403) :
 

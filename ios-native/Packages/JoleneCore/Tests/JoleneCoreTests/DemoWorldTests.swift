@@ -232,8 +232,6 @@ final class DemoWorldTests: XCTestCase {
     static let portsEnAttenteLot4 = [
         "disponibilites",    // T5
         "parrainage",        // T6
-        "litiges",           // T8
-        "reclamations",      // T8
         "messagerie",        // T7a
         "realtime",          // T7a
         "bulletins",         // T10

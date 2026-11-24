@@ -1,0 +1,37 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "messages": [
+    {
+      "id": "demo-litige-message-001",
+      "litige_id": "demo-litige-003",
+      "auteur_id": "demo-etablissement-3",
+      "type_auteur": "ETABLISSEMENT",
+      "contenu": "Démonstration · Nous confirmons la durée de pause retenue.",
+      "cree_le": "2026-10-14T00:00:00.000Z"
+    },
+    {
+      "id": "demo-litige-message-002",
+      "litige_id": "demo-litige-002",
+      "auteur_id": "demo-jolene",
+      "type_auteur": "ADMIN",
+      "contenu": "Démonstration · L’équipe Jolene suit ce dossier.",
+      "cree_le": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "demo-litige-message-003",
+      "litige_id": "demo-litige-001",
+      "auteur_id": "demo-soignant",
+      "type_auteur": "SOIGNANT",
+      "contenu": "Démonstration · Bonjour, je souhaite revenir sur le poste occupé.",
+      "cree_le": "2026-11-01T05:00:00.000Z"
+    },
+    {
+      "id": "demo-litige-message-004",
+      "litige_id": "demo-litige-001",
+      "auteur_id": "demo-etablissement-1",
+      "type_auteur": "ETABLISSEMENT",
+      "contenu": "Démonstration · Bonjour, nous regardons votre demande.",
+      "cree_le": "2026-11-01T06:00:00.000Z"
+    }
+  ]
+}

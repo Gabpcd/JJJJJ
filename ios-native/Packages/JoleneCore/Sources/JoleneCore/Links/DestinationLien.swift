@@ -123,7 +123,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.messagerie):
             return false                                 // T7b — messagerie
         case .secondaire(.litiges):
-            return false                                 // T8 — litiges et réclamations (deux onglets, deux coupe-circuits)
+            return true                                  // T8 — `LitigesScreen` (hub « Suivi »), deux onglets, deux coupe-circuits
         case .secondaire(.evaluations):
             return false                                 // T9 — évaluations reçues
         case .secondaire(.score):
