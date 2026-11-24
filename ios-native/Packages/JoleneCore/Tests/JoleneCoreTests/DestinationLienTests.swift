@@ -65,13 +65,14 @@ final class DestinationLienTests: XCTestCase {
         }
     }
 
-    /// Détail de série : renvoi web assumé au lot 1 (décision 11 de `LOT1_PLAN.md`, `PARITE_SOIGNANT.md`
-    /// l.48 : « détail de série natif au lot 4 ») ; la route reste `.serieDetail` dans la table.
-    func testDetailDeSerieEnRenvoiWebJusquAuLot4() throws {
+    /// Détail de série : renvoi web assumé au lot 1 (décision 11 de `LOT1_PLAN.md`), natif depuis L4-T12
+    /// (`SerieDetailScreen`) ; la route reste `.serieDetail` dans la table, sa cible est l'écran secondaire `.serie`.
+    func testDetailDeSerieNatifDepuisLeLot4() throws {
         let d = try XCTUnwrap(lien("https://jolene.app/soignant/missions/serie/s%201?x=1"))
         XCTAssertEqual(d.route, .serieDetail(id: "s 1"))
-        XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route))
-        XCTAssertEqual(d.destination, .safari(url("https://jolene.app/soignant/missions/serie/s%201?x=1")))
+        XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route))
+        XCTAssertEqual(d.destination, .serieDetail(id: "s 1"), "écran natif livré : plus de renvoi web")
+        XCTAssertEqual(CibleNotification(d), .secondaire(.serie(id: "s 1")))
     }
 
     // MARK: Écrans du lot 3 livrés (la tranche passe sa ligne de `ecranNatifLivre` à `true`)
@@ -459,7 +460,7 @@ final class DestinationLienTests: XCTestCase {
             (.missions, true, "placeholder jusqu'à L1-T5"),
             (.favoris, true, "L1-T4b : MesFavorisScreen, empilé sur l'onglet Explorer"),
             (.missionDetail(id: "m"), true, "lot 1"),
-            (.serieDetail(id: "s"), false, "renvoi web, décision 11 du lot 1 ; lot 4"),
+            (.serieDetail(id: "s"), true, "L4-T12 : SerieDetailScreen (report de la décision 11 du lot 1)"),
             (.revenus(section: .apercu), true, "T12 : RevenusScreen (onglet Revenus)"),
             (.monCompte, true, "hub ProfileScreen"),
             (.notifications, true, "T5"),

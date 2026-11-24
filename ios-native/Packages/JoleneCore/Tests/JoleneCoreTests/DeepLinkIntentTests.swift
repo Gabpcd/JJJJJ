@@ -66,6 +66,8 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/soignant/contrats", .documents(onglet: .contrats)),
             ("https://jolene.app/contrat/c1", .contrat(id: "c1")),
             ("https://jolene.app/contrat/c1/certificat", .certificat(contratId: "c1")),
+            // L4-T12 : détail de série natif (report de la décision 11 du lot 1), écran secondaire empilé sur le Profil.
+            ("https://jolene.app/soignant/missions/serie/s%201", .secondaire(.serie(id: "s 1"))),
         ]
         for (lien, cible) in cas {
             let obtenue = try intention(lien)
@@ -86,7 +88,6 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/mes-gains?tab=bulletins&annee=2026",          // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
-            "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
             "https://jolene.app/soignant/litiges#l1",
             // T7 (confirmation, `soignant`, `reprendre`) et T8 (`completer`) : présentées hors de l'espace
             // (`testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace`).
@@ -352,11 +353,11 @@ final class DeepLinkIntentTests: XCTestCase {
     /// sans session, et jamais mémorisé pour un espace à venir.
     func testRenvoiWebPresenteAussitotSansSessionEtJamaisMemorise() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
-        // Série de missions : renvoi web assumé (décision 11 du lot 1) ; Stripe Connect est natif depuis T14a.
-        let serie = url("https://jolene.app/soignant/missions/serie/s1")
-        XCTAssertEqual(aiguillage.recevoir(url: serie), .renvoiWeb(.safari(serie)))
+        // DPAE : page web (décision 16 du lot 2) ; la série de missions est native depuis L4-T12, Stripe Connect depuis T14a.
+        let dpae = url("https://jolene.app/soignant/dpae")
+        XCTAssertEqual(aiguillage.recevoir(url: dpae), .renvoiWeb(.safari(dpae)))
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
-        aiguillage.renvoiWebPresente(.safari(serie))
+        aiguillage.renvoiWebPresente(.safari(dpae))
         aiguillage.renvoiWebFerme()
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)), "déjà présenté : rien à rejouer")
         let etab = url("https://jolene.app/etablissement/missions/abc")

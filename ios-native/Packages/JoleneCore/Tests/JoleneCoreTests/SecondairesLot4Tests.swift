@@ -48,6 +48,7 @@ final class SecondairesLot4Tests: XCTestCase {
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
         .recherches, // T4
+        .serie(id: "s 1"), // T12 (ligne `.serieDetail` de `ecranNatifLivre`)
     ]
 
     func testSeulsLesEcransDesTranchesLivreesSontLivres() {
