@@ -1940,7 +1940,7 @@
     },
     {
       "name": "fn_lister_conversations_messagerie",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -1965,7 +1965,7 @@
     },
     {
       "name": "fn_interlocuteurs_conversations",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_conversation_ids: string[] }",
@@ -1993,7 +1993,7 @@
     },
     {
       "name": "fn_marquer_messages_lus",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_conversation_id: string }",
@@ -2021,7 +2021,7 @@
     },
     {
       "name": "fn_messages_non_lus",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "never",
@@ -2049,7 +2049,7 @@
     },
     {
       "name": "fn_typing_start",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_conversation_id: string }",
@@ -2077,7 +2077,7 @@
     },
     {
       "name": "fn_typing_stop",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_conversation_id: string }",
@@ -2105,7 +2105,7 @@
     },
     {
       "name": "fn_update_presence",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "never",
@@ -2133,7 +2133,7 @@
     },
     {
       "name": "fn_est_bloque",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -2159,7 +2159,7 @@
     },
     {
       "name": "fn_bloquer_utilisateur",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -2185,7 +2185,7 @@
     },
     {
       "name": "fn_debloquer_utilisateur",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [
@@ -2211,7 +2211,7 @@
     },
     {
       "name": "fn_signaler_utilisateur",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_categorie: string; p_cible_id: string; p_cible_type: string; p_mission_id?: string; p_motif: string }",
@@ -2240,7 +2240,7 @@
     },
     {
       "name": "fn_user_id_pour_etablissement",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_etablissement_id: string }",
@@ -2269,7 +2269,7 @@
     },
     {
       "name": "fn_obtenir_conversation",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": {
         "args": "{ p_autre_id: string; p_mission_id?: string }",

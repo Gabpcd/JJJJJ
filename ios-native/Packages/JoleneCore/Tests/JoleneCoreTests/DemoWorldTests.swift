@@ -234,8 +234,6 @@ final class DemoWorldTests: XCTestCase {
         "parrainage",        // T6
         "litiges",           // T8
         "reclamations",      // T8
-        "messagerie",        // T7a
-        "realtime",          // T7a
         "bulletins",         // T10
         "evaluationsRecues", // T9
         "poolUrgence",       // T11

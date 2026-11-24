@@ -109,6 +109,15 @@ public protocol MessageriePort: Sendable {
     /// « Écrire à l'établissement » depuis le détail de mission (correction 20).
     func conversationPourMission(missionId: String, etablissementId: String,
                                  context: MissionReadContext) async throws -> IssueConversationMission
+    /// Ajout additif de T7a : relecture après « rejoint » — messages dont `cree_le` ≥ `depuis` (valeur servie du dernier
+    /// message connu), 500 au plus, à fusionner par id. Défaut : filtre des 500 derniers.
+    func messages(conversationId: String, depuis: String, context: MissionReadContext) async throws -> [MessageChat]
+}
+
+public extension MessageriePort {
+    func messages(conversationId: String, depuis: String, context: MissionReadContext) async throws -> [MessageChat] {
+        try await messages(conversationId: conversationId, context: context).filter { FilMessages.pasAvant($0, depuis) }
+    }
 }
 
 /// Realtime (`client.realtimeV2`, `messages_chat`, `typing_status`, `presence_status`) — T7a. Un flux n'est jamais une
@@ -119,6 +128,13 @@ public protocol RealtimePort: Sendable {
     func presence(userId: String) -> AsyncStream<EtatPresence>
     func etat() -> AsyncStream<EtatCanal>
     func fermerTout() async
+    /// Ajout additif de T7a : état du canal de messages d'une conversation (`nil` : canal de la liste), dernier état
+    /// connu d'abord. Défaut : `etat()` (tous canaux de messages confondus).
+    func etat(conversationId: String?) -> AsyncStream<EtatCanal>
+}
+
+public extension RealtimePort {
+    func etat(conversationId: String?) -> AsyncStream<EtatCanal> { etat() }
 }
 
 /// Copies officielles des bulletins (`fn_lister_copies_bulletins`, edge `copies-bulletins`,

@@ -111,6 +111,7 @@ const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 // quatre RPC du swipe de T3a.
 const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const GATEWAY_MESSAGERIE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
   ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
@@ -120,6 +121,19 @@ const LOT4_CONSOMMEES = new Map([
   ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_lister_conversations_messagerie', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_interlocuteurs_conversations', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_marquer_messages_lus', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_messages_non_lus', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_typing_start', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_typing_stop', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_update_presence', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_est_bloque', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_bloquer_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_debloquer_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_signaler_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_user_id_pour_etablissement', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_obtenir_conversation', ['T7a', GATEWAY_MESSAGERIE]],
 ]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));

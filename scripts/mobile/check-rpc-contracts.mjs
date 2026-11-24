@@ -148,20 +148,21 @@ export const RPC_SUIVIES = [
   { name: 'fn_creer_reclamation_score', statut: 'a_venir', lot: 4 },
   { name: 'fn_mes_notations_recues_avec_stats', statut: 'a_venir', lot: 4 },
   { name: 'fn_signaler_notation', statut: 'a_venir', lot: 4 },
-  // T7a/T7b — messagerie, blocage, signalement, fil de mission (correction 20)
-  { name: 'fn_lister_conversations_messagerie', statut: 'a_venir', lot: 4 },
-  { name: 'fn_interlocuteurs_conversations', statut: 'a_venir', lot: 4 },
-  { name: 'fn_marquer_messages_lus', statut: 'a_venir', lot: 4 },
-  { name: 'fn_messages_non_lus', statut: 'a_venir', lot: 4 },
-  { name: 'fn_typing_start', statut: 'a_venir', lot: 4 },
-  { name: 'fn_typing_stop', statut: 'a_venir', lot: 4 },
-  { name: 'fn_update_presence', statut: 'a_venir', lot: 4 },
-  { name: 'fn_est_bloque', statut: 'a_venir', lot: 4 },
-  { name: 'fn_bloquer_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_debloquer_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_user_id_pour_etablissement', statut: 'a_venir', lot: 4 },
-  { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 4 },
+  // T7a — messagerie, blocage, signalement, fil de mission (correction 20) : toute la gateway est câblée par T7a
+  // (les écrans de T7b n'appellent aucune RPC de plus)
+  { name: 'fn_lister_conversations_messagerie', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_interlocuteurs_conversations', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_marquer_messages_lus', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_messages_non_lus', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_typing_start', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_typing_stop', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_update_presence', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_est_bloque', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_bloquer_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_debloquer_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_signaler_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_user_id_pour_etablissement', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_obtenir_conversation', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
   // T10 — copies officielles des bulletins
   { name: 'fn_lister_copies_bulletins', statut: 'a_venir', lot: 4 },
   { name: 'fn_signaler_copie_bulletin', statut: 'a_venir', lot: 4 },
