@@ -124,9 +124,14 @@ final class SupabaseCandidatureSwipeLikeTests: XCTestCase {
         XCTAssertEqual(session?.kind, .unauthorized)
     }
 
-    func testUrgenceResteVerrouilleeSansRequete() async throws {
-        let refus = await erreur { _ = try await self.aimer(.urgence) }
-        XCTAssertEqual(refus, CandidatureRules.actionHorsLot1(.urgence))
-        XCTAssertTrue(registry.requests.isEmpty, "verrou avant tout envoi (T11)")
+    /// URGENCE est livrée par T11 (`SupabaseCandidatureUrgenceTests`) : sans planning exact, aucune requête.
+    func testUrgenceSansPlanningSansRequete() async throws {
+        let refus = await erreur {
+            _ = try await SupabaseCandidatureGateway(client: TestClient.make())
+                .confirmer(action: .urgence, missionId: self.missionId, creneaux: [], message: nil, choixContrat: nil,
+                           candidatureId: nil, context: TestClient.context)
+        }
+        XCTAssertEqual(refus?.message, SupabaseCandidatureGateway.planningRequisMessage)
+        XCTAssertTrue(registry.requests.isEmpty, "planning exact obligatoire avant tout envoi (T11)")
     }
 }

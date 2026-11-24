@@ -458,6 +458,8 @@ public struct MissionUrgente: Equatable, Sendable, Identifiable {
     public var id: String
     public var mission: Mission
     public var statutCandidature: String?
+    /// `deja_candidate` du serveur (T11) : une candidature existe, même sans statut lisible (« Tu as déjà candidaté »).
+    public var dejaCandidate: Bool = false
     public init(id: String, mission: Mission, statutCandidature: String?) {
         self.id = id; self.mission = mission; self.statutCandidature = statutCandidature
     }

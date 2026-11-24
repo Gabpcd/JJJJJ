@@ -16,7 +16,7 @@ enum DemoLot4 {
         gateways.realtime = realtime()
         gateways.bulletins = bulletins()
         gateways.evaluationsRecues = evaluationsRecues()
-        gateways.poolUrgence = poolUrgence()
+        gateways.poolUrgence = poolUrgence(gateways)
         gateways.score = score()
         gateways.exclusions = exclusions()
     }

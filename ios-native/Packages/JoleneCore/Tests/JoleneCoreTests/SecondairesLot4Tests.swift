@@ -48,6 +48,7 @@ final class SecondairesLot4Tests: XCTestCase {
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
         .recherches, // T4
+        .poolUrgence, .exclusions, // T11
     ]
 
     func testSeulsLesEcransDesTranchesLivreesSontLivres() {
@@ -133,7 +134,8 @@ final class SecondairesLot4Tests: XCTestCase {
                        "entrées natives des seuls écrans livrés, renvois web inchangés pour les autres")
         XCTAssertEqual(EntreesHubLot4.sections(), [EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
             EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
-        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96)")
+            EntreesHubLot4.Entree(ecran: .exclusions, libelle: "Établissements exclus"),
+        ])], "T4, T11 : « Recherches sauvegardées », « Établissements exclus » (MonCompteSoignant.tsx l.94-97)")
         let toutes = EntreesHubLot4.sections(livre: { _ in true })
         XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb)
         XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi"], "MonCompteSoignant.tsx l.94, l.107")

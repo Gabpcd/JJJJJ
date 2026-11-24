@@ -511,6 +511,18 @@
         "? `Candidature annulée. Score impacté : ${points} pts.`",
         ": 'Candidature annulée.';"
       ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PoolUrgence.engagement"
+      ],
+      "source": "src/components/PoolUrgenceToggle.tsx:228-231",
+      "code": [
+        "<p className=\"text-xs text-muted-foreground\">",
+        "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon.",
+        "Tu restes libre de refuser. Chaque mission urgence terminée te rapporte <strong className=\"text-foreground\">+10 points de fiabilité</strong>.",
+        "</p>"
+      ]
     }
   ],
   "rendus": [
@@ -913,6 +925,11 @@
       "fonction": "TextesWeb.StripeConnect.salarieEtapeConfirmation",
       "appel": "salarieEtapeConfirmation",
       "rendu": "Tu confirmes la réception dans Mes gains"
+    },
+    {
+      "fonction": "TextesWeb.PoolUrgence.engagement",
+      "appel": "engagement",
+      "rendu": "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte +10 points de fiabilité."
     }
   ]
 }

@@ -882,6 +882,59 @@ public enum TextesWeb {
         }
     }
 
+    /// Pool urgence et exclusions (lot 4, T11, HARD STOP n°4 : consentement aux alertes du pool, dont les SMS, et
+    /// confirmation de l'exclusion, repris verbatim du web, tutoiement compris, en attente de la validation de Gabrielle).
+    /// Écart signalé, non arbitré : la promesse « +10 points de fiabilité » (`PoolUrgenceToggle.tsx` l.215, l.230) suit le
+    /// trigger legacy `dec_bonus_urgence`, alors que le score v2 applique un bonus de 5 (`LOT4_PLAN.md` §3 T11).
+    public enum PoolUrgence {
+        // source: src/components/PoolUrgenceToggle.tsx:109 [consentement]
+        public static let disponible = "🚨 Disponible pour les remplacements d'urgence"
+
+        // source: src/components/PoolUrgenceToggle.tsx:111 [consentement]
+        public static let disponibleDescription = "Tu seras alerté(e) en priorité quand un soignant annule une mission dans ton rayon."
+
+        // source: src/components/PoolUrgenceToggle.tsx:184 [consentement]
+        public static let smsTitre = "Alertes SMS du pool urgence"
+
+        // source: src/components/PoolUrgenceToggle.tsx:187 [consentement]
+        public static let smsDescription = "Notification immédiate par SMS, en plus des push et e-mails, pour ne manquer aucune mission de dernière minute."
+
+        // source: src/components/PoolUrgenceToggle.tsx:215 [juridique]
+        public static let avantageFiabilite = "+10 points fiabilité par mission urgence terminée"
+
+        /// Texte d'engagement (l.228-231) : voir `engagement`.
+        // source: src/components/PoolUrgenceToggle.tsx:229-230 [fragment]
+        public static let engagementDebut = "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte"
+
+        // source: src/components/PoolUrgenceToggle.tsx:230 [fragment]
+        public static let engagementPoints = "+10 points de fiabilité"
+
+        // source: src/components/PoolUrgenceToggle.tsx:230 [fragment]
+        public static let engagementFin = "."
+
+        /// Texte d'engagement du pool, rendu du paragraphe l.228-231 (« +10 points de fiabilité » en gras sur le web).
+        public static var engagement: String { engagementDebut + " " + engagementPoints + engagementFin }
+    }
+
+    /// « Ne plus travailler ensemble » (`BoutonExclusion.tsx`, D25, lot 4 T11, HARD STOP n°4) : bouton, confirmation et
+    /// effet annoncé, repris verbatim du web.
+    public enum Exclusion {
+        // source: src/components/BoutonExclusion.tsx:53 [consentement]
+        public static let bouton = "🚫 Ne plus travailler ensemble"
+
+        // source: src/components/BoutonExclusion.tsx:60 [consentement]
+        public static let titre = "🚫 Confirmer l'exclusion"
+
+        // source: src/components/BoutonExclusion.tsx:62 [juridique]
+        public static let effet = "Les missions de cette partie ne seront plus visibles. Vous pourrez annuler cette exclusion depuis vos paramètres."
+
+        // source: src/components/BoutonExclusion.tsx:77 [consentement]
+        public static let confirmer = "Confirmer l'exclusion"
+
+        // source: src/components/BoutonExclusion.tsx:39 [juridique]
+        public static let enregistree = "Exclusion enregistrée. Les missions ne seront plus visibles."
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -1051,5 +1104,18 @@ public enum TextesWeb {
         .init(cle: "Annulation.candidatureAnnulee", texte: Annulation.candidatureAnnulee),
         .init(cle: "Annulation.participationAnnulee", texte: Annulation.participationAnnulee),
         .init(cle: "Annulation.ouiAnnuler", texte: Annulation.ouiAnnuler),
+        .init(cle: "PoolUrgence.disponible", texte: PoolUrgence.disponible),
+        .init(cle: "PoolUrgence.disponibleDescription", texte: PoolUrgence.disponibleDescription),
+        .init(cle: "PoolUrgence.smsTitre", texte: PoolUrgence.smsTitre),
+        .init(cle: "PoolUrgence.smsDescription", texte: PoolUrgence.smsDescription),
+        .init(cle: "PoolUrgence.avantageFiabilite", texte: PoolUrgence.avantageFiabilite),
+        .init(cle: "PoolUrgence.engagementDebut", texte: PoolUrgence.engagementDebut),
+        .init(cle: "PoolUrgence.engagementPoints", texte: PoolUrgence.engagementPoints),
+        .init(cle: "PoolUrgence.engagementFin", texte: PoolUrgence.engagementFin),
+        .init(cle: "Exclusion.bouton", texte: Exclusion.bouton),
+        .init(cle: "Exclusion.titre", texte: Exclusion.titre),
+        .init(cle: "Exclusion.effet", texte: Exclusion.effet),
+        .init(cle: "Exclusion.confirmer", texte: Exclusion.confirmer),
+        .init(cle: "Exclusion.enregistree", texte: Exclusion.enregistree),
     ]
 }

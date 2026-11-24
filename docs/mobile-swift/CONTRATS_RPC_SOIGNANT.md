@@ -2553,12 +2553,12 @@ concernée à jour **dans la même PR**.
 | `fn_obtenir_conversation` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
 | `fn_lister_copies_bulletins` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
 | `fn_signaler_copie_bulletin` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
-| `fn_pool_urgence_missions_pour_soignant` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_pool_urgence` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_pool_urgence_sms` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_exclusions_recues` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_retirer_exclusion` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_exclure_utilisateur` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_pool_urgence_missions_pour_soignant` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_pool_urgence` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_pool_urgence_sms` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_exclusions_recues` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_retirer_exclusion` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_exclure_utilisateur` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 
 ## Lot 4 — lecture des exceptions PostgREST et des réponses edge
 
@@ -2605,7 +2605,7 @@ tableau.
   `p_creneaux_confirmes` exact (`CreneauxConfirmes.pourAction`, golden du lot 1 T2). Les refus propres à la
   RPC (planning à reconfirmer, conflit, repos de 11 h) précèdent la délégation et sont décrits dans sa fiche.
 - **`SWIPE_LIKE`** (❤️, T3a, **consommée** : verrou levé dans `SupabaseCandidatureGateway` et `DemoCandidatureGateway`,
-  `URGENCE` reste verrouillée jusqu'à T11) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
+  `URGENCE` consommée par T11 : verrou levé dans les deux mêmes gateways) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
   réponse est celle de `fn_enregistrer_swipe` — `{ok:true, …, candidature_id, choix_contrat}`,
   **pas de `success`** — et ses refus `{ok:false, …}` (fiche `fn_enregistrer_swipe`). `choix_requis` →
   `ChoixContratSheet` → nouvel appel `SWIPE_LIKE` avec `p_choix_contrat` ; planning à reconfirmer → relecture
@@ -3259,7 +3259,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "u
 
 ## fn_pool_urgence_missions_pour_soignant
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.etat`, appelée par `PoolUrgenceModel`.
 - **Usage prévu** : Écran Pool urgence : état (actif, rayon, SMS) et missions urgentes éligibles dans le rayon ; relu après chaque bascule et après une acceptation `URGENCE` (`statut_candidature`).
 - **Signature SQL** (`supabase/schema/public.sql` l.47819) :
 
@@ -3277,7 +3277,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_pool_urgence_missions_pour_soignant"() R
 
 ## fn_toggle_pool_urgence
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.basculer`, appelée par `PoolUrgenceModel` (interrupteur et rayon).
 - **Usage prévu** : Activation et rayon (curseur 5-50 km comme le web, `PoolUrgenceToggle.tsx` l.164-165), `p_creneaux = []` (web l.65-69) ; texte d'engagement du pool repris verbatim (l.229-230, relecture HARD STOP n°4). Seule voie native d'écriture de `soignants.disponible_urgence` (D26, correction 17).
 - **Signature SQL** (`supabase/schema/public.sql` l.61516) :
 
@@ -3295,7 +3295,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_pool_urgence"("p_actif" boolean, 
 
 ## fn_toggle_pool_urgence_sms
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.basculerSMS`, appelée par `PoolUrgenceModel`.
 - **Usage prévu** : Opt-in SMS du pool (description verbatim du web, `PoolUrgenceToggle.tsx` l.184-187).
 - **Signature SQL** (`supabase/schema/public.sql` l.61567) :
 
@@ -3313,7 +3313,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_pool_urgence_sms"("p_actif" boole
 
 ## fn_mes_exclusions_recues
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.recues`, appelée par `ExclusionsModel`.
 - **Usage prévu** : Onglet « reçues » de `/soignant/exclusions`. Les exclusions **envoyées** sont lues par PostgREST `exclusions` (`exclu_par = auth.uid()`, RLS `pol_exclusion_select` l.79211), noms via `fn_etablissements_safe`.
 - **Signature SQL** (`supabase/schema/public.sql` l.41730) :
 
@@ -3331,7 +3331,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_exclusions_recues"() RETURNS "jsonb"
 
 ## fn_retirer_exclusion
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.retirer`, appelée par `ExclusionsModel`.
 - **Usage prévu** : Retrait d'une exclusion envoyée. Le paramètre est l'`exclu_id` (l'établissement exclu), **pas** l'id de la ligne (l.54888-54891).
 - **Signature SQL** (`supabase/schema/public.sql` l.54875) :
 
@@ -3349,7 +3349,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_retirer_exclusion"("p_exclu_id" "uuid") 
 
 ## fn_exclure_utilisateur
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.exclure`, appelée par `ExclusionsModel` (MissionExclusionButton du détail de mission).
 - **Usage prévu** : « Ne plus travailler ensemble » depuis le détail de mission (correction 20, D25, `BoutonExclusion.tsx` l.53-75, textes verbatim, relecture HARD STOP n°4) : `p_exclu_id` = `etablissement_id`, `p_type = 'SOIGNANT'` (type de l'auteur), motif optionnel.
 - **Signature SQL** (`supabase/schema/public.sql` l.35556) :
 

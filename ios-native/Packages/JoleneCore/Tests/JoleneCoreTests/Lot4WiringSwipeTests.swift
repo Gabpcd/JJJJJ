@@ -59,15 +59,13 @@ final class Lot4WiringSwipeTests: XCTestCase {
         XCTAssertEqual(nombre, 3)
     }
 
-    func testUrgenceResteVerrouilleeEnDemo() async throws {
+    /// URGENCE est livrée par T11 (`DemoPoolUrgenceTests` côté cœur) : un planning vide n'est jamais accepté.
+    func testUrgenceSansPlanningJamaisAccepteeEnDemo() async throws {
         let gateways = DemoWorld.gateways()
-        do {
-            _ = try await gateways.candidature.confirmer(action: .urgence, missionId: "demo-mission-015", creneaux: [], message: nil,
-                                                         choixContrat: nil, candidatureId: nil, context: context)
-            XCTFail("URGENCE doit rester refusée (T11)")
-        } catch let erreur as JoleneError {
-            XCTAssertEqual(erreur.kind, .contract)
-        }
+        let issue = try await gateways.candidature.confirmer(action: .urgence, missionId: "demo-mission-015", creneaux: [],
+                                                             message: nil, choixContrat: nil, candidatureId: nil, context: context)
+        XCTAssertEqual(issue, .planningAReconfirmer(code: DemoCandidatureGateway.codePlanningModifie,
+                                                    message: DemoCandidatureGateway.Textes.planningModifie))
     }
 
     func testPreferencesHorsBornesRefuseesEtContexteEtrangerRefuse() async throws {

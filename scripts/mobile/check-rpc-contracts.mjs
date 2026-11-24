@@ -166,12 +166,12 @@ export const RPC_SUIVIES = [
   { name: 'fn_lister_copies_bulletins', statut: 'a_venir', lot: 4 },
   { name: 'fn_signaler_copie_bulletin', statut: 'a_venir', lot: 4 },
   // T11 — pool urgence et exclusions
-  { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'a_venir', lot: 4 },
-  { name: 'fn_toggle_pool_urgence', statut: 'a_venir', lot: 4 },
-  { name: 'fn_toggle_pool_urgence_sms', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_exclusions_recues', statut: 'a_venir', lot: 4 },
-  { name: 'fn_retirer_exclusion', statut: 'a_venir', lot: 4 },
-  { name: 'fn_exclure_utilisateur', statut: 'a_venir', lot: 4 },
+  { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway
+  { name: 'fn_toggle_pool_urgence', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway (seule écriture du pool)
+  { name: 'fn_toggle_pool_urgence_sms', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway
+  { name: 'fn_mes_exclusions_recues', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway
+  { name: 'fn_retirer_exclusion', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway
+  { name: 'fn_exclure_utilisateur', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway (détail de mission)
 ];
 
 /**

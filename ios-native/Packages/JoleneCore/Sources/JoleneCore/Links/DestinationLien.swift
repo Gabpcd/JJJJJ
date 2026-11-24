@@ -131,9 +131,9 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.bulletins):
             return false                                 // T10 — copies officielles (avec la destination de `.revenus(.bulletins)`)
         case .secondaire(.poolUrgence):
-            return false                                 // T11 — pool urgence
+            return true                                  // T11 — pool urgence
         case .secondaire(.exclusions):
-            return false                                 // T11 — établissements exclus
+            return true                                  // T11 — établissements exclus
         case .secondaire(.serie):
             return false                                 // T12 — jamais routée ainsi (`LinkRouter` rend `.serieDetail`, ligne ci-dessus)
         case .safari, .etablissement:

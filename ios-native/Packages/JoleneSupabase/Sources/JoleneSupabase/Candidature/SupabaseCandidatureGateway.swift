@@ -31,7 +31,11 @@ import Supabase
 ///   **sans `success`**, annoncé après relecture de la candidature comme POSTULER ; refus `{ok:false, error}` à code
 ///   technique traduit par `SwipeRefus`, message rédigé verbatim, `choix_requis` relayé ; `auth_required` →
 ///   `.unauthorized`. `warning` et `docs_a_completer` ne sont pas portés par `CandidatureOutcome` (écran T3b).
-/// - URGENCE (lot 4, T11) : refusée explicitement en citant sa tranche (`CandidatureRules.actionHorsLot1`).
+/// - URGENCE (lot 4, T11, verrou levé : le wrapper contrôle le planning puis délègue à
+///   `fn_accepter_mission_urgence(p_mission_id)`, qui ignore `p_choix_contrat`, envoyé à null) : succès `{success:true,
+///   candidature_id, …}` annoncé seulement après relecture de la candidature en `EN_ATTENTE_VALIDATION_ETAB` (l'écran relit
+///   ensuite le pool) ; refus `{success:false, error}` verbatim (documents avec `documents_requis_pour`) ; `choix_requis`
+///   relayé tel quel, jamais rejoué ici (l'écran renvoie au détail de la mission).
 /// - Annulations (T7) : `fn_annuler_candidature_soignant(p_candidature_id, p_motif_categorie, p_texte_libre,
 ///   p_justificatif_storage_path)` (`public.sql` l.17925 ; refus `{success:false, error_code, error}` → `.refusee`,
 ///   message serveur verbatim) puis relecture de la candidature `ANNULEE` ; `fn_annuler_mission_soignant(p_mission_id)`
@@ -73,8 +77,9 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
     public func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                           choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome {
         try MissionQuery.validate(context: context)
-        // Lot 1 : trois actions ; lot 4 (T3a) : SWIPE_LIKE, relu comme POSTULER. URGENCE (T11) reste refusée ici.
-        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike else {
+        // Lot 1 : trois actions ; lot 4 : SWIPE_LIKE (T3a), relu comme POSTULER, et URGENCE (T11).
+        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike
+                || action == .urgence else {
             throw CandidatureRules.actionHorsLot1(action)
         }
         guard let mission = Self.uuid(missionId) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
@@ -100,7 +105,8 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
             "p_creneaux_confirmes": .array(creneaux.map { .object(["debut": .string($0.debut), "fin": .string($0.fin)]) }),
             "p_message": Self.texteOuNul(message),
             // PROPOSITION : null comme le web (`CarteProposition.tsx` l.274) ; le contrat déclaré ne sert qu'au verrou.
-            "p_choix_contrat": proposition == nil ? Self.texteOuNul(choixContrat) : .null,
+            // URGENCE : null comme le web (`PoolUrgenceSoignant.tsx` l.111), la RPC déléguée l'ignore de toute façon.
+            "p_choix_contrat": proposition == nil && action != .urgence ? Self.texteOuNul(choixContrat) : .null,
             "p_candidature_id": proposition.map(AnyJSON.string) ?? .null,
         ]
         let reponse = try await RPCResponse.appeler(client, Self.confirmerRPC, params: params, fallback: Self.fallbackMessage)
@@ -112,6 +118,15 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
         try reponse.leverSiErreur(fallback: Self.fallbackMessage)
         guard reponse.success == true else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
 
+        if action == .urgence {
+            let id = try reponse.requiredString("candidature_id")
+            let relue = try await relireCandidature(id: id, context: context)
+            guard CandidatureRules.candidaturePoseeRelue(relue, id: id, missionId: mission),
+                  relue?.statut == PoolUrgenceRegles.statutEnAttenteValidation else {
+                throw JoleneError(.contract, Self.relectureMessage)
+            }
+            return .confirmed(candidatureId: id, contratId: nil)
+        }
         if action == .postuler {
             let id = try reponse.requiredString("candidature_id")
             let relue = try await relireCandidature(id: id, context: context)

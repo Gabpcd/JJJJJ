@@ -238,9 +238,7 @@ final class DemoWorldTests: XCTestCase {
         "realtime",          // T7a
         "bulletins",         // T10
         "evaluationsRecues", // T9
-        "poolUrgence",       // T11
         "score",             // T9
-        "exclusions",        // T11
     ]
 
     func testAucunPortNonCable() {

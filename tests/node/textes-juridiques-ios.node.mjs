@@ -118,6 +118,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
     'src/components/BandeauOubliDepart.tsx', // T5a : action du bandeau d'oubli de départ (Accueil)
     'src/components/BandeauSansGPS.tsx',
+    'src/components/BoutonExclusion.tsx', // L4-T11 : « Ne plus travailler ensemble » (HARD STOP)
     'src/components/CarteProposition.tsx', // L1-T6b : réponse à une proposition (revue B8 m7)
     'src/components/CertificatSignature.tsx',
     'src/components/ChoixContratDialog.tsx', // L1-T6b : choix du contrat (revue B8 m7)
@@ -125,6 +126,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/Countdown72hSignature.tsx',
     'src/components/NotationRapide.tsx', // T5a : feuille de notation rapide
     'src/components/PanneauContestation.tsx',
+    'src/components/PoolUrgenceToggle.tsx', // L4-T11 : consentement du pool urgence, SMS compris (HARD STOP)
     'src/components/SignerContratOtp.tsx',
     'src/components/WidgetAllerPointer.tsx', // T5a : widget « Aller pointer » (Accueil)
     'src/components/planning/RecapitulatifCandidatureDialog.tsx', // L1-T6b : récapitulatif et phrases d'engagement (HARD STOP)

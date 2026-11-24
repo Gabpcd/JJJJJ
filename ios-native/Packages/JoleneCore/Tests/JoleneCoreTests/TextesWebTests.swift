@@ -79,6 +79,9 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.Candidature.mentionAccepter",
             // L1-T7 : confirmation de l'annulation sans candidature (`DetailMissionSoignant.tsx` l.916).
             "TextesWeb.Annulation.participationAnnulee",
+            // L4-T11 : consentement du pool urgence (`PoolUrgenceToggle.tsx` l.111, l.229-230), repris à l'identique.
+            "TextesWeb.PoolUrgence.disponibleDescription",
+            "TextesWeb.PoolUrgence.engagementDebut",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -291,6 +294,19 @@ final class TextesWebTests: XCTestCase {
                     "confirmerAnnulation", "scoreImpacteDebut", "scoreImpacteFin", "candidatureAnnulee",
                     "participationAnnulee", "ouiAnnuler"] {
             XCTAssertTrue(catalogue.contains { $0.cle == "Annulation." + cle }, cle)
+        }
+    }
+
+    /// Pool urgence (lot 4, T11 ; `PoolUrgenceToggle.tsx` l.228-231) : texte d'engagement rendu comme le web, promesse
+    /// « +10 points de fiabilité » reprise telle quelle (écart avec le bonus du score v2 signalé, non arbitré).
+    func testEngagementDuPoolUrgenceCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.PoolUrgence.engagement,
+                       "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte +10 points de fiabilité.")
+        for cle in ["PoolUrgence.disponible", "PoolUrgence.disponibleDescription", "PoolUrgence.smsTitre",
+                    "PoolUrgence.smsDescription", "PoolUrgence.avantageFiabilite", "PoolUrgence.engagementDebut",
+                    "PoolUrgence.engagementPoints", "PoolUrgence.engagementFin", "Exclusion.bouton", "Exclusion.titre",
+                    "Exclusion.effet", "Exclusion.confirmer", "Exclusion.enregistree"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == cle }, cle)
         }
     }
 }
