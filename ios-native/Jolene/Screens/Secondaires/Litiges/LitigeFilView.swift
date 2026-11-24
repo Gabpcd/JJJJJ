@@ -16,12 +16,12 @@ import JoleneDesign
 struct LitigeFilView: View {
     let litige: Litige
     /// Relecture de la liste après un message (`onUpdate` du web) : le statut du litige a pu changer.
-    let apresEnvoi: () async -> Void
+    let apresEnvoi: @MainActor () async -> Void
     @StateObject private var model: LitigeFilModel
     @FocusState private var saisieActive: Bool
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
-    init(litige: Litige, session: SessionStore, snapshot: SessionSnapshot, apresEnvoi: @escaping () async -> Void) {
+    init(litige: Litige, session: SessionStore, snapshot: SessionSnapshot, apresEnvoi: @escaping @MainActor () async -> Void) {
         self.litige = litige
         self.apresEnvoi = apresEnvoi
         _model = StateObject(wrappedValue: LitigeFilModel(litigeId: litige.id, controller: session.controller, snapshot: snapshot))

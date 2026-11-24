@@ -333,14 +333,18 @@ final class CentreNotificationsTests: XCTestCase {
     }
 
     func testRenvoiWebSeulementAvecLePresentateur() async throws {
-        let port = PortScripte([.success([ligne("n1", lien: "/soignant/litiges", lue: true)])])
+        // L4-T8 : `/soignant/litiges` est natif ; le renvoi web témoin est la page Conformité (lot 4, renvoi web assumé).
+        let port = PortScripte([.success([ligne("n1", lien: "/soignant/conformite", lue: true),
+                                          ligne("n2", lien: "/soignant/litiges#l1", lue: true)])])
         let (controller, snapshot) = try await pret(port)
         let model = CentreNotificationsModel(controller: controller, snapshot: snapshot)
         await model.charger()
         let sans = await model.ouvrir(model.notifications[0], renvoiWebDisponible: false)
         XCTAssertNil(sans, "sans présentateur `.safari` (L1-T10), rien n'est ouvert")
         let avec = await model.ouvrir(model.notifications[0], renvoiWebDisponible: true)
-        XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/litiges")!)))
+        XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/conformite")!)))
+        let litige = await model.ouvrir(model.notifications[1], renvoiWebDisponible: false)
+        XCTAssertEqual(litige, .secondaire(.litiges(onglet: nil, litigeId: "l1")), "litiges natifs (L4-T8) : litige visé, sans présentateur")
     }
 
     /// Revue B8 de T3b, m2 : le centre ne contourne pas l'option B (décision 7 du lot 1). Une ligne dont le lien est un
@@ -369,7 +373,7 @@ final class CentreNotificationsTests: XCTestCase {
 
     func testVoirEtLigneActionnable() {
         let mission = ligne("a", lien: "/soignant/missions/m-1", lue: true)
-        let web = ligne("b", lien: "/soignant/litiges", lue: true)
+        let web = ligne("b", lien: "/soignant/conformite", lue: true) // `/soignant/litiges` est natif depuis L4-T8
         let invalide = ligne("c", lien: "https://evil.example/x", lue: true)
         let sansLien = ligne("d", lue: true)
         let nonLueSansLien = ligne("e")

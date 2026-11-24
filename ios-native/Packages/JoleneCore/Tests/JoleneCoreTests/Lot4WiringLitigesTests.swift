@@ -14,6 +14,29 @@ final class Lot4WiringLitigesTests: XCTestCase {
         XCTAssertFalse(gateways.unwiredPorts.contains("litiges"))
     }
 
+    /// Écran livré : entrée du hub, cible native des liens, et libellés DEBUG `deeplink-route` qu'attendent les XCUITest
+    /// (`DemoLitigesTests`, `DemoReclamationsTests`, `DemoPushTests`).
+    func testEcranLivreCibleNativeEtLibellesDebug() throws {
+        let nu = EcranSecondaire.litiges(onglet: nil, litigeId: nil)
+        XCTAssertTrue(nu.estLivre)
+        XCTAssertTrue(EcranSecondaire.litiges(onglet: .reclamations, litigeId: nil).estLivre)
+        XCTAssertTrue(EntreesHubLot4.sections().flatMap(\.entrees).contains { $0.identifiant == "hub-litiges" })
+        let alias = try XCTUnwrap(DestinationLien(link: "/soignant/reclamations"))
+        XCTAssertEqual(CibleNotification(alias), .secondaire(.litiges(onglet: .reclamations, litigeId: nil)))
+        XCTAssertEqual(PushTapIntent.libelleDebug(.secondaire(nu)), "secondaire(litiges, sans onglet, sans id)")
+        XCTAssertEqual(PushTapIntent.libelleDebug(.secondaire(.litiges(onglet: nil, litigeId: "demo-litige-002"))),
+                       "secondaire(litiges, sans onglet, id masqué)")
+        XCTAssertEqual(PushTapIntent.libelleDebug(alias.destination), "secondaire(litiges, reclamations, sans id)")
+        // Tap d'une notification de litige simulée (`-JOLENE_SIMULER_PUSH`) : litige visé par le fragment.
+        let tap = try XCTUnwrap(PushTapIntent.simule(arguments: ["-JOLENE_SIMULER_PUSH", "NOUVEAU_MESSAGE_LITIGE:litige_id=demo-litige-002"]))
+        XCTAssertEqual(tap.destination(role: "SOIGNANT")?.destination, .secondaire(.litiges(onglet: nil, litigeId: "demo-litige-002")))
+        // Renvoi de l'accord amiable et de l'onglet coupé : URL web canonique de l'écran.
+        XCTAssertEqual(EcranSecondaire.litiges(onglet: nil, litigeId: "demo-litige-001").urlWeb?.absoluteString,
+                       "https://jolene.app/soignant/litiges?litige=demo-litige-001")
+        XCTAssertEqual(EcranSecondaire.litiges(onglet: .reclamations, litigeId: nil).urlWeb?.absoluteString,
+                       "https://jolene.app/soignant/litiges?tab=reclamations")
+    }
+
     func testFixturesLuesDansLOrdreServeurAvecLeNomDeLEtablissement() async throws {
         let port = DemoLitigesGateway()
         let litiges = try await port.lister(context: context)

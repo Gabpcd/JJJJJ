@@ -160,11 +160,12 @@ final class DestinationLienTests: XCTestCase {
     }
 
     func testRenvoisWebEtEspaceEtablissementInchanges() throws {
-        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé), servie par le web
-        // tant que T8 ne l'a pas livrée.
+        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé) ; L4-T8 la livre : sa
+        // destination est l'écran natif, plus un renvoi web.
         let litiges = try XCTUnwrap(lien("https://www.jolene.app/soignant/litiges#l%201"))
         XCTAssertEqual(litiges.route, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
-        XCTAssertEqual(litiges.destination, .safari(url("https://jolene.app/soignant/litiges#l%201")))
+        XCTAssertEqual(litiges.destination, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
+        XCTAssertEqual(litiges.canonique, url("https://jolene.app/soignant/litiges#l%201"))
         let etab = try XCTUnwrap(lien("https://jolene.app/etablissement/missions/abc"))
         XCTAssertEqual(etab.destination, .etablissement(url("https://jolene.app/etablissement/missions/abc")))
         let horsAASA = try XCTUnwrap(lien("https://jolene.app/aide/pro-sante-connect?x=1"))
@@ -265,7 +266,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/stripe-connect": ("stripeConnect", "stripeConnect", 6),               // T14a (livrée)
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
-            "/soignant/litiges": ("secondaire(litiges)", "safari", 46),                    // lot 4, T8
+            "/soignant/litiges": ("secondaire(litiges)", "secondaire(litiges)", 46),       // lot 4, T8 (livrée)
             "/soignant/mes-documents": ("documents", "documents", 30),                       // L2-T10 (contrats, dpae)
             "/etablissement/*": ("etablissement", "etablissement", 125),
             "/admin/*": ("safari", "safari", 47),
@@ -298,9 +299,10 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 626, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
-                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect)")
-        XCTAssertEqual(renvois, 264, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6)")
+        XCTAssertEqual(natifs, 672, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
+                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect ; "
+                       + "L4-T8 : +46, litiges et réclamations)")
+        XCTAssertEqual(renvois, 218, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6 ; L4-T8 : −46)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)

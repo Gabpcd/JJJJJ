@@ -87,7 +87,7 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
             "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
-            "https://jolene.app/soignant/litiges#l1",
+            // `/soignant/litiges#l1` en est sorti à L4-T8 (litiges natifs, `LinksRouterLot4Tests`).
             // T7 (confirmation, `soignant`, `reprendre`) et T8 (`completer`) : présentées hors de l'espace
             // (`testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace`).
             "https://jolene.app/reset-password?token_hash=h&type=recovery",           // reset natif non livré
@@ -380,10 +380,11 @@ final class DeepLinkIntentTests: XCTestCase {
     func testRenvoiWebIssuDeLAppJamaisRejoueCommeLienUniversel() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         _ = aiguillage.ouvrirEspace(snapshot(epoch: 1))
-        let litiges = url("https://jolene.app/soignant/litiges")
+        // `/soignant/litiges` est natif depuis L4-T8 : le renvoi web témoin est la page Conformité.
+        let litiges = url("https://jolene.app/soignant/conformite")
         aiguillage.renvoiWebPresente(.safari(litiges)) // présenté par l'app (centre, Accueil, profil)
         XCTAssertNil(aiguillage.recevoir(url: litiges), "même URL revenue par lien universel : ignorée")
-        XCTAssertNil(aiguillage.recevoir(url: url("https://www.jolene.app/soignant/litiges")), "même URL canonique")
+        XCTAssertNil(aiguillage.recevoir(url: url("https://www.jolene.app/soignant/conformite")), "même URL canonique")
         let autre = url("https://jolene.app/soignant/dpae") // `/contrat/c1` est natif depuis L2-T10
         XCTAssertEqual(aiguillage.recevoir(url: autre), .renvoiWeb(.safari(autre)), "autre lien : présenté")
         aiguillage.renvoiWebPresente(.safari(autre))
