@@ -158,7 +158,7 @@ private struct SwipePaquetView: View {
     /// Action différée jusqu'à la fermeture complète de la feuille locale : jamais deux présentations enchaînées dans
     /// le même tour (détail → récapitulatif, quiz → Pool urgence).
     private enum ApresFermeture {
-        case candidater(String)
+        case recapitulatif(String)
         case ouvrir(CibleNotification)
     }
 
@@ -180,6 +180,8 @@ private struct SwipePaquetView: View {
     /// L'alerte en un toucher suit le coupe-circuit des recherches sauvegardées (T4).
     @State private var porteAlerte = PorteEcranNatif(drapeau: nil)
     @Environment(\.scenePhase) private var scenePhase
+    /// Largeur régulière : « Mes favoris » en tête de la rangée de chips, comme dans la liste.
+    @Environment(\.horizontalSizeClass) private var classeLargeur
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     init(model: SwipeModel, parcours: ParcoursCandidatureSwipe, missions: MissionsListModel, contexte: ContexteSecondaire,
@@ -232,12 +234,28 @@ private struct SwipePaquetView: View {
 
     // MARK: Chips
 
-    /// Chips rapides d'Explorer (les mêmes critères que la liste) : le paquet les respecte comme le web (6c.1).
+    /// Chips rapides d'Explorer (les mêmes critères que la liste) : le paquet les respecte comme le web (6c.1). En
+    /// largeur régulière (iPad), « Mes favoris » est en tête de la rangée comme dans la liste (`ExplorerActions` : la
+    /// barre de navigation n'y tient pas) ; en largeur compacte, il reste dans la barre de `MissionsListScreen`.
     private var chipsRapides: some View {
-        FilterChipRow(identifier: "explorer-chips") {
-            ForEach(ExplorerFiltres.chipsRapides) { chip in
-                FilterChip(chip.titre, isSelected: missions.filtres.estActif(chip), identifier: chip.identifiant) {
-                    Task { await missions.basculer(chip) }
+        HStack(spacing: 0) {
+            if ExplorerActions.dansLaRangeeDeChips(classeLargeur) {
+                NavigationLink(value: FavorisRoute()) {
+                    Image(systemName: "star")
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .tint(JoleneColor.rose700)
+                .accessibilityLabel(FavorisPresentation.titreEcran)
+                .accessibilityIdentifier("explorer-favoris-ouvrir")
+                .modifier(ExplorerActions.Pastille())
+                .padding(.leading, JoleneSpacing.lg)
+            }
+            FilterChipRow(identifier: "explorer-chips") {
+                ForEach(ExplorerFiltres.chipsRapides) { chip in
+                    FilterChip(chip.titre, isSelected: missions.filtres.estActif(chip), identifier: chip.identifiant) {
+                        Task { await missions.basculer(chip) }
+                    }
                 }
             }
         }
@@ -536,7 +554,7 @@ private struct SwipePaquetView: View {
         guard let action = apresFermeture else { return }
         apresFermeture = nil
         switch action {
-        case .candidater(let missionId): parcours.demander(missionId)
+        case .recapitulatif(let missionId): parcours.demander(missionId)
         case .ouvrir(let cible): contexte.ouvrir(cible)
         }
     }
@@ -553,7 +571,7 @@ private struct SwipePaquetView: View {
                     model.lancer(.passer, missionId)
                 }, onPostuler: {
                     // Le récapitulatif s'ouvre une fois le détail refermé.
-                    apresFermeture = .candidater(missionId)
+                    apresFermeture = .recapitulatif(missionId)
                     fermerFeuilleLocale()
                 })
             }

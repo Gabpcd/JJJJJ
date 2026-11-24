@@ -11,6 +11,10 @@ final class Lot4WiringSwipeTests: XCTestCase {
         let gateways = DemoWorld.gateways()
         XCTAssertTrue(gateways.swipe is DemoSwipeGateway)
         XCTAssertFalse(gateways.unwiredPorts.contains("swipe"))
+        // T3b : le ❤️ du monde démo rend ses avis (`CandidatureSwipePort`), comme le monde Supabase.
+        XCTAssertTrue(gateways.candidature is any CandidatureSwipePort)
+        XCTAssertEqual(LibellesCandidature.recapEngagement(.swipeLike), TextesWeb.Candidature.engagementCandidature,
+                       "❤️ : candidature retirable, même phrase d'engagement que POSTULER (récapitulatif du web sans `retraitPossible`)")
     }
 
     func testParcoursDemoPasserSauvegarderCandidaterPuisRetirer() async throws {

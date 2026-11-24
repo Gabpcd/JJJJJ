@@ -30,7 +30,9 @@ import Supabase
 ///   `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)`) : succès `{ok:true, swipe_id, candidature_id, …}`
 ///   **sans `success`**, annoncé après relecture de la candidature comme POSTULER ; refus `{ok:false, error}` à code
 ///   technique traduit par `SwipeRefus`, message rédigé verbatim, `choix_requis` relayé ; `auth_required` →
-///   `.unauthorized`. `warning` et `docs_a_completer` ne sont pas portés par `CandidatureOutcome` (écran T3b).
+///   `.unauthorized`. `warning` et `docs_a_completer` ne sont pas portés par `CandidatureOutcome` : T3b les rend par
+///   `CandidatureSwipePort.confirmerSwipeLike` (`IssueSwipeLike.avis`, valeurs du serveur telles quelles, seulement
+///   avec une candidature confirmée et relue).
 /// - URGENCE (lot 4, T11) : refusée explicitement en citant sa tranche (`CandidatureRules.actionHorsLot1`).
 /// - Annulations (T7) : `fn_annuler_candidature_soignant(p_candidature_id, p_motif_categorie, p_texte_libre,
 ///   p_justificatif_storage_path)` (`public.sql` l.17925 ; refus `{success:false, error_code, error}` → `.refusee`,
@@ -104,7 +106,7 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
             "p_candidature_id": proposition.map(AnyJSON.string) ?? .null,
         ]
         let reponse = try await RPCResponse.appeler(client, Self.confirmerRPC, params: params, fallback: Self.fallbackMessage)
-        if action == .swipeLike { return try await confirmerSwipeLike(reponse, missionId: mission, context: context) }
+        if action == .swipeLike { return try await confirmerSwipeLike(reponse, missionId: mission, context: context).issue }
         if let erreur = reponse.erreur, reponse.code == nil, !reponse.choixRequis, CandidatureRules.estMissionDejaAttribuee(erreur) {
             return .missionDejaAttribuee(message: erreur)
         }
@@ -133,7 +135,7 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
 
     /// SWIPE_LIKE (T3a) : refus du wrapper (accès, mission fermée, planning, conflit) puis de `fn_enregistrer_swipe`, dans
     /// l'ordre de `confirmer` ; succès `ok:true` (jamais `success`) relu par `candidature_id`.
-    private func confirmerSwipeLike(_ reponse: RPCResponse, missionId: String, context: MissionReadContext) async throws -> CandidatureOutcome {
+    private func confirmerSwipeLike(_ reponse: RPCResponse, missionId: String, context: MissionReadContext) async throws -> IssueSwipeLike {
         // Branche défensive, inatteignable avec le wrapper live (revue B8 de #1165, m4) : sans `auth.uid()`,
         // `fn_confirmer_action_planning_v1` refuse d'abord par « Accès réservé aux soignants authentifiés. »
         // (`success:false, ok:false`), restitué verbatim comme pour POSTULER au lot 1, et ne délègue jamais à
@@ -143,13 +145,13 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
             throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
         }
         if let erreur = reponse.erreur, reponse.code == nil, !reponse.choixRequis, CandidatureRules.estMissionDejaAttribuee(erreur) {
-            return .missionDejaAttribuee(message: erreur)
+            return IssueSwipeLike(issue: .missionDejaAttribuee(message: erreur))
         }
         if let refus = reponse.issueCandidatureRefusee(fallback: Self.fallbackMessage) {
             // Code technique de `fn_enregistrer_swipe` (`mission_deja_swipee`…) : libellé `SwipeRefus`, code conservé.
-            guard case .refusee(nil, let texte, let documents) = refus else { return refus }
+            guard case .refusee(nil, let texte, let documents) = refus else { return IssueSwipeLike(issue: refus) }
             let traduit = SwipeRefus.traduire(texte)
-            return .refusee(code: traduit.code, message: traduit.message, documentsRequisPour: documents)
+            return IssueSwipeLike(issue: .refusee(code: traduit.code, message: traduit.message, documentsRequisPour: documents))
         }
         try reponse.leverSiErreur(fallback: Self.fallbackMessage)
         guard reponse.ok == true, reponse.erreur == nil else { throw JoleneError(.contract, SupabaseErrorMapping.contractMessage) }
@@ -158,7 +160,10 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
         guard CandidatureRules.candidaturePoseeRelue(relue, id: id, missionId: missionId) else {
             throw JoleneError(.contract, Self.relectureMessage)
         }
-        return .confirmed(candidatureId: id, contratId: nil)
+        // T3b : avis du serveur, lus seulement une fois la candidature relue — `warning` (texte tel quel, non bloquant) et
+        // `docs_a_completer` (vrai seulement sur un booléen vrai : une valeur d'un autre type n'annonce rien).
+        let avis = AvisSwipeLike(avertissement: reponse.string("warning"), documentsACompleter: reponse.bool("docs_a_completer") == true)
+        return IssueSwipeLike(issue: .confirmed(candidatureId: id, contratId: nil), avis: avis)
     }
 
     // MARK: - Proposition refusée
@@ -377,5 +382,30 @@ public struct SupabaseCandidatureGateway: CandidaturePort {
     static func texteOuNul(_ valeur: String?) -> AnyJSON {
         guard let valeur, !valeur.isEmpty else { return .null }
         return .string(valeur)
+    }
+}
+
+// MARK: - ❤️ avec avis (lot 4, T3b)
+
+extension SupabaseCandidatureGateway: CandidatureSwipePort {
+    /// ❤️ du swipe et ses avis (`warning`, `docs_a_completer` de `fn_enregistrer_swipe`) : même appel, mêmes contrôles et
+    /// mêmes issues que `confirmer(action: .swipeLike, …)` (une seule requête `fn_confirmer_action_planning_v1`, sans
+    /// message, comme le web), les avis en plus quand la candidature est confirmée et relue.
+    public func confirmerSwipeLike(missionId: String, creneaux: [CreneauConfirmePayload], choixContrat: String?,
+                                   context: MissionReadContext) async throws -> IssueSwipeLike {
+        try MissionQuery.validate(context: context)
+        guard let mission = Self.uuid(missionId) else { throw JoleneError(.contract, Self.identifiantInvalideMessage) }
+        // Fail-closed : un planning non exact n'est jamais envoyé.
+        guard !creneaux.isEmpty else { throw JoleneError(.contract, Self.planningRequisMessage) }
+        let params: JSONObject = [
+            "p_mission_id": .string(mission),
+            "p_action": .string(ActionPlanning.swipeLike.rawValue),
+            "p_creneaux_confirmes": .array(creneaux.map { .object(["debut": .string($0.debut), "fin": .string($0.fin)]) }),
+            "p_message": .null,
+            "p_choix_contrat": Self.texteOuNul(choixContrat),
+            "p_candidature_id": .null,
+        ]
+        let reponse = try await RPCResponse.appeler(client, Self.confirmerRPC, params: params, fallback: Self.fallbackMessage)
+        return try await confirmerSwipeLike(reponse, missionId: mission, context: context)
     }
 }

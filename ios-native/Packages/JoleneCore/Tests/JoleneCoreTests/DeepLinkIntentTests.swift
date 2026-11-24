@@ -38,7 +38,7 @@ final class DeepLinkIntentTests: XCTestCase {
         let cas: [(String, CibleNotification)] = [
             ("https://jolene.app/soignant/tableau-de-bord", .accueil),
             ("https://jolene.app/soignant/recherche-missions", .explorer),
-            ("https://jolene.app/soignant/swipe-missions", .explorer),
+            ("https://jolene.app/soignant/swipe-missions", .secondaire(.swipe)), // L4-T3b : onglet Explorer en vue Swipe
             ("https://jolene.app/soignant/missions?tab=passees", .missions),
             ("https://jolene.app/soignant/missions/m%201", .mission(id: "m 1")),
             ("https://jolene.app/mission/m1", .mission(id: "m1")),

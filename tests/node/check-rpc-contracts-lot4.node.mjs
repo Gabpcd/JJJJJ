@@ -836,6 +836,54 @@ test('Lot 4 T1c — m6 : aucun abonnement Realtime avant T7a (seul point : Realt
   }
 });
 
+// Lot 4 T3b (LOT4_PLAN §3 T3b, correction 17, D26) : le quiz du web active le pool urgence par un UPDATE direct de
+// `soignants.disponible_urgence`, sans le contrôle documentaire ni le consentement de `fn_toggle_pool_urgence`. Gap
+// verrouillé : le quiz natif ne porte pas cette question, et aucun code Swift livré n'écrit cette colonne autrement que
+// par la RPC du pool urgence (T11). Jumelle Swift : `SwipeSourcesAppTests` (JoleneCore).
+test('Lot 4 T3b — aucun appel natif ne modifie soignants.disponible_urgence hors fn_toggle_pool_urgence', () => {
+  const sources = sourcesSwiftLivrees();
+  assert.ok(sources.length > 300, `${sources.length} sources Swift livrées lues`);
+  const duPool = chemin => chemin.includes('/PoolUrgence/') || chemin.includes('DemoPoolUrgenceGateway')
+    || chemin.endsWith('Models/PoolUrgence.swift');
+  const lecture = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Profil/ValidationProfil.swift';
+  const interdits = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Profil/ModificationProfil.swift';
+  // La colonne n'est nommée que là où elle est lue (validation du profil) ou interdite (paramètres jamais envoyés).
+  const colonne = sources.filter(s => s.code.includes('disponible_urgence') && !duPool(s.chemin)).map(s => s.chemin).sort();
+  assert.deepEqual(colonne, [interdits, lecture].sort(), '`disponible_urgence` nommée hors de la lecture du profil et de la liste des interdits');
+  const parametre = sources.filter(s => s.code.includes('"p_disponible_urgence"')).map(s => s.chemin);
+  assert.deepEqual(parametre, [interdits], '`p_disponible_urgence` hors de `ModificationProfil.parametresInterdits`');
+  const modification = sources.find(s => s.chemin === interdits).code;
+  const autorises = /parametresAutorises: \[String\] = \[([\s\S]*?)\]/.exec(modification);
+  const refuses = /parametresInterdits: \[String\] = \[([\s\S]*?)\]/.exec(modification);
+  assert.ok(autorises && refuses, 'listes des paramètres de fn_modifier_mon_profil introuvables');
+  assert.ok(!autorises[1].includes('urgence'), 'un paramètre « urgence » est autorisé pour fn_modifier_mon_profil');
+  for (const p of ['"p_disponible_urgence"', '"p_urgence_rayon_km"', '"p_ville_urgence"']) {
+    assert.ok(refuses[1].includes(p), `${p} absent des paramètres interdits`);
+  }
+  // Aucune écriture PostgREST de `soignants` ne porte une colonne du pool (une écriture directe existe : préférences SMS).
+  for (const s of sources.filter(x => x.code.includes('from("soignants")') && /\.(update|upsert|insert)\(/.test(x.code))) {
+    for (const col of ['disponible_urgence', 'urgence_rayon_km', 'ville_urgence']) {
+      assert.ok(!s.code.includes(col), `${s.chemin} : écriture de soignants qui touche à ${col}`);
+    }
+  }
+  // La RPC du pool n'est appelée que par sa gateway (aucune avant T11), jamais par le swipe ni par son quiz.
+  const toggle = sources.filter(s => s.code.includes('"fn_toggle_pool_urgence"')).map(s => s.chemin);
+  assert.deepEqual(toggle.filter(c => !duPool(c)), [], '`fn_toggle_pool_urgence` appelée hors de la gateway du pool urgence');
+  const swipe = sources.filter(s => s.chemin.includes('/Swipe/') || s.chemin.includes('/Screens/Explorer/') || s.chemin.endsWith('DemoSwipeGateway.swift'));
+  assert.ok(swipe.length >= 12, `${swipe.length} sources du swipe lues`);
+  for (const s of swipe) {
+    assert.ok(!s.code.includes('disponible_urgence') && !s.code.includes('fn_toggle_pool_urgence'), `${s.chemin} : le swipe touche au pool urgence`);
+  }
+  const quiz = sources.find(s => s.chemin === 'ios-native/Jolene/Screens/Explorer/QuizPreferencesSheet.swift');
+  assert.ok(quiz, 'QuizPreferencesSheet.swift absent');
+  assert.ok(quiz.code.includes('"swipe-quiz-pool-urgence"'), 'renvoi vers l écran Pool urgence absent du quiz');
+  assert.ok(!/urgence/i.test(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Swipe/QuizSwipe.swift')
+    .split('\n').filter(l => /Option\(|questionH|questionR|questionT/.test(l)).join('\n')), 'une question ou une option du quiz parle d urgence');
+  // Témoin : la garde voit une écriture directe ajoutée dans une gateway.
+  const temoin = codeSwift('try await client.from("soignants").update(["disponible_urgence": true]).eq("id", value: id) // quiz');
+  assert.ok(temoin.includes('from("soignants")') && /\.update\(/.test(temoin) && temoin.includes('disponible_urgence'));
+});
+
 test('Lot 4 T1c — fixtures démo : un module par domaine, collisions et noms hors motif refusés', async () => {
   const dossier = join(root, 'scripts/mobile/demo-fixtures');
   const modules = readdirSync(dossier).filter(f => f.endsWith('.mjs') && f !== 'lot4.mjs').map(f => f.replace(/\.mjs$/, '')).sort();

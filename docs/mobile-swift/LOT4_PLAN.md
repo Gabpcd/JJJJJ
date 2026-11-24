@@ -156,6 +156,36 @@
 >     - **Avis de succès refermables** à la place des toasts du web ; aucun ne disparaît sur minuterie.
 >     - **XCUITest** : `DemoFiltresTests` ouvre l'éclat `lot4` du job `ui-lot1` (D19) ; le paragraphe « CI » du n°12 ne
 >       vaut plus pour T4.
+> 15. **T3b livrée (24/11, branche `lot4/l4-t3b`)** : `/soignant/swipe-missions` natif, vue Swipe de l'onglet Explorer
+>     (`Screens/Explorer/SwipeModeView.swift` et ses quatre vues), ligne `.secondaire(.swipe)` de `ecranNatifLivre` passée.
+>     Écarts au §3 T3b et au web :
+>     - **Commande « Swipe · Liste », sans « Carte »** : Explorer natif n'a pas de carte de la liste des missions (la carte
+>       du lot 1 est celle du détail d'une mission) ; la commande n'existe qu'une fois le coupe-circuit `ios_natif_swipe_actif`
+>       lu.
+>     - **Vue par défaut : la liste** (`SwipeMarqueurs.vueParDefaut`), alors que le web ouvre Explorer sur Swipe : le
+>       comportement du lot 1 et ses XCUITest sont gardés tant que le soignant n'a pas choisi Swipe (choix mémorisé par
+>       compte) ou suivi un lien vers le swipe. **Décision produit à trancher par Gabrielle** ; une ligne à changer.
+>     - **Quiz** proposé au premier contact avec le paquet (et non à l'arrivée sur Explorer), quatre questions (D26),
+>       renvoi `swipe-quiz-pool-urgence` vers l'écran Pool urgence (web tant que T11 n'est pas livrée). Garde « aucune
+>       écriture native de `disponible_urgence` hors `fn_toggle_pool_urgence` » : `SwipeSourcesAppTests` et sa jumelle node.
+>     - **Parcours du ❤️ dans une seule feuille** (`ParcoursCandidatureSwipe`) : récapitulatif, feuille « première
+>       candidature » (`TextesWeb.PremiereCandidature`, verbatim, HARD STOP n°4, en attente de la relecture de Gabrielle),
+>       choix du contrat ; la feuille reste ouverte pendant l'envoi (le web la referme avant). La mémorisation du choix de
+>       contrat du web (écriture directe de `soignants.preference_contrat_mixte`) n'est pas portée.
+>     - **Avis du ❤️** (m3 de #1165) : `warning` et `docs_a_completer` rendus par `CandidatureSwipePort` (deux mondes),
+>       affichés sans minuterie ; `CandidatureOutcome` du lot 1 est inchangé.
+>     - **Toast d'annulation** : 5 s (D4) ; `JOLENE_DEMO_SWIPE_ANNULATION` l'allonge en démo et en DEBUG seulement, pour
+>       les XCUITest. Annonce « Candidature retirée » refermable, avec accès au détail.
+>     - **Détail d'une carte** : colonnes servies seulement (ni brut de base, ni cumul des majorations, ni IFM + ICP,
+>       calculés côté client par le web) ; les phrases de délai de versement du web ne sont pas reprises.
+>     - **Fin de paquet** : alerte en un toucher de T4 branchée (`swipe-fin-alerte`, même modèle, même coupe-circuit).
+>     - **Démo** : `demo-swipe.json` garde douze cartes, dont deux missions de recette hors d'Explorer
+>       (`missions_recette` : `demo-swipe-choix`, contrat `TOUS` ; `demo-swipe-deja`, déjà swipée), connues des mondes démo
+>       qui relisent une mission par son identifiant (candidature, favoris, Mes missions, détail), comme la mission de
+>       recette de la confirmation de présence.
+>     - **XCUITest** : `DemoSwipeTests` (sept méthodes, par les boutons `swipe-passer` / `swipe-sauvegarder` /
+>       `swipe-candidater`) rejoint l'éclat `lot4` ; le geste réel `swipeLeft()` du §3 n'est pas rejoué (fragile en CI,
+>       consigne du 24/11), ses règles restent prouvées par `JoleneDesignLot4Tests`.
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

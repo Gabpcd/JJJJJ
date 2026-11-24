@@ -124,6 +124,76 @@ final class SupabaseCandidatureSwipeLikeTests: XCTestCase {
         XCTAssertEqual(session?.kind, .unauthorized)
     }
 
+    // MARK: - Avis du ❤️ (T3b, `CandidatureSwipePort`)
+
+    private func aimerAvecAvis(choix: String? = nil) async throws -> IssueSwipeLike {
+        try await SupabaseCandidatureGateway(client: TestClient.make())
+            .confirmerSwipeLike(missionId: missionId, creneaux: creneaux, choixContrat: choix, context: TestClient.context)
+    }
+
+    func testConfirmerSwipeLikeRendLesAvisDuServeurApresRelecture() async throws {
+        reponse(#"{"ok":true,"swipe_id":"s-1","direction":"LIKE","candidature_id":"\#(candidatureId)","choix_contrat":"LIBERAL","profession_requise":"IDE","docs_a_completer":true,"warning":"Mission adjacente à moins d'une heure."}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("EN_ATTENTE")))
+        let issue = try await aimerAvecAvis(choix: "LIBERAL")
+        XCTAssertEqual(issue.issue, .confirmed(candidatureId: candidatureId, contratId: nil))
+        XCTAssertEqual(issue.avis, AvisSwipeLike(avertissement: "Mission adjacente à moins d'une heure.", documentsACompleter: true),
+                       "avertissement du serveur tel quel, documents à compléter")
+        XCTAssertEqual(registry.requests(to: rpc).count, 1, "une seule requête, comme `confirmer`")
+        let envoye = try XCTUnwrap(registry.requests(to: rpc).first?.bodyJSON as? [String: Any])
+        XCTAssertEqual(envoye["p_action"] as? String, "SWIPE_LIKE")
+        XCTAssertEqual(envoye["p_choix_contrat"] as? String, "LIBERAL")
+        XCTAssertTrue(envoye["p_message"] is NSNull, "aucun message sur un ❤️, comme le web")
+        XCTAssertTrue(envoye["p_candidature_id"] is NSNull)
+        XCTAssertEqual(registry.requests(to: "/rest/v1/candidatures").first?.query("id"), "eq.\(candidatureId)")
+    }
+
+    func testConfirmerSwipeLikeSansAvisEtJamaisSurUnRefus() async throws {
+        // `warning: null`, `docs_a_completer: false` : rien à montrer.
+        reponse(#"{"ok":true,"candidature_id":"\#(candidatureId)","docs_a_completer":false,"warning":null}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("EN_ATTENTE")))
+        let sobre = try await aimerAvecAvis()
+        XCTAssertEqual(sobre.avis, AvisSwipeLike())
+        XCTAssertEqual(sobre.avis?.estVide, true)
+
+        // Valeurs d'un autre type : jamais interprétées (un texte « true » n'annonce pas de documents à compléter).
+        registry.reset()
+        reponse(#"{"ok":true,"candidature_id":"\#(candidatureId)","docs_a_completer":"true","warning":42}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, candidatureJSON("EN_ATTENTE")))
+        let tolerant = try await aimerAvecAvis()
+        XCTAssertEqual(tolerant.issue, .confirmed(candidatureId: candidatureId, contratId: nil))
+        XCTAssertEqual(tolerant.avis, AvisSwipeLike())
+
+        // Refus, choix de contrat : mêmes issues que `confirmer(.swipeLike)`, sans avis.
+        registry.reset()
+        reponse(#"{"ok":false,"error":"mission_deja_swipee","warning":"x","docs_a_completer":true}"#)
+        let refus = try await aimerAvecAvis()
+        XCTAssertEqual(refus, IssueSwipeLike(issue: .refusee(code: "mission_deja_swipee", message: "Vous avez déjà répondu à cette mission.",
+                                                              documentsRequisPour: nil)))
+        XCTAssertNil(refus.avis)
+        registry.reset()
+        reponse(#"{"ok":false,"choix_requis":true,"options":[{"value":"SALARIE","label":"Salarié"},{"value":"LIBERAL","label":"Libéral"}]}"#)
+        let choix = try await aimerAvecAvis()
+        XCTAssertEqual(choix.issue, .choixRequis([ChoixContratOption(value: "SALARIE", label: "Salarié"),
+                                                  ChoixContratOption(value: "LIBERAL", label: "Libéral")]))
+        XCTAssertNil(choix.avis)
+    }
+
+    func testConfirmerSwipeLikeSansPlanningOuRelectureEnEchecNAnnonceRien() async throws {
+        let sansPlanning = await erreur {
+            _ = try await SupabaseCandidatureGateway(client: TestClient.make())
+                .confirmerSwipeLike(missionId: self.missionId, creneaux: [], choixContrat: nil, context: TestClient.context)
+        }
+        XCTAssertEqual(sansPlanning, JoleneError(.contract, SupabaseCandidatureGateway.planningRequisMessage))
+        XCTAssertTrue(registry.requests.isEmpty, "planning non exact : aucun envoi")
+
+        reponse(#"{"ok":true,"candidature_id":"\#(candidatureId)","docs_a_completer":true,"warning":"x"}"#)
+        registry.add("GET", "/rest/v1/candidatures", respond: .json(200, "[]"))
+        let nonRelue = await erreur { _ = try await self.aimerAvecAvis() }
+        XCTAssertEqual(nonRelue, JoleneError(.contract, SupabaseCandidatureGateway.relectureMessage),
+                       "aucun avis sans candidature relue : jamais un succès fabriqué")
+        XCTAssertEqual(registry.requests(to: rpc).count, 1, "aucun renvoi")
+    }
+
     func testUrgenceResteVerrouilleeSansRequete() async throws {
         let refus = await erreur { _ = try await self.aimer(.urgence) }
         XCTAssertEqual(refus, CandidatureRules.actionHorsLot1(.urgence))
