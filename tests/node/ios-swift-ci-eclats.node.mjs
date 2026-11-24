@@ -678,3 +678,27 @@ test('gel iPhone : un veilleur dont chaque outil échoue reste muet pour l étap
     assert.ok(existsSync(join(b.sortie, 'gel-presences-ecran-1.txt')), 'capture en échec consignée');
   } finally { b.nettoyer(); }
 });
+
+// Éclat « pointage » — 24/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, décision 22). Run 45239724447 (`main` à
+// `f6e6be49`), UI — ipad-portrait : à la tentative 1, un toucher synthétisé perdu fait échouer un test ; à la tentative 2,
+// un test reste dix minutes sans réponse et l'éclat est coupé à 30 min, sans que le résumé du job nomme les tests
+// échoués. En ipad-landscape, l'étape mesurait 21,8 min (23,2 min au run 45238573082). Trois réponses, gardées ci-dessous :
+// rejeu borné du toucher, relevé des tests à la sortie de l'étape de résumé, découpage de la classe et veilleur déclenché
+// par la durée d'un test.
+
+// Rejeu borné du toucher de relecture des compteurs démo (run 45239724447, tentative 1, ipad-portrait : toucher
+// synthétisé perdu, `lectures` inchangé 15 s). Même forme que `basculer` : trois essais, 3 s par `attendreSansEchec`,
+// chaque rejeu consigné, `require` final. Les XCUITest ne sont pas compilés ici : la garde lit la source.
+test('pointage : le toucher de relecture des compteurs est rejoué trois fois au plus, consigné, puis exigé', () => {
+  const source = read(`${DOSSIER_UI}/DemoPointageUITestCase.swift`);
+  const corps = /\n {4}func compteursRelus\(dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line\) -> String \{\n([\s\S]*?)\n {4}\}\n/.exec(source)?.[1];
+  assert.ok(corps, 'compteursRelus(dans:file:line:) introuvable');
+  assert.match(corps, /for essai in 1\.\.\.3 \{/, 'trois essais au plus');
+  assert.equal(corps.split('tap("pointage-demo-relire")').length - 1, 1, 'un seul toucher par essai');
+  assert.match(corps, /let recu = attendreSansEchec\(attente, timeout: 3, file: file, line: line\) \{ self\.lecturesCompteurs\(\) > avant \}/);
+  assert.match(corps, /if recu \{ break \}\n\s+guard essai < 3 else \{ break \}\n\s+consignerRejeu\(attente, issue: /, 'un rejeu consigné, jamais après un toucher reçu');
+  const iBoucle = corps.indexOf('for essai in 1...3 {');
+  const iPreuve = corps.indexOf('require("Compteurs relus après l\'action", file: file, line: line) { self.lecturesCompteurs() > avant }');
+  assert.ok(iPreuve > iBoucle, 'le require final reste la preuve, après la boucle');
+  assert.ok(!/XCTSkip|continueAfterFailure/.test(corps), 'aucun test relancé ni échec toléré');
+});

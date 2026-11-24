@@ -194,13 +194,35 @@ class DemoPointageUITestCase: JoleneUITestCase {
 
     /// Compteurs démo relus APRÈS l'action qui précède (revue fraîche de T4b, m3) : `pointage-demo-relire` touché, puis une
     /// lecture nouvelle exigée avant de rendre le libellé.
-    func compteursRelus(dans ecran: XCUIElement) -> String {
+    ///
+    /// Un toucher perdu est rejoué, jamais un toucher reçu, comme dans `basculer` (run 45239724447, tentative 1,
+    /// ipad-portrait, `testHorsLigneDesactiveLePointageSansAucunEnvoi` : toucher synthétisé sur le bouton entièrement
+    /// visible, puis 15 s sans lecture nouvelle). Tout toucher reçu par le bouton laisse une trace observable : il relit
+    /// les scans du monde démo et incrémente `lectures` (`CompteursPointageDemo.relire`, `PresencesScreen.swift` ; seule
+    /// condition : la session démo de la page, celle de tous les appelants). Sans lecture nouvelle au bout de 3 s, le
+    /// toucher n'a pas atteint l'app : il est rejoué, trois essais au plus. L'attente de 3 s passe par `attendreSansEchec`
+    /// (blocages décomptés, budgetés et tracés comme dans `require`) et chaque rejeu par `consignerRejeu`, au nom de
+    /// l'appelant.
+    ///
+    /// Un toucher reçu en double ne fausse rien : si la lecture d'un toucher arrive après les 3 s et que le toucher est
+    /// rejoué, les compteurs sont lus deux fois. La relecture n'écrit rien dans le monde démo (elle relit
+    /// `metadonneesRecues`), l'attente compare « lectures > avant », et le libellé rendu vient de la dernière lecture, donc
+    /// d'une lecture postérieure à l'action. La preuve reste le `require` final.
+    func compteursRelus(dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line) -> String {
         let avant = lecturesCompteurs()
         let relire = element("pointage-demo-relire")
         require("Le bouton de relecture des compteurs démo est rendu") { relire.exists }
         scrollTo(relire, in: ecran)
-        tap("pointage-demo-relire")
-        require("Compteurs relus après l'action") { self.lecturesCompteurs() > avant }
+        let attente = "Le toucher de pointage-demo-relire est reçu"
+        for essai in 1...3 {
+            tap("pointage-demo-relire")
+            let recu = attendreSansEchec(attente, timeout: 3, file: file, line: line) { self.lecturesCompteurs() > avant }
+            if recu { break }
+            guard essai < 3 else { break }
+            consignerRejeu(attente, issue: "toucher \(essai)/3 sans lecture nouvelle en 3 s (compteur de lectures resté à "
+                           + "\(avant)) : toucher rejoué", file: file, line: line)
+        }
+        require("Compteurs relus après l'action", file: file, line: line) { self.lecturesCompteurs() > avant }
         return element("pointage-demo-scans").label
     }
 
