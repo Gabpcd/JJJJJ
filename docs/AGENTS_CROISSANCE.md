@@ -52,7 +52,7 @@ La demande (établissements) passe avant l'offre : un soignant inscrit sans miss
 | Canal | Effort | Impact attendu | Délai |
 |---|---|---|---|
 | Emails B2B personnalisés via l'agent de prospection : 20 par jour, envoyés depuis le Gmail de la fondatrice, séquence J+3/J+7/J+14 | 20 min/j | Établissements de 75/92/56 joignables par une adresse classique (les adresses MSSanté sont exclues, §4) ; 2 à 4 % de réponses positives attendues | 1-4 semaines |
-| Appels ciblés : 10/j sur les établissements qui ont ouvert ou répondu, numéro fourni dans chaque brouillon | 30 min/j | Le meilleur taux de conversion B2B santé | dès J+1 |
+| Appels ciblés : liste hebdomadaire de 30 fiches d'appel préparée par l'agent (§4 bis), puis rappels dans « Actions du jour » | 30 min/j | Le meilleur taux de conversion B2B santé ; seul canal ouvert tant que les adresses des cibles sont en messagerie fermée | chaque lundi |
 | Concierge première mission : publier au téléphone avec l'établissement | 15 min par établissement | Lève le blocage « première mission » | immédiat |
 | Signaux BOAMP et France Travail : bonus de score dans l'agent | 0 (réactivation des imports) | Cible les établissements qui recrutent déjà | après go |
 | Sièges de groupes (EMEIS, Korian, mutualistes) en direct | élevé | Fort, mais cycle long | 2-6 mois |
@@ -97,9 +97,10 @@ La demande (établissements) passe avant l'offre : un soignant inscrit sans miss
 
 ## 4. Agents livrés (`20261109140000_agents_croissance_brouillons.sql`)
 
-Ce sont quatre routines SQL quotidiennes, plus un rapport hebdomadaire. **Aucune n'envoie quoi
-que ce soit** : ni pg_net, ni Resend, ni SMS, ni publication. Elles n'appellent pas de LLM, donc
-ne coûtent rien en tokens.
+Ce sont cinq routines SQL quotidiennes (la cinquième, la liste d'appels, date du 24/11/2026 : §4 bis),
+plus un rapport hebdomadaire. **Aucune n'envoie quoi que ce soit ni n'appelle personne** : ni pg_net,
+ni Resend, ni SMS, ni téléphonie, ni publication. Elles n'appellent pas de LLM, donc ne coûtent rien
+en tokens.
 
 Les deux crons (`jolene_growth_agents_quotidien`, `jolene_growth_rapport_hebdo`) sont créés
 **désactivés**, en production comme sur le staging, qui doit rester sans cron actif. La fondatrice
@@ -111,6 +112,7 @@ ou non.
 | Agent | Quand | Produit |
 |---|---|---|
 | Prospection établissements | chaque jour à 05:50 UTC, une fois activé | Jusqu'à 20 premiers emails par jour (file plafonnée à 60), plus les relances étapes 2 et 3 des contacts CRM échus. Détail ci-dessous. |
+| Appels établissements | chaque jour, dans la limite de la semaine | Jusqu'à 30 fiches d'appel par semaine (file plafonnée à 60) : nom, numéro, raisons du classement, script modifiable. Détail au §4 bis. |
 | Posts sociaux | chaque jour (idempotent à la semaine) | 1 post Facebook par département × {AS, IDE} et 1 post LinkedIn par semaine. Chiffres réels : missions ouvertes réelles, ou à défaut données BMO publiques. Groupes suggérés. |
 | Missions à pourvoir | chaque jour | 1 post par mission réelle ouverte depuis plus de 6 h, sans candidature, avec lien `/mission/:id` et UTM |
 | Réactivation | chaque jour | Email aux inscrits réels bloqués (documents, vérification, candidature, première mission), au plus un tous les 14 jours, `preferences_notifications` respecté |
@@ -137,6 +139,70 @@ Détail de l'agent de prospection :
 - Adresses MSSanté exclues (domaine `mssante.fr` et ses sous-domaines, `20261116143942`) : premiers contacts, relances, et revalidation par le prédicat unique (§5). Une seule règle, `private.fn_growth_email_mssante`. Les brouillons MSSanté encore en file (`BROUILLON` ou `VALIDE`) ont expiré au déploiement, avec un motif visible dans l'historique, et ne comptent pas dans le quota du jour. MSSanté est un espace de confiance fermé, une boîte MSSanté n'échange qu'avec les messageries MSSanté de la liste blanche de l'ANS, donc un email envoyé depuis Gmail est rejeté (ANS : [doctrine MSSanté](https://esante.gouv.fr/doctrine/mssante), [« Basiques de la MSSanté », 08/2026](https://esante.gouv.fr/sites/default/files/media/document/Pr%C3%A9sentation%20-%20Basiques%20de%20la%20MSSant%C3%A9%20-%20082026.pdf)).
 - Adresses Apicrypt exclues aussi (domaine `apicrypt.org` et ses sous-domaines, `20261117060000`), par la même règle, donc par les mêmes premiers contacts, relances, revalidation, expiration et quota. Constat du 17/11 : le premier passage après `20261116143942` a préparé 7 brouillons, tous vers une adresse `@interop-mssante.apicrypt.org` ; 554 prospects ont une telle adresse. Ce sont les adresses MSSanté des utilisateurs d'Apicrypt, publiées dans l'annuaire national ([FAQ Apicrypt](https://www.apicrypt.org/files/FAQ_mars2019_BD.pdf)) : même espace fermé. Force des sources : la FAQ fonde `interop-mssante.apicrypt.org` ; le reste d'`apicrypt.org` (messagerie chiffrée entre apicrypteurs) est un **choix de conformité Jolene**, prudent, sans adresse concernée au 17/11. `gmsi-mssante.fr` (1 adresse) n'est pas exclu, faute de source primaire. La migration verrouille par empreinte la règle et les quatre fonctions qui l'appliquent, puis vérifie le prédicat et la file après l'expiration.
 
+### 4 bis. Zéro visible et liste d'appels (`20261124123500_prospection_zero_visible_liste_appels.sql`)
+
+Constat du 20/11/2026 (lecture seule en production) : une fois les messageries fermées exclues, l'agent
+email n'a plus de cible. Sur les 2 318 établissements ciblés de 75, 92 et 56, 656 ont une adresse, toutes
+MSSanté ou Apicrypt ; 2 017 ont un téléphone (1 796 numéros distincts). Il ne préparait plus rien, sans
+erreur ni message.
+
+**Un seul univers ciblé.** `private.fn_growth_prospects_cibles()` lit une fois les départements et les
+types ciblés et dit, pour chaque établissement : adresse fermée, adresse utilisable, téléphone
+utilisable (9 chiffres au moins), cible disponible (jamais contactée, hors CRM, ni ignorée ni en
+opposition, sans brouillon vivant), et les points du score (type, signal BOAMP de moins de 90 jours,
+tension BMO exacte). L'agent email, l'agent d'appels et le décompte lisent cette fonction : aucun ne
+re-décide le ciblage.
+
+**Zéro visible.** `private.fn_growth_cibles_prospection()` compte l'univers : établissements ciblés,
+adresses fermées, adresses utilisables, adresses restant à contacter, téléphones utilisables, téléphones
+restants. Ce décompte figure dans le résultat de l'agent email (`growth_agent_executions.details.cibles`)
+et dans l'entonnoir figé chaque semaine (`prospection.cibles_agent`). L'écran l'affiche :
+- en haut de page, quel que soit l'onglet : « Prospection par email à l'arrêt » quand aucune adresse
+  n'est utilisable, « Plus aucune adresse à contacter par email » quand elles sont toutes traitées ;
+- sur la carte de l'agent : « Aucune cible joignable » à la place de « Brouillons seulement », et le décompte ;
+- dans le rapport hebdomadaire : colonnes « Appels notés » et « Adresses utilisables ».
+
+L'agent ne lève pas d'erreur : une exception annulerait aussi les relances préparées au même passage.
+
+**Liste d'appels.** `private.fn_growth_agent_appels()` écrit des fiches dans `growth_brouillons`
+(agent `APPEL_ETABLISSEMENT`, canal `TELEPHONE`) :
+- 30 fiches par semaine (lundi, heure de Paris) et 60 en file au plus. Ce sont des défauts du code ;
+  les clés facultatives `agents_appels_quota_semaine` et `agents_appels_file_max` les remplacent ;
+- classement par le score existant sans sa part email, les départements alternant comme pour l'email.
+  Au 24/11, aucun signal BOAMP n'a moins de 90 jours et la tension BMO est la même dans tout un
+  département : l'ordre suit donc le type (EHPAD, hôpitaux, handicap, domicile, centres de santé et
+  dialyse, écoles) ;
+- mêmes interdits que l'email, par le prédicat unique `fn_growth_destinataire_bloque` (STOP, opposition,
+  contact perdu, comparés par FINESS, adresse et numéro), moins le motif `MSSANTE` qui ne dit rien d'un
+  appel : `private.fn_growth_appel_bloque`. Un même numéro (standard partagé) n'est proposé qu'une fois ;
+- une cible n'a qu'un canal à la fois : un établissement qui a un brouillon d'email n'a pas de fiche
+  d'appel, et inversement ;
+- une fiche non traitée expire au bout de 14 jours ; jamais validée, elle libère sa cible.
+
+**Sur l'écran.** La fiche montre le nom, le numéro, les raisons du classement et le script, modifiable.
+« Valider la fiche » revérifie les interdits ; le numéro devient alors un lien d'appel que la fondatrice
+touche elle-même (rien n'est composé à sa place). Après l'appel, elle note le résultat : A répondu, Sans
+réponse, Intéressé, À rappeler, Pas intéressé ou STOP. Le décideur crée la fiche CRM silencieuse
+(`fn_admin_sourcing_ajouter_crm`) et traite le résultat par la logique CRM existante
+(`fn_admin_crm_effectuer_action`) : les rappels arrivent dans Prospects → « Actions du jour » ; « Pas
+intéressé » et « STOP » ferment tout contact ultérieur, email compris.
+
+**Script d'appel** (`private.fn_growth_script_appel`). Il ne reprend que des phrases déjà publiées :
+
+| Phrase du script | Source publiée |
+|---|---|
+| « Jolene facture à l'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu'elles entrent dans cette base. » | FAQ de l'accueil, « Comment fonctionne la commission ? » (`src/lib/seo-contenu/accueil.ts`), mot pour mot |
+| « Il n'y a ni abonnement ni frais d'entrée : vous ne payez que lorsque vous recrutez. » | Guide, « Combien coûte la publication d'une mission ? » (`src/lib/seo-contenu/guides.ts`), mot pour mot |
+| « plateforme de mise en relation directe », « vous publiez votre besoin, des soignants vérifiés candidatent » | FAQ de `/recruter-soignants` (`src/lib/seo-contenu/recruter-soignants.ts`) |
+| « le contrat est signé en ligne » | Accroche de l'accueil (« Contrat signé en ligne ») |
+| « pour des missions et remplacements ponctuels », « l'inscription est gratuite pour les soignants » | Description de l'accueil (`src/lib/seo-routes.ts`) |
+
+Il ne contient aucun chiffre hors le tarif publié, aucune promesse de délai, aucune comparaison avec un
+autre type de prestataire, aucune règle de droit. Il se termine par : « Si vous préférez ne pas être
+rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus. » Les écoles de santé ont une
+variante (faire connaître Jolene aux jeunes diplômés), sans tarif.
+`tests/node/prospection-liste-appels.node.mjs` compare ces phrases à leur source à chaque PR.
+
 Parcours de la fondatrice (Admin → Acquisition → **Agents de croissance**, `/admin/fondateur/agents`) :
 1. **À valider** : relire, modifier si besoin, puis « Valider et ouvrir Gmail » (email pré-rempli)
    ou « Valider et copier » (post).
@@ -152,7 +218,8 @@ Parcours de la fondatrice (Admin → Acquisition → **Agents de croissance**, `
 
 Réglages (`growth_config`, texte) : `agents_croissance_actifs`, `agents_departements_cibles`,
 `agents_types_cibles`, `agents_prospection_quota_jour`, `agents_prospection_file_max`,
-`prospection_signature`, `prospection_mention_opposition`. Sans mention d'opposition, l'agent de
+`prospection_signature`, `prospection_mention_opposition`, et, facultatives (absentes de la table,
+défauts 30 et 60 dans le code), `agents_appels_quota_semaine` et `agents_appels_file_max`. Sans mention d'opposition, l'agent de
 prospection refuse de tourner : le verrou est explicite et l'erreur est tracée.
 
 ## 5. Conformité — HARD STOP n°4 (validation de Gabrielle requise avant merge)
@@ -187,6 +254,13 @@ Les emails reprennent uniquement des affirmations déjà publiques sur `/recrute
 existe), contrats et facturation automatiques. Il n'y a aucune mention réglementaire.
 
 Garde-fous du code :
+- Appels (24/11/2026). Choix de conformité Jolene, sans règle de droit affichée : les fiches ne visent
+  que le numéro publié de l'établissement dans les annuaires publics (FINESS, Annuaire Santé), jamais un
+  particulier ; la fondatrice appelle elle-même ; le script propose de ne plus être rappelé, et « STOP »
+  ou « Pas intéressé » sont définitifs pour tous les canaux. Aucun texte de loi n'est cité à
+  l'interlocuteur ni affirmé ici : le cadre juridique du démarchage téléphonique entre professionnels
+  n'a pas été instruit dans ce lot (à faire avec sa source primaire avant d'en écrire une ligne, HARD
+  STOP n°4). La phrase d'opposition du script est une proposition soumise à Gabrielle.
 - Un **prédicat unique**, `private.fn_growth_destinataire_bloque`, sert aux agents comme à la
   validation. Il refuse un compte supprimé, les emails désactivés (préférence globale ou événement
   `SERIE_ONBOARDING`), les oppositions STOP et, en dernier, les adresses MSSanté (motif `MSSANTE`,

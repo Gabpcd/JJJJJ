@@ -1,0 +1,51 @@
+- main:
+  - text: Acquisition
+  - heading "Agents de croissance" [level=1]
+  - text: "Les agents préparent chaque jour des emails et des posts, et chaque semaine une liste d’appels. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail, publiez ou appelez, puis vous le notez ici."
+  - button "Préparer maintenant":
+    - img
+    - text: Préparer maintenant
+  - paragraph: Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, aucun appel n’est passé à votre place, et les contacts en opposition (STOP) sont exclus avant la rédaction puis vérifiés de nouveau à la validation.
+  - status:
+    - paragraph: Prospection par email à l’arrêt
+    - paragraph: "Aucune adresse utilisable parmi les 2 318 établissements ciblés (56, 75, 92). 656 ont une adresse, toutes en messagerie de santé fermée (MSSanté, Apicrypt), où un email envoyé depuis Gmail est rejeté. 2 017 ont un téléphone : les fiches d’appel de la semaine sont dans « Appels établissements »."
+    - paragraph: Constat du dernier passage de l’agent, le 24/11/2026 06:50.
+    - button "Voir les fiches d’appel":
+      - img
+      - text: Voir les fiches d’appel
+  - tablist "Vues des agents de croissance":
+    - tab "À valider" [selected]
+    - tab "Entonnoir"
+    - tab "Agents"
+  - tabpanel "À valider":
+    - group "Filtrer par agent":
+      - button "Tous" [pressed]
+      - button "Prospection établissements"
+      - button "Appels établissements"
+      - button "Posts sociaux"
+      - button "Missions à pourvoir"
+      - button "Réactivation des inscrits"
+      - button "Voir la file" [pressed]
+      - button "Rafraîchir la file":
+        - img
+    - text: Appels établissements Téléphone Appel noté Créé le 24/11/2026 06:50
+    - paragraph: EHPAD Les Glycines — recette
+    - paragraph: "Téléphone : 01 00 00 10 01"
+    - paragraph: "Pourquoi : EHPAD · Paris · dépt 75"
+    - text: Script d’appel
+    - textbox "Script d’appel" [disabled]: "Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui organise les remplacements de soignants ? Jolene est une plateforme de mise en relation directe entre les établissements de santé et des soignants vérifiés, pour des missions et remplacements ponctuels. Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne. Jolene facture à l'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez. Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ? Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus."
+    - paragraph: "Résultat de l’appel : Sans réponse"
+    - text: Appels établissements Téléphone Rejeté Créé le 24/11/2026 06:50
+    - paragraph: Hôpital Opposition — recette
+    - paragraph: "Téléphone : 01 00 00 10 02"
+    - paragraph: "Pourquoi : HOPITAL · Nanterre · dépt 92"
+    - text: Script d’appel
+    - textbox "Script d’appel" [disabled]: "Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui organise les remplacements de soignants ? Jolene est une plateforme de mise en relation directe entre les établissements de santé et des soignants vérifiés, pour des missions et remplacements ponctuels. Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne. Jolene facture à l'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez. Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ? Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus."
+    - paragraph: "Motif : Opposition (STOP) ou contact perdu"
+    - text: Appels établissements Téléphone Appel noté Créé le 24/11/2026 06:50
+    - paragraph: SSIAD du Port — recette
+    - paragraph: "Téléphone : 02.00.00.10.03"
+    - paragraph: "Pourquoi : DOMICILE · Lorient · dépt 56"
+    - text: Script d’appel
+    - textbox "Script d’appel" [disabled]: "Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui organise les remplacements de soignants ? Jolene est une plateforme de mise en relation directe entre les établissements de santé et des soignants vérifiés, pour des missions et remplacements ponctuels. Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne. Jolene facture à l'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez. Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ? Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus."
+    - paragraph: "Résultat de l’appel : STOP"
