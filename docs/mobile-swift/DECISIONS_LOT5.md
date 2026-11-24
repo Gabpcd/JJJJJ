@@ -475,7 +475,10 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
     (Accueil) et `/etablissement/missions/creer` ouvrent l'écran natif (`EtabRouteTests`, `DeepLinkCoordinatorTests`,
     `DemoEtabSessionTests` migrés). XCUITest `DemoEtabPublicationTests` (quatre tests) dans l'éclat
     « lot5-etablissement » du job `ui-lot1`, jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement
-    (aucun simulateur) : preuve CI ; durée de l'éclat à relever au premier run.
+    (aucun simulateur) : preuve CI ; durée de l'éclat à relever au premier run. Niveau 1 vérifié en local le 24/11
+    (Xcode 16.4, `swift build --build-tests` puis `swift test`, concurrence stricte) : JoleneCore 2 394 tests et
+    JoleneSupabase 713 tests, aucun échec, aucun avertissement. Les trois écrans de `Screens/Etablissement/Publication/`
+    et la classe XCUITest ne sont **pas** compilés en local (cible app, `xcodebuild` exclu) : première compilation en CI.
 13. **Textes natifs ajoutés (non juridiques)** : « Autres options », « Ouvrir sur jolene.app », « Choisir la date »,
     « Jour précédent », « Jour suivant », « Voir mes missions », « Voir la mission », « Publier une autre mission »,
     « Voir sur jolene.app », « La publication n'a pas pu être confirmée par une relecture. Vérifiez vos missions avant
