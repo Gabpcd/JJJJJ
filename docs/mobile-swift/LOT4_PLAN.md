@@ -156,6 +156,31 @@
 >     - **Avis de succès refermables** à la place des toasts du web ; aucun ne disparaît sur minuterie.
 >     - **XCUITest** : `DemoFiltresTests` ouvre l'éclat `lot4` du job `ui-lot1` (D19) ; le paragraphe « CI » du n°12 ne
 >       vaut plus pour T4.
+> 15. **T5 livrée (24/11, branche `lot4/l4-t5`)** : `/soignant/disponibilites` natif, `fn_definir_disponibilite` passée
+>     en `consommee` (`LOT4_CONSOMMEES`). Écarts au §3 T5 et au web :
+>     - **Point d'entrée** : aucun dans l'app, comme le prévoit le n°12 (ni entrée du hub web, ni emplacement posé dans
+>       Explorer) ; l'écran est atteint par lien universel, tap push ou ligne du centre. L'icône calendrier d'Explorer
+>       (`RechercheMissions.tsx` l.309-316) reste à poser (`MissionsListScreen`, hors tranche) : tant qu'elle manque,
+>       l'écran est livré sans accès depuis l'interface.
+>     - **Relecture de la semaine** (§2.3) : `DisponibilitesPort.definir` rend les cases de la semaine civile du jour
+>       basculé (du lundi au dimanche, `JourParis.semaine`). Le modèle remplace cette semaine dans la grille (jours passés
+>       écartés) ; si d'autres appels se chevauchent, il ne publie que la case basculée, une relecture ayant pu précéder
+>       l'écriture d'une autre case. La lecture est bornée à `soignant_id` = identité de la session (la policy admet
+>       aussi l'administrateur), en plus du `.gte("jour", …)` du web.
+>     - **Lecture en échec** : la grille n'est plus affichée (« Disponibilités indisponibles », texte du web), y compris
+>       quand un rafraîchissement échoue sur une grille déjà affichée ou quand la relecture qui suit une erreur de
+>       transport échoue : jamais de case dont l'état n'a pas pu être relu. Une erreur de transport dont la relecture
+>       montre la bascule est une bascule confirmée (aucun message), jamais renvoyée.
+>     - **Jour passé** : jamais envoyé (grille re-dérivée de l'horloge avant chaque bascule, minuit franchi compris) ; le
+>       refus affiché est celui du serveur, repris tel quel.
+>     - **Compteur** : les créneaux `MATIN` et `APRES_MIDI`, admis par la RPC mais écrits par aucun client, ne sont ni
+>       affichés ni comptés (le web les compterait sans les afficher).
+>     - **Fuseau du serveur** : le monde démo applique les bornes de la RPC au jour UTC de son horloge (`CURRENT_DATE`
+>       d'une session UTC) ; le fuseau réel de la base n'a pas été relu.
+>     - **XCUITest** : `DemoDisponibilitesTests` rejoint l'éclat `lot4` ; « sortie puis retour » passe par le retour au
+>       hub puis par le même lien remis pendant un renvoi web (`-JOLENE_OPEN_URL_SUIVANT`), faute de point d'entrée.
+>       L'horloge démo étant un lundi, aucun jour passé n'est visible en démo : la règle est prouvée par les tests du
+>       modèle.
 >
 > **§6 mis à jour au 18/11** : B0-bis fait (point 2) ; prérequis du point 1 complétés par le reliquat du lot 1
 > ci-dessus (T6a, T4b, T5, T6b, T6c) ; B1 toujours B9, non fait ; les autres points sont inchangés.

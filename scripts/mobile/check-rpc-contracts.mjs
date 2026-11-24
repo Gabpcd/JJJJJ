@@ -133,7 +133,7 @@ export const RPC_SUIVIES = [
   { name: 'fn_modifier_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   { name: 'fn_supprimer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   // T5 — disponibilités
-  { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
+  { name: 'fn_definir_disponibilite', statut: 'consommee', lot: 4 }, // L4-T5 : SupabaseDisponibilitesGateway
   // T6 — parrainage
   { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
   { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },

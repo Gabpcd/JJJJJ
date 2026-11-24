@@ -1595,7 +1595,7 @@
     },
     {
       "name": "fn_definir_disponibilite",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 4,
       "types": null,
       "sql": [

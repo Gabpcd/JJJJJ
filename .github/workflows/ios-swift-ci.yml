@@ -704,6 +704,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
+            -skip-testing:JoleneUITests/DemoDisponibilitesTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1584,7 +1585,8 @@ jobs:
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
       # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
       # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
-      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
+      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job. L4-T5 : DemoDisponibilitesTests
+      # (disponibilités, une méthode : une connexion, un écran, deux bascules, estimée à 1-3 min).
       - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
@@ -1613,6 +1615,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
+            -only-testing:JoleneUITests/DemoDisponibilitesTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1742,7 +1745,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoDisponibilitesTests"] },
               { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];

@@ -2525,7 +2525,7 @@ concernée à jour **dans la même PR**.
 | `fn_creer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_definir_disponibilite` | consommée lot 4 (T5) | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
 | `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
@@ -2773,8 +2773,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_supprimer_filtre_sauvegarde"("p_id" "uui
 
 ## fn_definir_disponibilite
 
-- **Statut natif** : à venir (lot 4, T5).
-- **Usage prévu** : Grille de 4 semaines depuis le lundi courant (Europe/Paris), créneaux `JOURNEE` et `NUIT` comme le web, jours passés désactivés ; bascule **sans état optimiste** puis relecture PostgREST `disponibilites_soignant` (RLS `dispos_soignant_select` l.77827).
+- **Statut natif** : consommée (lot 4, T5) par `JoleneSupabase/Disponibilites/SupabaseDisponibilitesGateway.swift`, appelée par `DisponibilitesModel` (JoleneCore, écran `/soignant/disponibilites`).
+- **Usage prévu** : Grille de 4 semaines depuis le lundi courant (Europe/Paris), créneaux `JOURNEE` et `NUIT` comme le web, jours passés désactivés ; bascule **sans état optimiste** puis relecture PostgREST `disponibilites_soignant` (RLS `dispos_soignant_select` l.77827). Livré (T5) : la gateway relit la semaine civile du jour basculé (`select=jour,creneau`, `soignant_id` = identité de la session, du lundi au dimanche) et la rend au modèle ; la lecture de l'écran est `jour >= <jour Paris>`, comme le web. Un jour passé ou hors de la grille n'est jamais envoyé ; une erreur de transport est réconciliée par relecture, sans renvoi.
 - **Signature SQL** (`supabase/schema/public.sql` l.29712) :
 
 ```sql

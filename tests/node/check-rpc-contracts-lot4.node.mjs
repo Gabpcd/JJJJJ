@@ -111,6 +111,7 @@ const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 // quatre RPC du swipe de T3a.
 const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const GATEWAY_DISPONIBILITES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Disponibilites/SupabaseDisponibilitesGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
   ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
@@ -120,6 +121,7 @@ const LOT4_CONSOMMEES = new Map([
   ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_definir_disponibilite', ['T5', GATEWAY_DISPONIBILITES]],
 ]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
