@@ -1,0 +1,40 @@
+- main:
+  - text: Acquisition
+  - heading "Agents de croissance" [level=1]
+  - text: "Les agents préparent chaque jour des emails et des posts, et chaque semaine une liste d’appels. Rien ne part sans vous : vous relisez, validez, envoyez depuis votre Gmail, publiez ou appelez, puis vous le notez ici."
+  - button "Préparer maintenant":
+    - img
+    - text: Préparer maintenant
+  - paragraph: Aucun envoi automatique. Chaque email reste un brouillon jusqu’à votre validation, aucun appel n’est passé à votre place, et les contacts en opposition (STOP) sont exclus avant la rédaction puis vérifiés de nouveau à la validation.
+  - tablist "Vues des agents de croissance":
+    - tab "À valider"
+    - tab "Entonnoir"
+    - tab "Agents" [selected]
+  - tabpanel "Agents":
+    - heading "Préparation automatique" [level=3]
+    - text: En pause
+    - paragraph: Les agents ne tournent que si vous cliquez sur « Préparer maintenant ». Activez la préparation pour recevoir les brouillons chaque matin.
+    - button "Activer la préparation automatique"
+    - heading "Prospection établissements" [level=3]
+    - text: Brouillons seulement
+    - paragraph: Chaque matin, jusqu’à 20 premiers emails et les relances dues, pour les établissements des marchés pilotes (FINESS), en excluant les oppositions.
+    - paragraph: "Dernier passage : 25/11/2026 06:50 (automatique) · 20 brouillon(s)"
+    - paragraph: "Cibles : 2 318 établissements ciblés · 260 adresses utilisables (dont 260 d’un annuaire public) · 520 en messagerie fermée · 2 017 téléphones"
+    - paragraph: "2 adresses laissées sans brouillon : origine sans mention d’opposition (saisie à la main, ou modifiée depuis son import)."
+    - heading "Appels établissements" [level=3]
+    - text: Brouillons seulement
+    - paragraph: Chaque semaine, jusqu’à 30 fiches d’appel pour les établissements des marchés pilotes qui ont un téléphone, classées par potentiel, oppositions exclues. Vous appelez vous-même, puis vous notez le résultat.
+    - paragraph: "Dernier passage : aucun pour l’instant"
+    - heading "Posts sociaux" [level=3]
+    - text: Brouillons seulement
+    - paragraph: Chaque semaine, un post par département et par métier pour les groupes Facebook, et un post LinkedIn pour les directions d’établissement.
+    - paragraph: "Dernier passage : aucun pour l’instant"
+    - heading "Missions à pourvoir" [level=3]
+    - text: Brouillons seulement
+    - paragraph: Chaque mission réelle ouverte depuis plus de 6 h et sans candidature reçoit un post prêt à partager.
+    - paragraph: "Dernier passage : aucun pour l’instant"
+    - heading "Réactivation des inscrits" [level=3]
+    - text: Brouillons seulement
+    - paragraph: Inscrits réels bloqués (documents, vérification, première candidature ou première mission), préférences email respectées.
+    - paragraph: "Dernier passage : aucun pour l’instant"
+    - paragraph: "Horaires (heure de Paris en hiver) : agents chaque jour à 6 h 50, liste d’appels complétée à ce passage dans la limite de la semaine, rapport hebdomadaire le lundi à 6 h 15. Réglages dans growth_config (départements cibles, quota quotidien, signature, mention d’opposition)."

@@ -36,6 +36,8 @@ import {
   raisonsCible,
   resumeAppels,
   resumeCibles,
+  resumeSansMention,
+  sourceAdresse,
   sourceFiche,
   telephoneFiche,
   type ActionBrouillon,
@@ -110,6 +112,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   const appel = estAppel(b);
   const numero = appel ? telephoneFiche(b.contexte) : null;
   const source = appel ? sourceFiche(b.contexte) : null;
+  const origineAdresse = estEmail(b) ? sourceAdresse(b.contexte, b.destinataire_email) : null;
   const resultatNote = appel ? libelleResultatAppel(b.contexte?.resultat_appel) : null;
 
   // `sansTexte` : une revérification avant appel ne réécrit pas le script (un autre onglet a pu le modifier).
@@ -227,6 +230,19 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
           </p>
           {b.destinataire_email ? (
             <p className="text-sm text-muted-foreground break-all">{b.destinataire_email}</p>
+          ) : null}
+          {origineAdresse ? (
+            <p className="text-xs text-muted-foreground" data-testid="source-adresse">
+              Source de l’adresse : {origineAdresse.texte}
+              {origineAdresse.url ? (
+                <>
+                  {' '}
+                  <a href={origineAdresse.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    Voir la source
+                  </a>
+                </>
+              ) : null}
+            </p>
           ) : null}
           {numero ? (
             <p className="text-sm text-muted-foreground">
@@ -722,6 +738,9 @@ export default function AdminAgentsCroissance() {
                       {appels ? <p className="text-xs text-muted-foreground" data-testid="passage-appels">{appels.texte}</p> : null}
                       {a === 'PROSPECTION_ETABLISSEMENT' && rapportCibles ? (
                         <p className="text-xs text-muted-foreground" data-testid="cibles-prospection">Cibles : {resumeCibles(rapportCibles.cibles)}</p>
+                      ) : null}
+                      {a === 'PROSPECTION_ETABLISSEMENT' && resumeSansMention(rapportCibles?.passage ?? null) ? (
+                        <p className="text-xs text-muted-foreground" data-testid="adresses-sans-mention">{resumeSansMention(rapportCibles?.passage ?? null)}</p>
                       ) : null}
                     </CardY2KContent>
                   </CardY2K>

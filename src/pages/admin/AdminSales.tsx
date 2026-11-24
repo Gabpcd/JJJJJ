@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { saisieAdresseManuelle } from '@/lib/agentsCroissance';
 import {
   Megaphone, Plus, ExternalLink, Phone, Mail, MessageCircle, Copy, Save, X, Trash2,
   Users, Building2, FileText, Search, Star, Archive, RotateCcw, Send, Pencil,
@@ -1253,9 +1254,12 @@ function ProspectionEtab({ onAjouter }: { onAjouter: () => void }) {
 
   const sauverEmail = async () => {
     if (!emailEdit) return;
-    const valeur = emailEdit.valeur.trim();
+    // Une adresse saisie à la main porte son origine (SAISIE_MANUELLE) : l'agent email ne lui
+    // prête pas la mention d'une autre source (docs/AGENTS_CROISSANCE.md §4 ter).
+    const saisie = saisieAdresseManuelle(emailEdit.valeur);
+    if (!saisie) { toast.error('Adresse non reconnue : lettres sans accent, chiffres, point ou tiret, et un seul « @ ».'); return; }
     const { error } = await supabase.from('prospects_etablissements' as any)
-      .update({ email: valeur || null } as any).eq('finess', emailEdit.finess);
+      .update({ email: saisie.email, email_provenance: saisie.provenance } as any).eq('finess', emailEdit.finess);
     if (error) { toast.error(error.message); return; }
     setEmailEdit(null);
     rechercher(page);

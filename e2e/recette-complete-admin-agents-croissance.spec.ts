@@ -80,6 +80,34 @@ const cibles = {
   departements: ['56', '75', '92'], etablissements_cibles: 2318, adresses_fermees: 656,
   adresses_utilisables: 0, adresses_restantes: 0, telephones_utilisables: 2017, telephones_restants: 2017,
 };
+
+// Après l'import de l'annuaire public des établissements pour personnes âgées (20261124170000) :
+// 260 adresses attendues dans les départements pilotes (mesure en lecture seule du 24/11/2026),
+// dont 136 à la place d'une adresse en messagerie fermée ; vingt déjà en file après un passage.
+const ciblesAvecAnnuaire = {
+  ...cibles, adresses_fermees: 520, adresses_utilisables: 260, adresses_annuaire_public: 260, adresses_restantes: 240,
+};
+const MENTION_ANNUAIRE = 'Votre adresse de contact provient de l\'annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr, données ouvertes publiées sur data.gouv.fr). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.';
+const PAGE_DU_JEU = 'https://www.data.gouv.fr/datasets/etablissements-ehpad-esld-residences-autonomie-accueils-de-jour';
+
+function brouillonsAdressesPubliques(): Brouillon[] {
+  const email = { ...base, agent: 'PROSPECTION_ETABLISSEMENT', canal: 'EMAIL', cible_type: 'PROSPECT_ETABLISSEMENT', sequence_etape: 1, statut: 'BROUILLON' as Statut, cree_le: '2026-11-25T05:50:00Z', expire_le: '2026-12-09T05:50:00Z' };
+  return [
+    { ...email, id: '99110000-0000-4000-8000-000000000021', cible_id: '560000021', destinataire_nom: 'EHPAD Les Ajoncs — recette',
+      destinataire_email: 'contact@ehpad-ajoncs.example.invalid', departement: '56', score: 67,
+      sujet: 'Renforts soignants pour EHPAD Les Ajoncs — recette',
+      corps: `Bonjour,\n\nJe suis Gabrielle, fondatrice de Jolene.\n\n${MENTION_ANNUAIRE}`,
+      contexte: { type_etablissement: 'EHPAD', ville: 'Vannes', score: { signal_boamp_90j: 0 },
+        source: 'FINESS (établissement) + annuaire pour-les-personnes-agees.gouv.fr (email, jeu ouvert data.gouv.fr)',
+        email_source: { email: 'contact@ehpad-ajoncs.example.invalid', source_code: 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV', source_url: PAGE_DU_JEU,
+          source_publie_le: '2020-11-11', source_maj_le: '2020-10-04', releve_le: '2026-11-24', classe: 'FONCTION' } } },
+    { ...email, id: '99110000-0000-4000-8000-000000000022', cible_id: '750000022', destinataire_nom: 'Centre de santé du Canal — recette',
+      destinataire_email: 'accueil@centre-canal.example.invalid', departement: '75', score: 45,
+      sujet: 'Renforts soignants pour Centre de santé du Canal — recette',
+      corps: 'Bonjour,\n\nMessage de recette.\n\nVos coordonnées professionnelles proviennent des annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.',
+      contexte: { type_etablissement: 'CENTRE_SANTE', ville: 'Paris', score: {}, source: 'FINESS (établissement) + Annuaire Santé (email)', email_source: null } },
+  ];
+}
 const RESULTATS_APPEL = ['APPEL_REPONDU', 'SANS_REPONSE', 'INTERESSE', 'A_RAPPELER', 'PAS_INTERESSE', 'STOP'];
 
 const entonnoir = {
@@ -92,17 +120,20 @@ const entonnoir = {
   sources_inscriptions_periode: {}, exclus_cohorte_test: { soignants_test: 1100, etablissements_test: 917 },
 };
 
-async function simulerAgents(page: Page, { appels = false }: { appels?: boolean } = {}) {
+async function simulerAgents(page: Page, { appels = false, adresses = false }: { appels?: boolean; adresses?: boolean } = {}) {
   const { etat } = await simulerEtablissement(page);
   etat.overrides.set('fn_get_my_role', { role: 'ADMIN_PLATEFORME' });
   etat.overrides.set('fn_admin_mes_acces', { acces_total: true, groupes: [] });
-  const brouillons = appels ? fichesAppel() : fixtures();
+  const brouillons = appels ? fichesAppel() : adresses ? brouillonsAdressesPubliques() : fixtures();
   const decisions: Array<{ p_id: string; p_action: string; p_sujet: string | null }> = [];
   const resultats: Array<{ p_id: string; p_motif: string | null }> = [];
   // Passage automatique du matin : l'agent email ne prépare rien et le dit, l'agent d'appels a préparé trois fiches.
   let executions: Array<Record<string, unknown>> = appels ? [
     { id: 11, agent: 'APPEL_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:01Z', brouillons_crees: 5, erreur: null, details: { brouillons_crees: 5, fiches_appel: 5, places_de_la_semaine: 30, places_non_pourvues: 25, quota_semaine: 30, fiches_de_la_semaine: 5, file_max: 60, fiches_en_file: 5, candidats_examines: 8, exclus_stop: 2, numeros_deja_en_file: 1 } },
     { id: 10, agent: 'PROSPECTION_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:00Z', brouillons_crees: 0, erreur: null, details: { premiers_contacts: 0, places_du_jour: 20, places_non_pourvues: 20, cibles } },
+  ] : adresses ? [
+    // Premier passage après l'import : vingt premiers contacts préparés, toutes les places du jour pourvues.
+    { id: 21, agent: 'PROSPECTION_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-25T05:50:00Z', brouillons_crees: 20, erreur: null, details: { premiers_contacts: 20, relances: 0, places_du_jour: 20, places_non_pourvues: 0, exclus_stop: 0, exclus_sans_mention: 2, cibles: ciblesAvecAnnuaire } },
   ] : [];
   const rapports = appels ? [{ semaine_debut: '2026-11-16', donnees: { ...entonnoir, prospection: { ...entonnoir.prospection, fiches_appel_notees_periode: 2, cibles_agent: cibles } } }] : [];
   let lancements = 0;
@@ -467,6 +498,7 @@ test('admin — zéro visible et liste d’appels : avertissement, fiche, appel 
   await page.getByRole('tab', { name: 'Agents' }).click();
   await expect(page.getByText('Aucune cible joignable', { exact: true })).toHaveCount(1);
   await expect(page.getByTestId('cibles-prospection')).toHaveText(/^Cibles : 2\s318 établissements ciblés · 0 adresse utilisable · 656 en messagerie fermée · 2\s017 téléphones$/);
+  await expect(page.getByTestId('adresses-sans-mention')).toHaveCount(0);
   await expect(page.getByText('Liste épuisée', { exact: true })).toHaveCount(1);
   await expect(page.getByTestId('passage-appels')).toHaveText('30 places restaient sur 30 cette semaine · 2 cibles écartées pour opposition · 1 numéro déjà proposé · 25 places sans cible appelable');
   await expect(page.getByText('Brouillons seulement', { exact: true })).toHaveCount(3);
@@ -490,6 +522,82 @@ test('admin — zéro visible et liste d’appels : avertissement, fiche, appel 
     'VALIDER:11', 'VALIDER:11', 'VALIDER:12', 'VALIDER:14', 'VALIDER:14', 'MARQUER_ENVOYE:11',
     'VALIDER:15', 'VALIDER:15', 'MARQUER_ENVOYE:15', 'VALIDER:13', 'VALIDER:13', 'MARQUER_ENVOYE:13',
   ]);
+  expect(sim.lancements()).toBe(0);
+  expect(sim.etat.ecritures).toEqual([]);
+  expect(sim.etat.inconnues).toEqual([]);
+  expect(sim.etat.erreurs).toEqual([]);
+});
+
+test('admin — adresses publiques : origine de l’adresse sur le brouillon, décompte de l’annuaire, validation, reprise', async ({ page }, info) => {
+  const sim = await simulerAgents(page, { adresses: true });
+  await page.goto('/admin/fondateur/agents');
+  if (info.project.name === 'iphone') expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+  if (info.project.name === 'ordinateur') expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
+  const sansDebordement = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const ouverts = () => page.evaluate(() => (window as unknown as { __ouverts: string[] }).__ouverts);
+
+  // État 1 — des adresses sont utilisables : plus d'avertissement, deux brouillons à valider, rien n'est parti.
+  await expect(page.getByRole('heading', { name: 'Agents de croissance', exact: true })).toBeVisible();
+  const cartes = page.getByTestId('brouillon-croissance');
+  await expect(cartes).toHaveCount(2);
+  await expect(page.getByTestId('alerte-cibles-prospection')).toHaveCount(0);
+
+  // L'adresse venue de l'annuaire dit d'où elle vient, de quand elle date, et qu'elle n'est pas vérifiée.
+  const ajoncs = cartes.filter({ hasText: 'EHPAD Les Ajoncs — recette' });
+  await expect(ajoncs.getByText('contact@ehpad-ajoncs.example.invalid', { exact: true })).toBeVisible();
+  const origine = ajoncs.getByTestId('source-adresse');
+  await expect(origine).toHaveText('Source de l’adresse : annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr), jeu ouvert de data.gouv.fr — fiche mise à jour le 04/10/2020, relevée le 24/11/2026. Adresse non vérifiée : elle a pu changer depuis. Voir la source');
+  const lien = origine.getByRole('link', { name: 'Voir la source' });
+  await expect(lien).toHaveAttribute('href', PAGE_DU_JEU);
+  await expect(lien).toHaveAttribute('target', '_blank');
+  await expect(lien).toHaveAttribute('rel', 'noopener noreferrer');
+  // Le message porte la mention de CETTE origine, pas celle des annuaires historiques.
+  const message = await ajoncs.getByLabel('Message').inputValue();
+  expect(message.endsWith(MENTION_ANNUAIRE)).toBe(true);
+  expect(message).not.toContain('Annuaire Santé');
+  // Une adresse historique ne reçoit pas de ligne d'origine, et garde sa mention.
+  const canal = cartes.filter({ hasText: 'Centre de santé du Canal — recette' });
+  await expect(canal.getByTestId('source-adresse')).toHaveCount(0);
+  await expect(canal.getByLabel('Message')).toHaveValue(/répertoire FINESS et Annuaire Santé/);
+  await expect(page.getByTestId('source-adresse')).toHaveCount(1);
+  await sansDebordement();
+  await preuve(page, 'agents-adresses-file', info);
+
+  // État 2 — validation : Gmail s'ouvre sur l'adresse de l'annuaire, avec la mention ; rien n'est envoyé d'ici.
+  await ajoncs.getByRole('button', { name: 'Valider et ouvrir Gmail' }).click();
+  await expect(page.getByText('Validé. Envoyez depuis Gmail, puis cliquez sur « J’ai envoyé ».')).toBeVisible();
+  const gmail = new URL((await ouverts())[0]);
+  expect(gmail.origin + gmail.pathname).toBe('https://mail.google.com/mail/');
+  expect(gmail.searchParams.get('to')).toBe('contact@ehpad-ajoncs.example.invalid');
+  expect(gmail.searchParams.get('body')).toContain(MENTION_ANNUAIRE);
+  expect(await ouverts()).toHaveLength(1);
+
+  await expect(ajoncs.getByText('Validé, à envoyer', { exact: true })).toBeVisible();
+  await expect(ajoncs.getByRole('button', { name: 'J’ai envoyé' })).toBeVisible();
+
+  // État 3 — reprise après rechargement : l'état vient du serveur, le brouillon validé garde son origine.
+  await stabiliserLectures(page); await page.reload();
+  await expect(page.getByRole('heading', { name: 'Agents de croissance', exact: true })).toBeVisible();
+  await expect(cartes).toHaveCount(2);
+  await expect(ajoncs.getByText('Validé, à envoyer', { exact: true })).toBeVisible();
+  await expect(ajoncs.getByTestId('source-adresse')).toContainText('fiche mise à jour le 04/10/2020, relevée le 24/11/2026');
+  await expect(ajoncs.getByRole('button', { name: 'J’ai envoyé' })).toBeVisible();
+  await sansDebordement();
+  await preuve(page, 'agents-adresses-valide', info);
+
+  // État 4 — carte de l'agent : le décompte dit combien d'adresses viennent de l'annuaire public.
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  await expect(page.getByTestId('cibles-prospection')).toHaveText(/^Cibles : 2\s318 établissements ciblés · 260 adresses utilisables \(dont 260 d’un annuaire public\) · 520 en messagerie fermée · 2\s017 téléphones$/);
+  // Deux adresses saisies ou modifiées à la main : pas de brouillon, et l'écran le dit.
+  await expect(page.getByTestId('adresses-sans-mention')).toHaveText(/^2 adresses laissées sans brouillon : origine sans mention d’opposition \(saisie à la main, ou modifiée depuis son import\)\.$/);
+  await expect(page.getByText('Dernier passage : 25/11/2026 06:50 (automatique) · 20 brouillon(s)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Aucune cible joignable', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('alerte-cibles-prospection')).toHaveCount(0);
+  await sansDebordement();
+  await preuve(page, 'agents-adresses-agents', info);
+
+  // Une seule décision, aucune écriture hors du décideur, aucune requête externe.
+  expect(sim.decisions.map((d) => d.p_action)).toEqual(['VALIDER']);
   expect(sim.lancements()).toBe(0);
   expect(sim.etat.ecritures).toEqual([]);
   expect(sim.etat.inconnues).toEqual([]);

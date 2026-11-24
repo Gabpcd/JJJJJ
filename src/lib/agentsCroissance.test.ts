@@ -20,6 +20,9 @@ import {
   raisonsCible,
   resumeAppels,
   resumeCibles,
+  sourceAdresse,
+  saisieAdresseManuelle,
+  resumeSansMention,
   sourceFiche,
   telephoneFiche,
   telephoneNational,
@@ -197,11 +200,17 @@ describe('agents de croissance — fiches d’appel', () => {
 describe('agents de croissance — un zéro n’est plus muet', () => {
   const constat = {
     departements: ['56', '75', '92'], etablissements_cibles: 2318, adresses_fermees: 656,
-    adresses_utilisables: 0, adresses_restantes: 0, telephones_utilisables: 2017, telephones_restants: 2017,
+    adresses_utilisables: 0, adresses_annuaire_public: 0, adresses_restantes: 0,
+    telephones_utilisables: 2017, telephones_restants: 2017,
   };
 
   it('ne lit qu’un décompte complet', () => {
     expect(lireCibles(constat)).toEqual(constat);
+    // Rapport figé avant la clé « annuaire public » : toujours lisible, à zéro.
+    const { adresses_annuaire_public: _absente, ...ancien } = constat;
+    expect(lireCibles(ancien)).toEqual(constat);
+    expect(lireCibles({ ...constat, adresses_annuaire_public: 'beaucoup' })?.adresses_annuaire_public).toBe(0);
+    expect(lireCibles({ ...constat, adresses_utilisables: 279, adresses_annuaire_public: 279 })?.adresses_annuaire_public).toBe(279);
     expect(lireCibles({ ...constat, adresses_utilisables: undefined })).toBeNull();
     expect(lireCibles({ ...constat, telephones_restants: '2017' })).toBeNull();
     expect(lireCibles(null)).toBeNull();
@@ -248,16 +257,18 @@ describe('agents de croissance — un zéro n’est plus muet', () => {
 
   it('se tait tant qu’il reste une adresse à contacter, ou sans décompte', () => {
     expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 })).toBeNull();
-    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 3, places_non_pourvues: 17 })).toBeNull();
-    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 0 })).toBeNull();
+    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 3, places_non_pourvues: 17, sans_mention: 0 })).toBeNull();
+    expect(alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 0, sans_mention: 0 })).toBeNull();
     expect(alerteCibles(null)).toBeNull();
   });
 
   it('dit quand les adresses restantes ont toutes été écartées au dernier passage', () => {
-    expect(lirePassage({ premiers_contacts: 0, places_non_pourvues: 20, places_du_jour: 20 })).toEqual({ premiers_contacts: 0, places_non_pourvues: 20 });
+    expect(lirePassage({ premiers_contacts: 0, places_non_pourvues: 20, places_du_jour: 20 })).toEqual({ premiers_contacts: 0, places_non_pourvues: 20, sans_mention: 0 });
+    expect(lirePassage({ premiers_contacts: 2, places_non_pourvues: 0, exclus_sans_mention: 3 })?.sans_mention).toBe(3);
+    expect(lirePassage({ premiers_contacts: 2, places_non_pourvues: 0, exclus_sans_mention: 'trois' })?.sans_mention).toBe(0);
     expect(lirePassage({ premiers_contacts: 0 })).toBeNull();
     expect(lirePassage(null)).toBeNull();
-    const a = alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 20 });
+    const a = alerteCibles({ ...constat, adresses_utilisables: 12, adresses_restantes: 5 }, { premiers_contacts: 0, places_non_pourvues: 20, sans_mention: 0 });
     expect(a?.niveau).toBe('info');
     expect(a?.titre).toBe('Aucun nouvel email préparé');
     expect(lisible(a?.texte)).toBe(
@@ -279,5 +290,83 @@ describe('agents de croissance — un zéro n’est plus muet', () => {
     expect(lisible(resumeCibles(constat))).toBe('2 318 établissements ciblés · 0 adresse utilisable · 656 en messagerie fermée · 2 017 téléphones');
     expect(lisible(resumeCibles({ ...constat, etablissements_cibles: 1, adresses_utilisables: 2, telephones_utilisables: 1 })))
       .toBe('1 établissement ciblé · 2 adresses utilisables · 656 en messagerie fermée · 1 téléphone');
+    expect(lisible(resumeCibles({ ...constat, adresses_utilisables: 280, adresses_annuaire_public: 279, adresses_fermees: 506 })))
+      .toBe('2 318 établissements ciblés · 280 adresses utilisables (dont 279 d’un annuaire public) · 506 en messagerie fermée · 2 017 téléphones');
+  });
+});
+
+describe('agents de croissance — origine d’une adresse publique', () => {
+  const origine = {
+    email: 'contact@ehpad-exemple.test', source_code: 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV',
+    source_url: 'https://www.data.gouv.fr/datasets/etablissements-ehpad-esld-residences-autonomie-accueils-de-jour',
+    source_publie_le: '2020-11-11', source_maj_le: '2020-10-04', releve_le: '2026-11-24', classe: 'FONCTION',
+  };
+
+  it('dit d’où vient l’adresse, de quand elle date, et qu’elle n’est pas vérifiée', () => {
+    expect(sourceAdresse({ email_source: origine })).toEqual({
+      texte: 'annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr), jeu ouvert de data.gouv.fr — fiche mise à jour le 04/10/2020, relevée le 24/11/2026. Adresse non vérifiée : elle a pu changer depuis.',
+      url: origine.source_url,
+    });
+  });
+
+  it('se rabat sur la date de publication, et n’affiche pas un lien qui n’est pas https', () => {
+    const s = sourceAdresse({ email_source: { ...origine, source_maj_le: null, source_url: 'javascript:alert(1)' } });
+    expect(s?.texte).toContain('fiche mise à jour le 11/11/2020');
+    expect(s?.url).toBeNull();
+    expect(sourceAdresse({ email_source: { ...origine, source_maj_le: 'hier', source_publie_le: undefined, releve_le: 20261124 } })?.texte)
+      .toBe('annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr), jeu ouvert de data.gouv.fr. Adresse non vérifiée : elle a pu changer depuis.');
+  });
+
+  it('nomme une source inconnue par son code, et ne dit rien d’une adresse historique', () => {
+    expect(sourceAdresse({ email_source: { ...origine, source_code: 'AUTRE_ANNUAIRE' } })?.texte).toContain('source AUTRE_ANNUAIRE');
+    expect(sourceAdresse({ email_source: null })).toBeNull();
+    expect(sourceAdresse({ source: 'FINESS (établissement) + Annuaire Santé (email)' })).toBeNull();
+    expect(sourceAdresse({ email_source: 'annuaire' })).toBeNull();
+    expect(sourceAdresse({ email_source: { source_url: origine.source_url } })).toBeNull();
+  });
+
+  it('ne s’affiche que sous l’adresse qu’elle décrit', () => {
+    expect(sourceAdresse({ email_source: origine }, ' Contact@EHPAD-Exemple.test ')?.url).toBe(origine.source_url);
+    expect(sourceAdresse({ email_source: origine }, 'autre@ehpad-exemple.test')).toBeNull();
+    // Sans adresse à comparer (ancien appel) ou sans adresse dans la source : affichée.
+    expect(sourceAdresse({ email_source: origine }, null)).not.toBeNull();
+    expect(sourceAdresse({ email_source: { ...origine, email: undefined } }, 'autre@ehpad-exemple.test')).not.toBeNull();
+  });
+});
+
+describe('adresse saisie à la main dans Sales', () => {
+  const jour = new Date('2026-11-24T23:30:00Z'); // déjà le 25 à Paris
+
+  it('porte l’origine SAISIE_MANUELLE, en minuscules, datée du jour à Paris', () => {
+    expect(saisieAdresseManuelle('  Accueil@EHPAD-Exemple.test ', jour)).toEqual({
+      email: 'accueil@ehpad-exemple.test',
+      provenance: { email: 'accueil@ehpad-exemple.test', source_code: 'SAISIE_MANUELLE', releve_le: '2026-11-25' },
+    });
+  });
+
+  it('efface l’adresse et sa provenance quand la saisie est vide', () => {
+    expect(saisieAdresseManuelle('   ', jour)).toEqual({ email: null, provenance: null });
+  });
+
+  it('enregistre une messagerie de santé fermée sans provenance (la base la refuserait)', () => {
+    expect(saisieAdresseManuelle('contact@ehpad.mssante.fr', jour)).toEqual({ email: 'contact@ehpad.mssante.fr', provenance: null });
+    expect(saisieAdresseManuelle('contact@medical.apicrypt.org', jour)?.provenance).toBeNull();
+  });
+
+  it('refuse ce qui n’est pas une adresse simple', () => {
+    for (const saisie of ['contact', 'contact@ehpad', 'château@ehpad.test', 'a b@ehpad.test', 'a@b@ehpad.test', 'contact@ehpad.test;x']) {
+      expect(saisieAdresseManuelle(saisie, jour), saisie).toBeNull();
+    }
+  });
+});
+
+describe('adresses laissées sans brouillon', () => {
+  it('se tait à zéro, compte au singulier et au pluriel', () => {
+    expect(resumeSansMention(null)).toBeNull();
+    expect(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 0 })).toBeNull();
+    expect(lisible(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 1 }) ?? undefined))
+      .toBe('1 adresse laissée sans brouillon : origine sans mention d’opposition (saisie à la main, ou modifiée depuis son import).');
+    expect(lisible(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 4 }) ?? undefined))
+      .toContain('4 adresses laissées sans brouillon');
   });
 });
