@@ -641,7 +641,10 @@
       suivant (`ConsentementGpsModel.oublierRetour()`), comme le toast éphémère du web ;
     - m5 : `DiffusionDernierEtat` (Core) porte le dernier état et les abonnés de `NetworkMonitor`. Le premier envoi d'un
       abonnement et la diffusion d'un changement se font sous le verrou ; les flux sont terminés à la fin du moniteur.
-      Tests : `PointageSaisieTests.testDiffusion…`, dont un abonnement concurrent d'un changement, répété 200 fois ;
+      Tests : `PointageSaisieTests.testDiffusion…`, dont un abonnement concurrent d'un changement, répété 200 fois.
+      Correctif du 24/11/2026 : un `yield` fait sous le verrou que prend `onTermination` figeait l'émetteur et le fil
+      qui annule un lecteur (gel reproduit par `DiffusionDernierEtatTests`, 0 tour sur 300 en 60 s avant correctif).
+      Envois sérialisés par un second verrou (`emission`), jamais sous `verrou` ; même garantie d'ordre ;
     - m6 : constat porté en B9 (« Purge datée des positions de `scans_pointage` ») et décidé par D-T4b-3 ;
     - m7 : références mises à jour. Anti-rejeu de 2 min : `public.sql` l.55710-55713, message l.55711
       (`SaisiePointage.swift`, `PointageSaisieTests.swift`, `PointageRules.swift`, `DemoPointageGateway.swift`).

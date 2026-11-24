@@ -8,9 +8,10 @@ import Network
 /// par `AppContainer`) ; tant que le premier état n'est pas connu, `estEnLigne()` l'attend au plus 2 s puis suppose la
 /// connexion présente (le refus éventuel vient alors du transport, jamais d'un scan mis de côté).
 ///
-/// Dernier état et abonnés : `DiffusionDernierEtat` (JoleneCore, testée par `PointageSaisieTests`) ; le premier envoi d'un
-/// abonnement se fait sous son verrou, un changement concurrent ne le devance jamais (revue fraîche de T4b, m5). Le
-/// moniteur rappelle sur sa propre file série.
+/// Dernier état et abonnés : `DiffusionDernierEtat` (JoleneCore, testée par `PointageSaisieTests` et
+/// `DiffusionDernierEtatTests`) ; un changement concurrent d'un abonnement ne devance jamais le premier envoi (revue
+/// fraîche de T4b, m5), et aucun envoi ne se fait sous le verrou que prend l'annulation d'un lecteur (gel du
+/// 24/11/2026). Le moniteur rappelle sur sa propre file série.
 final class NetworkMonitor: NetworkPathPort, @unchecked Sendable {
     private static let attentePremierEtat: TimeInterval = 2
     private static let pas: UInt64 = 100_000_000
