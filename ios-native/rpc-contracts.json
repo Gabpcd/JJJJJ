@@ -2764,7 +2764,7 @@
     },
     {
       "name": "fn_valider_presence",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_presence_id: string }",
@@ -2831,7 +2831,7 @@
     },
     {
       "name": "fn_valider_presences_lot",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_ids: string[] }",
@@ -2898,7 +2898,7 @@
     },
     {
       "name": "fn_contester_presence",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_motif: string; p_presence_id: string }",
@@ -2935,7 +2935,7 @@
     },
     {
       "name": "fn_declarer_fin_retroactive",
-      "statut": "a_venir",
+      "statut": "consommee",
       "lot": 5,
       "types": {
         "args": "{ p_heure_fin: string; p_mission_id: string; p_raison?: string }",

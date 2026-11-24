@@ -70,6 +70,11 @@ public protocol EtabPresencesPort: Sendable {
     /// `note` dans 1...5 (le port refuse toute autre valeur avant réseau).
     func noter(missionId: String, note: Int, context: EtablissementReadContext) async throws -> NotationOutcome
     func cloturerSegment(missionId: String, heureFin: Date, context: EtablissementReadContext) async throws -> ClotureOutcome
+    /// Missions `TERMINEE` salariées attribuées (`PresencesEtablissement.tsx` l.87-94) : l'alerte « Missions terminées
+    /// sans pointage » en est dérivée par `PresencesEtabRules.missionsSansPointage`, jamais par la gateway (T8).
+    func missionsTerminees(context: EtablissementReadContext) async throws -> [EtabMissionResume]
+    /// Créneaux hors pause (PREVISIONNEL et EFFECTIF) d'une mission, relus juste avant une validation (web l.213-249).
+    func creneaux(missionId: String, context: EtablissementReadContext) async throws -> [MissionSlot]
 }
 
 /// Publication d'une mission simple ou urgente, salariée (D8) — T9.
@@ -149,6 +154,8 @@ public struct UnwiredEtabPresencesPort: EtabPresencesPort, UnwiredPort {
     public func cloturerSegment(missionId: String, heureFin: Date, context: EtablissementReadContext) async throws -> ClotureOutcome {
         throw erreur
     }
+    public func missionsTerminees(context: EtablissementReadContext) async throws -> [EtabMissionResume] { throw erreur }
+    public func creneaux(missionId: String, context: EtablissementReadContext) async throws -> [MissionSlot] { throw erreur }
 }
 
 public struct UnwiredEtabPublicationPort: EtabPublicationPort, UnwiredPort {

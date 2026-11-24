@@ -60,6 +60,8 @@ const LOT5_CONSOMMEES = [
   'fn_soignant_pour_etablissement', // T5 : SupabaseEtabMissionsGateway
   'fn_lire_candidatures_mission_habilitee', 'fn_traiter_candidature_planning_v1', // T6 : SupabaseEtabCandidaturesGateway
   'fn_contrat_signe_pour_pointage', // T7 : SupabaseEtabPointageGateway
+  // T8 (B9) : SupabaseEtabPresencesGateway ; fn_creer_notation_mission reste l'entrée du lot 2, déjà consommée.
+  'fn_valider_presence', 'fn_valider_presences_lot', 'fn_contester_presence', 'fn_creer_notation_mission', 'fn_declarer_fin_retroactive',
 ];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [

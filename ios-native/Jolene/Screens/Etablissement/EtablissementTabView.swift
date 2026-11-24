@@ -33,6 +33,8 @@ struct EtablissementTabView: View {
     @State private var chemins: [Tab: [EtabDestination]] = [:]
     /// Lot 5, T5 : filtre `?statut=` d'un lien vers la liste des missions, rejoué par `EtabMissionsScreen`.
     @State private var demandeMissions = DemandeFiltreMissions()
+    /// Lot 5, T8 : onglet `?tab=` d'un lien vers la page Présences, rejoué par `PresencesEtabScreen`.
+    @State private var demandePresences = DemandeOngletPresences()
 
     init(container: AppContainer, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
         self.container = container
@@ -62,7 +64,7 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-missions")
 
             NavigationStack(path: chemin(.presences)) {
-                EtabPresencesRoot(session: session, snapshot: snapshot)
+                EtabPresencesRoot(session: session, snapshot: snapshot, demande: demandePresences)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.presences, snapshot: snapshot, session: session)
@@ -118,6 +120,10 @@ struct EtablissementTabView: View {
         chemins[cible.onglet] = cible.destination.map { [$0] } ?? []
         if cible.onglet == .missions, cible.destination == nil {
             demandeMissions = DemandeFiltreMissions(statut: cible.statut, jeton: demandeMissions.jeton + 1)
+        }
+        // T8 : `/etablissement/presences?tab=alertes` ouvre Présences sur l'onglet demandé (toute autre valeur : « À valider »).
+        if cible.onglet == .presences, cible.destination == nil {
+            demandePresences = DemandeOngletPresences(onglet: cible.ongletPresences, jeton: demandePresences.jeton + 1)
         }
     }
 }

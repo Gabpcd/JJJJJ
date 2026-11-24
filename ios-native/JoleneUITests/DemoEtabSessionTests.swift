@@ -38,7 +38,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         }
         record("\(proofPrefix)-etab-publication")
 
-        ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "placeholder-etab-presences")
+        ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "etab-presences-screen") // T8
         ouvrirOnglet("tab-etab-messages", label: "Messages", contenu: "placeholder-etab-messages")
         ouvrirCompte()
         XCTAssertEqual(element("etab-compte-nom").label, Self.nomEtablissement)
@@ -79,7 +79,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         tabButton("tab-etab-presences", label: "Présences").tap()
         let renvoi = element("etab-renvoi-web")
         require("L'onglet Présences coupé affiche le renvoi web") { self.containerVisible(renvoi) }
-        XCTAssertFalse(element("placeholder-etab-presences").exists, "l'écran natif coupé n'est jamais monté")
+        XCTAssertFalse(element("etab-presences-screen").exists, "l'écran natif coupé n'est jamais monté")
         XCTAssertFalse(element("etab-renvoi-web-message").label.isEmpty)
         let ouvrir = element("etab-renvoi-web-ouvrir")
         require("La sortie web est atteignable") { self.visible(ouvrir) }

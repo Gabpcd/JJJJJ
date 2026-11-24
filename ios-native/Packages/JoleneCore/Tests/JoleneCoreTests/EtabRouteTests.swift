@@ -113,8 +113,10 @@ final class EtabRouteTests: XCTestCase {
             XCTAssertEqual(cible.onglet, onglet)
             XCTAssertNil(cible.destination)
         }
-        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
-                                 .messagerie(conversation: "conv")] {
+        XCTAssertEqual(EtabRoute.presencesMission(id: "m").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .presences, destination: .presencesMission(missionId: "m"))),
+                       "T8 livrée : les présences de la mission sont empilées sur l'onglet Présences")
+        for route: EtabRoute in [.publierMission, .contrat(id: "c"), .contrats(statut: nil), .messagerie(conversation: "conv")] {
             XCTAssertEqual(route.presentation(canonique: canonique), .renvoiWeb(canonique), "\(route)")
         }
     }
@@ -134,8 +136,8 @@ final class EtabRouteTests: XCTestCase {
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
         XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
-        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
-                                             .conversation(id: "k")] {
+        XCTAssertTrue(EtabDestination.presencesMission(missionId: "m").ecranLivre, "T8")
+        for destination: EtabDestination in [.publication, .contrat(id: "c"), .conversation(id: "k")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }
     }

@@ -61,7 +61,7 @@ public enum DemoEtablissementWorld {
             missions: DemoEtabMissionsGateway(etat: decisions), // T5
             candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
             pointage: DemoEtabPointageGateway(decisions: decisions, cadence: configuration.cadencePointage), // T7
-            presences: UnwiredEtabPresencesPort(),        // T8
+            presences: DemoEtabPresencesGateway(),        // T8
             publication: UnwiredEtabPublicationPort(),    // T9
             audit: DemoEtabAuditGateway()
         )

@@ -174,18 +174,56 @@ public enum ClotureOutcome: Equatable, Sendable {
     case accesRefuse(message: String)
 }
 
-/// Ligne `presences` d'une mission de l'établissement (contrat minimal, complété par T8 ; jamais de
-/// coordonnées GPS).
+/// Mission embarquée dans une ligne `presences` (`missions!inner(…)`, `PresencesEtablissement.tsx` l.77) : ce que
+/// l'écran affiche et ce que la complétude du planning exige. Jamais `duree_heures` ni aucun montant (D15).
+public struct MissionPresenceEtab: Equatable, Sendable {
+    public var id: String
+    public var intitule: String?
+    public var service: String?
+    public var debutLe: String?
+    public var finLe: String?
+    public var nbCreneaux: Int?
+    /// Établissement de la mission relue : comparé au contexte confirmé, jamais une valeur de filtre.
+    public var etablissementId: String?
+
+    public init(id: String, intitule: String? = nil, service: String? = nil, debutLe: String? = nil, finLe: String? = nil,
+                nbCreneaux: Int? = nil, etablissementId: String? = nil) {
+        self.id = id; self.intitule = intitule; self.service = service; self.debutLe = debutLe; self.finLe = finLe
+        self.nbCreneaux = nbCreneaux; self.etablissementId = etablissementId
+    }
+}
+
+/// Ligne `presences` d'une mission de l'établissement (contrat posé par T1, complété par T8 : colonnes de
+/// `PresencesEtablissement.tsx` l.68-77 **sans** `arrivee_lat/lng`, `depart_lat/lng`, `coherence_incidents` ni
+/// `duree_heures`). Décodage tolérant dans `Etablissement/Presences/PresenceEtab.swift`. Aucune coordonnée, aucun
+/// montant, aucune durée servie : les durées affichées sont celles de `SynthesePresence` sur les créneaux relus.
 public struct PresenceEtab: Equatable, Sendable, Identifiable {
     public var id: String
     public var missionId: String
     public var valideParEtablissement: Bool
+    /// Valeur serveur, jamais posée localement.
     public var valideLe: String?
     public var motifLitige: String?
+    public var soignantId: String?
+    /// Distance à l'établissement relevée par le serveur à l'arrivée, en mètres (jamais une position).
+    public var distanceEtablissementM: Double?
+    public var perimetreGpsValide: Bool?
+    public var alerteTeleportation: Bool?
+    public var arriveeMockDetected: Bool?
+    public var departMockDetected: Bool?
+    public var mission: MissionPresenceEtab?
+    /// Créneaux hors pause de la mission (PREVISIONNEL et EFFECTIF), relus avec la liste (web l.126-144).
+    public var creneaux: [MissionSlot]
 
-    public init(id: String, missionId: String, valideParEtablissement: Bool, valideLe: String?, motifLitige: String?) {
+    public init(id: String, missionId: String, valideParEtablissement: Bool, valideLe: String?, motifLitige: String?,
+                soignantId: String? = nil, distanceEtablissementM: Double? = nil, perimetreGpsValide: Bool? = nil,
+                alerteTeleportation: Bool? = nil, arriveeMockDetected: Bool? = nil, departMockDetected: Bool? = nil,
+                mission: MissionPresenceEtab? = nil, creneaux: [MissionSlot] = []) {
         self.id = id; self.missionId = missionId; self.valideParEtablissement = valideParEtablissement
-        self.valideLe = valideLe; self.motifLitige = motifLitige
+        self.valideLe = valideLe; self.motifLitige = motifLitige; self.soignantId = soignantId
+        self.distanceEtablissementM = distanceEtablissementM; self.perimetreGpsValide = perimetreGpsValide
+        self.alerteTeleportation = alerteTeleportation; self.arriveeMockDetected = arriveeMockDetected
+        self.departMockDetected = departMockDetected; self.mission = mission; self.creneaux = creneaux
     }
 }
 

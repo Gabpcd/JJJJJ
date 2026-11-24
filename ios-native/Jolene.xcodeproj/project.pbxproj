@@ -22,6 +22,7 @@
 		10970FA992CD848C851A8EC7 /* DisponibilitesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517DABCE171BF33582E20B72 /* DisponibilitesScreen.swift */; };
 		11933738821F5C7870C4761B /* DemoLiensLot2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89986889CA66C02C2DCB55BA /* DemoLiensLot2Tests.swift */; };
 		12E6B9193B807F15C95D84AE /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8871298678DD982E3D6C3C26 /* RootView.swift */; };
+		133F2C7CB33ED838F9259DDD /* ClotureSegmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66FFECED3EB759B966CE7A5 /* ClotureSegmentSheet.swift */; };
 		13C886560C8EC3AF8C90DBE9 /* NotificationsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76297069ECDCBB5B5409052A /* NotificationsScreen.swift */; };
 		16BFD453D608D394DCB980DB /* DemoPointageEtatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A03E32731E4230AA162597E /* DemoPointageEtatsTests.swift */; };
 		1721F342FB93D69F5B41696E /* ProfilEditionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */; };
@@ -39,10 +40,12 @@
 		289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */; };
 		28EB1640C695ECF557C9FEA5 /* MissionContactButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF9E60D234A0A8CB552FDD4 /* MissionContactButton.swift */; };
 		2900EEBC88256867CF497EE5 /* MesMissionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3024018B51CE11B9BA2F96 /* MesMissionsScreen.swift */; };
+		29C45EF1317D9F87861D1C08 /* ValidationPresenceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42B5D6BDF2811EA0828A534D /* ValidationPresenceSheet.swift */; };
 		2A94C1A0F00563A7348B0C89 /* PlaceholderScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BA24C6A7F18C51C527F02B8 /* PlaceholderScreen.swift */; };
 		2B73E55E9216D48F441587F3 /* DemoPointageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D81B7401EDB83F0DF34E07 /* DemoPointageTests.swift */; };
 		2D32204272EA8D625E886C0E /* ExclusionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 304C37AB59D2FDA8F74E9F5B /* ExclusionsScreen.swift */; };
 		2E1E6FD113EBB416CEBC2582 /* DemoAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */; };
+		2E8238286F52206A444D28A6 /* PresencesEtabScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A253BA0AB28D4937FB33B6D1 /* PresencesEtabScreen.swift */; };
 		30D7D9C0C1AAB3F339472622 /* DemoSignatureContratTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */; };
 		343FDABE16FFD739ACFBF788 /* DemoMediaPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C732AB7A4929D74679DEEA /* DemoMediaPicker.swift */; };
 		34A1F7F9A59ECFD5A2EFE71A /* MissionSignalerButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CD0E1EB436D49127FBD091 /* MissionSignalerButton.swift */; };
@@ -84,6 +87,7 @@
 		619612E7C1FB0C889132803B /* RecherchesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A63EBDC43EE3281621B298 /* RecherchesScreen.swift */; };
 		620461707D412D65390C89F9 /* CodePointageScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F45A120B1011B5424026A007 /* CodePointageScreen.swift */; };
 		62B7CCBA5EDDBE42D956598B /* MessagesNavButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2D4568A86D0847C899DEEA /* MessagesNavButton.swift */; };
+		634A400152854B6D33A2E92A /* ContestationEtabSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B234CA3591DE14ACCA0421E /* ContestationEtabSheet.swift */; };
 		634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D38838D39EB705DD25FE585 /* SuppressionCompteScreen.swift */; };
 		63F75D7150FF3B2A5F3632C8 /* RenvoiWebScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DCAB7CB680ED030855915F3 /* RenvoiWebScreen.swift */; };
 		69C302538E906B38743E4734 /* DemoEtabAccueilTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53752834705D94DFD957860D /* DemoEtabAccueilTests.swift */; };
@@ -129,6 +133,7 @@
 		AE9B5CE2089FF23231F2639D /* OnboardingRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DFC0FF6ADC695DE2FD5332 /* OnboardingRootView.swift */; };
 		B0613EF56E48A98C317BDEC0 /* DemoEtabSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5F969B97A2D9B96C614046 /* DemoEtabSessionTests.swift */; };
 		B13F80A62CBEABBC35FD66EE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 246F44BC2A339EC8645FD77E /* Assets.xcassets */; };
+		B1A17CB54A3B192147E5E43D /* DemoEtabPresencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D04F7350BAE445E3EC04C02C /* DemoEtabPresencesTests.swift */; };
 		B1EE0AE3F1ABB031B7B9FBDE /* PushAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43E8DC20E74CFD2FACC575F /* PushAppDelegate.swift */; };
 		B1F7B8254066719EFAB5355A /* CalendarWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3E627DA4957200BD58CE6B5 /* CalendarWriter.swift */; };
 		B239771A10A540B898020201 /* EvaluationsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAE6BB0D93D52BC2319A92F2 /* EvaluationsScreen.swift */; };
@@ -264,6 +269,7 @@
 		40E058FD02D0891E9ADE0752 /* PoolUrgenceScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoolUrgenceScreen.swift; sourceTree = "<group>"; };
 		40F45DE21AF53796F64DB403 /* PointageCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointageCodeView.swift; sourceTree = "<group>"; };
 		41D47AC775A9BD1F3BA87C34 /* JoleneUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoleneUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		42B5D6BDF2811EA0828A534D /* ValidationPresenceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValidationPresenceSheet.swift; sourceTree = "<group>"; };
 		4C95A8207C47813BEFB7A091 /* EtabAccueilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabAccueilScreen.swift; sourceTree = "<group>"; };
 		4D6A37369D110A146F3E4CAF /* ContratReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContratReaderView.swift; sourceTree = "<group>"; };
 		4DDC6420C51347BB07F1FE2A /* DemoQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoQRScannerView.swift; sourceTree = "<group>"; };
@@ -297,6 +303,7 @@
 		798D89ACB654F41113D150AC /* PresenceAVenirRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceAVenirRow.swift; sourceTree = "<group>"; };
 		79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoDocumentsTests.swift; sourceTree = "<group>"; };
 		7B157B0FB088245CF6215DE4 /* AppareilEnvironnement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppareilEnvironnement.swift; sourceTree = "<group>"; };
+		7B234CA3591DE14ACCA0421E /* ContestationEtabSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContestationEtabSheet.swift; sourceTree = "<group>"; };
 		7C7BD194116340B0D7348AFA /* AlerteRapideButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlerteRapideButton.swift; sourceTree = "<group>"; };
 		7D3024018B51CE11B9BA2F96 /* MesMissionsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MesMissionsScreen.swift; sourceTree = "<group>"; };
 		7F524C6906946AF70D55B8DD /* PrePromptPushScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrePromptPushScreen.swift; sourceTree = "<group>"; };
@@ -328,8 +335,10 @@
 		A137CA863E9DAA0471608D0F /* DemoPhotoPositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPhotoPositionTests.swift; sourceTree = "<group>"; };
 		A197EBD87717F2D2E9D43964 /* DemoEtabPointageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabPointageTests.swift; sourceTree = "<group>"; };
 		A24F006640FB3D9605D893FA /* EnvironmentBlockedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentBlockedScreen.swift; sourceTree = "<group>"; };
+		A253BA0AB28D4937FB33B6D1 /* PresencesEtabScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresencesEtabScreen.swift; sourceTree = "<group>"; };
 		A5B9FAE25A0B29E1E39B0ED6 /* EtabMissionsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabMissionsScreen.swift; sourceTree = "<group>"; };
 		A633219A5D169F90CE80EA99 /* DemoPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPreferencesTests.swift; sourceTree = "<group>"; };
+		A66FFECED3EB759B966CE7A5 /* ClotureSegmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClotureSegmentSheet.swift; sourceTree = "<group>"; };
 		A82414C2B39FC0B682E516B6 /* Jolene.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Jolene.entitlements; sourceTree = "<group>"; };
 		AA71E0003DC5AB43E8D021FB /* DemoConfirmationPresenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoConfirmationPresenceTests.swift; sourceTree = "<group>"; };
 		AA8AFECC687127B6934C0D53 /* AnnulationSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnulationSection.swift; sourceTree = "<group>"; };
@@ -356,6 +365,7 @@
 		CC8EAC8C6EA29C51BFB9C6AF /* DemoEtabLiensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabLiensTests.swift; sourceTree = "<group>"; };
 		CC935FC14BF8B87C100F46ED /* AvatarProfilSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarProfilSection.swift; sourceTree = "<group>"; };
 		CE56ACFC3FBDB1EE19EDC062 /* MesDocumentsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MesDocumentsScreen.swift; sourceTree = "<group>"; };
+		D04F7350BAE445E3EC04C02C /* DemoEtabPresencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabPresencesTests.swift; sourceTree = "<group>"; };
 		D05CBBCD86659DF4895A2323 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPushTests.swift; sourceTree = "<group>"; };
 		D5C4B1EDFCA7189E5163D414 /* DetailPresencesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailPresencesScreen.swift; sourceTree = "<group>"; };
@@ -850,7 +860,11 @@
 		BF8E8773927F2CFDEDE3CFCB /* Presences */ = {
 			isa = PBXGroup;
 			children = (
+				A66FFECED3EB759B966CE7A5 /* ClotureSegmentSheet.swift */,
+				7B234CA3591DE14ACCA0421E /* ContestationEtabSheet.swift */,
 				1FFCBFD24DAA0DB58EF2ED1E /* EtabPresencesRoot.swift */,
+				A253BA0AB28D4937FB33B6D1 /* PresencesEtabScreen.swift */,
+				42B5D6BDF2811EA0828A534D /* ValidationPresenceSheet.swift */,
 			);
 			path = Presences;
 			sourceTree = "<group>";
@@ -916,6 +930,7 @@
 				CC8EAC8C6EA29C51BFB9C6AF /* DemoEtabLiensTests.swift */,
 				B3379FE7666AFE7065F080C8 /* DemoEtabMissionsTests.swift */,
 				A197EBD87717F2D2E9D43964 /* DemoEtabPointageTests.swift */,
+				D04F7350BAE445E3EC04C02C /* DemoEtabPresencesTests.swift */,
 				DD5F969B97A2D9B96C614046 /* DemoEtabSessionTests.swift */,
 				54FD5A2A491C046BB3B80DAC /* DemoExplorerTests.swift */,
 				37C5390FA7A7B5926E52B589 /* DemoFavorisTests.swift */,
@@ -1086,6 +1101,7 @@
 				0DE9F0C03902D7A6131E0A65 /* CandidaturesEtabScreen.swift in Sources */,
 				2138F984E427E34E321171FF /* CertificatView.swift in Sources */,
 				0174BFA8BE84B1166A1CBC63 /* ChoixModesExerciceSection.swift in Sources */,
+				133F2C7CB33ED838F9259DDD /* ClotureSegmentSheet.swift in Sources */,
 				620461707D412D65390C89F9 /* CodePointageScreen.swift in Sources */,
 				C6E60E84B009830D573470AE /* CompletionProfilScreen.swift in Sources */,
 				DA1C3DDBEDD68FE971327EF4 /* CompteSections.swift in Sources */,
@@ -1094,6 +1110,7 @@
 				FA4DA29A46F76F2819750FCA /* ConfirmationPresenceBloc.swift in Sources */,
 				5CE7FB62EB256D49B5BB2692 /* ConsentementGpsRow.swift in Sources */,
 				57EB1E7C965A1080346E62E0 /* ConsentementGpsSheet.swift in Sources */,
+				634A400152854B6D33A2E92A /* ContestationEtabSheet.swift in Sources */,
 				A84F8CB33E48F8365829150D /* ContestationSheet.swift in Sources */,
 				BEF9046E8D194E5FF2A90FD3 /* ContratReaderView.swift in Sources */,
 				C28FE82FC3C26CC7455ADE6B /* ContratScreen.swift in Sources */,
@@ -1168,6 +1185,7 @@
 				D6660F00D0873D85C55297FB /* PresenceAVenirRow.swift in Sources */,
 				C625A4191F64F89C54C7B791 /* PresenceHistoriqueRow.swift in Sources */,
 				7372653B481E694D77A0EEC9 /* PresenceValideeRow.swift in Sources */,
+				2E8238286F52206A444D28A6 /* PresencesEtabScreen.swift in Sources */,
 				AC6B8DFE9832048FE80BE611 /* PresencesScreen.swift in Sources */,
 				D2C858B7CC96D57DB6CC5E78 /* PresentateurRenvoiWeb.swift in Sources */,
 				1721F342FB93D69F5B41696E /* ProfilEditionScreen.swift in Sources */,
@@ -1199,6 +1217,7 @@
 				3D5EBDA423B81B01EFB87E0F /* SwipeModeView.swift in Sources */,
 				7F8EA7B0286941AA785F1B95 /* TeleversementSheet.swift in Sources */,
 				DFBE1117A955925C07671E66 /* ThemePreference.swift in Sources */,
+				29C45EF1317D9F87861D1C08 /* ValidationPresenceSheet.swift in Sources */,
 				BE9A97DCDD6F4D8667F1E424 /* VeilleEcran.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1223,6 +1242,7 @@
 				06A46CBD8144AE2B0FC62F6D /* DemoEtabLiensTests.swift in Sources */,
 				F0230E95A2270B6409B41C68 /* DemoEtabMissionsTests.swift in Sources */,
 				F524B2B5A60CA2EE6C06AD3E /* DemoEtabPointageTests.swift in Sources */,
+				B1A17CB54A3B192147E5E43D /* DemoEtabPresencesTests.swift in Sources */,
 				B0613EF56E48A98C317BDEC0 /* DemoEtabSessionTests.swift in Sources */,
 				F06D11FE9236C6488B87AE69 /* DemoExplorerTests.swift in Sources */,
 				DEE7ADECA38AC3AA9890204D /* DemoFavorisTests.swift in Sources */,

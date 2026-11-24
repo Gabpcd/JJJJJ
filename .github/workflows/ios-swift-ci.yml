@@ -32,6 +32,10 @@ on:
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T8 : textes des présences établissement relus par PresencesEtabRulesTests (garde de dérive).
+      - 'src/pages/PresencesEtablissement.tsx'
+      - 'src/components/CarteValidation.tsx'
+      - 'src/components/presence/BadgesAntiTrichePresence.tsx'
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
@@ -169,6 +173,10 @@ on:
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T8 : textes des présences établissement relus par PresencesEtabRulesTests (garde de dérive).
+      - 'src/pages/PresencesEtablissement.tsx'
+      - 'src/components/CarteValidation.tsx'
+      - 'src/components/presence/BadgesAntiTrichePresence.tsx'
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
@@ -695,6 +703,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
             -skip-testing:JoleneUITests/DemoEtabMissionsTests \
             -skip-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -skip-testing:JoleneUITests/DemoEtabPresencesTests \
             -skip-testing:JoleneUITests/DemoEtabPointageTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
@@ -1630,6 +1639,8 @@ jobs:
       # 8,7 / 8,1 / 6,2 min (iphone), 11,8 / 12,3 / 8,2 min (ipad-portrait), 11,9 / 11,1 / 13,3 min (ipad-landscape).
       # Session, Accueil et pointage établissement restent dans « lot3-profil-photo » du job `ui` : les six classes
       # ensemble auraient atteint 22 min en paysage.
+      # L5-T8 : DemoEtabPresencesTests (quatre tests, présences établissement) rejoint cet éclat ; durée à relever au
+      # premier run (décision 22 : un éclat dédié au-delà de 20 min mesurées).
       - name: test-without-building — éclat lot5-etablissement (XCUITest liens, missions et candidatures de l'espace établissement) (${{ matrix.format }})
         id: tests_lot5_etablissement
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
@@ -1660,6 +1671,7 @@ jobs:
             -only-testing:JoleneUITests/DemoEtabLiensTests \
             -only-testing:JoleneUITests/DemoEtabMissionsTests \
             -only-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -only-testing:JoleneUITests/DemoEtabPresencesTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1743,7 +1755,7 @@ jobs:
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
               { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
-              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
+              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests", "DemoEtabPresencesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";

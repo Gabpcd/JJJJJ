@@ -25,6 +25,7 @@ import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.
 import { fixturesLot4 } from './demo-fixtures/lot4.mjs';
 import { buildDemoEtabMissions } from './demo-etab-missions.mjs';
 import { buildDemoEtabPointage } from './demo-etab-pointage.mjs';
+import { buildDemoEtabPresences } from './demo-etab-presences.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -1222,6 +1223,14 @@ export function buildDemoEtabPointageFixture(now = new Date(FIXED_NOW)) {
   return buildDemoEtabPointage({ now, missions: buildDemoEtabMissionsFixture(now) });
 }
 
+/**
+ * Lot 5, T8 : présences de l'établissement démo (`demo-etab-presences.mjs`), dérivées des missions démo (embed et
+ * planning) et du pointage démo (segments EFFECTIF de M4 et M6) : une seule histoire par mission.
+ */
+export function buildDemoEtabPresencesFixture(now = new Date(FIXED_NOW)) {
+  return buildDemoEtabPresences({ now, missions: buildDemoEtabMissionsFixture(now), pointage: buildDemoEtabPointageFixture(now) });
+}
+
 export async function buildFixtures() {
   const contrats = buildDemoContrats(await chargerMoteurContrat());
   const fixtures = {
@@ -1249,6 +1258,7 @@ export async function buildFixtures() {
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
     'demo-etab-missions.json': buildDemoEtabMissionsFixture(), // lot 5, T5
     'demo-etab-pointage.json': buildDemoEtabPointageFixture(), // lot 5, T7
+    'demo-etab-presences.json': buildDemoEtabPresencesFixture(), // lot 5, T8
   };
   // Lot 4 (L4-T1c) : un module par domaine (scripts/mobile/demo-fixtures/), aucun fichier d'un lot antérieur réécrit.
   return { ...fixtures, ...fixturesLot4({ now: new Date(FIXED_NOW) }, fixtures) };

@@ -272,11 +272,11 @@ export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_lire_candidatures_mission_habilitee', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.lecture
   { name: 'fn_traiter_candidature_planning_v1', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.accepter/refuser
   { name: 'fn_contrat_signe_pour_pointage', statut: 'consommee', lot: 5 }, // T7 : SupabaseEtabPointageGateway.contratSigne
-  { name: 'fn_valider_presence', statut: 'a_venir', lot: 5 },
-  { name: 'fn_valider_presences_lot', statut: 'a_venir', lot: 5 },
-  { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },
-  { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 5 },
-  { name: 'fn_declarer_fin_retroactive', statut: 'a_venir', lot: 5 },
+  { name: 'fn_valider_presence', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.valider
+  { name: 'fn_valider_presences_lot', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.validerLot
+  { name: 'fn_contester_presence', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.contester
+  { name: 'fn_creer_notation_mission', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.noter
+  { name: 'fn_declarer_fin_retroactive', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.cloturerSegment
   { name: 'fn_creer_mission_multi_jours_v4', statut: 'a_venir', lot: 5 },
   { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 5 },
 ];

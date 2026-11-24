@@ -8,7 +8,19 @@ import CoreImage
 /// (70 % du petit côté, portrait comme paysage) et QR rendu à ce côté relu par `CIDetector` en la valeur brute du code
 /// (D4 : QR du `code_pointage_actif`, jamais un autre jeton). Le parcours visible est couvert par `DemoEtabPointageTests`
 /// (XCUITest démo, QR décodé sur la capture du plein écran).
+/// Lot 5 (T8) : rangée d'étoiles saisissable (`StarRating`), note de l'établissement à la validation d'une présence.
 final class JoleneDesignLot5Tests: XCTestCase {
+    func testEtoilesSaisissablesPleinesJusquALaNoteChoisie() {
+        XCTAssertEqual(StarRating.starCount, 5)
+        XCTAssertEqual(StarRating.minimumTarget, 44, "cible tactile de 44 pt par étoile")
+        XCTAssertEqual((1...5).map { StarRating.isFilled($0, value: 0) }, [false, false, false, false, false], "aucune note choisie")
+        XCTAssertEqual((1...5).map { StarRating.isFilled($0, value: 4) }, [true, true, true, true, false])
+        XCTAssertEqual((1...5).map { StarRating.isFilled($0, value: 9) }, [true, true, true, true, true], "valeur bornée à 5")
+        XCTAssertFalse(StarRating.isFilled(0, value: 5))
+        XCTAssertEqual([-3, 0, 3, 5, 12].map(StarRating.clamped), [0, 0, 3, 5, 5])
+    }
+
+
     func testCoteDuQRAuPlusGrandEnPortraitCommeEnPaysage() {
         XCTAssertEqual(FullScreenCodeView.proportionQR, 0.7)
         XCTAssertEqual(FullScreenCodeView.coteQR(pour: CGSize(width: 390, height: 844)), 273, "iPhone portrait")
