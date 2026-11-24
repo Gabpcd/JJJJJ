@@ -113,7 +113,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             return true                                  // L2-T10 — `ContratScreen`, `CertificatRoute` (T9a), drapeau `ios_natif_contrats_actif`
         // Lot 4 — une ligne par écran, passée à `true` par sa seule tranche (L4-T1c, revue B8 de #1159, m4).
         case .secondaire(.swipe):
-            return false                                 // T3b — vue Swipe d'Explorer (repli `.explorer` jusque-là)
+            return true                                  // T3b — vue Swipe d'Explorer (`SwipeModeView`, jamais un écran empilé)
         case .secondaire(.recherches):
             return true                                  // T4 — `RecherchesScreen` (hub « Recherche & disponibilité »), alerte rapide d'Explorer
         case .secondaire(.disponibilites):

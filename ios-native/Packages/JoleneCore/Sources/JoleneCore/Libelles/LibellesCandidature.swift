@@ -63,8 +63,11 @@ public enum LibellesCandidature {
     /// Phrase d'engagement du récapitulatif (`RecapitulatifCandidatureDialog.tsx` l.52-54, verbatim) : candidature
     /// retirable pour POSTULER (`retraitPossible`), acceptation immédiate pour ACCEPTER et PROPOSITION
     /// (`CarteProposition.tsx` l.391 : `retraitPossible={false}`). Affichée seulement quand le planning est exact.
+    /// L4-T3b : le ❤️ du swipe (SWIPE_LIKE) pose une candidature retirable, comme POSTULER (`VueSwipeMissions.tsx`
+    /// monte le récapitulatif sans `retraitPossible`, donc à sa valeur par défaut `true`).
     public static func recapEngagement(_ action: ActionPlanning) -> String {
-        action == .postuler ? TextesWeb.Candidature.engagementCandidature : TextesWeb.Candidature.engagementAcceptation
+        action == .postuler || action == .swipeLike
+            ? TextesWeb.Candidature.engagementCandidature : TextesWeb.Candidature.engagementAcceptation
     }
 
     /// « Il manque N information(s) pour pouvoir postuler : » (l.1319).

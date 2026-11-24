@@ -64,6 +64,10 @@ public final class SwipeModel: ObservableObject {
     @Published public private(set) var message: String?
     @Published public private(set) var annonce: Annonce?
     @Published public private(set) var candidatureAnnulable: CandidatureAnnulable?
+    /// Avis du dernier ❤️ confirmé (T3b, revue B8 de #1165, m3) : avertissement de planning du serveur, verbatim, et
+    /// documents à compléter ; `nil` sans avis. Reste affiché jusqu'à sa fermeture ou au ❤️ suivant, indépendamment
+    /// du toast d'annulation (aucun avis ne disparaît sur minuterie).
+    @Published public private(set) var avisCandidature: AvisSwipeLike?
     /// Options du serveur quand `choix_requis` : non vide → feuille de choix, ❤️ rejoué avec l'option.
     @Published public private(set) var optionsContrat: [ChoixContratOption] = []
     @Published public private(set) var missionChoixContrat: String?
@@ -133,9 +137,28 @@ public final class SwipeModel: ObservableObject {
 
     public func sauvegarder(_ missionId: String) async { await enregistrer(missionId, .favori) }
 
-    private func enregistrer(_ missionId: String, _ direction: DirectionSwipe) async {
-        guard actionEnCours == nil, carte(missionId) != nil else { return }
+    /// ✕ ou ⭐ depuis un geste ou un bouton (T3b) : pose le verrou `actionEnCours` **dans l'appel**, avant toute
+    /// suspension, puis lance l'enregistrement. Le paquet (`SwipeCardStack`) garde ainsi la carte décalée pendant
+    /// l'appel serveur au lieu de la ramener au centre, et un second geste dans le même tour de boucle est ignoré.
+    /// Rend `nil` si une action est déjà en vol ou si la carte n'est plus dans le paquet.
+    @discardableResult
+    public func lancer(_ direction: DirectionSwipe, _ missionId: String) -> Task<Void, Never>? {
+        guard actionEnCours == nil, carte(missionId) != nil else { return nil }
         actionEnCours = missionId
+        return Task { await self.enregistrer(missionId, direction, verrouPose: true) }
+    }
+
+    private func enregistrer(_ missionId: String, _ direction: DirectionSwipe, verrouPose: Bool = false) async {
+        if verrouPose {
+            // Verrou posé par `lancer` pour cette mission : toute autre situation le relâche sans rien envoyer.
+            guard actionEnCours == missionId, carte(missionId) != nil else {
+                if actionEnCours == missionId { actionEnCours = nil }
+                return
+            }
+        } else {
+            guard actionEnCours == nil, carte(missionId) != nil else { return }
+            actionEnCours = missionId
+        }
         defer { actionEnCours = nil }
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
         let port = gateways.swipe
@@ -184,16 +207,24 @@ public final class SwipeModel: ObservableObject {
         let port = gateways.candidature
         let context = snapshot.context
         do {
-            let issue = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.confirmer(action: .swipeLike, missionId: missionId, creneaux: creneaux, message: nil,
-                                         choixContrat: choixContrat, candidatureId: nil, context: context)
+            // T3b : le port des deux mondes rend aussi les avis du ❤️ (`CandidatureSwipePort`) ; un port qui ne le
+            // propose pas (doubles de test) répond par `confirmer(.swipeLike)`, sans avis.
+            let reponse = try await bounded(timeout: controller.resolutionTimeout) { () -> IssueSwipeLike in
+                if let avecAvis = port as? any CandidatureSwipePort {
+                    return try await avecAvis.confirmerSwipeLike(missionId: missionId, creneaux: creneaux,
+                                                                 choixContrat: choixContrat, context: context)
+                }
+                return IssueSwipeLike(issue: try await port.confirmer(action: .swipeLike, missionId: missionId, creneaux: creneaux,
+                                                                      message: nil, choixContrat: choixContrat,
+                                                                      candidatureId: nil, context: context))
             }
             guard await courant() else { return }
-            switch issue {
+            switch reponse.issue {
             case let .confirmed(candidatureId, _):
                 retirerCarte(missionId)
                 annonce = .candidatureEnvoyee(missionId: missionId)
                 candidatureAnnulable = candidatureId.map { CandidatureAnnulable(candidatureId: $0, missionId: missionId) }
+                avisCandidature = reponse.avis.flatMap { $0.estVide ? nil : $0 }
             case let .choixRequis(options):
                 optionsContrat = options
                 missionChoixContrat = missionId
@@ -238,7 +269,9 @@ public final class SwipeModel: ObservableObject {
             }
             guard await courant() else { return }
             switch issue {
-            case .retiree: annonce = .candidatureRetiree(missionId: annulable.missionId)
+            case .retiree:
+                annonce = .candidatureRetiree(missionId: annulable.missionId)
+                avisCandidature = nil // candidature supprimée : ses avis ne valent plus
             case let .refuse(texte): message = texte
             }
         } catch {
@@ -255,19 +288,41 @@ public final class SwipeModel: ObservableObject {
 
     public func effacerMessage() { message = nil }
 
+    /// Avis du dernier ❤️ refermé par l'utilisateur.
+    public func fermerAvis() { avisCandidature = nil }
+
+    /// Carte encore dans le paquet (récapitulatif, feuille de détail), `nil` si elle en est sortie.
+    public func carteDuPaquet(_ missionId: String) -> CarteSwipe? { carte(missionId) }
+
     // MARK: - Quiz (D6)
 
     /// Quiz au premier contact : marqueur local absent (`dejaVu`, `UserDefaults` par userId, T3b), compte hors cohorte
     /// E2E (`playwright-`, comme le web) et aucun swipe relu en base. Une lecture en échec ne propose rien (aucun état
     /// non relu ; le web, lui, propose le quiz quand le compte est illisible).
     public func quizAProposer(dejaVu: Bool) async -> Bool {
-        guard !dejaVu, !MissionBusiness.estComptePlaywright(email: snapshot.context.email),
-              let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
+        await quizPremierContact(dejaVu: dejaVu) == .proposer
+    }
+
+    /// Issue de la question « faut-il proposer le quiz ? » (T3b), pour que l'écran mémorise « vu » quand des swipes
+    /// existent déjà, comme le web (`RechercheMissions.tsx` : `else localStorage.setItem(CLE_QUIZ_PREFS, '1')`).
+    public enum QuizPremierContact: Equatable, Sendable {
+        /// Premier contact : aucun swipe relu en base, marqueur local absent.
+        case proposer
+        /// Rien à proposer, à mémoriser : marqueur déjà posé, ou des swipes existent (préférences déjà apprises).
+        case dejaFait
+        /// Rien à proposer, rien à mémoriser : compte de recette E2E, lecture en échec, session périmée.
+        case indetermine
+    }
+
+    public func quizPremierContact(dejaVu: Bool) async -> QuizPremierContact {
+        guard !dejaVu else { return .dejaFait }
+        guard !MissionBusiness.estComptePlaywright(email: snapshot.context.email),
+              let gateways = await controller.gateways(for: snapshot.epoch) else { return .indetermine }
         let port = gateways.swipe
         let context = snapshot.context
         guard let nombre = try? await bounded(timeout: controller.resolutionTimeout, { try await port.nombreSwipes(context: context) }),
-              await courant() else { return false }
-        return nombre == 0
+              await courant() else { return .indetermine }
+        return nombre == 0 ? .proposer : .dejaFait
     }
 
     /// Validation du quiz : préférences amorcées côté serveur (sans effet dès le premier signal appris). Best-effort comme

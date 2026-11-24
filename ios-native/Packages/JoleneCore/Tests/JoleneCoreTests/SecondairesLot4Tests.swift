@@ -47,6 +47,7 @@ final class SecondairesLot4Tests: XCTestCase {
     /// Écrans livrés par leur tranche (ligne de `DestinationLien.ecranNatifLivre` passée à `true`) ; tous les autres gardent
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
+        .swipe, // T3b (vue de l'onglet Explorer, jamais un écran empilé)
         .recherches, // T4
     ]
 

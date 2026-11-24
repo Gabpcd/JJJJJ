@@ -66,7 +66,9 @@ final class LinksRouterLot4Tests: XCTestCase {
         XCTAssertEqual(CibleNotification(litige), .web(.safari(litige.canonique)))
         let swipe = try lien("/soignant/swipe-missions")
         XCTAssertEqual(DeepLinkIntent(swipe), .espace(swipe))
-        XCTAssertEqual(CibleNotification(swipe), .explorer, "repli natif : Explorer, comme avant L4-T1")
+        XCTAssertEqual(CibleNotification(swipe), .secondaire(.swipe), "T3b livrée : onglet Explorer en vue Swipe (jamais un écran empilé)")
+        XCTAssertEqual(CibleNotification(swipe).onglet, .explorer)
+        XCTAssertEqual(CibleNotification(try lien("/soignant/recherche-missions?vue=swipe")), .secondaire(.swipe), "même destination")
         XCTAssertEqual(CibleNotification(try lien("/soignant/score")), .monCompte)
     }
 

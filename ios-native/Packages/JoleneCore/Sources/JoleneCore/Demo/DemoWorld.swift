@@ -226,8 +226,9 @@ public struct DemoMissionsGateway: MissionsPort {
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         // T6c : mission de recette de la confirmation de présence, ouverte par lien seulement (hors listes).
+        // L4-T3b : missions de recette du paquet de swipe, ouvertes en détail depuis Mes favoris ou Mes missions.
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-            + (DemoPresenceGateway.missionJ1().map { [$0] } ?? [])
+            + (DemoPresenceGateway.missionJ1().map { [$0] } ?? []) + DemoFixtures.missionsRecetteSwipe()
     }, profil: @escaping @Sendable () async throws -> SoignantProfile = { DemoWorld.context.profile },
        missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] },
        presences: @escaping @Sendable (MissionRecord) async -> MissionRecord = { $0 },

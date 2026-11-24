@@ -83,17 +83,26 @@ public actor DemoCandidatureGateway: CandidaturePort {
     private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
     private var annulees: Set<String> = []
     private var justificatifs: [String: String] = [:]
+    /// L4-T3b : lignes `swipes` posées hors de la session (`DemoFixtures.swipesAnterieurs`) : ❤️ refusé par
+    /// `mission_deja_swipee`, comme ✕ et ⭐ dans `DemoSwipeGateway`.
+    private let swipesAnterieurs: @Sendable () throws -> Set<String>
 
+    /// `missions` : `demo-missions.json` et, depuis L4-T3b, les missions de recette du paquet de swipe
+    /// (`DemoFixtures.missionsRecetteSwipe`, hors d'Explorer) : un ❤️ sur l'une d'elles est contrôlé comme les autres.
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow),
-                missions: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = { try DemoFixtures.loadMissions().missions },
+                missions: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+                    try DemoFixtures.loadMissions().missions + DemoFixtures.missionsRecetteSwipe()
+                },
                 candidaturesInitiales: @escaping @Sendable () throws -> [CandidatureRecord] = DemoCandidatureGateway.candidaturesDesFixtures,
                 missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
                     try DemoFixtures.loadDashboard().missionsAssignees
-                }) {
+                },
+                swipesAnterieurs: @escaping @Sendable () throws -> Set<String> = { try DemoFixtures.swipesAnterieurs() }) {
         self.clock = clock
         self.missions = missions
         self.candidaturesInitiales = candidaturesInitiales
         self.missionsAssignees = missionsAssignees
+        self.swipesAnterieurs = swipesAnterieurs
     }
 
     /// Chemin du justificatif transmis avec l'annulation de cette candidature (relecture des tests).
@@ -283,7 +292,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
         if mission.typeContratRecherche == "TOUS", context.profile.typeExercice == "MIXTE", (choixContrat ?? "").isEmpty {
             return .choixRequis(Textes.choixContrat)
         }
-        guard !likes.contains(mission.id) else {
+        guard !likes.contains(mission.id), try !swipesAnterieurs().contains(mission.id) else {
             let refus = SwipeRefus.traduire("mission_deja_swipee")
             return .refusee(code: refus.code, message: refus.message, documentsRequisPour: nil)
         }

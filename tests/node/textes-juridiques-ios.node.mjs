@@ -135,6 +135,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
     'src/components/soignant/ModaleAnnulationCandidature.tsx', // L1-T7 : annulation d'une candidature retenue
+    'src/components/swipe/VueSwipeMissions.tsx', // L4-T3b : feuille « première candidature » de la vue Swipe (HARD STOP)
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
     'src/pages/DetailMissionSoignant.tsx', // T5a : points d'entrée du détail d'une mission
@@ -229,6 +230,14 @@ const EXIGES = {
   ],
   'src/components/FormulaireMission.tsx': [
     'PublicationEtablissement.optionSalarieLibelle', 'PublicationEtablissement.optionSalarieDescription',
+  ],
+  // Lot 4, T3b (LOT4_PLAN §3 T3b, HARD STOP n°4) : feuille « première candidature » de la vue Swipe, l.540-563
+  // (titre, description, paragraphe d'acceptation en quatre morceaux, deux puces, « Pas maintenant », confirmation).
+  'src/components/swipe/VueSwipeMissions.tsx': [
+    'PremiereCandidature.titre', 'PremiereCandidature.description', 'PremiereCandidature.acceptationDirecte',
+    'PremiereCandidature.acceptationSiCas', 'PremiereCandidature.acceptationConfirmee',
+    'PremiereCandidature.acceptationCompteSurToi', 'PremiereCandidature.retraitLibre',
+    'PremiereCandidature.annulationTardive', 'PremiereCandidature.pasMaintenant', 'PremiereCandidature.confirmer',
   ],
 };
 

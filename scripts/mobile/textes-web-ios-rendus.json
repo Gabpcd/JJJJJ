@@ -511,6 +511,30 @@
         "? `Candidature annulée. Score impacté : ${points} pts.`",
         ": 'Candidature annulée.';"
       ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PremiereCandidature.acceptation"
+      ],
+      "source": "src/components/swipe/VueSwipeMissions.tsx:547-550",
+      "code": [
+        "<p>",
+        "<strong>L'établissement peut t'accepter directement</strong> — si c'est le cas,",
+        "la mission est <strong>confirmée</strong> : il compte sur toi auprès de ses patients.",
+        "</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PremiereCandidature.engagements"
+      ],
+      "source": "src/components/swipe/VueSwipeMissions.tsx:551-554",
+      "code": [
+        "<ul className=\"space-y-1.5 text-muted-foreground text-xs list-disc ml-4\">",
+        "<li>Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée.</li>",
+        "<li>Après acceptation, une annulation tardive impacte ton score de fiabilité.</li>",
+        "</ul>"
+      ]
     }
   ],
   "rendus": [
@@ -913,6 +937,11 @@
       "fonction": "TextesWeb.StripeConnect.salarieEtapeConfirmation",
       "appel": "salarieEtapeConfirmation",
       "rendu": "Tu confirmes la réception dans Mes gains"
+    },
+    {
+      "fonction": "TextesWeb.PremiereCandidature.acceptation",
+      "appel": "acceptation",
+      "rendu": "L'établissement peut t'accepter directement — si c'est le cas, la mission est confirmée : il compte sur toi auprès de ses patients."
     }
   ]
 }

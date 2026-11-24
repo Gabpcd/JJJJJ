@@ -819,6 +819,51 @@ public enum TextesWeb {
         public static let mentionAccepter = "En acceptant, tu t'engages à être présent(e) aux dates et horaires indiqués."
     }
 
+    /// Feuille « première candidature » de la vue Swipe (lot 4, T3b, `LOT4_PLAN.md` §3 T3b ; HARD STOP n°4 : portée
+    /// d'engagement, reprise à l'identique de `VueSwipeMissions.tsx` l.540-563, en attente de la relecture de Gabrielle).
+    /// Affichée une seule fois par compte, après le récapitulatif exact et avant le premier ❤️ envoyé
+    /// (`ParcoursCandidatureSwipe`). Tutoiement du web conservé verbatim : le vouvoiement passera d'abord par le web.
+    /// Le paragraphe d'acceptation est rendu par React en quatre morceaux (deux passages en gras) : `acceptation`.
+    public enum PremiereCandidature {
+        // source: src/components/swipe/VueSwipeMissions.tsx:540 [juridique]
+        public static let titre = "Ta première candidature 🎉"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:542 [juridique]
+        public static let description = "Ici, candidater est un engagement — pas un simple like."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:548 [fragment]
+        public static let acceptationDirecte = "L'établissement peut t'accepter directement"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:548-549 [fragment]
+        public static let acceptationSiCas = "— si c'est le cas, la mission est"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:549 [fragment]
+        public static let acceptationConfirmee = "confirmée"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:549 [fragment]
+        public static let acceptationCompteSurToi = ": il compte sur toi auprès de ses patients."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:552 [juridique]
+        public static let retraitLibre = "Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:553 [juridique]
+        public static let annulationTardive = "Après acceptation, une annulation tardive impacte ton score de fiabilité."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:559 [libellé]
+        public static let pasMaintenant = "Pas maintenant"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:562 [juridique]
+        public static let confirmer = "J'ai compris — envoyer ma candidature"
+
+        /// Paragraphe rendu par React : gras, texte, gras, texte, chaque morceau séparé du suivant par une espace.
+        public static var acceptation: String {
+            acceptationDirecte + " " + acceptationSiCas + " " + acceptationConfirmee + " " + acceptationCompteSurToi
+        }
+
+        /// Les deux puces de la liste, dans l'ordre du web.
+        public static let engagements = [retraitLibre, annulationTardive]
+    }
+
     /// Confirmation de présence J-1 du détail de mission (lot 1, T6c, `LOT1_PLAN.md` §3 T6c ; HARD STOP n°4 : chaînes
     /// reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438). Bouton du bloc, confirmation affichée
     /// après relecture (toast web, ici notice), état « confirmée » et repli d'un refus sans message serveur. Le titre et
@@ -1037,6 +1082,16 @@ public enum TextesWeb {
         .init(cle: "Candidature.engagementCandidature", texte: Candidature.engagementCandidature),
         .init(cle: "Candidature.engagementAcceptation", texte: Candidature.engagementAcceptation),
         .init(cle: "Candidature.mentionAccepter", texte: Candidature.mentionAccepter),
+        .init(cle: "PremiereCandidature.titre", texte: PremiereCandidature.titre),
+        .init(cle: "PremiereCandidature.description", texte: PremiereCandidature.description),
+        .init(cle: "PremiereCandidature.acceptationDirecte", texte: PremiereCandidature.acceptationDirecte),
+        .init(cle: "PremiereCandidature.acceptationSiCas", texte: PremiereCandidature.acceptationSiCas),
+        .init(cle: "PremiereCandidature.acceptationConfirmee", texte: PremiereCandidature.acceptationConfirmee),
+        .init(cle: "PremiereCandidature.acceptationCompteSurToi", texte: PremiereCandidature.acceptationCompteSurToi),
+        .init(cle: "PremiereCandidature.retraitLibre", texte: PremiereCandidature.retraitLibre),
+        .init(cle: "PremiereCandidature.annulationTardive", texte: PremiereCandidature.annulationTardive),
+        .init(cle: "PremiereCandidature.pasMaintenant", texte: PremiereCandidature.pasMaintenant),
+        .init(cle: "PremiereCandidature.confirmer", texte: PremiereCandidature.confirmer),
         .init(cle: "ConfirmationPresence.bouton", texte: ConfirmationPresence.bouton),
         .init(cle: "ConfirmationPresence.confirmation", texte: ConfirmationPresence.confirmation),
         .init(cle: "ConfirmationPresence.etatConfirme", texte: ConfirmationPresence.etatConfirme),

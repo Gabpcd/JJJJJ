@@ -124,12 +124,29 @@ final class SwipeDecodingTests: XCTestCase {
         XCTAssertEqual(fichier.fixedNow, "2026-11-02T00:00:00.000Z")
         XCTAssertEqual(fichier.paquet.missions.count, 12)
         XCTAssertEqual(fichier.paquet.lignesEcartees, 0)
-        XCTAssertEqual(fichier.paquet.missions.filter { $0.score == nil }.map(\.missionId), ["demo-mission-019", "demo-mission-025"])
+        XCTAssertEqual(fichier.paquet.missions.filter { $0.score == nil }.map(\.missionId), ["demo-mission-019", "demo-swipe-deja"])
         let epinglee = try XCTUnwrap(fichier.paquet.missions.first { $0.missionId == "demo-mission-018" })
         XCTAssertTrue(epinglee.paiementRapide)
         XCTAssertEqual(CarteSwipe(ligne: epinglee, creneaux: []).raisons, "tu connais cet établissement · paiement rapide ⚡")
-        let missions = Set(try DemoFixtures.loadMissions().missions.map(\.record.id))
-        XCTAssertTrue(fichier.paquet.missions.allSatisfy { missions.contains($0.missionId) }, "missions de demo-missions.json")
+        // T3b : dix missions de `demo-missions.json` et les deux missions de recette du paquet, jamais listées par Explorer.
+        let explorer = Set(try DemoFixtures.loadMissions().missions.map(\.record.id))
+        let recette = fichier.missionsRecette.map(\.record.id)
+        XCTAssertEqual(recette, ["demo-swipe-choix", "demo-swipe-deja"])
+        XCTAssertTrue(explorer.isDisjoint(with: recette), "une mission de recette n'entre pas dans demo-missions.json")
+        XCTAssertEqual(fichier.paquet.missions.filter { explorer.contains($0.missionId) }.count, 10)
+        XCTAssertTrue(fichier.paquet.missions.allSatisfy { explorer.contains($0.missionId) || recette.contains($0.missionId) },
+                      "chaque carte a sa mission : demo-missions.json ou mission de recette du paquet")
+        XCTAssertEqual(fichier.dejaSwipees, ["demo-swipe-deja"])
+        XCTAssertEqual(try DemoFixtures.swipesAnterieurs(), ["demo-swipe-deja"])
+        // Ordre servi : la carte « choix du contrat » en deuxième, la carte déjà swipée en dernier (XCUITest par boutons).
+        XCTAssertEqual(fichier.paquet.missions.map(\.missionId).prefix(3), ["demo-mission-015", "demo-swipe-choix", "demo-mission-016"])
+        XCTAssertEqual(fichier.paquet.missions.last?.missionId, "demo-swipe-deja")
+        let choix = try XCTUnwrap(fichier.missionsRecette.first)
+        XCTAssertEqual(choix.record.typeContratRecherche, "TOUS", "contrat au choix : le ❤️ du profil MIXTE demande l'option")
+        XCTAssertEqual(choix.record.statut, "OUVERTE")
+        XCTAssertEqual(choix.creneaux.count, 1)
+        XCTAssertTrue(fichier.missionsRecette.allSatisfy { $0.record.modeAttribution == CandidatureRules.modeCandidature },
+                      "jamais « premier arrivé » : le détail ne propose pas d'acceptation immédiate")
     }
 
     func testSwipeRefusTraduitLesCodesEtGardeLesMessagesRediges() {

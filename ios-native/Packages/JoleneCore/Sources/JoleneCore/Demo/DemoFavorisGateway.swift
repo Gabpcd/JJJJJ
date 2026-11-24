@@ -156,9 +156,10 @@ public struct DemoFavorisGateway: FavorisPort {
         await store.initialiser(fichier, inscription: inscriptionInitiale)
     }
 
-    /// Missions démo connues : Explorer (`demo-missions.json`) et missions ASSIGNEE du tableau de bord.
+    /// Missions démo connues : Explorer (`demo-missions.json`), missions de recette du paquet de swipe (L4-T3b : ⭐ sur
+    /// l'une d'elles) et missions ASSIGNEE du tableau de bord.
     private static func mission(id: String) throws -> MissionRecord? {
-        if let ouverte = try DemoFixtures.loadMissions().missions.first(where: { $0.record.id == id }) {
+        if let ouverte = try (DemoFixtures.loadMissions().missions + DemoFixtures.missionsRecetteSwipe()).first(where: { $0.record.id == id }) {
             return ouverte.record
         }
         return try DemoFixtures.loadDashboard().missionsAssignees.first { $0.record.id == id }?.record

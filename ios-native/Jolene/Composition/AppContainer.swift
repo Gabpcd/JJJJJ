@@ -90,6 +90,10 @@ final class AppContainer: ObservableObject {
     /// Lot 4, T4 : « Aller à la recherche » — recherche déposée par `RecherchesScreen` (Profil), appliquée par Explorer
     /// (`AlerteRapideExplorer`), remise à son seul auteur.
     let rechercheExplorer = BoiteRechercheExplorer()
+    /// Lot 4, T3b : réglages de la vue Swipe d'Explorer (`SwipeModeView`) — marqueurs locaux par compte (quiz vu, feuille
+    /// « première candidature » vue, vue préférée), `UserDefaults` en staging et production, mémoire vive en démo ; durée
+    /// du toast d'annulation (5 s, surcharge `JOLENE_DEMO_SWIPE_ANNULATION` en démo et en DEBUG seulement).
+    let swipe: ReglagesSwipe
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
@@ -151,6 +155,15 @@ final class AppContainer: ObservableObject {
             fluxExterne = presentateur
         }
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
+        // Lot 4, T3b : marqueurs du swipe et durée du toast d'annulation (surcharge honorée en démo et en DEBUG seulement).
+        #if DEBUG
+        let surchargesSwipe = true
+        #else
+        let surchargesSwipe = false
+        #endif
+        swipe = ReglagesSwipe(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil(),
+                              dureeAnnulation: ReglagesSwipe.dureeAnnulation(demo: environment.mode == .demo, debug: surchargesSwipe,
+                                                                             environnement: processEnvironment))
         selectionAvatarDemo = environment.mode == .demo
             ? DemoFixtures.selectionAvatarDemo(scenario: Self.scenarioAvatarDemo(arguments: arguments)) : nil
         // Lot 3, T11 (revue B8, m8) : un fichier d'export RGPD laissé par un arrêt brutal (feuille de partage jamais

@@ -79,6 +79,13 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.Candidature.mentionAccepter",
             // L1-T7 : confirmation de l'annulation sans candidature (`DetailMissionSoignant.tsx` l.916).
             "TextesWeb.Annulation.participationAnnulee",
+            // L4-T3b : feuille « première candidature » de la vue Swipe (`VueSwipeMissions.tsx` l.540-553), portée
+            // d'engagement reprise à l'identique (HARD STOP n°4) ; le vouvoiement passera d'abord par le web.
+            "TextesWeb.PremiereCandidature.titre",
+            "TextesWeb.PremiereCandidature.acceptationDirecte",
+            "TextesWeb.PremiereCandidature.acceptationCompteSurToi",
+            "TextesWeb.PremiereCandidature.retraitLibre",
+            "TextesWeb.PremiereCandidature.annulationTardive",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -276,6 +283,25 @@ final class TextesWebTests: XCTestCase {
     /// L3-T14a : troisième étape du mode salarié (`PageStripeConnect.tsx` l.228), texte puis « Mes gains » en gras.
     func testEtapeConfirmationStripeCommeLeRenduWeb() {
         XCTAssertEqual(TextesWeb.StripeConnect.salarieEtapeConfirmation, "Tu confirmes la réception dans Mes gains")
+    }
+
+    /// Lot 4, T3b : feuille « première candidature » de la vue Swipe (`VueSwipeMissions.tsx` l.540-563, HARD STOP n°4,
+    /// portée d'engagement) : paragraphe rendu par React (gras, texte, gras, texte), deux puces dans l'ordre du web,
+    /// tutoiement du web conservé.
+    func testPremiereCandidatureCommeLeRenduWeb() {
+        let feuille = TextesWeb.PremiereCandidature.self
+        XCTAssertEqual(feuille.acceptation, "L'établissement peut t'accepter directement — si c'est le cas, la mission est confirmée : il compte sur toi auprès de ses patients.")
+        XCTAssertEqual(feuille.engagements, [feuille.retraitLibre, feuille.annulationTardive])
+        XCTAssertEqual(feuille.titre, "Ta première candidature 🎉")
+        XCTAssertEqual(feuille.description, "Ici, candidater est un engagement — pas un simple like.")
+        XCTAssertEqual(feuille.retraitLibre, "Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée.")
+        XCTAssertEqual(feuille.annulationTardive, "Après acceptation, une annulation tardive impacte ton score de fiabilité.")
+        XCTAssertEqual(feuille.pasMaintenant, "Pas maintenant")
+        XCTAssertEqual(feuille.confirmer, "J'ai compris — envoyer ma candidature")
+        for cle in ["titre", "description", "acceptationDirecte", "acceptationSiCas", "acceptationConfirmee",
+                    "acceptationCompteSurToi", "retraitLibre", "annulationTardive", "pasMaintenant", "confirmer"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == "PremiereCandidature." + cle }, cle)
+        }
     }
 
     /// Annulation (lot 1, T7 ; `ModaleAnnulationCandidature.tsx` l.129-132) : « Score impacté » seulement pour des points
