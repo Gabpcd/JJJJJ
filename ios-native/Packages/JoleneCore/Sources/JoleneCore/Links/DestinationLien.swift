@@ -117,7 +117,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.recherches):
             return true                                  // T4 — `RecherchesScreen` (hub « Recherche & disponibilité »), alerte rapide d'Explorer
         case .secondaire(.disponibilites):
-            return false                                 // T5 — disponibilités
+            return true                                  // T5 — `DisponibilitesScreen` (atteint par lien, push ou centre : aucune entrée dans le hub web)
         case .secondaire(.parrainage):
             return false                                 // T6 — parrainage
         case .secondaire(.messagerie):
