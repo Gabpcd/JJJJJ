@@ -192,33 +192,6 @@ export function sourceAdresse(contexte: Record<string, unknown>, adresse?: strin
   };
 }
 
-export interface SaisieAdresse {
-  /** Adresse à enregistrer sur le prospect (null : effacée). */
-  email: string | null;
-  /** Provenance à enregistrer avec elle (null : aucune). */
-  provenance: { email: string; source_code: 'SAISIE_MANUELLE'; releve_le: string } | null;
-}
-
-const ADRESSE_SIMPLE = /^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
-const MESSAGERIE_FERMEE = /[@.](mssante\.fr|apicrypt\.org)$/;
-
-/**
- * Adresse saisie à la main dans l'écran Sales, et la provenance qui l'accompagne.
- * Une adresse saisie porte l'origine SAISIE_MANUELLE : l'agent email ne lui prête pas la
- * mention « FINESS et Annuaire Santé », qui serait fausse, et ne prépare donc aucun
- * brouillon pour elle (private.fn_growth_mention_opposition). Une adresse en messagerie
- * de santé fermée s'enregistre sans provenance : l'agent ne l'utilise jamais.
- * Rend null quand la saisie n'est pas une adresse simple (accent, espace, deux « @ »).
- */
-export function saisieAdresseManuelle(saisie: string, jour: Date = new Date()): SaisieAdresse | null {
-  const email = saisie.trim().toLowerCase();
-  if (!email) return { email: null, provenance: null };
-  if (!ADRESSE_SIMPLE.test(email)) return null;
-  if (MESSAGERIE_FERMEE.test(email)) return { email, provenance: null };
-  const releve = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(jour);
-  return { email, provenance: { email, source_code: 'SAISIE_MANUELLE', releve_le: releve } };
-}
-
 export interface ResumeAppels {
   texte: string;
   /** Des places de la semaine sont restées vides : plus aucune cible appelable. */
@@ -392,11 +365,11 @@ export function lirePassage(details: unknown): PassageProspection | null {
   };
 }
 
-/** Phrase affichée quand l'agent email a laissé des adresses sans brouillon, sinon null. */
+/** Phrase affichée quand l'agent email a laissé des adresses sans brouillon à son dernier passage (un compte par passage, pas un stock), sinon null. */
 export function resumeSansMention(passage: PassageProspection | null): string | null {
   if (!passage || passage.sans_mention <= 0) return null;
   const n = passage.sans_mention;
-  return `${fr(n)} ${pluriel(n, 'adresse laissée', 'adresses laissées')} sans brouillon : origine sans mention d’opposition (saisie à la main, ou modifiée depuis son import).`;
+  return `Au dernier passage, ${fr(n)} ${pluriel(n, 'adresse laissée', 'adresses laissées')} sans brouillon : origine sans mention d’opposition (adresse modifiée depuis son import).`;
 }
 
 /** Avertissement à afficher quand l'agent email ne peut plus rien préparer, sinon null. */

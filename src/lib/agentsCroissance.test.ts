@@ -21,7 +21,6 @@ import {
   resumeAppels,
   resumeCibles,
   sourceAdresse,
-  saisieAdresseManuelle,
   resumeSansMention,
   sourceFiche,
   telephoneFiche,
@@ -334,38 +333,12 @@ describe('agents de croissance — origine d’une adresse publique', () => {
   });
 });
 
-describe('adresse saisie à la main dans Sales', () => {
-  const jour = new Date('2026-11-24T23:30:00Z'); // déjà le 25 à Paris
-
-  it('porte l’origine SAISIE_MANUELLE, en minuscules, datée du jour à Paris', () => {
-    expect(saisieAdresseManuelle('  Accueil@EHPAD-Exemple.test ', jour)).toEqual({
-      email: 'accueil@ehpad-exemple.test',
-      provenance: { email: 'accueil@ehpad-exemple.test', source_code: 'SAISIE_MANUELLE', releve_le: '2026-11-25' },
-    });
-  });
-
-  it('efface l’adresse et sa provenance quand la saisie est vide', () => {
-    expect(saisieAdresseManuelle('   ', jour)).toEqual({ email: null, provenance: null });
-  });
-
-  it('enregistre une messagerie de santé fermée sans provenance (la base la refuserait)', () => {
-    expect(saisieAdresseManuelle('contact@ehpad.mssante.fr', jour)).toEqual({ email: 'contact@ehpad.mssante.fr', provenance: null });
-    expect(saisieAdresseManuelle('contact@medical.apicrypt.org', jour)?.provenance).toBeNull();
-  });
-
-  it('refuse ce qui n’est pas une adresse simple', () => {
-    for (const saisie of ['contact', 'contact@ehpad', 'château@ehpad.test', 'a b@ehpad.test', 'a@b@ehpad.test', 'contact@ehpad.test;x']) {
-      expect(saisieAdresseManuelle(saisie, jour), saisie).toBeNull();
-    }
-  });
-});
-
 describe('adresses laissées sans brouillon', () => {
   it('se tait à zéro, compte au singulier et au pluriel', () => {
     expect(resumeSansMention(null)).toBeNull();
     expect(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 0 })).toBeNull();
     expect(lisible(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 1 }) ?? undefined))
-      .toBe('1 adresse laissée sans brouillon : origine sans mention d’opposition (saisie à la main, ou modifiée depuis son import).');
+      .toBe('Au dernier passage, 1 adresse laissée sans brouillon : origine sans mention d’opposition (adresse modifiée depuis son import).');
     expect(lisible(resumeSansMention({ premiers_contacts: 3, places_non_pourvues: 0, sans_mention: 4 }) ?? undefined))
       .toContain('4 adresses laissées sans brouillon');
   });

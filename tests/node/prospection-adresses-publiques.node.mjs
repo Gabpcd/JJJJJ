@@ -208,7 +208,7 @@ test('extraction : une adresse par FINESS, décompte de ce qui est écarté, blo
   ]);
   assert.deepEqual({ lignes: comptes.lignes, invalides: comptes.finess_invalide, absentes: comptes.ABSENTE, aVerifier: comptes.A_VERIFIER, doublons: comptes.doublon_finess, retenues: comptes.retenues },
     { lignes: 6, invalides: 1, absentes: 1, aVerifier: 1, doublons: 1, retenues: 2 });
-  assert.equal(blocSql(adresses), '010000001;contact@mimosas.example;F;2020-10-04\n920000002;les.lilas@exemple.example;S;2020-09-01');
+  assert.equal(blocSql(adresses), '010000001;contact@mimosas.example;F;2020-10-04');
 });
 
 // ---------------------------------------------------------------------------
@@ -244,8 +244,11 @@ test('bloc de données : empreinte, format, aucune messagerie fermée, aucune in
   }
   assert.equal(finess.size, lignes.length);
   // Les nombres écrits dans l'en-tête sont ceux du bloc.
-  assert.ok(migration.includes(`en retient ${lignes.length} :`), 'total annoncé');
-  assert.ok(migration.includes(`${classes.F} portent un mot de fonction\n-- (classe F), ${classes.S} le seul nom de la structure (classe S)`), 'répartition annoncée');
+  assert.ok(migration.includes(`en importe ${lignes.length} :`), 'total annoncé');
+  // Seule la classe « fonction » est importée : une adresse au seul nom de la structure peut être
+  // celle d'un établissement qui porte le nom d'une personne (revue du delta de #1180).
+  assert.equal(classes.S, 0, 'aucune adresse de classe S dans le bloc');
+  assert.match(migration, /Ne sont PAS importées : [0-9 ]+ adresses au seul nom de la\n-- structure \(classe S/);
   assert.ok(migration.includes("le champ « gestionnaire » n'est pas lu"), 'le gestionnaire n’explique aucune adresse');
   // Source : même jeu, même fichier, mêmes dates dans le script et dans la migration.
   assert.ok(migration.includes(`sha256 ${SOURCE.sha256}`));
@@ -385,19 +388,17 @@ test('aucun envoi, aucune écriture de configuration, aucun droit ouvert', () =>
   assert.doesNotMatch(migration, /\$\$/);
 });
 
-test('adresse saisie à la main et envoi groupé : origine posée, lot fermé aux adresses à provenance', () => {
+test('saisie manuelle prévue en base, écran Sales inchangé, envoi groupé fermé aux adresses à provenance', () => {
+  // Le code SAISIE_MANUELLE est accepté sans page source et ne reçoit aucune mention. L'écran Sales
+  // ne le pose pas encore : ce branchement attend sa recette d'interface (revue du delta de #1180).
   const sales = read('src/pages/admin/AdminSales.tsx');
-  assert.match(sales, /const saisie = saisieAdresseManuelle\(emailEdit\.valeur\);/);
-  assert.match(sales, /\.update\(\{ email: saisie\.email, email_provenance: saisie\.provenance \} as any\)\.eq\('finess', emailEdit\.finess\)/);
-  assert.equal(sales.split("from('prospects_etablissements' as any)").length - 1, 2, 'deux écritures seulement : favori et adresse');
-  const lib = read('src/lib/agentsCroissance.ts');
-  assert.match(lib, /source_code: 'SAISIE_MANUELLE', releve_le: releve/);
-  // La contrainte de forme accepte une saisie manuelle sans page source, et elle seule.
+  assert.doesNotMatch(sales, /email_provenance/);
   assert.match(migration, /AND \(email_provenance->>'source_code' = 'SAISIE_MANUELLE'\s+OR COALESCE\(email_provenance->>'source_url', ''\) ~ '\^https:\/\/'\)/);
   // L'envoi groupé (éteint avant le lancement) n'emporte aucune adresse dont l'origine est enregistrée.
   const lot = read('supabase/functions/sales-outreach-batch/index.ts');
   assert.match(lot, /if \(cible === "ETABLISSEMENT"\) q = q\.is\("email_provenance", null\);/);
   assert.ok(lot.indexOf('q.is("email_provenance", null)') < lot.indexOf('await q;'), 'filtre posé avant la lecture des destinataires');
+  assert.match(lot, /if \(cible === "ETABLISSEMENT"\) qRestants = qRestants\.is\("email_provenance", null\);/);
 });
 
 test('suite SQL, écran et CI : la section 12 existe, l’écran nomme la source, la garde est câblée', () => {

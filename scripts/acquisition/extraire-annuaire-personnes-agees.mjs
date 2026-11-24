@@ -32,8 +32,10 @@
 //     de la commune (« mr.sartilly@ »), le sigle passe : une commune n'est pas une personne.
 //   * Un domaine à une faute de frappe d'un domaine courant (« orane.fr », « gmail.com.fr ») :
 //     l'adresse n'atteindrait personne, ou quelqu'un d'autre.
-// La règle reste une heuristique : une adresse au seul nom de l'établissement est retenue même si ce
-// nom est un patronyme (« Résidence Dupont » → « dupont@ »). Chaque brouillon est relu avant envoi.
+// Le tri reste une heuristique, et la classe STRUCTURE (le seul nom de l'établissement ou de la
+// commune, sans mot de fonction) ne distingue pas un établissement qui porte le nom d'une personne
+// (« Résidence Dupont » → « dupont@ », « prenom.nom@ » d'un établissement éponyme). SEULE LA CLASSE
+// FONCTION EST IMPORTÉE (blocSql) : la classe STRUCTURE est comptée, pas reprise.
 // Pourquoi : la prospection par courrier électronique d'une personne physique exige son
 // consentement préalable (CPCE, art. L34-5) ; une adresse générique concerne la personne morale
 // (CNIL, « La prospection commerciale par courrier électronique », onglet professionnels).
@@ -179,27 +181,39 @@ const DOMAINES_COURANTS = ['orange.fr', 'wanadoo.fr', 'gmail.com', 'free.fr', 'h
   'yahoo.com', 'laposte.net', 'sfr.fr', 'neuf.fr', 'live.fr', 'outlook.fr', 'outlook.com', 'bbox.fr', 'aol.com',
   'club-internet.fr', 'nordnet.fr', 'numericable.fr', 'cegetel.net', 'aliceadsl.fr', 'ymail.com'];
 
+/** Distance d'édition, deux lettres voisines inversées comptant pour une faute (« humainsme »). */
 function distance(a, b) {
   if (Math.abs(a.length - b.length) > 1) return 2;
+  let avant = null;
   let ligne = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i += 1) {
     const suivante = [i];
-    for (let j = 1; j <= b.length; j += 1) suivante[j] = Math.min(ligne[j] + 1, suivante[j - 1] + 1, ligne[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    for (let j = 1; j <= b.length; j += 1) {
+      suivante[j] = Math.min(ligne[j] + 1, suivante[j - 1] + 1, ligne[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (avant && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) suivante[j] = Math.min(suivante[j], avant[j - 2] + 1);
+    }
+    avant = ligne;
     ligne = suivante;
   }
   return ligne[b.length];
 }
+/** Extensions qui sont presque toujours une faute de frappe de « .com » ou « .fr ». */
+const EXTENSIONS_FAUTIVES = ['cm', 'om', 'con', 'cmo', 'comm', 'ft', 'fe', 'frr'];
 
 /**
  * Domaine probablement fautif : à une lettre d'un domaine grand public ou d'un domaine très présent
- * dans le fichier (`frequents` : domaines portés par au moins dix lignes), ou un domaine grand public
- * suivi d'une extension de trop (« gmail.com.fr »).
+ * dans le fichier (`frequents` : domaines portés par au moins cinq lignes), une extension fautive
+ * (« .cm »), ou un domaine grand public suivi d'une extension de trop (« gmail.com.fr »).
  */
 export function domaineDouteux(domaine, frequents = []) {
   const d = String(domaine ?? '').toLowerCase();
-  const reperes = [...new Set([...DOMAINES_COURANTS, ...frequents])];
-  if (reperes.includes(d)) return false;
-  return reperes.some(r => distance(d, r) === 1) || DOMAINES_COURANTS.some(r => d.startsWith(`${r}.`));
+  if (DOMAINES_COURANTS.includes(d) || frequents.includes(d)) return false;
+  if (EXTENSIONS_FAUTIVES.includes(d.slice(d.lastIndexOf('.') + 1))) return true;
+  if (DOMAINES_COURANTS.some(r => distance(d, r) === 1 || d.startsWith(`${r}.`))) return true;
+  // Repères du fichier : ni les noms courts (« ch-ca.fr »), ni les domaines qui ne diffèrent que
+  // par un chiffre (« fede43.admr.org », « fede44.admr.org ») ne sont des fautes de frappe.
+  const sansChiffres = t => t.replace(/[0-9]/g, '');
+  return frequents.some(r => r.indexOf('.') >= 6 && sansChiffres(r) !== sansChiffres(d) && distance(d, r) === 1);
 }
 
 /** Lecture CSV (RFC 4180 : guillemets doublés, virgules et retours à la ligne dans un champ). */
@@ -225,13 +239,13 @@ export function extraire(texteCsv) {
   const comptes = { lignes: 0, finess_invalide: 0, ABSENTE: 0, MAL_FORMEE: 0, MESSAGERIE_FERMEE: 0, A_VERIFIER: 0, DOMAINE_DOUTEUX: 0, FONCTION: 0, STRUCTURE: 0, doublon_finess: 0 };
   const parFiness = new Map();
   const lignes = lireCsv(texteCsv);
-  // Domaines portés par au moins dix lignes du fichier : repères pour les fautes de frappe.
+  // Domaines portés par au moins cinq lignes du fichier : repères pour les fautes de frappe.
   const parDomaine = new Map();
   for (const l of lignes) {
     const e = String(l['coordinates.emailContact'] ?? '').trim().toLowerCase();
     if (BIEN_FORMEE.test(e)) { const d = e.slice(e.lastIndexOf('@') + 1); parDomaine.set(d, (parDomaine.get(d) ?? 0) + 1); }
   }
-  const frequents = [...parDomaine].filter(([, n]) => n >= 10).map(([d]) => d);
+  const frequents = [...parDomaine].filter(([, n]) => n >= 5).map(([d]) => d);
   for (const l of lignes) {
     comptes.lignes += 1;
     const finess = String(l.noFinesset ?? '').replace(/\D/g, '');
@@ -251,9 +265,12 @@ export function extraire(texteCsv) {
   return { comptes: { ...comptes, retenues: adresses.length, adresses_distinctes: new Set(adresses.map(a => a.email)).size }, adresses };
 }
 
-/** Bloc de données de la migration : une ligne par adresse, « finess;adresse;classe;date de mise à jour ». */
+/**
+ * Bloc de données de la migration : une ligne par adresse IMPORTÉE, « finess;adresse;F;date de mise
+ * à jour ». Seule la classe FONCTION est importée ; la classe STRUCTURE reste hors du bloc.
+ */
 export function blocSql(adresses) {
-  return adresses.map(a => `${a.finess};${a.email};${a.classe === 'FONCTION' ? 'F' : 'S'};${a.maj ?? ''}`).join('\n');
+  return adresses.filter(a => a.classe === 'FONCTION').map(a => `${a.finess};${a.email};F;${a.maj ?? ''}`).join('\n');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -264,12 +281,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (empreinte !== SOURCE.sha256) { console.error(`Fichier inattendu (sha256 ${empreinte}) : ce script décrit la publication du 11/11/2020 (${SOURCE.sha256}). Relire les colonnes avant d'importer une autre version.`); process.exit(1); }
   const { comptes, adresses } = extraire(brut.toString('utf8'));
   console.log(JSON.stringify(comptes, null, 2));
-  console.log('départements pilotes', Object.fromEntries(['56', '75', '92'].map(d => [d, adresses.filter(a => a.departement === d).length])));
+  console.log('départements pilotes, classe FONCTION', Object.fromEntries(['56', '75', '92'].map(d => [d, adresses.filter(a => a.departement === d && a.classe === 'FONCTION').length])));
   const option = nom => (options.includes(nom) ? options[options.indexOf(nom) + 1] : null);
   if (option('--json')) { writeFileSync(option('--json'), `${JSON.stringify({ source: SOURCE, comptes, adresses })}\n`); console.log('écrit', option('--json')); }
   if (option('--sql')) {
     const bloc = blocSql(adresses);
     writeFileSync(option('--sql'), `${bloc}\n`);
-    console.log('écrit', option('--sql'), '— lignes', adresses.length, '— sha256 du bloc', createHash('sha256').update(bloc).digest('hex'));
+    console.log('écrit', option('--sql'), '— lignes', bloc.split('\n').length, '— sha256 du bloc', createHash('sha256').update(bloc).digest('hex'));
   }
 }

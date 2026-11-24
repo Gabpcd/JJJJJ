@@ -19,8 +19,8 @@
     - text: Brouillons seulement
     - paragraph: Chaque matin, jusqu’à 20 premiers emails et les relances dues, pour les établissements des marchés pilotes (FINESS), en excluant les oppositions.
     - paragraph: "Dernier passage : 25/11/2026 06:50 (automatique) · 20 brouillon(s)"
-    - paragraph: "Cibles : 2 318 établissements ciblés · 260 adresses utilisables (dont 260 d’un annuaire public) · 520 en messagerie fermée · 2 017 téléphones"
-    - paragraph: "2 adresses laissées sans brouillon : origine sans mention d’opposition (saisie à la main, ou modifiée depuis son import)."
+    - paragraph: "Cibles : 2 318 établissements ciblés · 167 adresses utilisables (dont 167 d’un annuaire public) · 576 en messagerie fermée · 2 017 téléphones"
+    - paragraph: "Au dernier passage, 2 adresses laissées sans brouillon : origine sans mention d’opposition (adresse modifiée depuis son import)."
     - heading "Appels établissements" [level=3]
     - text: Brouillons seulement
     - paragraph: Chaque semaine, jusqu’à 30 fiches d’appel pour les établissements des marchés pilotes qui ont un téléphone, classées par potentiel, oppositions exclues. Vous appelez vous-même, puis vous notez le résultat.

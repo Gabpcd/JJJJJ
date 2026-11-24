@@ -82,10 +82,10 @@ const cibles = {
 };
 
 // Après l'import de l'annuaire public des établissements pour personnes âgées (20261124170000) :
-// 260 adresses attendues dans les départements pilotes (mesure en lecture seule du 24/11/2026),
-// dont 136 à la place d'une adresse en messagerie fermée ; vingt déjà en file après un passage.
+// 167 adresses attendues dans les départements pilotes (mesure en lecture seule du 24/11/2026),
+// dont 80 à la place d'une adresse en messagerie fermée ; vingt déjà en file après un passage.
 const ciblesAvecAnnuaire = {
-  ...cibles, adresses_fermees: 520, adresses_utilisables: 260, adresses_annuaire_public: 260, adresses_restantes: 240,
+  ...cibles, adresses_fermees: 576, adresses_utilisables: 167, adresses_annuaire_public: 167, adresses_restantes: 147,
 };
 const MENTION_ANNUAIRE = 'Votre adresse de contact provient de l\'annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr, données ouvertes publiées sur data.gouv.fr). Si vous ne souhaitez plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.';
 const PAGE_DU_JEU = 'https://www.data.gouv.fr/datasets/etablissements-ehpad-esld-residences-autonomie-accueils-de-jour';
@@ -587,9 +587,9 @@ test('admin — adresses publiques : origine de l’adresse sur le brouillon, d�
 
   // État 4 — carte de l'agent : le décompte dit combien d'adresses viennent de l'annuaire public.
   await page.getByRole('tab', { name: 'Agents' }).click();
-  await expect(page.getByTestId('cibles-prospection')).toHaveText(/^Cibles : 2\s318 établissements ciblés · 260 adresses utilisables \(dont 260 d’un annuaire public\) · 520 en messagerie fermée · 2\s017 téléphones$/);
-  // Deux adresses saisies ou modifiées à la main : pas de brouillon, et l'écran le dit.
-  await expect(page.getByTestId('adresses-sans-mention')).toHaveText(/^2 adresses laissées sans brouillon : origine sans mention d’opposition \(saisie à la main, ou modifiée depuis son import\)\.$/);
+  await expect(page.getByTestId('cibles-prospection')).toHaveText(/^Cibles : 2\s318 établissements ciblés · 167 adresses utilisables \(dont 167 d’un annuaire public\) · 576 en messagerie fermée · 2\s017 téléphones$/);
+  // Deux adresses modifiées depuis leur import : pas de brouillon, et l'écran le dit.
+  await expect(page.getByTestId('adresses-sans-mention')).toHaveText(/^Au dernier passage, 2 adresses laissées sans brouillon : origine sans mention d’opposition \(adresse modifiée depuis son import\)\.$/);
   await expect(page.getByText('Dernier passage : 25/11/2026 06:50 (automatique) · 20 brouillon(s)', { exact: true })).toBeVisible();
   await expect(page.getByText('Aucune cible joignable', { exact: true })).toHaveCount(0);
   await expect(page.getByTestId('alerte-cibles-prospection')).toHaveCount(0);

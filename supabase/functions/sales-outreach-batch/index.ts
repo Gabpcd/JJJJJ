@@ -167,9 +167,12 @@ Deno.serve(async (req) => {
       await new Promise((res) => setTimeout(res, 600));
     }
 
-    const { count: restants } = await admin.from(table)
+    let qRestants = admin.from(table)
       .select(pk, { count: "exact", head: true })
       .not("email", "is", null).neq("email", "").is("email_envoye_le", null);
+    // Même verrou que la lecture des destinataires : les adresses à provenance ne sont pas « restantes ».
+    if (cible === "ETABLISSEMENT") qRestants = qRestants.is("email_provenance", null);
+    const { count: restants } = await qRestants;
 
     return new Response(JSON.stringify({
       success: true,

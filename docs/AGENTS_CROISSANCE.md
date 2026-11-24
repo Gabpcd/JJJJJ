@@ -301,10 +301,15 @@ publication : les adresses ont six ans). Trois points lus le 24/11/2026, à conn
   tiers sans vous) : à vous de décider s'il faut écrire à la CNSA.
 
 **Tri (script reproductible `scripts/acquisition/extraire-annuaire-personnes-agees.mjs`).** Le
-fichier porte 10 901 lignes. Une adresse n'est retenue que si tout son identifiant (avant « @ »)
-s'explique sans nommer une personne : mots de fonction ou de type d'établissement (contact,
-direction, accueil, ehpad, résidence…), mots du nom de l'établissement ou de sa commune. Aucune
+fichier porte 10 901 lignes. **Seules sont importées les adresses qui portent un mot de fonction ou
+de type d'établissement** (contact, direction, accueil, ehpad, résidence…) et dont tout le reste de
+l'identifiant (avant « @ ») s'explique par le nom de l'établissement ou de sa commune. Aucune
 adresse n'est devinée. Sont écartées :
+- une adresse au seul nom de la structure, sans mot de fonction (classe « structure ») : un
+  établissement peut porter le nom d'une personne (« dupont@ » pour une résidence Dupont,
+  `prenom.nom@` pour un établissement éponyme), et rien dans le fichier ne le distingue d'une
+  adresse personnelle. La revue de la PR en a trouvé six de cette forme. Ces adresses sont
+  comptées, pas importées : les reprendre est une décision à part (§6) ;
 - une adresse dont un mot reste inexpliqué, ou qui porte une initiale isolée : `prenom.nom@`,
   `p.nom@`, `pnom@` ;
 - une adresse qui ne s'explique que par le champ « gestionnaire » du fichier : ce champ est parfois
@@ -320,20 +325,18 @@ adresse n'est devinée. Sont écartées :
 
 | | Lignes |
 |---|---|
-| Retenues (une par FINESS) | 6 756, soit 6 040 adresses distinctes |
-| dont un mot de fonction ou de type d'établissement (classe « fonction ») | 5 142 |
-| dont le seul nom de la structure ou de la commune (classe « structure ») | 1 614 |
+| **Importées** : un mot de fonction ou de type d'établissement (classe « fonction »), une par FINESS | **5 143**, soit 4 464 adresses distinctes |
+| Non importées : le seul nom de la structure ou de la commune (classe « structure ») | 1 611 |
 | Écartées : peuvent nommer une personne | 3 509 |
-| Écartées : domaine à une faute de frappe d'un domaine courant | 14 |
-| Écartées : pas d'adresse, adresse mal formée, FINESS invalide | 568, 16, 38 |
+| Écartées : domaine à une faute de frappe d'un domaine courant | 16 |
+| Écartées : pas d'adresse, adresse mal formée | 568, 16 |
+| Non lues : établissements de Corse (FINESS en 2A ou 2B, que le script ne lit pas) | 38 |
 
 La règle est volontairement stricte : elle écarte aussi des adresses légitimes qu'elle reconnaît mal
-(« secret.direction@ », « casvp-s10@ », « louisemichel@ » pour un EHPAD Louise-Michel). **Elle reste
-une heuristique.** Une adresse au seul nom de l'établissement est retenue même si ce nom est un
-patronyme (« dupont@ » pour une résidence Dupont) : rien, dans le fichier, ne permet de distinguer
-ce cas. C'est une des raisons pour lesquelles chaque brouillon est relu avant envoi, avec l'adresse
-sous les yeux. La classe est gardée avec chaque adresse : restreindre plus tard aux seules adresses
-« fonction » est un filtre d'une ligne.
+(« secret.direction@ », « casvp-s10@ », « lestilleuls@ » pour un EHPAD Les Tilleuls). **Elle reste
+une heuristique**, relue par échantillon et par deux revues, sans preuve qu'aucune adresse importée
+ne nomme quelqu'un : c'est une des raisons pour lesquelles chaque brouillon est relu avant envoi,
+avec l'adresse sous les yeux.
 
 **Ce qui est écrit en base, par la migration seulement.** Une colonne
 `prospects_etablissements.email_provenance` (l'adresse décrite, la source, l'adresse de la page du
@@ -345,19 +348,20 @@ elle-même après l'écriture (aucune adresse ouverte du bloc modifiée, aucune 
 comptes qui se recoupent) et s'annule en entier sinon.
 
 **Une adresse ne reçoit que la mention de sa propre origine.** La provenance ne vaut que pour
-l'adresse qu'elle décrit. Dans trois cas l'agent ne prépare **aucun brouillon**, parce qu'aucune
-mention d'opposition ne dirait vrai sur l'origine de l'adresse, et il le compte (« N adresses
-laissées sans brouillon », sur la carte de l'agent) :
-- une adresse **saisie à la main** dans Sales : l'écran enregistre désormais avec elle l'origine
-  `SAISIE_MANUELLE` ;
-- l'adresse d'un établissement dont la provenance décrit **une autre adresse** (adresse changée
+l'adresse qu'elle décrit. L'agent ne prépare **aucun brouillon**, parce qu'aucune mention
+d'opposition ne dirait vrai sur l'origine de l'adresse, et il le compte (« Au dernier passage,
+N adresses laissées sans brouillon », sur la carte de l'agent) :
+- pour l'adresse d'un établissement dont la provenance décrit **une autre adresse** (adresse changée
   depuis l'import) ;
-- la **fiche CRM corrigée à la main** d'un tel établissement, au moment de la relance.
+- pour la **fiche CRM corrigée à la main** d'un tel établissement, au moment de la relance ;
+- pour une origine que le code ne connaît pas.
 
-Pour écrire à ces adresses, passez par le composeur de Sales, avec votre propre texte. Limite
-antérieure à ce lot, inchangée : une adresse saisie à la main avant ce lot, ou portée par une fiche
-CRM créée à la main, n'a pas de provenance et reçoit la mention historique (« FINESS et Annuaire
-Santé »). Une mention propre aux adresses saisies à la main est un texte à décider (§6).
+Limite antérieure à ce lot, inchangée : une adresse saisie à la main dans Sales (possible seulement
+pour un établissement sans adresse), ou portée par une fiche CRM créée à la main, n'a pas de
+provenance et reçoit la mention historique (« FINESS et Annuaire Santé »), fausse pour elle. Le
+verrou est prêt en base : une provenance de code `SAISIE_MANUELLE` est acceptée sans page source et
+ne reçoit aucune mention. L'écran Sales ne la pose pas encore ; ce branchement, sa recette
+d'interface et le texte d'une mention propre à ces adresses font l'objet d'un lot à part (§6).
 
 **L'envoi groupé ne les emporte pas.** `sales-outreach-batch` (éteint avant le lancement par
 `automatisations_marketing_actives`) envoie un même texte à tous les prospects jamais contactés. Il
@@ -365,13 +369,13 @@ ignore désormais toute adresse d'établissement qui porte une provenance : son 
 pas dire d'où vient chaque adresse. Ces adresses ne passent que par les brouillons relus un par un.
 
 **Rendement, départements pilotes (mesures du 24/11/2026, avant import).** Le fichier porte 585
-lignes en 56, 75 et 92 (162, 251 et 172). 274 ont une adresse retenue (108, 55 et 111). Lecture
-seule en production : 260 de ces établissements sont dans la base, tous ciblés, tous des EHPAD, tous
-jamais contactés, aucun en opposition, aucun avec une adresse ouverte (136 ont une adresse en
-messagerie fermée, 124 n'en ont pas). **260 adresses attendues** (56 : 103, 75 : 51, 92 : 106), sur
-les 2 318 établissements ciblés, soit 11 %. Au rythme de 20 premiers contacts par jour, cela
-représente treize passages, soit environ deux semaines de brouillons, moins les adresses de groupe
-partagées. Le nombre exact écrit en production est donné par la migration (message
+lignes en 56, 75 et 92 (162, 251 et 172). 181 ont une adresse importée (83, 32 et 66). Lecture
+seule en production : 167 de ces établissements sont dans la base, tous ciblés, tous des EHPAD, tous
+jamais contactés, aucun en opposition, aucun avec une adresse ouverte (80 ont une adresse en
+messagerie fermée, 87 n'en ont pas). **167 adresses attendues** (56 : 78, 75 : 28, 92 : 61), sur
+les 2 318 établissements ciblés, soit 7 %. Au rythme de 20 premiers contacts par jour, cela
+représente neuf passages, moins les adresses de groupe partagées. La classe « structure », non
+importée, en aurait ajouté 93 dans ces départements. Le nombre exact écrit en production est donné par la migration (message
 `ADRESSES_PUBLIQUES_IMPORT` du déploiement) et relu ensuite. Les autres familles ciblées (handicap,
 domicile, hôpitaux, centres de santé, écoles) ne sont pas dans cette source : elles restent sur la
 liste d'appels.
@@ -428,8 +432,8 @@ La phrase d'opposition est reprise mot pour mot ; seule l'origine déclarée cha
 unique, `private.fn_growth_mention_opposition`, choisit la mention d'après la provenance de
 l'adresse, pour le premier email comme pour les relances. Une adresse dont l'origine n'a pas de
 mention connue ne reçoit aucun brouillon (l'agent le compte dans `exclus_sans_mention`, et la carte
-de l'agent l'affiche) : adresse saisie à la main dans Sales, adresse changée depuis l'import, fiche
-CRM corrigée à la main pour un établissement importé (§4 ter). Défaut porté
+de l'agent l'affiche) : adresse changée depuis l'import, fiche CRM corrigée à la main pour un
+établissement importé, origine inconnue du code (§4 ter). Défaut porté
 par le code, modifiable par la clé facultative `prospection_mention_opposition_annuaire_pa` : si vous
 modifiez un jour la phrase d'opposition de la mention historique, modifiez aussi celle-ci.
 
@@ -526,5 +530,8 @@ Garde-fous du code :
 7. **Instruction juridique** de l'argument « vacation directe vs intérim » (§3) avant tout usage public.
 8. **Annuaire des établissements pour personnes âgées (§4 ter)** : décider s'il faut écrire à la CNSA,
    dont le site demande à être contacté par qui réutilise ses contenus ; décider du texte de la
-   mention d'opposition des adresses saisies à la main (sans elle, l'agent ne prépare aucun brouillon
-   pour ces adresses).
+   mention d'opposition des adresses saisies à la main (aujourd'hui elles reçoivent la mention
+   historique, fausse pour elles ; le verrou est prêt en base, l'écran Sales reste à brancher avec
+   sa recette) ; décider si les adresses au seul nom de la structure (1 611, dont 93 dans les
+   départements pilotes) sont à reprendre, après en avoir lu un échantillon : certaines sont le nom
+   d'une personne qui a donné son nom à l'établissement.
