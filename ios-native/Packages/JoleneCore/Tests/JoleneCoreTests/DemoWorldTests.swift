@@ -230,7 +230,6 @@ final class DemoWorldTests: XCTestCase {
     /// (`Demo/Lot4/Demo<Domaine>Gateway.swift`, `Lot4/Supabase<Domaine>Factory.swift`) et retire SA ligne d'ici dans
     /// la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Vide en T15.
     static let portsEnAttenteLot4 = [
-        "disponibilites",    // T5
         "parrainage",        // T6
         "litiges",           // T8
         "reclamations",      // T8
