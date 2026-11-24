@@ -47,6 +47,8 @@ public enum MessagerieTextes {
 
     // MARK: Fil
 
+    // source: src/pages/PageMessagerie.tsx:765 (bulle d'un collègue, rôle ADMIN_ETABLISSEMENT ; lot 5, T11)
+    public static let equipeEtablissement = "Équipe établissement"
     // source: src/pages/PageMessagerie.tsx:721
     public static let echecFil = "Impossible de charger les messages."
     // source: src/pages/PageMessagerie.tsx:723
@@ -336,6 +338,22 @@ public enum MessageriePresentation {
         if message.auteurId?.lowercased() == moi.lowercased() { return .moi }
         return message.estAdmin ? .jolene : .interlocuteur
     }
+
+    /// Nature d'une bulle côté établissement (lot 5, T11 ; l.738-745, rôle `ADMIN_ETABLISSEMENT`) : dans une
+    /// conversation rattachée à un soignant, tout message non administrateur qui n'est pas du soignant est du côté de
+    /// l'établissement (le mien ou celui d'un collègue) ; sinon, règle du soignant (`moi` = utilisateur courant).
+    public static func natureEtablissement(_ message: MessageChat, moi: String, soignantId: String?) -> NatureBulle {
+        if message.estAdmin { return nature(message, moi: moi) }
+        guard let soignantId, !soignantId.isEmpty else { return nature(message, moi: moi) }
+        return message.auteurId?.lowercased() == soignantId.lowercased() ? .interlocuteur : .moi
+    }
+
+    /// Message écrit par un collègue de l'équipe (l.746-748) : du côté de l'établissement, mais pas par l'utilisateur
+    /// courant ; la bulle porte alors « Équipe établissement ».
+    public static func messageEquipe(_ message: MessageChat, moi: String, soignantId: String?) -> Bool {
+        natureEtablissement(message, moi: moi, soignantId: soignantId) == .moi && !message.estAdmin
+            && message.auteurId?.lowercased() != moi.lowercased()
+    }
 }
 
 /// Cibles du blocage et du signalement depuis le fil (exigence Apple 1.2). Blocage sur `autre_id` (l.701-713),
@@ -359,12 +377,26 @@ public struct ModerationConversation: Equatable, Sendable {
     public var signalement: CibleSignalement?
 
     public static func pour(_ conversation: ConversationAffichee) -> ModerationConversation {
+        pour(conversation, etablissement: false)
+    }
+
+    /// Lot 5 (T11) : côté établissement, cible du blocage `cet utilisateur` (le web ne passe `l’établissement` qu'au
+    /// rôle `SOIGNANT`, l.709-712) et signalement du soignant de la conversation (`SOIGNANT`, `soignant_id`, sans
+    /// mission, comme `ProfilSoignantEtablissement.tsx` l.145) ; rien pour une conversation avec la plateforme.
+    public static func pour(_ conversation: ConversationAffichee, etablissement: Bool) -> ModerationConversation {
         let apercu = conversation.apercu
-        let libelle = MessagerieTextes.Blocage.cible(etablissement: apercu.etablissementId != nil)
+        let libelle = MessagerieTextes.Blocage.cible(etablissement: !etablissement && apercu.etablissementId != nil)
         guard !conversation.estJolene else { return ModerationConversation(blocage: nil, libelleCible: libelle, signalement: nil) }
         let autre = apercu.autreId.flatMap { $0.isEmpty || $0 == MessageriePresentation.auteurSysteme ? nil : $0 }
-        let signalement = apercu.etablissementId.flatMap { id in
-            id.isEmpty ? nil : CibleSignalement(cibleId: id, type: .etablissement, missionId: apercu.missionId)
+        let signalement: CibleSignalement?
+        if etablissement {
+            signalement = apercu.soignantId.flatMap { id in
+                id.isEmpty ? nil : CibleSignalement(cibleId: id, type: .soignant, missionId: nil)
+            }
+        } else {
+            signalement = apercu.etablissementId.flatMap { id in
+                id.isEmpty ? nil : CibleSignalement(cibleId: id, type: .etablissement, missionId: apercu.missionId)
+            }
         }
         return ModerationConversation(blocage: autre, libelleCible: libelle, signalement: signalement)
     }

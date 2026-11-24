@@ -150,7 +150,7 @@ extension EtabDestination {
         case .presencesMission: return false     // T8
         case .publication: return false          // T9
         case .contrat: return false              // T10
-        case .conversation: return false         // T11
+        case .conversation: return true          // T11
         }
     }
 }

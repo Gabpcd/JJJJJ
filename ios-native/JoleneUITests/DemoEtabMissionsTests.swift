@@ -2,7 +2,8 @@ import XCTest
 
 /// Missions de l'espace établissement en démo (lot 5, T5 ; `docs/mobile-swift/LOT5_PLAN.md` §3 T5) sur iPhone, iPad
 /// portrait et iPad paysage (`JOLENE_UI_ORIENTATION`, `proofPrefix`) : liste par filtre avec compteurs dérivés des onze
-/// missions fictives (`demo-etab-missions.json`, M1…M11), détail relu (planning incomplet de M3, soignant de M4), liens
+/// missions fictives (`demo-etab-missions.json`, M1…M11), détail relu (planning incomplet de M3, soignant de M4, fil natif
+/// de M4 ouvert par « Contacter le soignant », T11), liens
 /// vers les écrans non livrés servis par le renvoi web (double démo `renvoi-web-demo`), liens et actions masqués sans
 /// leur permission (`LECTURE_SEULE`). Aucune requête réseau. Vérifié par la CI seulement (aucun simulateur en local),
 /// dans l'éclat « lot3-profil-photo » de `ios-swift-ci.yml`, avec la session établissement (hors du socle).
@@ -74,14 +75,12 @@ final class DemoEtabMissionsTests: JoleneUITestCase {
             XCTAssertFalse(element(absent).exists, "\(absent) : masqué sans sa permission (§2.7)")
         }
         record("\(proofPrefix)-etab-mission-lecture-seule")
-        // T11 non livrée : le lien du message est servi par le renvoi web (double démo).
-        XCTAssertEqual(message.value as? String, "https://jolene.app/etablissement/messagerie")
+        // T11 livrée : « Contacter le soignant » ouvre le fil natif de la mission (permission `lecture` seule suffit).
+        XCTAssertTrue(message.label.contains("Contacter le soignant"), message.label)
         message.tap()
-        let renvoi = element("renvoi-web-demo")
-        require("Le lien non livré est servi par le renvoi web") { self.containerVisible(renvoi) }
-        XCTAssertEqual(element("renvoi-web-url").label, "https://jolene.app/etablissement/messagerie")
-        tap("renvoi-web-fermer")
-        require("Le renvoi web est fermé, le détail reste affiché") { !renvoi.exists && self.containerVisible(detail) }
+        require("Le lien du message ouvre le fil natif de M4 (T11)") { self.containerVisible(self.element("chat-screen")) }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran livré : jamais un renvoi web")
+        XCTAssertTrue(element("chat-message-demo-etab-message-004").waitForExistence(timeout: 10))
     }
 
     // MARK: Étapes

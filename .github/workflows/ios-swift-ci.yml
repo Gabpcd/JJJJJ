@@ -717,6 +717,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
             -skip-testing:JoleneUITests/DemoMessagerieTests \
+            -skip-testing:JoleneUITests/DemoEtabMessagerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1597,7 +1598,9 @@ jobs:
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
       # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
       # estimées à 3-6 min au prorata de DemoFavorisTests ; L4-T7b : messagerie, trois méthodes, estimées à 5-9 min) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
-      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
+      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job. L5-T11 : la messagerie en contexte
+      # établissement (DemoEtabMessagerieTests, deux méthodes, estimées à 3-6 min) rejoint cet éclat, celui de l'écran
+      # qu'elle réemploie, plutôt que « lot5-etablissement » qui reçoit déjà les classes des autres tranches du lot 5.
       - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées, messagerie) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
@@ -1627,6 +1630,7 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
             -only-testing:JoleneUITests/DemoMessagerieTests \
+            -only-testing:JoleneUITests/DemoEtabMessagerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1756,7 +1760,7 @@ jobs:
             const eclats = [
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoMessagerieTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoMessagerieTests", "DemoEtabMessagerieTests"] },
               { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];

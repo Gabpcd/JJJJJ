@@ -7,7 +7,7 @@ import XCTest
 /// seule fois dans l'espace qui s'ouvre. Aucune requête réseau.
 ///
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
-/// - `/etablissement/messagerie` ouvre l'onglet Messages de la coquille établissement (écran provisoire), jamais un
+/// - `/etablissement/messagerie` ouvre l'onglet Messages de la coquille établissement (messagerie native, T11), jamais un
 ///   renvoi web ; libellé DEBUG `deeplink-route` = « etab messagerie » ;
 /// - `/etablissement/missions/<id>` ouvre le détail natif (T5) sur l'onglet Missions ; `/contrat/<id>` (contrat
 ///   établissement, T10 non livrée) est un renvoi web de son URL canonique dans l'espace établissement — jamais le
@@ -25,7 +25,7 @@ final class DemoEtabLiensTests: JoleneUITestCase {
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_OPEN_URL", "https://jolene.app/etablissement/messagerie"])
         aucunePresentationSurLaConnexion()
         connecter(email: DemoEtabSessionTests.emailEtablissement)
-        let messages = element("placeholder-etab-messages")
+        let messages = element("messagerie-screen")
         require("L'onglet Messages est ouvert par le lien après `.readyEtablissement`", timeout: 30) {
             self.containerVisible(messages)
         }
@@ -72,7 +72,7 @@ final class DemoEtabLiensTests: JoleneUITestCase {
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien])
         connecter(email: JoleneUITestCase.demoEmail)
         renvoiWeb(attendu: lien, "Dans l'espace soignant, un lien établissement est servi par le renvoi web")
-        XCTAssertFalse(element("placeholder-etab-messages").exists, "jamais un onglet établissement dans l'espace soignant")
+        XCTAssertFalse(element("messagerie-screen").exists, "jamais un onglet établissement dans l'espace soignant")
         XCTAssertFalse(element("tab-etab-messages").exists)
         record("\(proofPrefix)-soignant-lien-etab-web")
     }

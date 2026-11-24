@@ -20,7 +20,7 @@ import JoleneDesign
 /// `chat-chargement`, `chat-erreur` (+ `-reessayer`), `chat-message-erreur`, `chat-moderation-confirmation`.
 struct ConversationScreen: View {
     let conversation: ConversationAffichee
-    let contexte: ContexteSecondaire
+    let contexte: ContexteEcranMessagerie
     @ObservedObject var cycle: CycleRealtime
     /// La conversation n'est plus accessible (`42501 Accès refusé`) : l'écran se referme sur la liste.
     let surIndisponible: () -> Void
@@ -35,23 +35,24 @@ struct ConversationScreen: View {
     @State private var typeAntiFuite: DetectedType?
     private let moderation: ModerationConversation
 
-    init(conversation: ConversationAffichee, contexte: ContexteSecondaire, cycle: CycleRealtime, surIndisponible: @escaping () -> Void) {
+    init(conversation: ConversationAffichee, contexte: ContexteEcranMessagerie, cycle: CycleRealtime, surIndisponible: @escaping () -> Void) {
         self.conversation = conversation
         self.contexte = contexte
         self.cycle = cycle
         self.surIndisponible = surIndisponible
-        let moderation = ModerationConversation.pour(conversation)
+        // Lot 5 (T11) : cibles du blocage et du signalement propres à l'établissement (`ModerationConversation.pour`).
+        let moderation = ModerationConversation.pour(conversation, etablissement: contexte.contexte.estEtablissement)
         self.moderation = moderation
         // Présence et saisie suivies pour l'interlocuteur seulement, jamais pour la plateforme (web `realtimeAutreId`).
         let autre = conversation.estJolene ? nil : conversation.apercu.autreId
-        _fil = StateObject(wrappedValue: FilModel(controller: contexte.session.controller, snapshot: contexte.snapshot,
+        _fil = StateObject(wrappedValue: FilModel(controller: contexte.controller, contexte: contexte.contexte,
                                                   conversationId: conversation.id, autreId: autre,
                                                   archivee: conversation.apercu.archivee, cycle: cycle))
-        _blocage = StateObject(wrappedValue: BlocageModel(controller: contexte.session.controller, snapshot: contexte.snapshot,
+        _blocage = StateObject(wrappedValue: BlocageModel(controller: contexte.controller, contexte: contexte.contexte,
                                                           cibleId: moderation.blocage ?? "", libelleCible: moderation.libelleCible))
     }
 
-    private var maintenant: Date { contexte.container.clock.now() }
+    private var maintenant: Date { contexte.maintenant() }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,7 +78,7 @@ struct ConversationScreen: View {
         .onChange(of: fil.antiFuite) { type in if let type { typeAntiFuite = type } }
         .sheet(isPresented: $signalementOuvert) {
             if let cible = moderation.signalement {
-                SignalementSheet(cible: cible, contexte: contexte) { transmis in
+                SignalementSheet(cible: cible, messagerie: contexte) { transmis in
                     signalementOuvert = false
                     if transmis { confirmationSignalement = MessagerieTextes.Signalement.succes }
                 }
@@ -176,9 +177,20 @@ struct ConversationScreen: View {
                         .accessibilityIdentifier("chat-vide")
                     case .pret:
                         ForEach(fil.messages) { message in
-                            ChatBubble(message.contenu, kind: nature(message), heure: MessageriePresentation.heure(message),
-                                       auteur: MessageriePresentation.nom(conversation), identifier: "chat-message-\(message.id)")
+                            if equipe(message) {
+                                // Lot 5 (T11) : message d'un collègue de l'équipe, du côté de l'établissement (web l.763-767).
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(MessagerieTextes.equipeEtablissement)
+                                        .font(JoleneFont.caption.weight(.semibold))
+                                        .foregroundStyle(JoleneColor.bubblegum)
+                                        .accessibilityIdentifier("chat-equipe-\(message.id)")
+                                    bulle(message)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                                 .id(message.id)
+                            } else {
+                                bulle(message).id(message.id)
+                            }
                         }
                     }
                     if fil.saisieInterlocuteur {
@@ -200,8 +212,21 @@ struct ConversationScreen: View {
         }
     }
 
+    private func bulle(_ message: MessageChat) -> ChatBubble {
+        ChatBubble(message.contenu, kind: nature(message), heure: MessageriePresentation.heure(message),
+                   auteur: MessageriePresentation.nom(conversation), identifier: "chat-message-\(message.id)")
+    }
+
+    /// Bulle d'un collègue (établissement seulement).
+    private func equipe(_ message: MessageChat) -> Bool {
+        fil.estEtablissement && MessageriePresentation.messageEquipe(message, moi: fil.moi, soignantId: conversation.apercu.soignantId)
+    }
+
     private func nature(_ message: MessageChat) -> ChatBubble.Kind {
-        switch MessageriePresentation.nature(message, moi: fil.moi) {
+        let nature = fil.estEtablissement
+            ? MessageriePresentation.natureEtablissement(message, moi: fil.moi, soignantId: conversation.apercu.soignantId)
+            : MessageriePresentation.nature(message, moi: fil.moi)
+        switch nature {
         case .moi: return .moi
         case .interlocuteur: return .interlocuteur
         case .jolene: return .jolene

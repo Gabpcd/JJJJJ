@@ -30,11 +30,16 @@ public final class BlocageModel: ObservableObject {
     public let cibleId: String
     public let libelleCible: String
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    private let contexte: ContexteMessagerie
 
-    public init(controller: SessionController, snapshot: SessionSnapshot, cibleId: String, libelleCible: String) {
+    public convenience init(controller: SessionController, snapshot: SessionSnapshot, cibleId: String, libelleCible: String) {
+        self.init(controller: controller, contexte: ContexteMessagerie(snapshot), cibleId: cibleId, libelleCible: libelleCible)
+    }
+
+    /// Lot 5 (T11) : même blocage en contexte établissement.
+    public init(controller: SessionController, contexte: ContexteMessagerie, cibleId: String, libelleCible: String) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.contexte = contexte
         self.cibleId = cibleId
         self.libelleCible = libelleCible
     }
@@ -48,12 +53,12 @@ public final class BlocageModel: ObservableObject {
     public func lire() async {
         statut = .lecture
         confirmation = false
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let cible = cibleId
         do {
-            let bloque = try await bounded(timeout: controller.resolutionTimeout) { try await port.bloque(cibleId: cible, context: context) }
+            let bloque = try await bounded(timeout: controller.resolutionTimeout) { try await port.bloque(cibleId: cible, contexte: contexte) }
             guard await courant() else { return }
             statut = .lu(bloque: bloque)
         } catch {
@@ -77,15 +82,15 @@ public final class BlocageModel: ObservableObject {
     public func annuler() { confirmation = false }
 
     private func basculer(bloquer: Bool) async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         enCours = true
         defer { enCours = false }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let cible = cibleId
         do {
             let relu = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.basculerBlocage(cibleId: cible, bloquer: bloquer, context: context)
+                try await port.basculerBlocage(cibleId: cible, bloquer: bloquer, contexte: contexte)
             }
             guard await courant() else { return }
             statut = .lu(bloque: relu)
@@ -121,7 +126,7 @@ public final class BlocageModel: ObservableObject {
         self.succes = succes
     }
 
-    private func courant() async -> Bool { await controller.epoch == snapshot.epoch }
+    private func courant() async -> Bool { await controller.epoch == contexte.epoch }
 }
 
 /// Signaler un interlocuteur à Jolene (lot 4, T7b ; exigence Apple 1.2), port de `src/components/SignalerUtilisateur.tsx` :
@@ -138,11 +143,16 @@ public final class SignalementModel: ObservableObject {
 
     public let cible: ModerationConversation.CibleSignalement
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    private let contexte: ContexteMessagerie
 
-    public init(controller: SessionController, snapshot: SessionSnapshot, cible: ModerationConversation.CibleSignalement) {
+    public convenience init(controller: SessionController, snapshot: SessionSnapshot, cible: ModerationConversation.CibleSignalement) {
+        self.init(controller: controller, contexte: ContexteMessagerie(snapshot), cible: cible)
+    }
+
+    /// Lot 5 (T11) : même signalement en contexte établissement.
+    public init(controller: SessionController, contexte: ContexteMessagerie, cible: ModerationConversation.CibleSignalement) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.contexte = contexte
         self.cible = cible
     }
 
@@ -160,17 +170,17 @@ public final class SignalementModel: ObservableObject {
             erreur = MessagerieTextes.Signalement.motifTropCourt
             return false
         }
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return false }
         enCours = true
         defer { enCours = false }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let cible = self.cible
         let categorie = self.categorie
         do {
             let issue = try await bounded(timeout: controller.resolutionTimeout) {
                 try await port.signaler(cibleId: cible.cibleId, type: cible.type, categorie: categorie, motif: texte,
-                                        missionId: cible.missionId, context: context)
+                                        missionId: cible.missionId, contexte: contexte)
             }
             guard await courant() else { return false }
             switch issue {
@@ -196,7 +206,7 @@ public final class SignalementModel: ObservableObject {
         }
     }
 
-    private func courant() async -> Bool { await controller.epoch == snapshot.epoch }
+    private func courant() async -> Bool { await controller.epoch == contexte.epoch }
 }
 
 /// « Écrire à l'établissement » depuis le détail d'une mission (lot 4, T7b ; correction 20, D25) :

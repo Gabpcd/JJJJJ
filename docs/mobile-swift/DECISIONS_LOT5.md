@@ -372,6 +372,36 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
     « Aucun code de pointage n’est à présenter pour cette mission. », « Le planning de cette mission n'a pas pu être
     relu. », « Impossible de charger le planning détaillé. Réessayez. ».
 
+## Précisions relevées par la tranche T11 (messagerie établissement, 24/11/2026)
+
+Base : `lot4/l4-t7b` (messagerie du lot 4, pas encore sur `main`). Aucune décision du §7 ni règle juridique changée ;
+aucun texte à portée contractuelle ajouté ; textes du web établissement repris mot pour mot.
+
+1. **Extension additive du port** : `MessageriePort` reçoit les mêmes méthodes avec `etab: EtablissementReadContext`
+   (défaut : refus « non câblé » T11, aucun double à retoucher) et `conversationPourSoignant(missionId:soignantId:etab:)`
+   (`fn_obtenir_conversation(p_autre_id := soignant assigné, p_mission_id)`, sans `fn_user_id_pour_etablissement`,
+   comme `DetailMission.tsx` l.1083). Les modèles du lot 4 (`ConversationsModel`, `FilModel`, `BlocageModel`,
+   `SignalementModel`, `CycleRealtime`) prennent un `ContexteMessagerie` (soignant ou établissement) ; les écrans du
+   lot 4 sont réemployés tels quels (`ContexteEcranMessagerie`), aucun second écran.
+2. **Auteur = utilisateur courant** : `moi` est `user.id` de la session dans les deux espaces ; la gateway refuse tout
+   envoi dont `etab.userId` n'est pas l'utilisateur du JWT ; l'edge pose `auteur_id = auth.uid()`. Règles d'affichage du
+   rôle `ADMIN_ETABLISSEMENT` (web l.305-307, l.738-748) : non-lu = message du soignant seul ; bulle d'un collègue du
+   côté de l'établissement avec « Équipe établissement ».
+3. **Compteurs relus** : l'Accueil garde `messages_non_lus` de `fn_stats_dashboard_etablissement` ; l'onglet Messages
+   porte le badge `fn_messages_non_lus()` du cycle. En démo, l'Accueil relit les non-lus de la messagerie démo (état
+   dérivé, plus la valeur figée de la fixture). Cycle Realtime ouvert aussi pour `.readyEtablissement`, coupe-circuit
+   `ios_natif_etab_messages_actif`.
+4. **Écarts au web assumés** : « Contacter le soignant » (libellé du bouton web, l.1085) est une ligne de lien du détail
+   et empile le fil sur la pile courante (le web navigue vers `/etablissement/messagerie?conv=`) ; signalement depuis le
+   fil (le web ne le propose que sur le profil du soignant, `ProfilSoignantEtablissement.tsx` l.145 : cible
+   `SOIGNANT`, sans mission), comme T7b pour Apple 1.2 ; libellé de cible du blocage « cet utilisateur » (défaut web hors
+   rôle soignant). L'écriture n'est pas filtrée par une permission côté natif : le web n'en filtre aucune, le serveur
+   juge (`CONVERSATION_NON_AUTORISEE` → libellé générique du web).
+5. **Monde démo** : `demo-etab-messagerie.json` (`scripts/mobile/demo-etab-messagerie.mjs`, dérivé des missions démo) ;
+   `EtabDestination.conversation.ecranLivre = true`. XCUITest `DemoEtabMessagerieTests` (deux tests) dans l'éclat
+   « lot4 » du job `ui-lot1` ; `DemoEtabMissionsTests` (fil natif au lieu du renvoi web), `DemoEtabLiensTests`,
+   `DemoEtabAccueilTests`, `DemoEtabSessionTests` migrés vers `messagerie-screen`. Non exécutés localement : preuve CI.
+
 ## Précisions de l'intégration de la vague C (19/11/2026)
 
 Branche `integration/ios-vague-c` (T4 à T7 réunies avec le lot 4). Aucune ne change une décision du §7 ni une règle

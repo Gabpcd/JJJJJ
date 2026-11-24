@@ -70,6 +70,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func conversations(avant: CurseurConversations?, context: MissionReadContext) async throws -> PageConversations {
         try MissionQuery.validate(context: context)
+        return try await _conversations(avant: avant, userId: context.userId)
+    }
+
+    private func _conversations(avant: CurseurConversations?, userId: String) async throws -> PageConversations {
         // Curseur complet ou nul : un seul des deux paramètres lèverait « Curseur incomplet » (22023).
         let params: JSONObject = [
             "p_avant": avant.map { .string($0.ordreLe) } ?? .null,
@@ -89,6 +93,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func interlocuteurs(ids: [String], context: MissionReadContext) async throws -> [Interlocuteur] {
         try MissionQuery.validate(context: context)
+        return try await _interlocuteurs(ids: ids, userId: context.userId)
+    }
+
+    private func _interlocuteurs(ids: [String], userId: String) async throws -> [Interlocuteur] {
         guard !ids.isEmpty else { return [] }
         // « Trop de conversations demandées » (22023) : jamais envoyé.
         guard ids.count <= Interlocuteur.lotMax else { throw Self.contrat }
@@ -102,15 +110,24 @@ public struct SupabaseMessagerieGateway: MessageriePort {
     // MARK: - Fil
 
     public func messages(conversationId: String, context: MissionReadContext) async throws -> [MessageChat] {
-        try await lireFil(conversationId: conversationId, depuis: nil, context: context)
+        try MissionQuery.validate(context: context)
+        return try await _messages(conversationId: conversationId, userId: context.userId)
+    }
+
+    private func _messages(conversationId: String, userId: String) async throws -> [MessageChat] {
+        try await lireFil(conversationId: conversationId, depuis: nil, userId: userId)
     }
 
     public func messages(conversationId: String, depuis: String, context: MissionReadContext) async throws -> [MessageChat] {
-        try await lireFil(conversationId: conversationId, depuis: depuis, context: context)
+        try MissionQuery.validate(context: context)
+        return try await _messages(conversationId: conversationId, depuis: depuis, userId: context.userId)
     }
 
-    private func lireFil(conversationId: String, depuis: String?, context: MissionReadContext) async throws -> [MessageChat] {
-        try MissionQuery.validate(context: context)
+    private func _messages(conversationId: String, depuis: String, userId: String) async throws -> [MessageChat] {
+        try await lireFil(conversationId: conversationId, depuis: depuis, userId: userId)
+    }
+
+    private func lireFil(conversationId: String, depuis: String?, userId: String) async throws -> [MessageChat] {
         let id = try Self.uuid(conversationId)
         let brut: AnyJSON
         do {
@@ -125,6 +142,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func message(id: String, conversationId: String, context: MissionReadContext) async throws -> MessageChat? {
         try MissionQuery.validate(context: context)
+        return try await _message(id: id, conversationId: conversationId, userId: context.userId)
+    }
+
+    private func _message(id: String, conversationId: String, userId: String) async throws -> MessageChat? {
         let message = try Self.uuid(id)
         let conversation = try Self.uuid(conversationId)
         let brut: AnyJSON
@@ -142,6 +163,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func envoyer(conversationId: String, contenu: String, context: MissionReadContext) async throws -> EnvoiOutcome {
         try MissionQuery.validate(context: context)
+        return try await _envoyer(conversationId: conversationId, contenu: contenu, userId: context.userId)
+    }
+
+    private func _envoyer(conversationId: String, contenu: String, userId: String) async throws -> EnvoiOutcome {
         let id = try Self.uuid(conversationId)
         let session: Session
         do {
@@ -149,7 +174,7 @@ public struct SupabaseMessagerieGateway: MessageriePort {
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: SupabaseErrorMapping.unauthorizedMessage)
         }
-        guard session.user.id.uuidString.lowercased() == context.userId.lowercased() else {
+        guard session.user.id.uuidString.lowercased() == userId.lowercased() else {
             throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
         }
         let options = FunctionInvokeOptions(method: .post, headers: ["Authorization": "Bearer \(session.accessToken)"],
@@ -190,6 +215,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func marquerLus(conversationId: String, context: MissionReadContext) async throws -> IssueLecture {
         try MissionQuery.validate(context: context)
+        return try await _marquerLus(conversationId: conversationId, userId: context.userId)
+    }
+
+    private func _marquerLus(conversationId: String, userId: String) async throws -> IssueLecture {
         let id = try Self.uuid(conversationId)
         let reponse = try await appelerSansCorps(Self.rpcMarquerLus, params: ["p_conversation_id": .string(id)],
                                                  exceptions: ExceptionsMetierLot4.marquerMessagesLus)
@@ -198,6 +227,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func nonLus(context: MissionReadContext) async throws -> Int {
         try MissionQuery.validate(context: context)
+        return try await _nonLus(userId: context.userId)
+    }
+
+    private func _nonLus(userId: String) async throws -> Int {
         let reponse = try await RPCResponse.appeler(client, Self.rpcNonLus, fallback: Self.repli, exceptions: ExceptionsLot4([]))
         guard let nombre = reponse.raw.intValue, nombre >= 0 else { throw Self.contrat }
         return nombre
@@ -207,6 +240,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func saisie(debut: Bool, conversationId: String, context: MissionReadContext) async throws {
         try MissionQuery.validate(context: context)
+        try await _saisie(debut: debut, conversationId: conversationId, userId: context.userId)
+    }
+
+    private func _saisie(debut: Bool, conversationId: String, userId: String) async throws {
         let params: JSONObject = ["p_conversation_id": .string(try Self.uuid(conversationId))]
         // `42501 NON_AUTORISE` de `fn_typing_start` (conversation inaccessible) : restitué puis ignoré, l'indicateur
         // est abandonné sans message.
@@ -216,6 +253,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func presence(context: MissionReadContext) async throws {
         try MissionQuery.validate(context: context)
+        try await _presence(userId: context.userId)
+    }
+
+    private func _presence(userId: String) async throws {
         _ = try await appelerSansCorps(Self.rpcPresence, params: nil, exceptions: ExceptionsMetierLot4.updatePresence)
     }
 
@@ -223,6 +264,10 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func bloque(cibleId: String, context: MissionReadContext) async throws -> Bool {
         try MissionQuery.validate(context: context)
+        return try await _bloque(cibleId: cibleId, userId: context.userId)
+    }
+
+    private func _bloque(cibleId: String, userId: String) async throws -> Bool {
         let cible = try Self.uuid(cibleId)
         let reponse = try await RPCResponse.appeler(client, Self.rpcEstBloque, params: ["p_cible_id": .string(cible)],
                                                     fallback: Self.repli)
@@ -233,18 +278,26 @@ public struct SupabaseMessagerieGateway: MessageriePort {
 
     public func basculerBlocage(cibleId: String, bloquer: Bool, context: MissionReadContext) async throws -> Bool {
         try MissionQuery.validate(context: context)
+        return try await _basculerBlocage(cibleId: cibleId, bloquer: bloquer, userId: context.userId)
+    }
+
+    private func _basculerBlocage(cibleId: String, bloquer: Bool, userId: String) async throws -> Bool {
         let cible = try Self.uuid(cibleId)
         // Comme le web : `p_cible_id` seul (aucun motif).
         let reponse = try await RPCResponse.appeler(client, bloquer ? Self.rpcBloquer : Self.rpcDebloquer,
                                                     params: ["p_cible_id": .string(cible)], fallback: Self.repli)
         try reponse.leverSiErreur(fallback: Self.repli)
         guard reponse.success == true, reponse.erreur == nil else { throw Self.contrat }
-        return try await bloque(cibleId: cible, context: context)
+        return try await _bloque(cibleId: cible, userId: userId)
     }
 
     public func signaler(cibleId: String, type: TypeCibleSignalement, categorie: String, motif: String, missionId: String?,
                          context: MissionReadContext) async throws -> IssueSignalement {
         try MissionQuery.validate(context: context)
+        return try await _signaler(cibleId: cibleId, type: type, categorie: categorie, motif: motif, missionId: missionId, userId: context.userId)
+    }
+
+    private func _signaler(cibleId: String, type: TypeCibleSignalement, categorie: String, motif: String, missionId: String?, userId: String) async throws -> IssueSignalement {
         let params: JSONObject = [
             "p_cible_id": .string(try Self.uuid(cibleId)),
             "p_cible_type": .string(type.rawValue),
@@ -264,6 +317,76 @@ public struct SupabaseMessagerieGateway: MessageriePort {
         return .signale
     }
 
+    // MARK: - Contexte établissement (lot 5, T11)
+
+    // Mêmes requêtes, sous le JWT du membre de l'établissement : contexte vérifié (`EtablissementReadContext.verifier`) ;
+    // l'auteur d'un envoi est l'utilisateur de la session (`session.user.id == etab.userId`, jamais l'identifiant de
+    // l'établissement) ; le serveur pose `auteur_id = auth.uid()` et juge la relation d'équipe.
+
+    public func conversations(avant: CurseurConversations?, etab: EtablissementReadContext) async throws -> PageConversations {
+        try etab.verifier()
+        return try await _conversations(avant: avant, userId: etab.userId)
+    }
+
+    public func interlocuteurs(ids: [String], etab: EtablissementReadContext) async throws -> [Interlocuteur] {
+        try etab.verifier()
+        return try await _interlocuteurs(ids: ids, userId: etab.userId)
+    }
+
+    public func messages(conversationId: String, etab: EtablissementReadContext) async throws -> [MessageChat] {
+        try etab.verifier()
+        return try await _messages(conversationId: conversationId, userId: etab.userId)
+    }
+
+    public func messages(conversationId: String, depuis: String, etab: EtablissementReadContext) async throws -> [MessageChat] {
+        try etab.verifier()
+        return try await _messages(conversationId: conversationId, depuis: depuis, userId: etab.userId)
+    }
+
+    public func message(id: String, conversationId: String, etab: EtablissementReadContext) async throws -> MessageChat? {
+        try etab.verifier()
+        return try await _message(id: id, conversationId: conversationId, userId: etab.userId)
+    }
+
+    public func envoyer(conversationId: String, contenu: String, etab: EtablissementReadContext) async throws -> EnvoiOutcome {
+        try etab.verifier()
+        return try await _envoyer(conversationId: conversationId, contenu: contenu, userId: etab.userId)
+    }
+
+    public func marquerLus(conversationId: String, etab: EtablissementReadContext) async throws -> IssueLecture {
+        try etab.verifier()
+        return try await _marquerLus(conversationId: conversationId, userId: etab.userId)
+    }
+
+    public func nonLus(etab: EtablissementReadContext) async throws -> Int {
+        try etab.verifier()
+        return try await _nonLus(userId: etab.userId)
+    }
+
+    public func saisie(debut: Bool, conversationId: String, etab: EtablissementReadContext) async throws {
+        try etab.verifier()
+        try await _saisie(debut: debut, conversationId: conversationId, userId: etab.userId)
+    }
+
+    public func presence(etab: EtablissementReadContext) async throws {
+        try etab.verifier()
+        try await _presence(userId: etab.userId)
+    }
+
+    public func bloque(cibleId: String, etab: EtablissementReadContext) async throws -> Bool {
+        try etab.verifier()
+        return try await _bloque(cibleId: cibleId, userId: etab.userId)
+    }
+
+    public func basculerBlocage(cibleId: String, bloquer: Bool, etab: EtablissementReadContext) async throws -> Bool {
+        try etab.verifier()
+        return try await _basculerBlocage(cibleId: cibleId, bloquer: bloquer, userId: etab.userId)
+    }
+
+    public func signaler(cibleId: String, type: TypeCibleSignalement, categorie: String, motif: String, missionId: String?, etab: EtablissementReadContext) async throws -> IssueSignalement {
+        try etab.verifier()
+        return try await _signaler(cibleId: cibleId, type: type, categorie: categorie, motif: motif, missionId: missionId, userId: etab.userId)
+    }
     // MARK: - « Écrire à l'établissement »
 
     public func conversationPourMission(missionId: String, etablissementId: String,
@@ -280,6 +403,25 @@ public struct SupabaseMessagerieGateway: MessageriePort {
         }
         let conversation = try await RPCResponse.appeler(client, Self.rpcObtenirConversation,
                                                          params: ["p_autre_id": .string(autre), "p_mission_id": .string(mission)],
+                                                         fallback: Self.repli, exceptions: ExceptionsMetierLot4.obtenirConversation)
+        guard let id = try Self.identifiant(conversation) else {
+            return .indisponible(message: conversation.erreur ?? Self.repli)
+        }
+        return .conversation(id: id)
+    }
+
+    /// Lot 5 (T11) : « Contacter le soignant » (`DetailMission.tsx` l.1083, `useOuvrirConversation` sans résolution
+    /// d'établissement) : `fn_obtenir_conversation(p_autre_id := soignant assigné, p_mission_id)` seul, jamais sans
+    /// mission ; le serveur rend le fil canonique du couple établissement × soignant (un second membre de l'équipe
+    /// retrouve le même fil). `null`, `22023` ou `42501` au message connu → conversation indisponible ; `28000` →
+    /// session expirée.
+    public func conversationPourSoignant(missionId: String, soignantId: String,
+                                         etab: EtablissementReadContext) async throws -> IssueConversationMission {
+        try etab.verifier()
+        let mission = try Self.uuid(missionId)
+        let soignant = try Self.uuid(soignantId)
+        let conversation = try await RPCResponse.appeler(client, Self.rpcObtenirConversation,
+                                                         params: ["p_autre_id": .string(soignant), "p_mission_id": .string(mission)],
                                                          fallback: Self.repli, exceptions: ExceptionsMetierLot4.obtenirConversation)
         guard let id = try Self.identifiant(conversation) else {
             return .indisponible(message: conversation.erreur ?? Self.repli)

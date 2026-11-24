@@ -108,7 +108,9 @@ const ECLATS_LOT1 = new Map([
   ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
   // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
   // L4-T7b : la messagerie (DemoMessagerieTests, trois méthodes) rejoint « lot4 », estimé sous 20 min (décision 22).
-  ['lot4', ['DemoFiltresTests', 'DemoMessagerieTests']],
+  // L5-T11 : la messagerie en contexte établissement (DemoEtabMessagerieTests, deux méthodes) rejoint « lot4 », l'éclat de
+  // l'écran qu'elle réemploie, estimé sous 20 min (décision 22).
+  ['lot4', ['DemoFiltresTests', 'DemoMessagerieTests', 'DemoEtabMessagerieTests']],
   // Stabilité de la CI (23/11/2026) : deux éclats du job `ui` atteignaient leurs 30 min (« presences » : 27 à 30 min sur
   // iPad ; « lot3-notifications » : 23 à 30 min, runs 44475153698, 44555091967 et 44797977486). Les classes qui les
   // faisaient déborder tournent ici, le job `ui` étant à son plafond de onze éclats.
@@ -143,7 +145,9 @@ test('lot 5 : session et liens établissement hors du socle, chacun dans son éc
   // 30 min sur iPad) vers l'éclat « lot5-etablissement » du job `ui-lot1`.
   const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'lot5-etablissement'],
     ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'lot5-etablissement'],
-    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
+    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo'],
+    // L5-T11 : messagerie établissement dans « lot4 », avec la messagerie du lot 4 (job `ui-lot1`).
+    ['DemoEtabMessagerieTests', 'lot4']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = [...domaines, ...parEtapeLot1].filter(e => classesDe(e).includes(classe)).map(e => e.nom);

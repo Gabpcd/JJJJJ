@@ -89,7 +89,8 @@ public enum DemoWorld {
         DemoLot4.cabler(&gateways) // lot 4 : une fabrique par domaine (`Demo/Lot4/`)
         // Lot 5 (T1) : ports établissement ; l'identité est celle de la session démo courante, si bien
         // que le compte soignant fictif y est refusé (`.demoOnly`).
-        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id })
+        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id },
+                                                                messagerie: gateways.messagerie as? DemoMessagerieGateway)
         return gateways
     }
 

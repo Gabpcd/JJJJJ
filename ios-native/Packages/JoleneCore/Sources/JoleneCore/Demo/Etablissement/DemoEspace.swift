@@ -98,7 +98,8 @@ public extension DemoWorld {
         // Report sur main (lot 3, T7) : l'inscription démo partage l'authentification servie (mêmes `store`/`comptes`).
         gateways.inscription = DemoInscriptionGateway(auth: auth)
         gateways.role = DemoRoleEspaceGateway(identite: identite)
-        gateways.etablissement = DemoEtablissementWorld.gateways(configuration: configuration, identite: identite)
+        gateways.etablissement = DemoEtablissementWorld.gateways(configuration: configuration, identite: identite,
+                                                                messagerie: gateways.messagerie as? DemoMessagerieGateway)
         return gateways
     }
 }

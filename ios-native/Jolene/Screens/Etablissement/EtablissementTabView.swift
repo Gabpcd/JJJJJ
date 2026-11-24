@@ -75,6 +75,7 @@ struct EtablissementTabView: View {
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.messages, snapshot: snapshot, session: session)
+            .badgeMessagesEtablissement(container.cycleMessagerie) // T11 : `fn_messages_non_lus()` relu
             .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
             .tag(Tab.messages)
             .accessibilityIdentifier("tab-etab-messages")
@@ -89,6 +90,9 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-compte")
         }
         .tint(JoleneColor.rose700)
+        // Lot 5, T11 : cycle Realtime et horloge de la messagerie pour les racines et destinations de l'espace.
+        .environment(\.messagerieEtablissement,
+                     MessagerieEtablissementEnvironnement(cycle: container.cycleMessagerie, clock: container.clock))
         // Lot 5, T2b : lien reçu avant l'espace rejoué une fois, puis chaque demande de cet epoch.
         .onAppear {
             liens.espaceEtablissementOuvert(snapshot)

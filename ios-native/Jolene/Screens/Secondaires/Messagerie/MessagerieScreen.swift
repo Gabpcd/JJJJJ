@@ -2,7 +2,8 @@ import SwiftUI
 import JoleneCore
 import JoleneDesign
 
-/// Messagerie (`/soignant/messagerie?conv=`, L4-T7b), port de la liste de `src/pages/PageMessagerie.tsx` (rôle SOIGNANT),
+/// Messagerie (`/soignant/messagerie?conv=`, L4-T7b ; `/etablissement/messagerie?conv=`, L5-T11), port de la liste de
+/// `src/pages/PageMessagerie.tsx` (rôles SOIGNANT et ADMIN_ETABLISSEMENT, même écran : aucune copie en lot 5),
 /// empilée sur le Profil par `SecondaryRouter` une fois son coupe-circuit `ios_natif_messagerie_actif` lu (fail-open).
 /// Vue de `ConversationsModel` (JoleneCore, T7a), qui porte les règles (pagination keyset, interlocuteurs, Realtime,
 /// epoch) ; la vue n'ajoute aucune logique. Textes : `MessagerieTextes` (verbatim du web).
@@ -19,7 +20,7 @@ import JoleneDesign
 /// `messagerie-vide`, `messagerie-message`, `messagerie-indisponible`.
 struct MessagerieScreen: View {
     let conversationId: String?
-    let contexte: ContexteSecondaire
+    let contexte: ContexteEcranMessagerie
     @StateObject private var model: ConversationsModel
     @ObservedObject private var cycle: CycleRealtime
     @State private var onglet = Onglet.actives
@@ -31,12 +32,16 @@ struct MessagerieScreen: View {
     private enum Onglet { case actives, archivees }
 
     init(conversationId: String?, contexte: ContexteSecondaire) {
+        self.init(conversationId: conversationId, messagerie: ContexteEcranMessagerie(contexte))
+    }
+
+    /// Lot 5 (T11) : le même écran en contexte établissement (`ContexteEcranMessagerie(etablissement:…)`).
+    init(conversationId: String?, messagerie: ContexteEcranMessagerie) {
         self.conversationId = conversationId
-        self.contexte = contexte
-        let cycle = contexte.container.cycleMessagerie
-        self.cycle = cycle ?? CycleRealtime(session: contexte.session)
-        _model = StateObject(wrappedValue: ConversationsModel(controller: contexte.session.controller,
-                                                              snapshot: contexte.snapshot, cycle: cycle))
+        self.contexte = messagerie
+        self.cycle = messagerie.cycle
+        _model = StateObject(wrappedValue: ConversationsModel(controller: messagerie.controller,
+                                                              contexte: messagerie.contexte, cycle: messagerie.cycleAttache))
     }
 
     var body: some View {
@@ -157,7 +162,7 @@ struct MessagerieScreen: View {
                             .lineLimit(1)
                         Spacer(minLength: JoleneSpacing.sm)
                         if let quand = MessageriePresentation.horodatage(conversation.apercu.dernierMessageLe,
-                                                                        maintenant: contexte.container.clock.now()) {
+                                                                        maintenant: contexte.maintenant()) {
                             Text(quand)
                                 .font(JoleneFont.caption)
                                 .foregroundStyle(nonLus > 0 ? JoleneColor.rose800 : JoleneColor.bubblegum)

@@ -15,7 +15,8 @@ public enum MessagerieRepli {
 /// elle-même l'état de la session (`SessionStore.state`).
 ///
 /// Règles :
-/// - canaux ouverts seulement quand la scène est active ET qu'un espace soignant est prêt ; aucun `UIBackgroundModes` ;
+/// - canaux ouverts seulement quand la scène est active ET qu'un espace (soignant, ou établissement depuis le lot 5 T11)
+///   est prêt ; aucun `UIBackgroundModes` ;
 /// - arrière-plan → `RealtimePort.fermerTout()` (tous les flux se terminent : les suivis des modèles s'arrêtent) ;
 ///   retour au premier plan → flux de la liste redemandé, badge relu, `generation` avancée (les écrans relancent leur
 ///   suivi par `.task(id: generation)`) ;
@@ -43,7 +44,8 @@ public final class CycleRealtime: ObservableObject {
     private var suiviSession: AnyCancellable?
     private var file: Task<Void, Never>?
     private var auPremierPlan = false
-    private var instantane: SessionSnapshot?
+    /// Espace prêt (soignant ou établissement, lot 5 T11) ; `nil` : aucune session prête.
+    private var instantane: ContexteMessagerie?
     /// Port dont des canaux sont ouverts ; `nil` : rien n'est ouvert.
     private var portOuvert: RealtimePort?
     private var ecouteMessages: Task<Void, Never>?
@@ -53,15 +55,19 @@ public final class CycleRealtime: ObservableObject {
     private weak var liste: ConversationsModel?
     /// Écran natif de la messagerie livré (lu une fois : la valeur est figée à la compilation).
     private let ecranLivre: Bool
+    /// Lot 5 (T11) : messagerie de l'espace établissement livrée (`EtabDestination.conversation.ecranLivre`).
+    private let ecranLivreEtablissement: Bool
 
     public convenience init(session: SessionStore) {
-        self.init(session: session, ecranLivre: EcranSecondaire.messagerie(conversationId: nil).estLivre)
+        self.init(session: session, ecranLivre: EcranSecondaire.messagerie(conversationId: nil).estLivre,
+                  ecranLivreEtablissement: EtabDestination.conversation(id: "").ecranLivre)
     }
 
-    /// `ecranLivre` : imposé par les tests du cycle, que l'écran soit livré ou non.
-    init(session: SessionStore, ecranLivre: Bool) {
+    /// `ecranLivre` : imposé par les tests du cycle, que l'écran soit livré ou non (les deux espaces).
+    init(session: SessionStore, ecranLivre: Bool, ecranLivreEtablissement: Bool? = nil) {
         self.session = session
         self.ecranLivre = ecranLivre
+        self.ecranLivreEtablissement = ecranLivreEtablissement ?? ecranLivre
         // `@Published` publie la nouvelle valeur avant de l'affecter : l'état reçu est celui qui entre en vigueur.
         suiviSession = session.$state.sink { [weak self] etat in self?.etatPublie(etat) }
     }
@@ -158,8 +164,12 @@ public final class CycleRealtime: ObservableObject {
     // MARK: - Transitions
 
     private func traiter(_ etat: SessionState) async {
-        guard case let .ready(snapshot) = etat else {
-            // Plus d'espace soignant prêt (déconnexion, espace bloqué, autre espace) : rien ne reste ouvert.
+        let snapshot: ContexteMessagerie
+        switch etat {
+        case let .ready(soignant): snapshot = ContexteMessagerie(soignant)
+        case let .readyEtablissement(etablissement): snapshot = ContexteMessagerie(etablissement) // lot 5, T11
+        default:
+            // Plus d'espace prêt (déconnexion, espace bloqué) : rien ne reste ouvert.
             instantane = nil
             await fermer()
             oublierIdentite()
@@ -197,16 +207,20 @@ public final class CycleRealtime: ObservableObject {
 
     /// Flux de la liste déclaré, puis badge relu. Le canal `messagerie-liste-<uid>` est partagé avec la liste affichée.
     private func ouvrir() async {
-        guard ecranLivre, let instantane, let gateways = await controller.gateways(for: instantane.epoch),
+        guard let instantane, instantane.estEtablissement ? ecranLivreEtablissement : ecranLivre,
+              let gateways = await controller.gateways(for: instantane.epoch),
               VerrousLot4.abonnementRealtimePermis(gateways.realtime) else { return }
-        // Coupe-circuit de l'écran lu avant tout canal (fail-open : absent ou illisible, la messagerie reste servie).
-        guard await PorteEcranNatif.lire(EcranSecondaire.messagerie(conversationId: nil), flags: gateways.flags) == .natif,
-              self.instantane?.epoch == instantane.epoch, portOuvert == nil else { return }
+        // Coupe-circuit de l'écran lu avant tout canal (fail-open : absent ou illisible, la messagerie reste servie) :
+        // `ios_natif_messagerie_actif` pour le soignant, `ios_natif_etab_messages_actif` pour l'établissement (D14).
+        let actif = instantane.estEtablissement
+            ? await gateways.flags.ecranEtablissementActif(.messages)
+            : await PorteEcranNatif.lire(EcranSecondaire.messagerie(conversationId: nil), flags: gateways.flags) == .natif
+        guard actif, self.instantane?.epoch == instantane.epoch, portOuvert == nil else { return }
         let realtime = gateways.realtime
         portOuvert = realtime
         let entrants = realtime.messagesEntrants(conversationId: nil)
         let etats = realtime.etat(conversationId: nil)
-        let moi = instantane.user.id
+        let moi = instantane.moi
         ecouteMessages = Task { [weak self] in
             for await message in entrants where FilMessages.estEntrant(message, moi: moi) {
                 await self?.relireNonLus()
@@ -241,9 +255,9 @@ public final class CycleRealtime: ObservableObject {
     private func lireBadge() async {
         guard let instantane, let gateways = await controller.gateways(for: instantane.epoch) else { return }
         let port = gateways.messagerie
-        let context = instantane.context
+        let contexte = instantane
         let epoch = instantane.epoch
-        guard let valeur = try? await bounded(timeout: controller.resolutionTimeout, { try await port.nonLus(context: context) }),
+        guard let valeur = try? await bounded(timeout: controller.resolutionTimeout, { try await port.nonLus(contexte: contexte) }),
               self.instantane?.epoch == epoch, await controller.epoch == epoch else { return }
         nonLus = max(0, valeur)
     }

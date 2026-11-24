@@ -58,7 +58,7 @@ public final class ConversationsModel: ObservableObject {
     @Published public private(set) var sessionExpiree = false
 
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    private let contexte: ContexteMessagerie
     private let cycle: CycleRealtime?
     private var jeton = 0
     private var interlocuteurs: [String: Interlocuteur] = [:]
@@ -66,9 +66,14 @@ public final class ConversationsModel: ObservableObject {
     /// INSERT déjà appliqués à la liste (un message reçu deux fois n'est compté qu'une fois).
     private var messagesAppliques: Set<String> = []
 
-    public init(controller: SessionController, snapshot: SessionSnapshot, cycle: CycleRealtime? = nil) {
+    public convenience init(controller: SessionController, snapshot: SessionSnapshot, cycle: CycleRealtime? = nil) {
+        self.init(controller: controller, contexte: ContexteMessagerie(snapshot), cycle: cycle)
+    }
+
+    /// Lot 5 (T11) : la même liste en contexte établissement (`ContexteMessagerie(EtablissementSessionSnapshot)`).
+    public init(controller: SessionController, contexte: ContexteMessagerie, cycle: CycleRealtime? = nil) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.contexte = contexte
         self.cycle = cycle
         cycle?.attacher(self)
     }
@@ -84,9 +89,9 @@ public final class ConversationsModel: ObservableObject {
     public func charger() async {
         jeton += 1
         let numero = jeton
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let delai = controller.resolutionTimeout
         do {
             var lues: [ConversationApercu] = []
@@ -94,7 +99,7 @@ public final class ConversationsModel: ObservableObject {
             var avant: CurseurConversations?
             for _ in 0..<PageConversations.pagesMax {
                 let curseur = avant
-                let page = try await bounded(timeout: delai) { try await port.conversations(avant: curseur, context: context) }
+                let page = try await bounded(timeout: delai) { try await port.conversations(avant: curseur, contexte: contexte) }
                 guard await courant(), numero == jeton else { return }
                 for conversation in page.conversations where vues.insert(conversation.id).inserted { lues.append(conversation) }
                 guard let suivant = page.suivant, suivant != avant else { break }
@@ -106,7 +111,7 @@ public final class ConversationsModel: ObservableObject {
                 let ids = lues.map(\.id)
                 for debut in stride(from: 0, to: ids.count, by: Interlocuteur.lotMax) {
                     let lot = Array(ids[debut..<min(debut + Interlocuteur.lotMax, ids.count)])
-                    let lignes = try await bounded(timeout: delai) { try await port.interlocuteurs(ids: lot, context: context) }
+                    let lignes = try await bounded(timeout: delai) { try await port.interlocuteurs(ids: lot, contexte: contexte) }
                     guard await courant(), numero == jeton else { return }
                     for ligne in lignes { index[ligne.id] = ligne }
                 }
@@ -132,7 +137,7 @@ public final class ConversationsModel: ObservableObject {
     /// Lit la liste puis la suit jusqu'à la fermeture du flux (arrière-plan, changement d'identité) ou l'annulation de
     /// l'appelant. L'écran le relance à chaque `CycleRealtime.generation`.
     public func suivre() async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let realtime = gateways.realtime
         // Flux déclarés avant la lecture : un message reçu pendant qu'elle est en vol n'est pas perdu.
         let entrants = realtime.messagesEntrants(conversationId: nil)
@@ -163,7 +168,7 @@ public final class ConversationsModel: ObservableObject {
     private func recevoir(_ recu: MessageChat) async {
         // Liste pas encore lue : la lecture en vol portera ce message.
         guard etat == .pret, messagesAppliques.insert(recu.id).inserted else { return }
-        guard let liste = ListeConversations.appliquer(recu, a: conversations.map(\.apercu), moi: snapshot.user.id,
+        guard let liste = ListeConversations.appliquer(recu, a: conversations.map(\.apercu), moi: contexte.moi, etablissement: contexte.estEtablissement,
                                                        filOuvert: cycle?.filOuvert) else {
             await charger() // conversation inconnue
             return
@@ -194,7 +199,7 @@ public final class ConversationsModel: ObservableObject {
         }
     }
 
-    private func courant() async -> Bool { await controller.epoch == snapshot.epoch }
+    private func courant() async -> Bool { await controller.epoch == contexte.epoch }
 
     /// Message d'une erreur (`nil` : annulation, rien à montrer) ; session expirée signalée.
     private func texte(_ error: Error) -> String? {

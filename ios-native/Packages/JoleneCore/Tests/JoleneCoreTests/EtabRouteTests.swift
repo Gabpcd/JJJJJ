@@ -113,10 +113,12 @@ final class EtabRouteTests: XCTestCase {
             XCTAssertEqual(cible.onglet, onglet)
             XCTAssertNil(cible.destination)
         }
-        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
-                                 .messagerie(conversation: "conv")] {
+        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil)] {
             XCTAssertEqual(route.presentation(canonique: canonique), .renvoiWeb(canonique), "\(route)")
         }
+        XCTAssertEqual(EtabRoute.messagerie(conversation: "conv").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .messages, destination: .conversation(id: "conv"))),
+                       "T11 livrée : la conversation est empilée sur l'onglet Messages")
     }
 
     func testCiblesDesEcransEmpiles() {
@@ -134,8 +136,8 @@ final class EtabRouteTests: XCTestCase {
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
         XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
-        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
-                                             .conversation(id: "k")] {
+        XCTAssertTrue(EtabDestination.conversation(id: "k").ecranLivre, "T11")
+        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c")] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }
     }

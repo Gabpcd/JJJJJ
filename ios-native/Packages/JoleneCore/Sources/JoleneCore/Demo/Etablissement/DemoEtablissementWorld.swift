@@ -51,13 +51,15 @@ public enum DemoEtablissementWorld {
     /// (l'équivalent du JWT) : `DemoWorld` y branche `DemoAuthGateway.restoreSession`. Chaque port est
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.portsEnAttenteLot5`).
+    /// `messagerie` (lot 5, T11) : messagerie démo du même monde, dont l'Accueil relit les non-lus.
     public static func gateways(configuration: Configuration = Configuration(),
-                                identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
+                                identite: @escaping @Sendable () async -> String?,
+                                messagerie: DemoMessagerieGateway? = nil) -> EtablissementGateways {
         // T6 : décisions de la session partagées par les missions, les candidatures et le pointage (une seule source relue).
         let decisions = DemoEtabEtatCandidatures(planningModifie: configuration.planningModifie)
         return EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
-            dashboard: DemoEtabDashboardGateway(),        // T4
+            dashboard: DemoEtabDashboardGateway(messagesNonLus: messagerie.map { m in { await m.nonLusEtablissement($0) } }), // T4 (T11)
             missions: DemoEtabMissionsGateway(etat: decisions), // T5
             candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
             pointage: DemoEtabPointageGateway(decisions: decisions, cadence: configuration.cadencePointage), // T7

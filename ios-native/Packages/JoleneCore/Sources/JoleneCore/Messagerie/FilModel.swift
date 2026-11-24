@@ -81,7 +81,7 @@ public final class FilModel: ObservableObject {
     public let autreId: String?
 
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    private let contexte: ContexteMessagerie
     private let cycle: CycleRealtime?
     private let delais: Delais
     private var filLu = false
@@ -93,10 +93,17 @@ public final class FilModel: ObservableObject {
     private var saisieEnCours = false
     private var dernierSignalSaisie: TimeInterval = 0
 
-    public init(controller: SessionController, snapshot: SessionSnapshot, conversationId: String, autreId: String?,
+    public convenience init(controller: SessionController, snapshot: SessionSnapshot, conversationId: String, autreId: String?,
+                            archivee: Bool = false, cycle: CycleRealtime? = nil, delais: Delais = Delais()) {
+        self.init(controller: controller, contexte: ContexteMessagerie(snapshot), conversationId: conversationId, autreId: autreId,
+                  archivee: archivee, cycle: cycle, delais: delais)
+    }
+
+    /// Lot 5 (T11) : le même fil en contexte établissement ; `moi` reste l'utilisateur courant.
+    public init(controller: SessionController, contexte: ContexteMessagerie, conversationId: String, autreId: String?,
                 archivee: Bool = false, cycle: CycleRealtime? = nil, delais: Delais = Delais()) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.contexte = contexte
         self.conversationId = conversationId
         self.autreId = autreId
         self.archivee = archivee
@@ -104,13 +111,16 @@ public final class FilModel: ObservableObject {
         self.delais = delais
     }
 
-    /// Identifiant de l'utilisateur de la session (auteur de ses propres messages).
-    public var moi: String { snapshot.user.id }
+    /// Identifiant de l'utilisateur de la session (auteur de ses propres messages), soignant ou membre d'établissement.
+    public var moi: String { contexte.moi }
+
+    /// Espace de la session (règles d'affichage du rôle).
+    public var estEtablissement: Bool { contexte.estEtablissement }
 
     // MARK: - Suivi
 
     public func suivre() async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let realtime = gateways.realtime
         suivisActifs += 1
         cycle?.ouvrirFil(conversationId)
@@ -159,14 +169,14 @@ public final class FilModel: ObservableObject {
     /// Lit le fil (500 derniers, ou depuis `depuis`) et le fusionne par id avec les messages déjà reçus.
     @discardableResult
     private func lireFil(depuis: String?, marquer: Marquage) async -> Bool {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return false }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let id = conversationId
         do {
             let lus = try await bounded(timeout: controller.resolutionTimeout) { () async throws -> [MessageChat] in
-                if let depuis { return try await port.messages(conversationId: id, depuis: depuis, context: context) }
-                return try await port.messages(conversationId: id, context: context)
+                if let depuis { return try await port.messages(conversationId: id, depuis: depuis, contexte: contexte) }
+                return try await port.messages(conversationId: id, contexte: contexte)
             }
             guard await courant() else { return false }
             let connus = Set(messages.map(\.id))
@@ -200,12 +210,12 @@ public final class FilModel: ObservableObject {
     }
 
     private func marquerLus(signaler: Bool) async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let id = conversationId
         do {
-            let issue = try await bounded(timeout: controller.resolutionTimeout) { try await port.marquerLus(conversationId: id, context: context) }
+            let issue = try await bounded(timeout: controller.resolutionTimeout) { try await port.marquerLus(conversationId: id, contexte: contexte) }
             guard await courant() else { return }
             switch issue {
             case .lus:
@@ -285,10 +295,10 @@ public final class FilModel: ObservableObject {
 
     /// Faux quand l'identité a changé : le battement s'arrête.
     private func battre() async -> Bool {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return false }
         let port = gateways.messagerie
-        let context = snapshot.context
-        _ = try? await bounded(timeout: controller.resolutionTimeout) { try await port.presence(context: context) }
+        let contexte = self.contexte
+        _ = try? await bounded(timeout: controller.resolutionTimeout) { try await port.presence(contexte: contexte) }
         return true
     }
 
@@ -304,13 +314,13 @@ public final class FilModel: ObservableObject {
         refusEnvoi = nil
         antiFuite = nil
         envoiNonConfirme = false
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return false }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return false }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let id = conversationId
         do {
             let issue = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.envoyer(conversationId: id, contenu: contenu, context: context)
+                try await port.envoyer(conversationId: id, contenu: contenu, contexte: contexte)
             }
             guard await courant() else { return false }
             switch issue {
@@ -370,12 +380,12 @@ public final class FilModel: ObservableObject {
 
     /// Ligne confirmée relue par id puis fusionnée ; à défaut, le fil entier est relu.
     private func afficherEnvoye(_ messageId: String) async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let id = conversationId
         let relu = try? await bounded(timeout: controller.resolutionTimeout) {
-            try await port.message(id: messageId, conversationId: id, context: context)
+            try await port.message(id: messageId, conversationId: id, contexte: contexte)
         }
         guard await courant() else { return }
         if let ligne = relu {
@@ -422,18 +432,18 @@ public final class FilModel: ObservableObject {
 
     /// Indicateur éphémère : un échec (dont `42501 NON_AUTORISE`) l'abandonne sans message.
     private func signalerSaisie(debut: Bool) async {
-        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        guard let gateways = await controller.gateways(for: contexte.epoch) else { return }
         let port = gateways.messagerie
-        let context = snapshot.context
+        let contexte = self.contexte
         let id = conversationId
         _ = try? await bounded(timeout: controller.resolutionTimeout) {
-            try await port.saisie(debut: debut, conversationId: id, context: context)
+            try await port.saisie(debut: debut, conversationId: id, contexte: contexte)
         }
     }
 
     // MARK: - Interne
 
-    private func courant() async -> Bool { await controller.epoch == snapshot.epoch }
+    private func courant() async -> Bool { await controller.epoch == contexte.epoch }
 
     /// Message d'une erreur (`nil` : annulation, rien à montrer) ; session expirée signalée.
     private func texte(_ error: Error) -> String? {

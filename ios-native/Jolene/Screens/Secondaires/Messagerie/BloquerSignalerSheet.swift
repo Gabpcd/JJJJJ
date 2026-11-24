@@ -90,6 +90,13 @@ struct SignalementSheet: View {
         self.fermer = fermer
     }
 
+    /// Lot 5 (T11) : même feuille depuis le fil, soignant ou établissement.
+    init(cible: ModerationConversation.CibleSignalement, messagerie: ContexteEcranMessagerie, fermer: @escaping (Bool) -> Void) {
+        _model = StateObject(wrappedValue: SignalementModel(controller: messagerie.controller, contexte: messagerie.contexte,
+                                                            cible: cible))
+        self.fermer = fermer
+    }
+
     private typealias S = MessagerieTextes.Signalement
 
     var body: some View {

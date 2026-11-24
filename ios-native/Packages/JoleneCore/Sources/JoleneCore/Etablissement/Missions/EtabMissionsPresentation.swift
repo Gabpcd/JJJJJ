@@ -10,7 +10,8 @@ import Foundation
 ///
 /// Liens du détail (registre de T2a) : chaque lien vise une `EtabDestination` ; tant que sa tranche n'a pas livré
 /// l'écran (`EtabDestination.ecranLivre`), il ouvre la page web équivalente (renvoi Safari, D16), jamais un écran
-/// provisoire. Contrat (T10) et message (T11) n'ont pas encore d'identifiant lu : renvoi web de leur liste.
+/// provisoire. Le contrat (T10) n'a pas encore d'identifiant lu : renvoi web de sa liste ; le message (T11) ouvre la
+/// conversation de la mission (`ContactSoignantModel`).
 /// Chaque lien est soumis à sa permission servie (§2.7, fail-closed).
 public enum EtabMissionsPresentation {
     public typealias Badge = MesMissionsPresentation.Badge
@@ -241,6 +242,9 @@ public enum EtabMissionsPresentation {
         public enum Cible: Equatable, Sendable {
             case ecran(EtabDestination)
             case web(URL)
+            /// Lot 5 (T11) : conversation de la mission obtenue par `fn_obtenir_conversation` (`ContactSoignantModel`),
+            /// puis `EtabDestination.conversation(id:)`.
+            case contactSoignant(missionId: String, soignantId: String)
         }
 
         public var cle: Cle
@@ -289,9 +293,17 @@ public enum EtabMissionsPresentation {
                               cible: .web(urlWeb("/etablissement/contrats"))))
         }
         if assigne, statutsAvecSoignant.contains(statut), permissions.lecture {
-            // T11 : la conversation sera ouverte par `fn_obtenir_conversation` ; d'ici là, messagerie web.
-            liens.append(Lien(cle: .message, titre: "Message au soignant sur jolene.app", detail: nil,
-                              cible: .web(urlWeb("/etablissement/messagerie"))))
+            // T11 : conversation de la mission ouverte par `fn_obtenir_conversation` (web l.1083) ; messagerie web tant
+            // que l'écran n'est pas livré ou sans soignant assigné lu.
+            let soignant = detail.soignantAssigneId ?? mission.soignantAssigneId ?? ""
+            if EtabDestination.conversation(id: "").ecranLivre, !soignant.isEmpty {
+                // source: src/pages/DetailMission.tsx:1085 (aria-label du bouton)
+                liens.append(Lien(cle: .message, titre: "Contacter le soignant", detail: nil,
+                                  cible: .contactSoignant(missionId: mission.id, soignantId: soignant)))
+            } else {
+                liens.append(Lien(cle: .message, titre: "Message au soignant sur jolene.app", detail: nil,
+                                  cible: .web(urlWeb("/etablissement/messagerie"))))
+            }
         }
         return liens
     }

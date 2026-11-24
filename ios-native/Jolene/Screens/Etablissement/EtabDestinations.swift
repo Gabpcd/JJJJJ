@@ -12,6 +12,8 @@ struct EtabDestinationEcran: View {
     let snapshot: EtablissementSessionSnapshot
     @ObservedObject var session: SessionStore
     @ObservedObject var ecrans: EcransEtablissementModel
+    /// Lot 5 (T11) : cycle et horloge de la messagerie, injectés par `EtablissementTabView`.
+    @Environment(\.messagerieEtablissement) var messagerie
 
     var body: some View {
         if !destination.accessible(avec: snapshot.context.permissions) {
@@ -35,8 +37,8 @@ struct EtabDestinationEcran: View {
             provisoire("Présences", "Les présences de la mission arrivent dans une prochaine version de l'application.") // T8
         case .contrat:
             provisoire("Contrat", "Le contrat arrive dans une prochaine version de l'application.") // T10
-        case .conversation:
-            provisoire("Message", "La conversation arrive dans une prochaine version de l'application.") // T11
+        case let .conversation(id):
+            EtabConversationRoot(conversationId: id, session: session, snapshot: snapshot, environnement: messagerie) // T11
         case .publication:
             provisoire("Publier une mission", "La publication d'une mission arrive dans une prochaine version de l'application.") // T9
         }

@@ -63,22 +63,29 @@ public enum ListeConversations {
     }
 
     /// Message entrant pour le soignant : dans une conversation rattachée à un soignant, tout auteur qui n'est pas ce
-    /// soignant ; sinon tout auteur qui n'est pas `moi` (web, rôle `SOIGNANT`).
-    public static func estEntrant(_ message: MessageChat, dans conversation: ConversationApercu, moi: String) -> Bool {
-        FilMessages.estEntrant(message, moi: conversation.soignantId ?? moi)
+    /// soignant ; sinon tout auteur qui n'est pas `moi` (web, rôle `SOIGNANT`). Pour l'établissement (lot 5, T11 ; web,
+    /// rôle `ADMIN_ETABLISSEMENT`, `PageMessagerie.tsx` l.305-307) : dans une conversation rattachée à un soignant, le
+    /// seul message entrant est celui du soignant (un message d'un collègue de l'équipe n'est pas un non-lu) ; sinon
+    /// tout auteur qui n'est pas `moi`.
+    public static func estEntrant(_ message: MessageChat, dans conversation: ConversationApercu, moi: String,
+                                  etablissement: Bool = false) -> Bool {
+        if etablissement, let soignant = conversation.soignantId, !soignant.isEmpty {
+            return message.auteurId?.lowercased() == soignant.lowercased()
+        }
+        return FilMessages.estEntrant(message, moi: conversation.soignantId ?? moi)
     }
 
     /// Aperçu, date et non-lus de la conversation du message, puis liste retriée ; les non-lus n'augmentent que pour un
     /// message entrant d'un fil qui n'est pas ouvert. `nil` : conversation inconnue (la liste est à relire, il n'y a
     /// pas d'abonnement aux nouvelles conversations).
     public static func appliquer(_ message: MessageChat, a conversations: [ConversationApercu], moi: String,
-                                 filOuvert: String?) -> [ConversationApercu]? {
+                                 etablissement: Bool = false, filOuvert: String?) -> [ConversationApercu]? {
         guard let index = conversations.firstIndex(where: { $0.id == message.conversationId }) else { return nil }
         var liste = conversations
         var conversation = liste[index]
         conversation.dernierContenu = message.contenu
         if let creeLe = message.creeLe { conversation.dernierMessageLe = creeLe }
-        if estEntrant(message, dans: conversation, moi: moi), filOuvert != conversation.id { conversation.nonLus += 1 }
+        if estEntrant(message, dans: conversation, moi: moi, etablissement: etablissement), filOuvert != conversation.id { conversation.nonLus += 1 }
         liste[index] = conversation
         return trier(liste)
     }

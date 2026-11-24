@@ -39,7 +39,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         record("\(proofPrefix)-etab-publication")
 
         ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "placeholder-etab-presences")
-        ouvrirOnglet("tab-etab-messages", label: "Messages", contenu: "placeholder-etab-messages")
+        ouvrirOnglet("tab-etab-messages", label: "Messages", contenu: "messagerie-screen")
         ouvrirCompte()
         XCTAssertEqual(element("etab-compte-nom").label, Self.nomEtablissement)
         XCTAssertEqual(element("etab-compte-role").label, "Propriétaire")

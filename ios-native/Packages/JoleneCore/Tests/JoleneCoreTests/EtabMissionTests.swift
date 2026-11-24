@@ -190,7 +190,9 @@ final class EtabMissionTests: XCTestCase {
         let terminee = EtabMissionDetail(mission: mission(statut: "TERMINEE", soignant: "s-1"), creneaux: [], soignantAssigneId: "s-1")
         let liensTerminee = EtabMissionsPresentation.liens(terminee, permissions: tout)
         XCTAssertEqual(liensTerminee.map(\.cle), [.presences, .contrat, .message])
-        XCTAssertTrue(liensTerminee.allSatisfy(\.estWeb), "T8, T10, T11 non livrées")
+        XCTAssertEqual(liensTerminee.filter(\.estWeb).map(\.cle), [.presences, .contrat], "T8, T10 non livrées")
+        XCTAssertEqual(liensTerminee.last?.cible, .contactSoignant(missionId: "m-1", soignantId: "s-1"),
+                       "T11 livrée : « Contacter le soignant » ouvre la conversation de la mission")
         XCTAssertEqual(liensTerminee.map(\.identifiant),
                        ["etab-mission-lien-presences", "etab-mission-lien-contrat", "etab-mission-lien-message"])
     }

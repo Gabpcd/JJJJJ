@@ -35,7 +35,7 @@ final class DemoEtabAccueilTests: JoleneUITestCase {
 
         toucher("etab-action-messages-cta")
         require("L'action « messages » ouvre l'onglet Messages de la coquille") {
-            self.containerVisible(self.element("placeholder-etab-messages"))
+            self.containerVisible(self.element("messagerie-screen"))
         }
         XCTAssertFalse(element("renvoi-web-demo").exists, "onglet natif : jamais un renvoi web")
         record("\(proofPrefix)-etab-accueil-messages")
