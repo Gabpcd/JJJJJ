@@ -152,6 +152,46 @@ export function sourceFiche(contexte: Record<string, unknown>): string | null {
   return typeof brut === 'string' && brut.trim() ? brut.trim() : null;
 }
 
+/** Sources d'adresses publiques connues de l'écran (code posé par l'import, libellé lisible). */
+const SOURCES_ADRESSE: Record<string, string> = {
+  ANNUAIRE_PERSONNES_AGEES_DATA_GOUV:
+    'annuaire public des établissements pour personnes âgées (pour-les-personnes-agees.gouv.fr), jeu ouvert de data.gouv.fr',
+};
+
+const dateFr = (iso: unknown): string | null => {
+  const m = typeof iso === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso) : null;
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+};
+
+export interface SourceAdresse {
+  /** Phrase à afficher sous l'adresse du brouillon. */
+  texte: string;
+  /** Page publique de la source (https), pour vérifier. */
+  url: string | null;
+}
+
+/**
+ * Origine de l'adresse d'un brouillon d'email quand elle vient d'un annuaire public
+ * (contexte.email_source, posé par l'agent). Null pour une adresse historique.
+ * L'adresse n'est pas vérifiée : la date de la fiche dit de quand elle date.
+ */
+export function sourceAdresse(contexte: Record<string, unknown>, adresse?: string | null): SourceAdresse | null {
+  const s = contexte?.email_source;
+  if (typeof s !== 'object' || s === null) return null;
+  const o = s as Record<string, unknown>;
+  if (typeof o.source_code !== 'string' || !o.source_code) return null;
+  // La source ne vaut que pour l'adresse qu'elle décrit : jamais affichée sous une autre.
+  if (typeof adresse === 'string' && typeof o.email === 'string' && o.email !== adresse.trim().toLowerCase()) return null;
+  const libelle = SOURCES_ADRESSE[o.source_code] ?? `source ${o.source_code}`;
+  const maj = dateFr(o.source_maj_le) ?? dateFr(o.source_publie_le);
+  const releve = dateFr(o.releve_le);
+  const dates = [maj ? `fiche mise à jour le ${maj}` : null, releve ? `relevée le ${releve}` : null].filter(Boolean).join(', ');
+  return {
+    texte: `${libelle}${dates ? ` — ${dates}` : ''}. Adresse non vérifiée : elle a pu changer depuis.`,
+    url: typeof o.source_url === 'string' && o.source_url.startsWith('https://') ? o.source_url : null,
+  };
+}
+
 export interface ResumeAppels {
   texte: string;
   /** Des places de la semaine sont restées vides : plus aucune cible appelable. */
@@ -265,6 +305,8 @@ export interface CiblesProspection {
   etablissements_cibles: number;
   adresses_fermees: number;
   adresses_utilisables: number;
+  /** Parmi les adresses utilisables, celles qui viennent d'un annuaire public ouvert (0 avant 20261124170000). */
+  adresses_annuaire_public: number;
   adresses_restantes: number;
   telephones_utilisables: number;
   telephones_restants: number;
@@ -285,6 +327,9 @@ export function lireCibles(brut: unknown): CiblesProspection | null {
     etablissements_cibles: c.etablissements_cibles as number,
     adresses_fermees: c.adresses_fermees as number,
     adresses_utilisables: c.adresses_utilisables as number,
+    // Clé plus récente que le décompte : un rapport figé avant elle reste lisible.
+    adresses_annuaire_public: typeof c.adresses_annuaire_public === 'number' && Number.isFinite(c.adresses_annuaire_public)
+      ? c.adresses_annuaire_public : 0,
     adresses_restantes: c.adresses_restantes as number,
     telephones_utilisables: c.telephones_utilisables as number,
     telephones_restants: c.telephones_restants as number,
@@ -305,13 +350,26 @@ const pluriel = (n: number, un: string, plusieurs: string) => (n > 1 ? plusieurs
 export interface PassageProspection {
   premiers_contacts: number;
   places_non_pourvues: number;
+  /** Adresses laissées sans brouillon : leur origine n'a pas de mention d'opposition. */
+  sans_mention: number;
 }
 
 export function lirePassage(details: unknown): PassageProspection | null {
   if (typeof details !== 'object' || details === null) return null;
   const d = details as Record<string, unknown>;
   if (typeof d.premiers_contacts !== 'number' || typeof d.places_non_pourvues !== 'number') return null;
-  return { premiers_contacts: d.premiers_contacts, places_non_pourvues: d.places_non_pourvues };
+  return {
+    premiers_contacts: d.premiers_contacts,
+    places_non_pourvues: d.places_non_pourvues,
+    sans_mention: typeof d.exclus_sans_mention === 'number' && Number.isFinite(d.exclus_sans_mention) ? d.exclus_sans_mention : 0,
+  };
+}
+
+/** Phrase affichée quand l'agent email a laissé des adresses sans brouillon à son dernier passage (un compte par passage, pas un stock), sinon null. */
+export function resumeSansMention(passage: PassageProspection | null): string | null {
+  if (!passage || passage.sans_mention <= 0) return null;
+  const n = passage.sans_mention;
+  return `Au dernier passage, ${fr(n)} ${pluriel(n, 'adresse laissée', 'adresses laissées')} sans brouillon : origine sans mention d’opposition (adresse modifiée depuis son import).`;
 }
 
 /** Avertissement à afficher quand l'agent email ne peut plus rien préparer, sinon null. */
@@ -361,7 +419,8 @@ export function alerteCibles(c: CiblesProspection | null, passage: PassageProspe
 export function resumeCibles(c: CiblesProspection): string {
   return [
     `${fr(c.etablissements_cibles)} ${pluriel(c.etablissements_cibles, 'établissement ciblé', 'établissements ciblés')}`,
-    `${fr(c.adresses_utilisables)} ${pluriel(c.adresses_utilisables, 'adresse utilisable', 'adresses utilisables')}`,
+    `${fr(c.adresses_utilisables)} ${pluriel(c.adresses_utilisables, 'adresse utilisable', 'adresses utilisables')}${
+      c.adresses_annuaire_public > 0 ? ` (dont ${fr(c.adresses_annuaire_public)} d’un annuaire public)` : ''}`,
     `${fr(c.adresses_fermees)} en messagerie fermée`,
     `${fr(c.telephones_utilisables)} ${pluriel(c.telephones_utilisables, 'téléphone', 'téléphones')}`,
   ].join(' · ');

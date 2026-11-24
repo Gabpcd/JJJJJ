@@ -34,6 +34,14 @@ DECLARE
   v_appels_avant integer;
   v_places integer;
   v_rec record;
+  v_id_pub uuid;
+  v_contact_pub uuid;
+  v_mention_pa text;
+  v_mention_hist text;
+  v_prov jsonb := jsonb_build_object(
+    'source_code', 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV',
+    'source_url', 'https://www.data.gouv.fr/datasets/etablissements-ehpad-esld-residences-autonomie-accueils-de-jour',
+    'source_publie_le', '2020-11-11', 'source_maj_le', '2020-10-04', 'releve_le', '2026-11-24', 'classe', 'FONCTION');
 BEGIN
   -- 1. Droits : RPC admin fermées à anon, primitives private fermées à tous.
   IF has_function_privilege('anon', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'EXECUTE')
@@ -700,6 +708,7 @@ BEGIN
   v_cibles := private.fn_growth_cibles_prospection();
   IF v_cibles - 'departements' IS DISTINCT FROM jsonb_build_object(
        'etablissements_cibles', 14, 'adresses_fermees', 6, 'adresses_utilisables', 0, 'adresses_restantes', 0,
+       'adresses_annuaire_public', 0,
        'telephones_utilisables', 12, 'telephones_restants', 9)
      OR v_cibles->'departements' IS DISTINCT FROM '["ZY"]'::jsonb THEN
     RAISE EXCEPTION 'Appels : décompte des cibles inexact — %', v_cibles;
@@ -1121,6 +1130,226 @@ BEGIN
       WHERE semaine_debut = (v_res->>'semaine_debut')::date) IS NULL THEN
     RAISE EXCEPTION 'Appels : le rapport hebdomadaire figé ne porte pas le décompte des cibles';
   END IF;
+
+  -- 12. Adresses publiques de l'annuaire des établissements pour personnes
+  -- âgées (20261124170000). Marché fictif ZX : sept témoins créés ici. La
+  -- provenance ne vaut que pour l'adresse qu'elle décrit ; la mention
+  -- d'opposition suit l'origine de l'adresse, au premier contact comme à la
+  -- relance ; une origine sans mention ne reçoit aucun brouillon ; les fiches
+  -- d'appel vont d'abord aux établissements qu'aucun email ne peut joindre.
+  UPDATE public.growth_config SET valeur = 'ZX' WHERE cle = 'agents_departements_cibles';
+  UPDATE public.growth_config SET valeur = '100' WHERE cle = 'agents_prospection_quota_jour';
+  UPDATE public.growth_config SET valeur = '500' WHERE cle = 'agents_prospection_file_max';
+  v_mention_hist := private.fn_growth_config('prospection_mention_opposition', NULL);
+
+  -- 12.a Droits : les deux fonctions neuves restent fermées à anon et authenticated.
+  IF EXISTS (SELECT 1 FROM unnest(ARRAY[
+               'private.fn_growth_email_source(text,text)',
+               'private.fn_growth_mention_opposition(text,text)']) AS f(sig)
+             WHERE has_function_privilege('anon', f.sig, 'EXECUTE')
+                OR has_function_privilege('authenticated', f.sig, 'EXECUTE')) THEN
+    RAISE EXCEPTION 'Adresses publiques : une fonction private du lot est exécutable par anon ou authenticated';
+  END IF;
+
+  -- 12.b Forme de la provenance : sans page source ni date de relevé, ou pour une
+  -- adresse en messagerie fermée, la ligne est refusée.
+  v_refus := false;
+  BEGIN
+    INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, departement, email_provenance)
+    VALUES ('ZXPUB098', 'EHPAD Provenance incomplète', 'EHPAD', 'contact@ehpad-incomplet.test', 'ZX',
+            jsonb_build_object('email', 'contact@ehpad-incomplet.test', 'source_code', 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV'));
+  EXCEPTION WHEN check_violation THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Adresses publiques : une provenance sans page source ni date de relevé a été acceptée'; END IF;
+  v_refus := false;
+  BEGIN
+    INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, departement, email_provenance)
+    VALUES ('ZXPUB099', 'EHPAD Provenance fermée', 'EHPAD', 'contact@ehpad-ferme.mssante.fr', 'ZX',
+            v_prov || jsonb_build_object('email', 'contact@ehpad-ferme.mssante.fr'));
+  EXCEPTION WHEN check_violation THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Adresses publiques : une provenance en messagerie fermée a été acceptée'; END IF;
+  -- Seule une saisie manuelle se passe de page source.
+  v_refus := false;
+  BEGIN
+    INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, email, departement, email_provenance)
+    VALUES ('ZXPUB097', 'EHPAD Provenance sans page', 'EHPAD', 'contact@ehpad-sans-page.test', 'ZX',
+            jsonb_build_object('email', 'contact@ehpad-sans-page.test', 'source_code', 'AUTRE_SOURCE', 'releve_le', '2026-11-24'));
+  EXCEPTION WHEN check_violation THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Adresses publiques : une provenance sans page source, hors saisie manuelle, a été acceptée'; END IF;
+
+  -- 12.c Témoins : 001 adresse de l'annuaire (elle remplace une adresse fermée),
+  -- 002 adresse sans provenance, 003 adresse changée depuis l'import (la
+  -- provenance décrit une autre adresse), 004 origine que le code ne connaît
+  -- pas, 005 même adresse de groupe que 001, 006 hôpital sans adresse (moins
+  -- de points qu'un EHPAD, mais joignable par téléphone seulement), 007 adresse
+  -- saisie à la main dans l'écran Sales (provenance SAISIE_MANUELLE, sans page).
+  INSERT INTO public.prospects_etablissements
+    (finess, nom, type_jolene, email, telephone, ville, departement, email_provenance)
+  VALUES
+    ('ZXPUB001', 'EHPAD Public Un', 'EHPAD', 'contact@ehpad-public-un.test', '01 00 00 20 01', 'Publicville', 'ZX',
+     v_prov || jsonb_build_object('email', 'contact@ehpad-public-un.test', 'remplace', 'contact@ehpad-public-un.mssante.fr')),
+    ('ZXPUB002', 'EHPAD Public Deux sans provenance', 'EHPAD', 'accueil@ehpad-public-deux.test', NULL, 'Publicville', 'ZX', NULL),
+    ('ZXPUB003', 'EHPAD Public Trois adresse changée', 'EHPAD', 'direction@ehpad-public-trois.test', NULL, 'Publicville', 'ZX',
+     v_prov || jsonb_build_object('email', 'contact@ehpad-public-trois.test')),
+    ('ZXPUB004', 'EHPAD Public Quatre origine inconnue', 'EHPAD', 'contact@ehpad-public-quatre.test', NULL, 'Publicville', 'ZX',
+     v_prov || jsonb_build_object('email', 'contact@ehpad-public-quatre.test', 'source_code', 'SOURCE_SANS_MENTION')),
+    ('ZXPUB005', 'EHPAD Public Cinq adresse de groupe', 'EHPAD', 'contact@ehpad-public-un.test', NULL, 'Publicville', 'ZX',
+     v_prov || jsonb_build_object('email', 'contact@ehpad-public-un.test')),
+    ('ZXPUB006', 'Hôpital Public Six sans adresse', 'HOPITAL', NULL, '01 00 00 20 06', 'Publicville', 'ZX', NULL),
+    ('ZXPUB007', 'EHPAD Public Sept adresse saisie', 'EHPAD', 'accueil@ehpad-public-sept.test', NULL, 'Publicville', 'ZX',
+     jsonb_build_object('email', 'accueil@ehpad-public-sept.test', 'source_code', 'SAISIE_MANUELLE', 'releve_le', '2026-11-24'));
+
+  v_cibles := private.fn_growth_cibles_prospection();
+  IF (v_cibles->>'etablissements_cibles')::integer IS DISTINCT FROM 7
+     OR (v_cibles->>'adresses_utilisables')::integer IS DISTINCT FROM 6
+     OR (v_cibles->>'adresses_restantes')::integer IS DISTINCT FROM 6
+     OR (v_cibles->>'adresses_fermees')::integer IS DISTINCT FROM 0
+     -- 001, 004 et 005 : la provenance décrit l'adresse du prospect ; pas 003,
+     -- et 007 est une saisie manuelle, pas un annuaire.
+     OR (v_cibles->>'adresses_annuaire_public')::integer IS DISTINCT FROM 3 THEN
+    RAISE EXCEPTION 'Adresses publiques : décompte inexact — %', v_cibles;
+  END IF;
+
+  -- 12.c bis Liste d'appels : une seule place. Elle va à l'hôpital sans adresse
+  -- (35 points), pas à l'EHPAD 001 (40 points, téléphone) que l'agent email
+  -- peut joindre ; 001 reste libre pour l'email.
+  UPDATE public.growth_config
+     SET valeur = ((SELECT count(*) FROM public.growth_brouillons b
+                    WHERE b.agent = 'APPEL_ETABLISSEMENT'
+                      AND b.cree_le >= date_trunc('week', now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris') + 1)::text
+   WHERE cle = 'agents_appels_quota_semaine';
+  v_res := private.fn_growth_agent_appels();
+  IF (v_res->>'places_de_la_semaine')::integer IS DISTINCT FROM 1
+     OR (v_res->>'fiches_appel')::integer IS DISTINCT FROM 1
+     OR NOT EXISTS (SELECT 1 FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZXPUB006' AND statut = 'BROUILLON')
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZXPUB001')
+     OR (SELECT c.disponible FROM private.fn_growth_prospects_cibles() c WHERE c.finess = 'ZXPUB001') IS NOT TRUE THEN
+    RAISE EXCEPTION 'Adresses publiques : la fiche d''appel doit aller à l''établissement sans adresse utilisable, pas à l''EHPAD joignable par email — %', v_res;
+  END IF;
+  UPDATE public.growth_config SET valeur = '0' WHERE cle = 'agents_appels_quota_semaine';
+
+  -- 12.d Origine et mention : la provenance se lit sans égard à la casse ni aux
+  -- blancs ; elle ne vaut pas pour une autre adresse, ni sans FINESS. La mention
+  -- historique reste celle des établissements sans aucune provenance. Dès que
+  -- le prospect en porte une, une adresse qu'elle ne décrit pas (changée depuis
+  -- l'import : 003) n'a pas de mention ; une adresse saisie à la main (007) non plus.
+  v_mention_pa := private.fn_growth_mention_opposition('ZXPUB001', 'contact@ehpad-public-un.test');
+  IF v_mention_hist IS NULL OR v_mention_pa IS NULL
+     OR v_mention_pa IS NOT DISTINCT FROM v_mention_hist
+     OR position('pour-les-personnes-agees.gouv.fr' IN v_mention_pa) = 0
+     OR position('Annuaire Santé' IN v_mention_pa) > 0
+     OR position('« STOP »' IN v_mention_pa) = 0
+     -- La phrase d'opposition est la même, mot pour mot ; seule l'origine déclarée change.
+     OR split_part(v_mention_pa, '). ', 2) IS DISTINCT FROM split_part(v_mention_hist, '). ', 2)
+     OR split_part(v_mention_hist, '). ', 2) NOT LIKE 'Si vous ne souhaitez plus%'
+     OR private.fn_growth_email_source('ZXPUB001', '  Contact@EHPAD-Public-Un.test ')->>'source_code'
+        IS DISTINCT FROM 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV'
+     OR private.fn_growth_email_source('ZXPUB001', 'autre@ehpad-public-un.test') IS NOT NULL
+     OR private.fn_growth_email_source(NULL, 'contact@ehpad-public-un.test') IS NOT NULL
+     OR private.fn_growth_email_source('ZXPUB003', 'direction@ehpad-public-trois.test') IS NOT NULL
+     OR private.fn_growth_mention_opposition('ZXPUB002', 'accueil@ehpad-public-deux.test') IS DISTINCT FROM v_mention_hist
+     OR private.fn_growth_mention_opposition('ZXPUB002', '  Accueil@EHPAD-Public-Deux.test ') IS DISTINCT FROM v_mention_hist
+     -- Limite antérieure au lot : sans provenance sur le prospect, toute adresse garde la mention historique.
+     OR private.fn_growth_mention_opposition('ZXPUB002', 'corrigee@ehpad-public-deux.test') IS DISTINCT FROM v_mention_hist
+     OR private.fn_growth_mention_opposition(NULL, 'contact@ehpad-public-un.test') IS DISTINCT FROM v_mention_hist
+     OR private.fn_growth_mention_opposition('ZXABSENT', 'accueil@ehpad-public-deux.test') IS DISTINCT FROM v_mention_hist
+     -- Provenance qui décrit une autre adresse : aucune mention, ni pour l'adresse du prospect ni pour une autre.
+     OR private.fn_growth_mention_opposition('ZXPUB003', 'direction@ehpad-public-trois.test') IS NOT NULL
+     OR private.fn_growth_mention_opposition('ZXPUB001', 'autre@ehpad-public-un.test') IS NOT NULL
+     OR private.fn_growth_email_source('ZXPUB007', 'accueil@ehpad-public-sept.test')->>'source_code' IS DISTINCT FROM 'SAISIE_MANUELLE'
+     OR private.fn_growth_mention_opposition('ZXPUB007', 'accueil@ehpad-public-sept.test') IS NOT NULL
+     OR private.fn_growth_mention_opposition('ZXPUB004', 'contact@ehpad-public-quatre.test') IS NOT NULL THEN
+    RAISE EXCEPTION 'Adresses publiques : origine ou mention inexacte — annuaire « % », historique « % »', v_mention_pa, v_mention_hist;
+  END IF;
+
+  -- 12.e Agent : deux brouillons (001 avec la mention de l'annuaire, 002 avec la
+  -- mention historique) ; 003, 004 et 007 comptés sans mention ; 005 écarté, son
+  -- adresse a déjà une séquence.
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'premiers_contacts')::integer IS DISTINCT FROM 2
+     OR (v_res->>'exclus_sans_mention')::integer IS DISTINCT FROM 3
+     OR (v_res->'cibles'->>'adresses_annuaire_public')::integer IS DISTINCT FROM 3
+     OR (SELECT count(*) FROM public.growth_brouillons
+         WHERE agent = 'PROSPECTION_ETABLISSEMENT'
+           AND cible_id IN ('ZXPUB003', 'ZXPUB004', 'ZXPUB005', 'ZXPUB007')) <> 0 THEN
+    RAISE EXCEPTION 'Adresses publiques : deux premiers contacts, trois origines sans mention et aucune seconde séquence sur l''adresse de groupe attendus — %', v_res;
+  END IF;
+  SELECT id, corps INTO v_id_pub, v_corps
+  FROM public.growth_brouillons WHERE canal = 'EMAIL' AND cible_id = 'ZXPUB001';
+  IF v_id_pub IS NULL
+     OR right(v_corps, char_length(v_mention_pa)) IS DISTINCT FROM v_mention_pa
+     OR position('Annuaire Santé' IN v_corps) > 0
+     OR (SELECT b.destinataire_email IS DISTINCT FROM 'contact@ehpad-public-un.test'
+                OR b.contexte->'email_source'->>'source_code' IS DISTINCT FROM 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV'
+                OR b.contexte->'email_source'->>'source_url' IS DISTINCT FROM v_prov->>'source_url'
+                OR b.contexte->'email_source'->>'source_maj_le' IS DISTINCT FROM '2020-10-04'
+                OR b.contexte->'email_source'->>'releve_le' IS DISTINCT FROM '2026-11-24'
+                -- L'ancienne adresse en messagerie fermée ne suit pas le brouillon.
+                OR b.contexte->'email_source' ? 'remplace'
+                OR position('mssante' IN b.contexte::text) > 0
+                OR position('pour-les-personnes-agees.gouv.fr' IN b.contexte->>'source') = 0
+         FROM public.growth_brouillons b WHERE b.id = v_id_pub) THEN
+    RAISE EXCEPTION 'Adresses publiques : le brouillon de l''adresse de l''annuaire doit porter sa mention et son origine — %',
+      (SELECT contexte FROM public.growth_brouillons WHERE id = v_id_pub);
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons b
+      WHERE b.canal = 'EMAIL' AND b.cible_id = 'ZXPUB002'
+        AND right(b.corps, char_length(v_mention_hist)) = v_mention_hist
+        AND position('pour-les-personnes-agees' IN b.corps) = 0
+        AND jsonb_typeof(b.contexte->'email_source') = 'null'
+        AND b.contexte->>'source' = 'FINESS (établissement) + Annuaire Santé (email)') <> 1 THEN
+    RAISE EXCEPTION 'Adresses publiques : sans provenance, le brouillon garde la mention et la source historiques';
+  END IF;
+
+  -- 12.f Relance : le constat d'envoi copie l'adresse de l'annuaire sur la fiche
+  -- CRM ; la relance porte la mention de CETTE adresse, même si l'adresse du
+  -- prospect a changé depuis. Une adresse nouvelle n'hérite pas de la source.
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  PERFORM public.fn_admin_growth_brouillon_decider(v_id_pub, 'VALIDER');
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_pub, 'MARQUER_ENVOYE');
+  EXECUTE 'RESET ROLE';
+  v_contact_pub := (v_res->>'contact_crm_id')::uuid;
+  IF v_res->>'statut' IS DISTINCT FROM 'ENVOYE'
+     OR (SELECT email FROM public.sales_contacts WHERE id = v_contact_pub) IS DISTINCT FROM 'contact@ehpad-public-un.test' THEN
+    RAISE EXCEPTION 'Adresses publiques : le constat d''envoi doit copier l''adresse de l''annuaire sur la fiche CRM — %', v_res;
+  END IF;
+  UPDATE public.prospects_etablissements SET email = 'nouvelle@ehpad-public-un.test' WHERE finess = 'ZXPUB001';
+  IF private.fn_growth_mention_opposition('ZXPUB001', 'nouvelle@ehpad-public-un.test') IS NOT NULL THEN
+    RAISE EXCEPTION 'Adresses publiques : une adresse écrite après l''import, sans provenance à elle, ne doit recevoir aucune mention (ni celle de l''annuaire, ni l''historique)';
+  END IF;
+  -- Fiche CRM corrigée à la main : la relance partirait à une adresse dont
+  -- l'origine est inconnue. Aucun brouillon, et l'agent le compte.
+  UPDATE public.sales_contacts
+     SET email = 'corrigee@ehpad-public-un.test', prochaine_action_le = now() - interval '1 minute'
+   WHERE id = v_contact_pub;
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'relances')::integer IS DISTINCT FROM 0
+     OR (v_res->>'exclus_sans_mention')::integer < 1
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons b
+                WHERE b.destinataire_email = 'corrigee@ehpad-public-un.test') THEN
+    RAISE EXCEPTION 'Adresses publiques : une fiche CRM dont l''adresse a été corrigée à la main ne doit recevoir aucune relance tant que son origine est inconnue — %', v_res;
+  END IF;
+  -- L'adresse de l'annuaire revient sur la fiche : la relance est préparée.
+  UPDATE public.sales_contacts
+     SET email = 'contact@ehpad-public-un.test', prochaine_action_le = now() - interval '1 minute'
+   WHERE id = v_contact_pub;
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'relances')::integer IS DISTINCT FROM 1
+     OR (SELECT right(b.corps, char_length(v_mention_pa)) IS DISTINCT FROM v_mention_pa
+                OR b.destinataire_email IS DISTINCT FROM 'contact@ehpad-public-un.test' OR b.sequence_etape <> 2
+                -- La relance dit elle aussi d'où vient son adresse, sans l'ancienne adresse fermée.
+                OR b.contexte->'email_source'->>'source_code' IS DISTINCT FROM 'ANNUAIRE_PERSONNES_AGEES_DATA_GOUV'
+                OR b.contexte->'email_source' ? 'remplace'
+                OR position('mssante' IN b.contexte::text) > 0
+         FROM public.growth_brouillons b
+         WHERE b.cible_type = 'CONTACT_CRM' AND b.cible_id = v_contact_pub::text) IS NOT FALSE THEN
+    RAISE EXCEPTION 'Adresses publiques : la relance doit porter la mention et l''origine de l''annuaire — %', v_res;
+  END IF;
+
 END;
 $test$;
 ROLLBACK;

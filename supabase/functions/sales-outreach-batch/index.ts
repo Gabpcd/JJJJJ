@@ -87,6 +87,11 @@ Deno.serve(async (req) => {
       .not("email", "is", null).neq("email", "")
       .is("email_envoye_le", null)
       .limit(max);
+    // Verrou (docs/AGENTS_CROISSANCE.md §4 ter) : une adresse d'établissement dont l'origine est
+    // enregistrée (aujourd'hui : annuaire public) ne part jamais par cet envoi groupé. Son
+    // message doit dire d'où vient l'adresse (private.fn_growth_mention_opposition) et le corps
+    // unique d'un lot ne le peut pas : ces adresses passent par les brouillons relus un par un.
+    if (cible === "ETABLISSEMENT") q = q.is("email_provenance", null);
     if (departement) q = q.eq("departement", String(departement).toUpperCase());
     const { data: prospects, error: qErr } = await q;
     if (qErr) return new Response(JSON.stringify({ error: qErr.message }), { status: 500, headers: corsHeaders(req) });
@@ -162,9 +167,12 @@ Deno.serve(async (req) => {
       await new Promise((res) => setTimeout(res, 600));
     }
 
-    const { count: restants } = await admin.from(table)
+    let qRestants = admin.from(table)
       .select(pk, { count: "exact", head: true })
       .not("email", "is", null).neq("email", "").is("email_envoye_le", null);
+    // Même verrou que la lecture des destinataires : les adresses à provenance ne sont pas « restantes ».
+    if (cible === "ETABLISSEMENT") qRestants = qRestants.is("email_provenance", null);
+    const { count: restants } = await qRestants;
 
     return new Response(JSON.stringify({
       success: true,
