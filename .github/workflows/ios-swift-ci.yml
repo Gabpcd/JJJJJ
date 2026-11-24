@@ -665,6 +665,13 @@ jobs:
         run: |
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-socle.xcresult"
           set +e
+          # Veilleur du gel (scripts/mobile/ios-ci-gel-simulateur.sh), comme dans les éclats presences et pointage : depuis
+          # le 24/11/2026, le socle exécute DemoPointageQRTests, dont un test saisit au pavé numérique (déclencheur des gels
+          # relevés ; DECISIONS_LOT2, « Gel iPhone CI — 16/11/2026 »). Relevés gel-socle-* dans l'artefact ; le veilleur
+          # ne fait jamais échouer l'étape.
+          journal="$JOLENE_UI_OUTPUT/test-without-building-socle.log"
+          bash scripts/mobile/ios-ci-gel-simulateur.sh veiller socle "$journal" > "$JOLENE_UI_OUTPUT/gel-socle-veilleur.log" 2>&1 &
+          veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
             -scheme Jolene \
@@ -720,6 +727,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-socle.log" 2>&1
           code=$?
+          pkill -P "$veilleur" 2>/dev/null || true
+          kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-socle.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -782,6 +791,14 @@ jobs:
       - name: test-without-building — éclat pointage (XCUITest du pointage) (${{ matrix.format }})
         id: tests_pointage
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        # Éclat pointage sous 20 min (24/11/2026). Avec ses dix tests, DemoPointageTests portait cette étape à 21,8 et
+        # 23,2 min en iPad paysage (runs 45239724447 et 45238573082 ; 18,6 et 17,8 min sur iphone ; 15,0 et 11,2 min en
+        # iPad portrait), et un seul test resté dix minutes sans réponse a suffi à la couper à 30 min (tentative 2 du run
+        # 45239724447, ipad-portrait). Ses trois tests de QR (4,2 à 5,3 min en paysage) forment DemoPointageQRTests, que
+        # ne nomme aucun -only-testing : ils tournent dans le socle, l'éclat le plus léger du job (5,9 à 10,5 min aux
+        # mêmes runs), qui reçoit le même veilleur. DemoPointageTests garde sept tests : étape estimée à 17,6 et 17,9 min
+        # en paysage, 15 min sur iphone, 9 à 12 min en portrait. À re-mesurer au premier run ; au-delà de 20 min, sortir
+        # un autre test vers DemoPointageQRTests. Garde : tests/node/ios-swift-ci-eclats.node.mjs.
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:

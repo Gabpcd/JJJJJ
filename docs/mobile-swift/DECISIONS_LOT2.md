@@ -179,6 +179,36 @@
     Éclats encore au-dessus de 20 min en iPad paysage, à surveiller : « pointage » (20 à 27 min, une seule classe),
     « lot3-compte » (21 à 24), « lot3-revenus » (20 à 25), « documents » (21 à 22), « lot3-profil-photo » (19 à 22),
     « lot3-push » (19 à 21).
+    Éclat « pointage » (24 novembre 2026). Durée de l'étape au run 45239724447 (`main` à `f6e6be49`) puis au run
+    45238573082 : 18,6 et 17,8 min sur iphone, 15,0 et 11,2 min en ipad-portrait, 21,8 et 23,2 min en ipad-landscape. À
+    la tentative 2 du premier, en ipad-portrait, l'étape a été coupée à 30 min : un test a épuisé son délai d'exécution
+    de dix minutes, sur un runner plus lent (les autres éclats du job y ont pris 12 à 67 % de plus qu'à la tentative 1).
+    `DemoPointageTests` est scindée sans changer un test : ses trois tests de QR (4,2 à 5,3 min en paysage) forment
+    `DemoPointageQRTests`, qu'aucun `-only-testing` ne nomme et que le socle exécute donc. Le socle est l'éclat le plus
+    léger du job `ui` (5,9 à 10,5 min aux mêmes runs) ; les autres sont fermés par leurs gardes ou déjà au-dessus de
+    16 min en paysage.
+    Estimation aux mêmes runs : « pointage » 17,6 et 17,9 min en paysage avec ses sept tests, socle 14,5 et 15,8 min.
+    Limite connue : dans un run aussi lent que le plus lent du 23 novembre (27 min), « pointage » resterait vers
+    21 min ; le job `ui` n'a plus d'éclat où ranger des tests, le levier suivant est un éclat du job `ui-lot1`.
+    Instrumentation ajoutée le même jour : le socle reçoit le veilleur du gel ; le veilleur se déclenche aussi quand un
+    test est en cours depuis plus de 420 s (`JOLENE_VEILLEUR_SEUIL_TEST_S`) ; l'étape « Résumé xcresult » des deux jobs
+    relève à sa sortie, quelle que soit son issue, les tests échoués (nom, durée, premier message), les trois tests les
+    plus longs de chaque éclat et le temps passé des tests échoués ou d'au moins 5 min
+    (`scripts/mobile/ios-ci-resume-tests.mjs`) ; un artefact léger par job (« ios-swift-journaux-ui-<format>-<sha> »,
+    « ios-swift-journaux-ui-lot1-<format>-<sha> ») porte les journaux des éclats, la durée de chaque test et les
+    relevés, sans les xcresult. Cause des dix minutes de
+    `testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture` : **non établie**. Constats du journal du job (heures
+    des événements synthétisés joints au test) : rythme ordinaire jusqu'au toucher de « OK » qui ferme le pavé numérique
+    (09:58:59 UTC), puis un événement toutes les 2 min 8 s à 2 min 16 s, jusqu'au Spindump que XCTest joint à 10:07:30,
+    dix minutes après le début du test (délai d'exécution, déduit de cette heure : le message d'échec n'a pas été lu).
+    L'app répond encore entre deux : la feuille de consentement est présentée, puis acceptée, et le refus du code est
+    affiché ; le temps passe donc dans les touchers eux-mêmes, que `require` ne borne pas, comme si chaque attente
+    d'inactivité de XCTest expirait (hypothèse, à lire au prochain relevé). Les huit tests suivants réussissent en
+    19 min, ce palier ne les touche donc plus. Même déclencheur apparent que le gel du 16 novembre (la
+    fermeture du pavé numérique), cette fois sur iPad et sans glissement. Le journal xcodebuild de l'éclat, les relevés
+    du veilleur et le Spindump de XCTest n'ont pas été lus : ils ne sont que dans l'artefact complet (832 Mo). La
+    lecture du code (page Présences, zone de pointage, feuille de consentement, champ du code, bouton « OK ») n'a montré
+    ni animation perpétuelle ni minuteur qui démarre à la fermeture du pavé.
 23. **Journal de reçus : celui du lot 1 T7 est réutilisé** ; si T1 du lot 2 démarrait avant son intégration, T1
     livrerait le journal générique et T7 le consommerait sans changer son API. Ordonnancement retenu : T1 attendait
     l'intégration de T7 et démarrait dans la vague 1 du lot 2, pas dans la vague 0.

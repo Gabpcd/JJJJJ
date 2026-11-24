@@ -487,8 +487,9 @@ test('gel iPhone : le redémarrage est borné à 2 min dans l éclat suivant, le
   assert.equal(syntaxe.status, 0, `bash -n ${SCRIPT_GEL} : ${syntaxe.stderr}`);
 });
 
-test('gel iPhone : les éclats presences et pointage lancent le veilleur instrumenté, arrêté après xcodebuild', () => {
-  for (const nom of ['presences', 'pointage']) {
+test('gel iPhone : le socle et les éclats presences et pointage lancent le veilleur instrumenté, arrêté après xcodebuild', () => {
+  // Socle : depuis le 24/11/2026, il exécute DemoPointageQRTests, dont un test saisit au pavé numérique.
+  for (const nom of ['socle', 'presences', 'pointage']) {
     const e = parEtape.find(x => x.nom === nom);
     assert.ok(e, `éclat ${nom} absent`);
     const texte = liste.find(x => x.id === e.id).texte;
@@ -796,4 +797,94 @@ test('journaux légers : chaque job publie journaux et relevés sans les xcresul
   const releve = read(SCRIPT_RESUME);
   assert.ok(releve.includes('`diagnostic/spindump-${eclat}-${spindumps.length + 1}.txt`'), 'Spindump copiés dans diagnostic/');
   assert.ok(releve.includes('join(sortie, `xctest-tests-${nom}.json`)'), 'durée de chaque test gardée dans xctest-tests-<éclat>.json');
+});
+
+// Découpage de DemoPointageTests : ses trois tests de QR forment DemoPointageQRTests, exécutée par le socle (éclat le
+// plus léger du job `ui` : 5,9 à 10,5 min aux deux runs), qui reçoit le veilleur des éclats presences et pointage.
+const TESTS_QR = ['testQRDetecteDeuxFoisNEnvoieQuUnScan', 'testQRIllisibleGardeLaCameraPuisSaisieManuelle', 'testRefusDeLaCameraRendLaSaisieManuelle'];
+
+/** Méthodes de test de chaque classe d'un fichier de JoleneUITests, dans l'ordre du fichier. */
+function testsParClasse(fichier) {
+  const parClasse = new Map();
+  let classe = null;
+  for (const ligne of read(`${DOSSIER_UI}/${fichier}`).split('\n')) {
+    const declaration = /^(?:final )?class (\w+): \w+/.exec(ligne);
+    if (declaration) { classe = declaration[1]; parClasse.set(classe, []); continue; }
+    const methode = /^ {4}func (test\w+)\(\)/.exec(ligne);
+    if (methode && classe) parClasse.get(classe).push(methode[1]);
+  }
+  return parClasse;
+}
+
+test('pointage : les trois tests de QR tournent dans le socle (DemoPointageQRTests), « pointage » garde sept tests', () => {
+  const parClasse = testsParClasse('DemoPointageTests.swift');
+  assert.deepEqual([...parClasse.keys()], ['DemoPointageTests', 'DemoPointageQRTests']);
+  assert.deepEqual(parClasse.get('DemoPointageQRTests'), TESTS_QR, 'aucun test retiré : les trois tests de QR, tels quels');
+  const restants = parClasse.get('DemoPointageTests');
+  // Sept tests : 16 min de tests en iPad paysage aux runs 45239724447 et 45238573082. Un huitième ramènerait l'étape
+  // au-dessus des 20 min de la décision 22 : le ranger dans DemoPointageQRTests (socle), ou re-mesurer d'abord.
+  assert.equal(restants.length, 7, `DemoPointageTests : ${restants.length} tests (${restants.join(', ')})`);
+  assert.ok(!restants.some(t => TESTS_QR.includes(t)), 'un test de QR est resté dans DemoPointageTests');
+  for (const c of ['DemoPointageTests', 'DemoPointageQRTests']) assert.ok(classes.includes(c), `${c} n est pas reconnue comme classe XCUITest`);
+  // « pointage » ne nomme que DemoPointageTests ; DemoPointageQRTests n'est nommée nulle part, donc exécutée par le socle.
+  assert.deepEqual(classesDe(parEtape.find(e => e.nom === 'pointage')), ['DemoPointageTests']);
+  assert.ok(!yml.includes('JoleneUITests/DemoPointageQRTests'), 'DemoPointageQRTests : ni -only-testing ni -skip-testing (elle tourne dans le socle)');
+  assert.ok(!socle.sauf.includes('JoleneUITests/DemoPointageQRTests') && socle.seulement.includes('JoleneUITests'), 'le socle exécute DemoPointageQRTests');
+  assert.equal(parResume.find(r => r.nom === 'pointage').classes.join(), 'DemoPointageTests', 'classe exigée par le résumé');
+});
+
+// Veilleur déclenché par la durée d'un test. À la tentative 2 du run 45239724447, un test a duré dix minutes (délai
+// d'exécution) avec un événement synthétisé toutes les 2 min 8 s ; rien ne garantit qu'une marque de gel figurait au
+// journal. Un test en cours depuis plus de `JOLENE_VEILLEUR_SEUIL_TEST_S` (420 s : 1,6 fois le plus long test des éclats
+// veillés, 264 s, et 3 min avant le délai d'exécution de 600 s) déclenche les mêmes relevés.
+const JOURNAL_TEST_EN_COURS = [
+  "Test Suite 'DemoPointageTests' started at 2026-11-24 09:57:29.100.",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' started.",
+  '    t =     0.00s Start Test at 2026-11-24 09:57:29.101',
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' passed (62.760 seconds).",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture]' started.",
+  '    t =    90.90s     Synthesize event',
+  '',
+].join('\n');
+
+test('veilleur : un test en cours au-delà du seuil déclenche les relevés, sans aucune marque de gel au journal', () => {
+  const script = read(SCRIPT_GEL);
+  assert.ok(script.includes('local seuil="${JOLENE_VEILLEUR_SEUIL_TEST_S:-420}"'), 'seuil par défaut du veilleur ≠ 420 s');
+  for (const marque of MARQUES_GEL) assert.ok(!JOURNAL_TEST_EN_COURS.toLowerCase().includes(marque.toLowerCase()));
+  const b = bac(OUTILS_VEILLEUR);
+  try {
+    const journal = join(b.sortie, 'test-without-building-pointage.log');
+    writeFileSync(journal, JOURNAL_TEST_EN_COURS);
+    const r = b.lancer(['veiller', 'pointage', journal],
+      { JOLENE_VEILLEUR_PAS_S: '1', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_VEILLEUR_SEUIL_TEST_S: '1', JOLENE_IPS_HOTE: join(b.dir, 'absent') });
+    assert.equal(r.status, 0, r.stderr);
+    for (const n of [1, 2, 3]) {
+      assert.match(r.stdout, new RegExp(`Passe ${n} du veilleur \\(pointage\\) : \\S+ — test -\\[JoleneUITests\\.DemoPointageTests testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture\\] en cours depuis plus de 1 s`));
+      assert.ok(existsSync(join(b.sortie, `gel-pointage-sample-${n}.txt`)), `sample de l app, passe ${n}`);
+    }
+    assert.ok(b.appels().includes(`sample 4242 5 -file ${join(b.sortie, 'gel-pointage-sample-1.txt')}`), 'sample de l app Jolene');
+    // Une marque de gel reste annoncée comme telle (déclenchement d'origine).
+    writeFileSync(journal, `${JOURNAL_TEST_EN_COURS}    t = 151.00s App event loop idle notification not received, will attempt to continue.\n`);
+    const marque = b.lancer(['veiller', 'pointage', journal], { JOLENE_VEILLEUR_PAS_S: '0', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_IPS_HOTE: join(b.dir, 'absent') });
+    assert.match(marque.stdout, /Passe 1 du veilleur \(pointage\) : \S+ — marque de gel au journal/);
+  } finally { b.nettoyer(); }
+});
+
+test('veilleur : sous le seuil, tests conclus ou journal absent — aucun relevé, quelle que soit l attente', () => {
+  const conclu = JOURNAL_TEST_EN_COURS.split('\n').slice(0, 4).join('\n');
+  for (const [cas, texte, seuil] of [['test en cours sous le seuil', JOURNAL_TEST_EN_COURS, '3600'], ['tous les tests conclus', `${conclu}\n`, '1'],
+    ['journal absent', null, '1'], ['seuil illisible, remplacé par 420 s', JOURNAL_TEST_EN_COURS, 'bientôt']]) {
+    const b = bac(OUTILS_VEILLEUR);
+    try {
+      const journal = join(b.sortie, 'test-without-building-pointage.log');
+      if (texte !== null) writeFileSync(journal, texte);
+      // Le veilleur attend sans fin (l'étape le tue après xcodebuild) : coupé ici après 2,5 s.
+      const r = spawnSync('bash', [join(root, SCRIPT_GEL), 'veiller', 'pointage', journal], { encoding: 'utf8', timeout: 2_500,
+        env: { PATH: `${join(b.dir, 'bin')}:${process.env.PATH}`, HOME: b.dir, UDID: 'UDID-TEST', JOLENE_UI_OUTPUT: b.sortie,
+          JOLENE_VEILLEUR_PAS_S: '1', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_VEILLEUR_SEUIL_TEST_S: seuil } });
+      assert.equal(r.status, null, `${cas} : le veilleur attendait encore (${r.stdout})`);
+      assert.deepEqual(b.appels(), [], `${cas} : aucun outil de relevé appelé`);
+      assert.deepEqual(readdirSync(b.sortie).filter(f => f.startsWith('gel-')), [], `${cas} : aucun fichier gel-*`);
+    } finally { b.nettoyer(); }
+  }
 });

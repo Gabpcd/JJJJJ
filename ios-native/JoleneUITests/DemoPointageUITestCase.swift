@@ -1,10 +1,10 @@
 import XCTest
 
-/// Étapes communes des XCUITest du pointage démo (lot 2, T4b) : `DemoPointageTests` (parcours nominal, QR, GPS, hors
-/// ligne) et `DemoPointageEtatsTests` (session à vérifier, échec du consentement, coupe-circuit ; seconde revue fraîche
-/// de T4b, m2 et m3). Aucune méthode de test ici. Monde `DemoPointageGateway` (`demo-presences.json`, horloge fixée
-/// 2026-11-02T00:00:00Z ; codes affichés : mission a `123456`, mission b `654321` ; `100001` → refus du code inconnu ;
-/// consentement GPS NULL au lancement). Aucune attente par délai fixe : tout passe par `require`.
+/// Étapes communes des XCUITest du pointage démo (lot 2, T4b) : `DemoPointageTests` (parcours nominal, GPS, hors ligne),
+/// `DemoPointageQRTests` (QR) et `DemoPointageEtatsTests` (session à vérifier, échec du consentement, coupe-circuit ;
+/// seconde revue fraîche de T4b, m2 et m3). Aucune méthode de test ici. Monde `DemoPointageGateway` (`demo-presences.json`,
+/// horloge fixée 2026-11-02T00:00:00Z ; codes affichés : mission a `123456`, mission b `654321` ; `100001` → refus du code
+/// inconnu ; consentement GPS NULL au lancement). Aucune attente par délai fixe : tout passe par `require`.
 ///
 /// Scanner démo (seconde revue fraîche de T4b, MJ1) : en DEBUG, `DemoQRScannerView` ne lit rien d'elle-même ; la feuille
 /// `pointage-scanner` reste présentée jusqu'au toucher de `pointage-scanner-demo-lire` (`lireQRDemo()`). L'ouverture de la

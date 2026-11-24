@@ -17,8 +17,12 @@
 #                               n'est masqué, le résumé xcresult exige toujours chaque éclat vert.
 #                               Environnement : UDID, JOLENE_UI_OUTPUT, ECLAT_PRECEDENT, ECLAT_PRECEDENT_ISSUE
 #                               (`steps.<id>.outcome`), ECLAT_PRECEDENT_CODE (`steps.<id>.outputs.code`).
-#   veiller <éclat> <journal>   En tâche de fond des éclats presences et pointage. Dès que le journal xcodebuild signale
-#                               une app qui ne redevient pas inactive, trois passes à 60 s d'écart : `sample` de l'app
+#   veiller <éclat> <journal>   En tâche de fond des éclats socle, presences et pointage. Dès que le journal xcodebuild
+#                               signale une app qui ne redevient pas inactive, ou qu'un test y est en cours depuis plus
+#                               de JOLENE_VEILLEUR_SEUIL_TEST_S (420 s : 1,6 fois le plus long test mesuré de ces éclats,
+#                               264 s, et 3 min avant le délai d'exécution de 600 s ; à la tentative 2 du run
+#                               45239724447, un test a duré dix minutes, un événement toutes les 2 min 8 s, sans relevé
+#                               lisible), trois passes à 60 s d'écart : `sample` de l'app
 #                               Jolene, de backboardd et de SpringBoard du simulateur, capture d'écran du simulateur
 #                               (30 s au plus), journal du simulateur des 10 dernières minutes (passes 1 et 3), rapports
 #                               .ips récents de l'hôte et du simulateur, mémoire de l'hôte (vm_stat, swap, top). Fichiers
@@ -28,7 +32,8 @@
 #
 # Aucune sous-commande de relevé ne fait échouer l'étape appelante : `relancer-si-gel` et `veiller` rendent toujours 0,
 # même si un outil échoue ou dépasse sa borne. Garde : tests/node/ios-swift-ci-eclats.node.mjs (outils simulés).
-# Réglages des gardes Node seulement : JOLENE_VEILLEUR_PAS_S (10 s), JOLENE_VEILLEUR_PAUSE_S (60 s), JOLENE_IPS_HOTE.
+# Réglages des gardes Node seulement : JOLENE_VEILLEUR_PAS_S (10 s), JOLENE_VEILLEUR_PAUSE_S (60 s),
+# JOLENE_VEILLEUR_SEUIL_TEST_S (420 s), JOLENE_IPS_HOTE.
 
 set -u
 UDID="${UDID:-}"
@@ -220,13 +225,43 @@ collecter() {
   return 0
 }
 
+# test_en_cours <journal> : test démarré sans ligne de conclusion au journal (« -[Cible.Classe test] »), vide sinon.
+test_en_cours() {
+  [ -f "$1" ] || return 0
+  awk '
+    /^Test Case .* started\.$/ { courant = $3 " " $4; next }
+    /^Test Case .* (passed|failed) [(]/ { courant = "" }
+    END { if (courant != "") { gsub("\047", "", courant); print courant } }
+  ' "$1" 2>/dev/null
+  return 0
+}
+
 veiller() {
   local eclat="${1:-?}" journal="${2:-}"
   local prefixe="${JOLENE_UI_OUTPUT:-.}/gel-$eclat"
   local pas="${JOLENE_VEILLEUR_PAS_S:-10}" pause="${JOLENE_VEILLEUR_PAUSE_S:-60}" n
+  local seuil="${JOLENE_VEILLEUR_SEUIL_TEST_S:-420}"
+  case "$seuil" in '' | *[!0-9]*) seuil=420 ;; esac
+  # Test suivi, et instant où le veilleur l'a vu en cours pour la première fois (à `pas` secondes près).
+  local suivi="" depuis=0 courant raison
   for n in 1 2 3; do
-    until grep -qiE "$MARQUES_VEILLEUR" "$journal" 2>/dev/null; do sleep "$pas"; done
-    echo "Passe $n du veilleur ($eclat) : $(horodatage)"
+    while :; do
+      if grep -qiE "$MARQUES_VEILLEUR" "$journal" 2>/dev/null; then
+        raison="marque de gel au journal"
+        break
+      fi
+      courant="$(test_en_cours "$journal")"
+      if [ "$courant" != "$suivi" ]; then
+        suivi="$courant"
+        depuis=$(date +%s)
+      fi
+      if [ -n "$suivi" ] && [ $(($(date +%s) - depuis)) -ge "$seuil" ]; then
+        raison="test $suivi en cours depuis plus de $seuil s"
+        break
+      fi
+      sleep "$pas"
+    done
+    echo "Passe $n du veilleur ($eclat) : $(horodatage) — $raison"
     collecter "$prefixe" "$n"
     echo "Passe $n terminée : $(horodatage)"
     [ "$n" -lt 3 ] && sleep "$pause"
