@@ -37,7 +37,8 @@ import JoleneDesign
 /// identifiant racine `contrat-detail` (jamais `contrat-screen`, l'écran du soignant) ; mode de signature annoncé au-dessus
 /// du formulaire OTP avec les textes du web (`TextesWeb.Contrat.otpLibelle`, `otpDescription`, `ContratMission.tsx`
 /// l.742-745, identifiant `contrat-mode-otp`), seul mode porté (signature manuscrite non portée) ; CDD sans original :
-/// préparation par l'employeur sur jolene.app (`contrat-preparer-web`) ; renvois web ouverts dans l'espace établissement.
+/// préparation par l'employeur sur jolene.app (`contrat-preparer-web`) ; page du certificat sur jolene.app
+/// (`contrat-certificat-web`, §1.2) ; renvois web ouverts dans l'espace établissement.
 struct ContratScreen: View {
     /// Espace qui regarde le contrat : epoch de sa session et partie du contrat.
     enum Cadre {
@@ -172,26 +173,37 @@ struct ContratScreen: View {
         document(contrat)
         if ContratRules.certificatVisible(contrat) {
             CertificatView(signatures: model.signatures, erreur: model.erreurCertificat, prefixe: "contrat-certificat")
-            NavigationLink {
-                CertificatScreen(model: model)
-            } label: {
-                HStack {
-                    Label(TextesWeb.Certificat.titrePage, systemImage: "checkmark.shield")
-                        .foregroundStyle(JoleneColor.midnight)
-                    Spacer(minLength: JoleneSpacing.sm)
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(JoleneColor.bubblegum)
-                        .accessibilityHidden(true)
+            if estEtablissement {
+                // Page du certificat hors périmètre natif de l'établissement (`LOT5_PLAN.md` §1.2) : renvoi web, le résumé
+                // reste affiché ci-dessus.
+                if let presentateurRenvoiWeb, let url = EtabContratsPresentation.urlCertificat(id: contrat.id) {
+                    JoleneButton(EtabContratsPresentation.certificatSurJolene, style: .secondary) {
+                        presentateurRenvoiWeb.presenter(.etablissement(url))
+                    }
+                    .accessibilityIdentifier("contrat-certificat-web")
                 }
-                .font(JoleneFont.callout.weight(.semibold))
-                .padding(JoleneSpacing.lg)
-                .frame(minHeight: 44)
-                .background(JoleneColor.cloud)
-                .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
-                .contentShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+            } else {
+                NavigationLink {
+                    CertificatScreen(model: model)
+                } label: {
+                    HStack {
+                        Label(TextesWeb.Certificat.titrePage, systemImage: "checkmark.shield")
+                            .foregroundStyle(JoleneColor.midnight)
+                        Spacer(minLength: JoleneSpacing.sm)
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(JoleneColor.bubblegum)
+                            .accessibilityHidden(true)
+                    }
+                    .font(JoleneFont.callout.weight(.semibold))
+                    .padding(JoleneSpacing.lg)
+                    .frame(minHeight: 44)
+                    .background(JoleneColor.cloud)
+                    .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+                    .contentShape(RoundedRectangle(cornerRadius: JoleneRadius.card))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("contrat-certificat-ouvrir")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("contrat-certificat-ouvrir")
         }
         signatures(contrat)
         TimelineView(.periodic(from: .now, by: 1)) { _ in

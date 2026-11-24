@@ -407,6 +407,35 @@ juridique ; aucun texte juridique n'est ajouté.
    aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
    `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
+## Précisions relevées par la tranche T10 (contrats et signature OTP établissement, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique nouveau (textes du web repris par
+`TextesWeb` et `LibellesWeb`, refus serveur traduits comme le web, quelques libellés natifs de navigation).
+
+1. **Port étendu, écrans réemployés (D18).** `ContratsPort` reçoit huit méthodes à contexte `EtablissementReadContext`
+   (défaut « non câblé » pour les conformances antérieures) ; `ContratModel`, `ContratsListeModel`, `ContratScreen`,
+   `ContratsListeView` et `SignatureOtpView` du lot 2 servent les deux espaces, aiguillés par `PartieContrat`. Aucun
+   appel sans la permission `contrats` servie (`ContratsEtablissement.verifier`, fail-closed). Supabase : extension
+   `Etablissement/SupabaseEtabContratsGateway.swift` du gateway du lot 2 (liste `eq(etablissement_id)`, détail borné à
+   l'établissement, compte TEST sur `etablissements.est_compte_test` ; la mission n'est pas relue, ses montants non
+   plus, D15) ; succès de signature annoncé seulement après relecture de `signature_etablissement_le` non nul et de la
+   preuve `signatures_contrats` du membre.
+2. **Identifiants.** Écran du lot 2 réemployé : ses identifiants restent (`contract-otp` pour le champ du code,
+   `contrat-signer` pour la validation, au lieu de `contrat-otp` et `contrat-otp-valider` du plan) ; racine
+   `contrat-detail` dans l'espace établissement (jamais `contrat-screen`) ; `etab-contrats-screen`, `etab-contrat-{id}`,
+   `etab-contrat-statut-{id}` (pastille, dans le bouton de la carte), `contrat-otp-envoyer`, `contrat-signe`,
+   `contrat-preparer-web` comme prévu ; `contrat-mode-otp` pour le mode de signature.
+3. **Point d'entrée (D13).** Aucun onglet « Contrats » : bouton « Contrats » de la barre de Missions
+   (`etab-missions-contrats`) et lien « Contrats » du détail d'une mission assignée, tous deux masqués sans la
+   permission `contrats` (absents pour POINTAGE_ONLY et LECTURE_SEULE). Liens `/etablissement/contrats?statut=` et
+   `/contrat/{id}` natifs dans l'espace établissement ; `/contrat/{id}/certificat` reste un renvoi web (§1.2), le résumé
+   du certificat restant affiché sur le contrat.
+4. **Mode de signature affiché (HARD STOP n°4, à valider).** Au-dessus du formulaire OTP, l'écran établissement montre
+   `TextesWeb.Contrat.otpLibelle` et `TextesWeb.Contrat.otpDescription` (`ContratMission.tsx` l.742 et l.745, mention
+   « Conforme art. 1366-1367 Code civil »), verbatim, comme le web ; la signature manuscrite n'est pas proposée. Ces
+   textes sont ceux du lot 2 et ne sont pas sous le verrou `VALIDES` de `contrats-etablissement-ios.node.mjs` ; l'écran
+   reste soumis à la validation de Gabrielle avant merge (§6.4).
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
