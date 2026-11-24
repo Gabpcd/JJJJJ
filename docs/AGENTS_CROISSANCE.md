@@ -153,8 +153,9 @@ de moins de 90 jours, tension BMO exacte). L'agent email, l'agent d'appels et le
 fonction : aucun ne re-décide le ciblage.
 
 Une cible est **disponible** si elle n'a jamais été contactée, n'est pas au CRM (date d'ajout sur le
-prospect, ou contact CRM au même FINESS), ne s'est jamais inscrite sur la plateforme (compte supprimé
-compris), n'est ni ignorée ni en opposition, et n'a aucun brouillon vivant. Deux décisions à connaître :
+prospect, ou contact CRM au même FINESS), n'a pas de compte établissement au même FINESS (un compte
+suspendu par un administrateur compte encore ; un compte supprimé par l'établissement lui-même perd son
+FINESS et ne compte plus), n'est ni ignorée ni en opposition, et n'a aucun brouillon vivant. Deux décisions à connaître :
 - une cible n'a qu'un canal à la fois, et un brouillon **rejeté**, ou **validé puis expiré**, ferme la
   cible aux deux canaux. « Ne pas appeler » sur une fiche prive donc aussi l'établissement d'un email
   futur. C'est voulu : vous avez écarté cet établissement, ou vous avez pu le contacter sans le noter.
@@ -275,6 +276,135 @@ Réglages (`growth_config`, texte) : `agents_croissance_actifs`, `agents_departe
 défauts 30 et 60 dans le code), `agents_appels_quota_semaine` et `agents_appels_file_max`. Sans mention d'opposition, l'agent de
 prospection refuse de tourner : le verrou est explicite et l'erreur est tracée.
 
+### 4 ter. Adresses publiques des établissements pour personnes âgées (`20261124170000_prospection_adresses_annuaire_personnes_agees.sql`)
+
+**Pourquoi.** Les seules adresses des établissements ciblés venaient de l'Annuaire Santé, et ce sont
+des messageries de santé fermées (MSSanté, Apicrypt) : un email envoyé depuis Gmail y est rejeté.
+L'agent email n'avait donc aucune cible (§4 bis).
+
+**Source.** L'annuaire officiel des établissements pour personnes âgées
+([pour-les-personnes-agees.gouv.fr](https://www.pour-les-personnes-agees.gouv.fr/annuaire-ehpad-et-maisons-de-retraite),
+portail géré par la CNSA), tel que republié en données ouvertes sur data.gouv.fr :
+[« Etablissements EHPAD, ESLD, résidences autonomie, accueils de jour »](https://www.data.gouv.fr/datasets/etablissements-ehpad-esld-residences-autonomie-accueils-de-jour),
+Licence Ouverte 2.0, fichier `base-etablissements.csv` publié le 11/11/2020 (c'est la dernière
+publication : les adresses ont six ans). Trois points lus le 24/11/2026, à connaître :
+- ce jeu n'est pas une publication de la CNSA : c'est une reprise des données du site par un compte
+  de data.gouv.fr, supprimé depuis, et le jeu n'est rattaché à aucune organisation. La Licence
+  Ouverte affichée a été posée par ce compte ;
+- le site d'origine dit lui-même, dans ses mentions légales (« Droits de reproduction »), que ses
+  contenus « sont des informations publiques librement et gratuitement réutilisables dans les
+  conditions fixées par la loi n°78-753 du 17 juillet 1978 », « à l'exception des marques et logos
+  et des contenus grevés de droits de propriété intellectuelle de tiers ou contenant des données
+  personnelles ». D'où le tri ci-dessous : une adresse qui peut nommer une personne n'est pas reprise ;
+- la même page ajoute : « Si vous souhaitez réutiliser des contenus présents sur ce site, merci de
+  bien vouloir nous contacter. » Ce contact n'a pas été pris (aucun message n'est envoyé à un
+  tiers sans vous) : à vous de décider s'il faut écrire à la CNSA.
+
+**Tri (script reproductible `scripts/acquisition/extraire-annuaire-personnes-agees.mjs`).** Le
+fichier porte 10 901 lignes. Une adresse n'est retenue que si tout son identifiant (avant « @ »)
+s'explique sans nommer une personne : mots de fonction ou de type d'établissement (contact,
+direction, accueil, ehpad, résidence…), mots du nom de l'établissement ou de sa commune. Aucune
+adresse n'est devinée. Sont écartées :
+- une adresse dont un mot reste inexpliqué, ou qui porte une initiale isolée : `prenom.nom@`,
+  `p.nom@`, `pnom@` ;
+- une adresse qui ne s'explique que par le champ « gestionnaire » du fichier : ce champ est parfois
+  le nom d'une personne (la revue de la PR a trouvé une adresse `nom.prenom@` retenue pour cette
+  raison ; le champ n'est plus lu) ;
+- un prénom courant sans mot de fonction, même s'il figure dans le nom de l'établissement ou de la
+  commune : « jean.moulin@ » pour une résidence Jean-Moulin, « martin@ » pour Saint-Martin ;
+- un sigle de deux lettres à côté d'un mot du nom de l'établissement (« mr.dupont@ », « ch.dupont@ »,
+  qui se lisent aussi « Monsieur Dupont ») ; à côté du nom de la commune, le sigle passe ;
+- un nom fait de mots de liaison collés (« direction.lesaux@ ») ;
+- un domaine à une faute de frappe d'un domaine courant (« orane.fr », « gmail.com.fr ») : le
+  message partirait ailleurs.
+
+| | Lignes |
+|---|---|
+| Retenues (une par FINESS) | 6 756, soit 6 040 adresses distinctes |
+| dont un mot de fonction ou de type d'établissement (classe « fonction ») | 5 142 |
+| dont le seul nom de la structure ou de la commune (classe « structure ») | 1 614 |
+| Écartées : peuvent nommer une personne | 3 509 |
+| Écartées : domaine à une faute de frappe d'un domaine courant | 14 |
+| Écartées : pas d'adresse, adresse mal formée, FINESS invalide | 568, 16, 38 |
+
+La règle est volontairement stricte : elle écarte aussi des adresses légitimes qu'elle reconnaît mal
+(« secret.direction@ », « casvp-s10@ », « louisemichel@ » pour un EHPAD Louise-Michel). **Elle reste
+une heuristique.** Une adresse au seul nom de l'établissement est retenue même si ce nom est un
+patronyme (« dupont@ » pour une résidence Dupont) : rien, dans le fichier, ne permet de distinguer
+ce cas. C'est une des raisons pour lesquelles chaque brouillon est relu avant envoi, avec l'adresse
+sous les yeux. La classe est gardée avec chaque adresse : restreindre plus tard aux seules adresses
+« fonction » est un filtre d'une ligne.
+
+**Ce qui est écrit en base, par la migration seulement.** Une colonne
+`prospects_etablissements.email_provenance` (l'adresse décrite, la source, l'adresse de la page du
+jeu, la date de publication, la date de mise à jour de la fiche, la date du relevé, la classe, et
+l'ancienne adresse fermée remplacée). L'adresse de l'annuaire est écrite sur le prospect de même
+FINESS quand il n'a pas d'adresse, ou une adresse en messagerie fermée. Une adresse ouverte déjà
+présente est conservée ; un prospect en opposition n'est pas touché. La migration le contrôle
+elle-même après l'écriture (aucune adresse ouverte du bloc modifiée, aucune opposition touchée,
+comptes qui se recoupent) et s'annule en entier sinon.
+
+**Une adresse ne reçoit que la mention de sa propre origine.** La provenance ne vaut que pour
+l'adresse qu'elle décrit. Dans trois cas l'agent ne prépare **aucun brouillon**, parce qu'aucune
+mention d'opposition ne dirait vrai sur l'origine de l'adresse, et il le compte (« N adresses
+laissées sans brouillon », sur la carte de l'agent) :
+- une adresse **saisie à la main** dans Sales : l'écran enregistre désormais avec elle l'origine
+  `SAISIE_MANUELLE` ;
+- l'adresse d'un établissement dont la provenance décrit **une autre adresse** (adresse changée
+  depuis l'import) ;
+- la **fiche CRM corrigée à la main** d'un tel établissement, au moment de la relance.
+
+Pour écrire à ces adresses, passez par le composeur de Sales, avec votre propre texte. Limite
+antérieure à ce lot, inchangée : une adresse saisie à la main avant ce lot, ou portée par une fiche
+CRM créée à la main, n'a pas de provenance et reçoit la mention historique (« FINESS et Annuaire
+Santé »). Une mention propre aux adresses saisies à la main est un texte à décider (§6).
+
+**L'envoi groupé ne les emporte pas.** `sales-outreach-batch` (éteint avant le lancement par
+`automatisations_marketing_actives`) envoie un même texte à tous les prospects jamais contactés. Il
+ignore désormais toute adresse d'établissement qui porte une provenance : son texte unique ne peut
+pas dire d'où vient chaque adresse. Ces adresses ne passent que par les brouillons relus un par un.
+
+**Rendement, départements pilotes (mesures du 24/11/2026, avant import).** Le fichier porte 585
+lignes en 56, 75 et 92 (162, 251 et 172). 274 ont une adresse retenue (108, 55 et 111). Lecture
+seule en production : 260 de ces établissements sont dans la base, tous ciblés, tous des EHPAD, tous
+jamais contactés, aucun en opposition, aucun avec une adresse ouverte (136 ont une adresse en
+messagerie fermée, 124 n'en ont pas). **260 adresses attendues** (56 : 103, 75 : 51, 92 : 106), sur
+les 2 318 établissements ciblés, soit 11 %. Au rythme de 20 premiers contacts par jour, cela
+représente treize passages, soit environ deux semaines de brouillons, moins les adresses de groupe
+partagées. Le nombre exact écrit en production est donné par la migration (message
+`ADRESSES_PUBLIQUES_IMPORT` du déploiement) et relu ensuite. Les autres familles ciblées (handicap,
+domicile, hôpitaux, centres de santé, écoles) ne sont pas dans cette source : elles restent sur la
+liste d'appels.
+
+**Email ou appel.** Une cible n'a qu'un canal à la fois. Depuis cet import, un EHPAD peut être
+joint par email : les fiches d'appel vont donc d'abord aux établissements qu'aucun email ne peut
+joindre (sans adresse, ou adresse en messagerie fermée), puis seulement aux autres. L'agent email
+passe avant l'agent d'appels à chaque passage.
+
+**Ce que vous voyez.** Chaque brouillon dont l'adresse vient de l'annuaire affiche « Source de
+l'adresse », avec la date de la fiche, la date du relevé, « Adresse non vérifiée : elle a pu changer
+depuis » et un lien vers la page du jeu. La carte de l'agent dit combien d'adresses utilisables
+viennent d'un annuaire public. L'avertissement « Prospection par email à l'arrêt » disparaît de
+lui-même dès qu'une adresse est utilisable.
+
+**Limites connues.**
+- Les adresses datent de 2020 : certaines reviendront en erreur. Rien ne le note encore dans
+  l'application. Si un message revient en erreur, rejetez la relance quand elle se présente ; le
+  marquage « adresse en erreur » (qui retirerait aussi l'adresse des autres établissements du même
+  groupe) fait l'objet d'un lot à part.
+- Une même adresse de groupe ou de siège ne reçoit qu'une séquence (règle existante de l'agent) :
+  le nombre de brouillons sera donc inférieur au nombre d'adresses.
+- La liste d'appels sert d'abord les établissements sans adresse utilisable. Un EHPAD dont l'adresse
+  est utilisable mais que l'agent email ne sert pas (adresse de groupe déjà en séquence, adresse
+  laissée sans brouillon) passe donc en fin de liste d'appels.
+- Retour arrière : une migration qui remet `email` à la valeur gardée dans `email_provenance.remplace`
+  (ou à NULL), efface la provenance, puis restaure les trois corps de fonctions de
+  `20261124123500`. Les brouillons déjà préparés restent à rejeter à la main.
+- Le jeu ne couvre que les établissements pour personnes âgées. Les pharmacies d'officine ne sont pas
+  ciblées, par choix : le produit ne sert pas une officine (la publication d'une mission y est
+  refusée par `dec_verifier_profession_etablissement`, le formulaire la désactive, et les pages
+  publiques de missions les excluent).
+
 ## 5. Conformité — HARD STOP n°4 (validation de Gabrielle requise avant merge)
 
 Wording exposé aux prospects, ajouté en pied de chaque email de prospection :
@@ -286,6 +416,46 @@ Wording exposé aux prospects, ajouté en pied de chaque email de prospection :
 Origine vérifiée en base au 08/11 : les 64 058 établissements viennent de FINESS, et leurs 30 633 emails
 viennent de l'enrichissement Annuaire Santé (FHIR ANS). Les relances de l'agent ne concernent que les
 contacts qu'il a lui-même ouverts, ce qui garde cette mention exacte.
+
+Depuis le 24/11/2026 (§4 ter), une adresse venue de l'annuaire des établissements pour personnes
+âgées porte une autre mention, parce que la première serait fausse pour elle :
+
+> Votre adresse de contact provient de l'annuaire public des établissements pour personnes âgées
+> (pour-les-personnes-agees.gouv.fr, données ouvertes publiées sur data.gouv.fr). Si vous ne souhaitez
+> plus être contacté par Jolene, répondez simplement « STOP » à cet email : nous ne vous écrirons plus.
+
+La phrase d'opposition est reprise mot pour mot ; seule l'origine déclarée change. Une fonction
+unique, `private.fn_growth_mention_opposition`, choisit la mention d'après la provenance de
+l'adresse, pour le premier email comme pour les relances. Une adresse dont l'origine n'a pas de
+mention connue ne reçoit aucun brouillon (l'agent le compte dans `exclus_sans_mention`, et la carte
+de l'agent l'affiche) : adresse saisie à la main dans Sales, adresse changée depuis l'import, fiche
+CRM corrigée à la main pour un établissement importé (§4 ter). Défaut porté
+par le code, modifiable par la clé facultative `prospection_mention_opposition_annuaire_pa` : si vous
+modifiez un jour la phrase d'opposition de la mention historique, modifiez aussi celle-ci.
+
+Base retenue pour ces adresses (sources lues le 24/11/2026) :
+- CNIL, [« La prospection commerciale par courrier électronique »](https://www.cnil.fr/fr/la-prospection-commerciale-par-courrier-electronique-sms-mms-et-automate-dappel)
+  (page datée du 10/06/2026, doctrine de l'autorité), onglet consacré aux professionnels : deux
+  règles, l'information et l'opposition simple et gratuite, et ce rappel : « Les adresses génériques
+  de type info[@]nomsociete.fr, contact[@]nomsociete.fr ou commande[@]nomsociete.fr, qui concernent
+  de personnes morales, ne sont pas soumises aux principes rappelés ci-dessus. » ;
+- [CPCE, art. L34-5](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042155961) (texte
+  légal) : le consentement préalable vise la prospection « utilisant les coordonnées d'une personne
+  physique » ; dans tous les cas, l'émetteur doit être identifiable et indiquer des « coordonnées
+  valables » pour demander l'arrêt. La page porte une note, lue le 24/11/2026 : par sa décision
+  n° 2026-1210 QPC du 25 juin 2026, le Conseil constitutionnel a déclaré contraires à la Constitution
+  les sixième, huitième et avant-dernier alinéas de cet article, avec une abrogation reportée au
+  31 octobre 2027. Ce ne sont pas les alinéas cités ici (le premier, sur le consentement, et celui sur
+  l'identité de l'émetteur) ; la décision elle-même n'a pas été lue.
+- Mentions légales de pour-les-personnes-agees.gouv.fr (conditions de réutilisation, citées au
+  §4 ter) : réutilisation libre et gratuite, sauf contenus contenant des données personnelles, et
+  demande d'être contacté par qui réutilise les contenus. Ce contact n'a pas été pris.
+- Choix de conformité Jolene : ne reprendre que des adresses qui ne nomment personne (tri du §4 ter),
+  dire quand même l'origine de l'adresse et offrir l'opposition dans chaque message, n'envoyer qu'à la
+  main, garder la source et la date de chaque adresse.
+
+Ce texte et ce choix sont une décision prise par Claude sur délégation explicite de Gabrielle du
+08/11/2026, à relire par elle (HARD STOP n°4).
 
 | Source | Force | Ce qu'elle impose |
 |---|---|---|
@@ -313,8 +483,9 @@ Garde-fous du code :
   ou « Pas intéressé » sont définitifs pour tous les canaux. Source lue le 24/11/2026 : CNIL,
   [« Prospection commerciale par téléphone (hors automate d'appel) : quelles sont les règles ? »](https://www.cnil.fr/fr/prospection-commerciale-par-telephone-hors-automate-dappel-quelles-sont-les-regles)
   (page datée du 10/06/2026, doctrine de l'autorité). Elle indique que les règles ont changé le
-  11/08/2026 : consentement préalable pour les particuliers (elle renvoie à l'article L. 223-1 du code
-  de la consommation, qui ne vise que les consommateurs), et, pour les professionnels, deux règles,
+  11/08/2026 : consentement préalable pour les particuliers (la page renvoie alors, sous son onglet
+  consacré aux consommateurs, à l'article L. 223-1 du code de la consommation), et, pour les
+  professionnels, deux règles,
   « Information » et « Opposition simple et gratuite », la prospection pouvant se fonder sur l'intérêt
   légitime « lorsque l'objet de la sollicitation est en rapport avec la profession de la personne
   démarchée ». D'où les deux dernières phrases du script (origine du numéro, possibilité de ne plus
@@ -353,3 +524,7 @@ Garde-fous du code :
    dans ces trois Edge Functions.
 6. **Activer Vercel Web Analytics** (ou un équivalent sans cookie) pour mesurer le trafic SEO.
 7. **Instruction juridique** de l'argument « vacation directe vs intérim » (§3) avant tout usage public.
+8. **Annuaire des établissements pour personnes âgées (§4 ter)** : décider s'il faut écrire à la CNSA,
+   dont le site demande à être contacté par qui réutilise ses contenus ; décider du texte de la
+   mention d'opposition des adresses saisies à la main (sans elle, l'agent ne prépare aucun brouillon
+   pour ces adresses).
