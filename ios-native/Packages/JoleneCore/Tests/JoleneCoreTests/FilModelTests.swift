@@ -47,7 +47,8 @@ final class FilModelTests: XCTestCase {
             await nouveau.premierPlan()
             cycle = nouveau
         } else {
-            snapshot = try XCTUnwrap(await controller.start().snapshot, file: file, line: line)
+            let etat = await controller.start()
+            snapshot = try XCTUnwrap(etat.snapshot, file: file, line: line)
         }
         let model = FilModel(controller: controller, snapshot: snapshot, conversationId: fil, autreId: autre, archivee: archivee,
                              cycle: cycle, delais: delaisCourts)

@@ -20,10 +20,10 @@ public final class DemoDiffusionMessagerie: @unchecked Sendable {
     private let verrou = NSLock()
     private var messages: [String: DiffusionEvenements<MessageChat>] = [:]
     private var saisies: [String: DiffusionEvenements<EtatSaisie>] = [:]
-    private var presences: [String: DiffusionDernierEtat<EtatPresence>] = [:]
+    private var presences: [String: DiffusionEtat<EtatPresence>] = [:]
     /// Dernière présence de chaque interlocuteur, gardée d'un canal au suivant.
     private var presencesConnues: [String: EtatPresence] = [:]
-    private var etats: [String: DiffusionDernierEtat<EtatCanal>] = [:]
+    private var etats: [String: DiffusionEtat<EtatCanal>] = [:]
     private var etatsGlobaux = DiffusionEvenements<EtatCanal>()
 
     public init() {}
@@ -40,7 +40,7 @@ public final class DemoDiffusionMessagerie: @unchecked Sendable {
     func fluxMessages(_ conversationId: String?) -> AsyncStream<MessageChat> {
         let cle = conversationId ?? Self.liste
         let (flux, etat, globaux) = verrou.withLock {
-            (dans(&messages, cle) { DiffusionEvenements() }.flux(), dans(&etats, cle) { DiffusionDernierEtat() }, etatsGlobaux)
+            (dans(&messages, cle) { DiffusionEvenements() }.flux(), dans(&etats, cle) { DiffusionEtat() }, etatsGlobaux)
         }
         // Canal simulé : abonné sans délai, une fois par canal (un second lecteur le trouve déjà abonné).
         if etat.lire() != .rejoint {
@@ -56,14 +56,14 @@ public final class DemoDiffusionMessagerie: @unchecked Sendable {
     }
 
     func fluxPresence(_ userId: String) -> AsyncStream<EtatPresence> {
-        let (diffusion, connue) = verrou.withLock { (dans(&presences, userId) { DiffusionDernierEtat() }, presencesConnues[userId]) }
+        let (diffusion, connue) = verrou.withLock { (dans(&presences, userId) { DiffusionEtat() }, presencesConnues[userId]) }
         // Dernière présence connue servie d'abord (lecture initiale de `presence_status` du web), même après `fermerTout()`.
         if let connue { diffusion.recevoir(connue) }
         return diffusion.flux()
     }
 
     func fluxEtat(_ conversationId: String?) -> AsyncStream<EtatCanal> {
-        verrou.withLock { dans(&etats, conversationId ?? Self.liste) { DiffusionDernierEtat() } }.flux()
+        verrou.withLock { dans(&etats, conversationId ?? Self.liste) { DiffusionEtat() } }.flux()
     }
 
     func fluxEtats() -> AsyncStream<EtatCanal> { verrou.withLock { etatsGlobaux }.flux() }
@@ -97,7 +97,7 @@ public final class DemoDiffusionMessagerie: @unchecked Sendable {
 
     /// Présence d'un interlocuteur : dernier état gardé pour les abonnés à venir (lecture initiale du web).
     func emettre(presence: EtatPresence) {
-        let diffusion = verrou.withLock { () -> DiffusionDernierEtat<EtatPresence>? in
+        let diffusion = verrou.withLock { () -> DiffusionEtat<EtatPresence>? in
             presencesConnues[presence.userId] = presence
             return presences[presence.userId]
         }

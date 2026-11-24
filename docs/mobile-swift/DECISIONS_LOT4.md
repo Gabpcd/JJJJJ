@@ -156,6 +156,32 @@ les règles générales.
    n'est pas bloqué : il s'inscrit, et le parrainage ne lui est pas rattaché. Ce cas reste à vérifier sur appareil
    en T15 (`RECETTE_DEVICE_LOT4.md`, lien ouvert depuis Messages et WhatsApp), après T6.
 
+13. **T7a — messagerie, cœur sans écran** (décisions de tranche, 24 novembre). (a) **Ports étendus de façon
+   additive**, avec une implémentation par défaut (aucun double ni stub existant à retoucher) :
+   `RealtimePort.etat(conversationId:)` (état du canal d'un fil, `nil` pour la liste — sans lui, le « premier
+   battement après l'abonnement du canal du fil » ne distinguerait pas le canal du fil de celui de la liste) et
+   `MessageriePort.messages(conversationId:depuis:context:)` (relecture après « rejoint » bornée par
+   `cree_le ≥ depuis`). (b) **Les treize RPC de la messagerie passent en `consommee` en T7a**, y compris les sept
+   que le T0 rangeait en T7b (`fn_messages_non_lus`, `fn_est_bloque`, `fn_bloquer_utilisateur`,
+   `fn_debloquer_utilisateur`, `fn_signaler_utilisateur`, `fn_user_id_pour_etablissement`,
+   `fn_obtenir_conversation`) : le port les exige toutes et la règle est « consommée par la PR qui câble la
+   gateway » ; T7b n'appelle aucune RPC de plus. (c) **Cycle Realtime inactif tant que l'écran n'est pas livré** :
+   `CycleRealtime` n'ouvre aucun canal et ne lit aucun badge tant que la ligne `messagerie` de
+   `DestinationLien.ecranNatifLivre` vaut `false` (T7b la passe à `true`, le cycle s'active alors sans autre
+   changement), puis lit le coupe-circuit `ios_natif_messagerie_actif` avant tout canal (messagerie coupée : ni
+   Realtime ni badge). Écart assumé au plan, qui activait le cycle dès T7a : aucun WebSocket ni RPC en production
+   pour un écran qui n'existe pas encore, et un coupe-circuit qui coupe aussi le Realtime. (d) **Issues de l'edge
+   `messagerie-validate`** : `INTERNAL_ERROR` (500) et `ENVOI_INDISPONIBLE` (503) sont « non confirmés » (issue de
+   l'insertion inconnue : fil relu, aucun renvoi), `AUTORISATION_INDISPONIBLE` (503, avant toute insertion) est un
+   refus ; fiche mise à jour. (e) **Aucun texte nouveau** : repli des erreurs = message générique du web déjà porté
+   (`MessagesDocuments.erreurGenerique`) ; les libellés par code de refus sont repris du web par T7b. (f) **Canal
+   perdu** : le SDK ne signale un canal fermé par le serveur que par son retrait du client ; la passerelle le
+   contrôle toutes les 5 s et remplace aussi un canal resté désabonné 30 s. Délais non mesurés sur un serveur
+   réel : à confirmer par T14 (STAGING) et par la recette sur appareil. (g) **Écarts au web assumés** : pas de
+   lecture initiale de `typing_status` (l'indicateur suit le prochain changement, au plus 2 s plus tard) ; le fil
+   est relu à chaque « rejoint », premier abonnement compris (le web laisse un trou entre sa lecture et
+   l'abonnement).
+
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 
 - **Périmètre (l.204)** : « soit par Safari, soit par la WebView bornée » devient : renvois par

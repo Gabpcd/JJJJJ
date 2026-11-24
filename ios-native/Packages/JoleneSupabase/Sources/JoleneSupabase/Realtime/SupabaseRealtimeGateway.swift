@@ -122,7 +122,7 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
     private let reglages: Reglages
     private let verrou = NSLock()
     private var abonnements: [String: Abonnement] = [:]
-    private var etats: [String: DiffusionDernierEtat<EtatCanal>] = [:]
+    private var etats: [String: DiffusionEtat<EtatCanal>] = [:]
     private var etatsGlobaux = DiffusionEvenements<EtatCanal>()
 
     public convenience init(client: SupabaseClient) {
@@ -209,10 +209,10 @@ public final class SupabaseRealtimeGateway: RealtimePort, @unchecked Sendable {
         return transport.utilisateur().map(Self.sujetListe)
     }
 
-    private func diffusionEtat(_ sujet: String) -> DiffusionDernierEtat<EtatCanal> {
+    private func diffusionEtat(_ sujet: String) -> DiffusionEtat<EtatCanal> {
         verrou.withLock {
             if let existante = etats[sujet] { return existante }
-            let nouvelle = DiffusionDernierEtat<EtatCanal>()
+            let nouvelle = DiffusionEtat<EtatCanal>()
             etats[sujet] = nouvelle
             return nouvelle
         }

@@ -101,7 +101,8 @@ final class Lot4WiringMessagerieTests: XCTestCase {
         XCTAssertEqual(relu?.auteurId, context.userId)
 
         await waitUntil { await recus.valeurs.count == 1 }
-        let reponse = try XCTUnwrap(await recus.valeurs.first)
+        let premiere = await recus.valeurs.first
+        let reponse = try XCTUnwrap(premiere)
         XCTAssertEqual(reponse.auteurId, interlocuteur, "réponse de l'établissement démo")
         XCTAssertEqual(reponse.contenu, try DemoFixtures.loadMessages().reponseDemo.contenu)
         XCTAssertEqual(reponse.instant, try XCTUnwrap(relu?.instant).addingTimeInterval(1), "horloge démo + 1 s")

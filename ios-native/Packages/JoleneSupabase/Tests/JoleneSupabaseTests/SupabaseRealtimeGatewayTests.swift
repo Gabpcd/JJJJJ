@@ -31,7 +31,7 @@ final class SupabaseRealtimeGatewayTests: XCTestCase {
         private let echec: Bool
         private let verrou = NSLock()
         private var flux: [String: DiffusionEvenements<ChangementRealtime>] = [:]
-        private let etats = DiffusionDernierEtat<StatutCanalRealtime>()
+        private let etats = DiffusionEtat<StatutCanalRealtime>()
 
         init(sujet: String, numero: Int, journal: Journal, echec: Bool) {
             self.sujet = sujet; self.numero = numero; self.journal = journal; self.echec = echec

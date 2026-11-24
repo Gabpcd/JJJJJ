@@ -88,10 +88,16 @@ public enum ListeConversations {
 /// abonnement). `terminer()` ferme tous les flux, présents et à venir. Sert au monde démo (`DemoRealtimeGateway`) et au
 /// partage d'un canal Realtime entre plusieurs lecteurs (`SupabaseRealtimeGateway`).
 ///
-/// `@unchecked Sendable` : tout l'état mutable est protégé par `verrou`, dans des sections synchrones ; `yield` ne fait
-/// que mettre la valeur en tampon.
+/// Deux verrous, pour qu'une émission ne puisse jamais s'interbloquer avec l'annulation d'un lecteur : `yield` reprend
+/// la tâche qui attend le flux et prend pour cela le verrou d'état de cette tâche, que son annulation tient déjà quand
+/// elle appelle `onTermination`. `verrou` protège la liste des abonnés et est le seul que prend `onTermination` ;
+/// `emission` sérialise les émissions (ordre conservé) et n'est jamais pris par `onTermination` : les `yield` et les
+/// `finish` se font sous `emission` seul, `verrou` relâché.
+///
+/// `@unchecked Sendable` : tout l'état mutable est protégé par `verrou`, dans des sections synchrones.
 public final class DiffusionEvenements<Valeur: Sendable>: @unchecked Sendable {
     private let verrou = NSLock()
+    private let emission = NSLock()
     private var abonnes: [UUID: AsyncStream<Valeur>.Continuation] = [:]
     private var termine = false
 
@@ -106,18 +112,19 @@ public final class DiffusionEvenements<Valeur: Sendable>: @unchecked Sendable {
     }
 
     public func emettre(_ valeur: Valeur) {
-        verrou.lock(); defer { verrou.unlock() }
-        for suite in abonnes.values { suite.yield(valeur) }
+        emission.lock(); defer { emission.unlock() }
+        for suite in suites() { suite.yield(valeur) }
     }
 
     public func terminer() {
+        emission.lock(); defer { emission.unlock() }
         verrou.lock()
         termine = true
-        let suites = Array(abonnes.values)
+        let aFinir = Array(abonnes.values)
         abonnes.removeAll()
         verrou.unlock()
-        // Hors du verrou : `finish()` appelle aussitôt `onTermination`, qui le reprend.
-        suites.forEach { $0.finish() }
+        // `finish()` appelle aussitôt `onTermination`, qui reprend `verrou`.
+        aFinir.forEach { $0.finish() }
     }
 
     /// Abonnés en cours.
@@ -126,10 +133,84 @@ public final class DiffusionEvenements<Valeur: Sendable>: @unchecked Sendable {
         return abonnes.count
     }
 
+    private func suites() -> [AsyncStream<Valeur>.Continuation] {
+        verrou.lock(); defer { verrou.unlock() }
+        return Array(abonnes.values)
+    }
+
     private func abonner(_ id: UUID, _ suite: AsyncStream<Valeur>.Continuation) -> Bool {
         verrou.lock(); defer { verrou.unlock() }
         guard !termine else { return false }
         abonnes[id] = suite
+        return true
+    }
+
+    private func desabonner(_ id: UUID) {
+        verrou.lock(); defer { verrou.unlock() }
+        abonnes[id] = nil
+    }
+}
+
+/// Dernier état connu et ses changements, diffusés à plusieurs abonnés `AsyncStream` : un abonné reçoit d'abord l'état
+/// courant s'il est connu, puis chaque changement (un doublon n'est pas rediffusé). Mêmes deux verrous que
+/// `DiffusionEvenements` : les états du canal Realtime sont émis pendant que des lecteurs sont annulés (fil masqué,
+/// `fermerTout()`), ce qui interbloquerait une diffusion faite sous le verrou que prend `onTermination`.
+///
+/// Le rejeu à l'abonnement se fait sous `verrou` : le flux n'a pas encore de lecteur (il n'est pas rendu), `yield` ne
+/// fait que mettre en tampon, et un changement concurrent ne peut pas être livré avant l'état qu'il remplace.
+public final class DiffusionEtat<Valeur: Sendable & Equatable>: @unchecked Sendable {
+    private let verrou = NSLock()
+    private let emission = NSLock()
+    private var dernier: Valeur?
+    private var abonnes: [UUID: AsyncStream<Valeur>.Continuation] = [:]
+    private var termine = false
+
+    public init() {}
+
+    /// Dernier état reçu, nil tant qu'aucun ne l'a été.
+    public func lire() -> Valeur? {
+        verrou.lock(); defer { verrou.unlock() }
+        return dernier
+    }
+
+    /// Nouvel état : diffusé à chaque abonné s'il change.
+    public func recevoir(_ valeur: Valeur) {
+        emission.lock(); defer { emission.unlock() }
+        verrou.lock()
+        guard dernier != valeur else {
+            verrou.unlock()
+            return
+        }
+        dernier = valeur
+        let suites = Array(abonnes.values)
+        verrou.unlock()
+        for suite in suites { suite.yield(valeur) }
+    }
+
+    public func flux() -> AsyncStream<Valeur> {
+        AsyncStream { suite in
+            let id = UUID()
+            suite.onTermination = { [weak self] _ in self?.desabonner(id) }
+            if !abonner(id, suite) { suite.finish() }
+        }
+    }
+
+    /// Termine tous les flux, présents et à venir.
+    public func terminer() {
+        emission.lock(); defer { emission.unlock() }
+        verrou.lock()
+        termine = true
+        let aFinir = Array(abonnes.values)
+        abonnes.removeAll()
+        verrou.unlock()
+        aFinir.forEach { $0.finish() }
+    }
+
+    private func abonner(_ id: UUID, _ suite: AsyncStream<Valeur>.Continuation) -> Bool {
+        verrou.lock(); defer { verrou.unlock() }
+        guard !termine else { return false }
+        abonnes[id] = suite
+        if let dernier { suite.yield(dernier) }
         return true
     }
 

@@ -186,4 +186,44 @@ final class MessagerieDecodingTests: XCTestCase {
         XCTAssertEqual(recus, [2, 3], "un flux demandé après terminer() est fermé d'emblée")
         XCTAssertEqual(diffusion.nombreAbonnes, 0)
     }
+
+    func testDernierEtatRejoueSansDoublonPuisFerme() async {
+        let etat = DiffusionEtat<EtatCanal>()
+        XCTAssertNil(etat.lire())
+        etat.recevoir(.connexion)
+        etat.recevoir(.rejoint)
+        let flux = etat.flux() // abonné après coup : dernier état d'abord
+        etat.recevoir(.rejoint) // doublon : non rediffusé
+        etat.recevoir(.coupe)
+        XCTAssertEqual(etat.lire(), .coupe)
+        etat.terminer()
+        var recus: [EtatCanal] = []
+        for await valeur in flux { recus.append(valeur) }
+        XCTAssertEqual(recus, [.rejoint, .coupe])
+        for await valeur in etat.flux() { recus.append(valeur) }
+        XCTAssertEqual(recus, [.rejoint, .coupe], "un flux demandé après terminer() est fermé d'emblée")
+    }
+
+    /// Régression du 24/11/2026 : une diffusion faite sous le verrou que prend `onTermination` s'interbloquait avec
+    /// l'annulation d'un lecteur (reprise du lecteur ↔ annulation de sa tâche). Un interblocage figerait ce test.
+    func testEmissionPendantLAnnulationDesLecteursSansInterblocage() async {
+        for tour in 0..<400 {
+            let evenements = DiffusionEvenements<Int>()
+            let etat = DiffusionEtat<Int>()
+            let lecteurs = (0..<3).map { _ in Task { for await _ in evenements.flux() {} } }
+                + (0..<3).map { _ in Task { for await _ in etat.flux() {} } }
+            let emetteur = Task.detached {
+                for valeur in 0..<40 {
+                    evenements.emettre(valeur)
+                    etat.recevoir(valeur)
+                }
+            }
+            if tour % 2 == 0 { await Task.yield() }
+            lecteurs.forEach { $0.cancel() }
+            await emetteur.value
+            for lecteur in lecteurs { await lecteur.value }
+            evenements.terminer()
+            etat.terminer()
+        }
+    }
 }

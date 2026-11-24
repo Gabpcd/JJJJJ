@@ -31,7 +31,7 @@ final class RealtimeFactice: RealtimePort, @unchecked Sendable {
     private var entrants: [String: DiffusionEvenements<MessageChat>] = [:]
     private var saisiesParFil: [String: DiffusionEvenements<EtatSaisie>] = [:]
     private var presences: [String: DiffusionEvenements<EtatPresence>] = [:]
-    private var etats: [String: DiffusionDernierEtat<EtatCanal>] = [:]
+    private var etats: [String: DiffusionEtat<EtatCanal>] = [:]
     private var etatsGlobaux = DiffusionEvenements<EtatCanal>()
 
     init(journal: JournalAppels = JournalAppels()) { self.journal = journal }
@@ -43,10 +43,10 @@ final class RealtimeFactice: RealtimePort, @unchecked Sendable {
         return nouvelle
     }
 
-    private func diffusionEtat(_ cle: String) -> DiffusionDernierEtat<EtatCanal> {
+    private func diffusionEtat(_ cle: String) -> DiffusionEtat<EtatCanal> {
         verrou.withLock {
             if let existante = etats[cle] { return existante }
-            let nouvelle = DiffusionDernierEtat<EtatCanal>()
+            let nouvelle = DiffusionEtat<EtatCanal>()
             etats[cle] = nouvelle
             return nouvelle
         }
