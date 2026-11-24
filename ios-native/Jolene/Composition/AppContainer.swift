@@ -134,7 +134,7 @@ final class AppContainer: ObservableObject {
         // d'inscription dans `liensInscription`, que `RootView` présente hors de l'espace.
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
-        // Lot 4, T1c : capture du parrainage (stub verrouillé jusqu'à T6) ; stockage par appareil hors démo, mémoire
+        // Lot 4, T1c : capture du parrainage (implémentée par T6) ; stockage par appareil hors démo, mémoire
         // vive en démo (chaque lancement démo part sans capture).
         let parrainage = ParrainageApplicateur(stockage: environment.mode == .demo ? MemoireStockageAppareil()
                                                                                    : UserDefaultsStockageAppareil())
@@ -205,6 +205,7 @@ final class AppContainer: ObservableObject {
             // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
             let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
             parrainage.controleur = controller // lot 4, T1c
+            parrainage.horloge = gateways.clock // lot 4, T6 : fenêtre de 30 jours sur l'horloge des gateways
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -228,6 +229,7 @@ final class AppContainer: ObservableObject {
                 // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 parrainage.controleur = controller // lot 4, T1c
+                parrainage.horloge = gateways.clock // lot 4, T6
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())

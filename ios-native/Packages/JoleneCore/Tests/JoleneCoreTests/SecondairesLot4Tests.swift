@@ -14,15 +14,21 @@ final class SecondairesLot4Tests: XCTestCase {
 
     // MARK: - Verrous m6 (revue B8 de #1146)
 
-    /// Aucun branchement de la capture du parrainage avant T6 : `estLivree` figé à `false`, aucun code capturé quel que
-    /// soit le lien, et le verrou bascule avec le port `parrainage` (une seule PR, T6, livre les deux).
+    /// Le verrou de la capture du parrainage bascule avec le port `parrainage` (une seule PR, T6, livre les deux) : avant
+    /// T6, aucun code capturé quel que soit le lien ; depuis T6, la forme exacte du web (`ParrainageCaptureTests`).
     func testCaptureDuParrainageVerrouilleeAvantT6() throws {
         let enAttente = DemoWorldTests.portsEnAttenteLot4.contains("parrainage")
         XCTAssertEqual(ParrainageCapture.estLivree, !enAttente,
                        "T6 livre ensemble ParrainageCapture (estLivree) et le port parrainage (portsEnAttenteLot4)")
         XCTAssertEqual(VerrousLot4.parrainageBranche, ParrainageCapture.estLivree)
         XCTAssertEqual(DemoWorld.gateways().parrainage is UnwiredPort, enAttente)
-        guard enAttente else { return }
+        guard enAttente else {
+            let lien = try XCTUnwrap(URL(string: "https://jolene.app/inscription/soignant?ref=abcd1234"))
+            XCTAssertEqual(VerrousLot4.codeParrainageACapturer(depuis: lien), "ABCD1234", "T6 livrée : capture par le verrou")
+            let horsForme = try XCTUnwrap(URL(string: "https://jolene.app/inscription/soignant?ref=%3Cscript%3E"))
+            XCTAssertNil(VerrousLot4.codeParrainageACapturer(depuis: horsForme), "code hors forme ignoré")
+            return
+        }
         for lien in ["https://jolene.app/inscription/soignant?ref=ABCD1234",
                      "https://jolene.app/soignant/tableau-de-bord?parrain=XYZ-1234",
                      "https://jolene.app/?ref=abcd1234"] {
@@ -48,6 +54,7 @@ final class SecondairesLot4Tests: XCTestCase {
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
         .recherches, // T4
+        .parrainage, // T6
     ]
 
     func testSeulsLesEcransDesTranchesLivreesSontLivres() {
@@ -133,7 +140,10 @@ final class SecondairesLot4Tests: XCTestCase {
                        "entrées natives des seuls écrans livrés, renvois web inchangés pour les autres")
         XCTAssertEqual(EntreesHubLot4.sections(), [EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
             EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
-        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96)")
+        ]), EntreesHubLot4.Section(titre: nil, entrees: [
+            EntreesHubLot4.Entree(ecran: .parrainage, libelle: "Parrainage"),
+        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96) ; "
+            + "T6 : « Parrainage », section sans titre (l.103)")
         let toutes = EntreesHubLot4.sections(livre: { _ in true })
         XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb)
         XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi"], "MonCompteSoignant.tsx l.94, l.107")

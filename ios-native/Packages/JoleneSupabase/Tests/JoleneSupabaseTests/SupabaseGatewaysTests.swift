@@ -92,8 +92,9 @@ final class SupabaseGatewaysTests: XCTestCase {
         let gateways = SupabaseGateways.make(client: TestClient.make())
         XCTAssertTrue(gateways.realtime is UnwiredRealtimePort, "avant T7a : port Realtime Supabase non câblé")
         XCTAssertFalse(VerrousLot4.abonnementRealtimePermis(gateways.realtime), "avant T7a : aucun abonnement Realtime")
-        XCTAssertTrue(gateways.parrainage is UnwiredParrainagePort, "avant T6 : port parrainage Supabase non câblé")
-        XCTAssertFalse(VerrousLot4.parrainageBranche, "avant T6 : aucune capture ni application du code de parrainage")
+        // L4-T6 livrée : port parrainage câblé et capture branchée, ensemble.
+        XCTAssertTrue(gateways.parrainage is SupabaseParrainageGateway, "T6 : port parrainage Supabase câblé")
+        XCTAssertTrue(VerrousLot4.parrainageBranche, "T6 : capture et application du code de parrainage branchées")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du

@@ -94,32 +94,53 @@ public enum IssueDisponibilite: Equatable, Sendable {
 
 // MARK: - Parrainage (T6)
 
+/// Filleul de `fn_obtenir_mes_parrainages` (`filleuls[]`, lu comme `PageParrainage.tsx` l.70-81) : identifiant
+/// `filleul_id`, prénom « Soignant » par défaut, statut `INSCRIT` par défaut. Les champs de progression vers la prime
+/// sont lus mais jamais affichés par l'écran natif (bloc de conditions sous HARD STOP n°4, T6-HS).
 public struct Filleul: Equatable, Sendable, Identifiable {
     public var id: String
-    public var prenom: String?
-    public var statut: String?
-    public var seuilAtteint: Bool
+    public var prenom: String
+    public var statut: String
+    public var creeLe: String?
+    public var premiereMissionLe: String?
+    public var primeVerseeLe: String?
+    public var seuilAtteint: Bool?
     public var resteGmvAvantPrime: Double?
 
-    public init(id: String, prenom: String?, statut: String?, seuilAtteint: Bool, resteGmvAvantPrime: Double?) {
-        self.id = id; self.prenom = prenom; self.statut = statut; self.seuilAtteint = seuilAtteint
+    public init(id: String, prenom: String, statut: String, creeLe: String?, premiereMissionLe: String?,
+                primeVerseeLe: String? = nil, seuilAtteint: Bool? = nil, resteGmvAvantPrime: Double? = nil) {
+        self.id = id; self.prenom = prenom; self.statut = statut; self.creeLe = creeLe
+        self.premiereMissionLe = premiereMissionLe; self.primeVerseeLe = primeVerseeLe; self.seuilAtteint = seuilAtteint
         self.resteGmvAvantPrime = resteGmvAvantPrime
     }
 }
 
-/// `soignants.code_parrainage, badge_ambassadeur` + `fn_obtenir_mes_parrainages` (montants et seuils serveur).
+/// `mon_parrain` de `fn_obtenir_mes_parrainages` (`{parrain_prenom, statut, prime_versee_le}`, JSON `null` sans parrain).
+public struct MonParrain: Equatable, Sendable {
+    public var prenom: String?
+    public var statut: String?
+
+    public init(prenom: String?, statut: String?) {
+        self.prenom = prenom; self.statut = statut
+    }
+}
+
+/// `soignants.code_parrainage, badge_ambassadeur` + `fn_obtenir_mes_parrainages`. `primeEur` et `seuilGmvEur` (valeurs
+/// serveur) sont réservés au bloc de conditions (T6-HS) : jamais affichés par cette tranche.
 public struct EtatParrainage: Equatable, Sendable {
+    /// Ligne `soignants` présente (texte « à préparer » du web, l.143-145).
+    public var profilPresent: Bool
     public var code: String?
     public var badgeAmbassadeur: Bool
     public var filleuls: [Filleul]
     public var primeEur: Double?
     public var seuilGmvEur: Double?
-    public var monParrain: String?
+    public var monParrain: MonParrain?
 
-    public init(code: String?, badgeAmbassadeur: Bool, filleuls: [Filleul], primeEur: Double?, seuilGmvEur: Double?,
-                monParrain: String?) {
-        self.code = code; self.badgeAmbassadeur = badgeAmbassadeur; self.filleuls = filleuls; self.primeEur = primeEur
-        self.seuilGmvEur = seuilGmvEur; self.monParrain = monParrain
+    public init(profilPresent: Bool, code: String?, badgeAmbassadeur: Bool, filleuls: [Filleul], primeEur: Double?,
+                seuilGmvEur: Double?, monParrain: MonParrain?) {
+        self.profilPresent = profilPresent; self.code = code; self.badgeAmbassadeur = badgeAmbassadeur
+        self.filleuls = filleuls; self.primeEur = primeEur; self.seuilGmvEur = seuilGmvEur; self.monParrain = monParrain
     }
 }
 

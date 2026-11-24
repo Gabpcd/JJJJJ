@@ -104,6 +104,8 @@ private struct SessionRootView: View {
             case let .ready(snapshot):
                 MainTabView(container: container, session: session, snapshot: snapshot)
                     .id(snapshot.epoch)
+                    // Lot 4, T6 : avis de l'application du code de parrainage capté par lien (`ParrainageApplicateur`).
+                    .overlay(alignment: .top) { AvisParrainageVue(applicateur: container.liens.parrainage) }
             case let .readyEtablissement(snapshot):
                 // Lot 5 (T2a, D1) : espace établissement, reconstruit à chaque epoch.
                 EtablissementTabView(container: container, session: session, snapshot: snapshot)

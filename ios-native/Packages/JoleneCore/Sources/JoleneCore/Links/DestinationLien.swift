@@ -119,7 +119,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.disponibilites):
             return false                                 // T5 — disponibilités
         case .secondaire(.parrainage):
-            return false                                 // T6 — parrainage
+            return true                                  // T6 — `ParrainageScreen` (hub du compte, entrée « Parrainage »)
         case .secondaire(.messagerie):
             return false                                 // T7b — messagerie
         case .secondaire(.litiges):
