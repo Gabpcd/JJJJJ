@@ -74,7 +74,7 @@ et arrête le workflow avant toute écriture chez Apple. Aucune garde ne se dés
 
 | Garde | Ce qu'elle vérifie | Si elle échoue |
 |---|---|---|
-| `entrees` | Déclenchement manuel sur `main` ; mode `verifier` ou `soumettre` ; numéro de build entier, supérieur à 24 et au moins égal à `ios.minimumBuildNumber` ; en mode `soumettre`, phrase de confirmation exacte ; mode de publication connu. | Corriger la saisie. Un build 25 à 31 ne se soumet pas : il précède la clôture des lots 4 et 5. |
+| `entrees` | Déclenchement manuel sur `main` ; mode `verifier` ou `soumettre` ; numéro de build entier, supérieur à 24 et au moins égal à `ios.minimumBuildNumber` ; en mode `soumettre`, phrase de confirmation exacte ; mode de publication connu. | Corriger la saisie. Un build 25 à 31 ne se soumet pas : il précède la clôture des lots 1 à 5. |
 | `notes` | `config/mobile-release-notes-ios.txt` existe, tient en 4 000 caractères, annonce la reconnexion et Face ID, sans texte provisoire. | Corriger le fichier par une PR. |
 | dépôt | Les gardes statiques du TestFlight (`TESTFLIGHT.md`) : production, chiffrement exempté, manifeste de confidentialité, icône, entitlements. | Voir `TESTFLIGHT.md`. |
 | `provenance` | `main` n'a pas avancé depuis le déclenchement ; un run réussi de `ios-native-testflight.yml`, lancé à la main depuis `main`, a produit l'artefact `ios-native-testflight-<N>-<commit>`, encore disponible ; ce commit appartient à l'historique de `main`. L'artefact est conservé **14 jours** (`retention-days` de `ios-native-testflight.yml`) : au-delà, le build ne se soumet plus, y compris pour une nouvelle soumission après un refus d'Apple, et le refus le dit (« a expiré », ou « introuvable » une fois purgé). | Relancer depuis le `main` courant. Artefact expiré ou purgé : refaire un envoi TestFlight et soumettre le nouveau build. |
@@ -108,7 +108,9 @@ accès en écriture au dépôt). Pour le garantir côté GitHub : créer un envi
 `app-store`) dont les règles de déploiement n'admettent que la branche `main`, y déplacer les secrets
 `ASC_KEY_ID`, `ASC_ISSUER_ID` et `ASC_PRIVATE_KEY_BASE64` (et, pour `ios-native-testflight.yml` et
 `mobile-delivery.yml`, les secrets de signature et de Google Play), puis déclarer `environment:` sur les
-jobs qui les lisent, dans une PR. Tant que ce réglage n'est pas fait, cette limite demeure.
+jobs qui les lisent, dans une PR. `mobile-store-status.yml` (lecture seule de l'état des stores) lit les
+mêmes trois secrets `ASC_*` : son job doit déclarer le même environnement dans la même PR, sinon il perd
+l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fait, cette limite demeure.
 
 ## Après la soumission
 

@@ -17,7 +17,7 @@
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, sign, X509Certificate } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COQUILLE_IOS_FIGEE, lireConfigLivraison } from './release-config.mjs';
 
@@ -346,7 +346,7 @@ function listSwift(dir, root, out = {}) {
     if (name === '.build' || name === 'Tests' || name === 'DerivedData') continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) listSwift(path, root, out);
-    else if (name.endsWith('.swift')) out[path.slice(root.length + 1)] = readFileSync(path, 'utf8');
+    else if (name.endsWith('.swift')) out[relative(root, path)] = readFileSync(path, 'utf8');
   }
   return out;
 }
