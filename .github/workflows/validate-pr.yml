@@ -79,8 +79,9 @@ jobs:
         run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs tests/node/check-rpc-contracts-lot4.node.mjs tests/node/ios-native-testflight.node.mjs tests/node/sources-web-ios-ci.node.mjs tests/node/contrats-etablissement-ios.node.mjs
 
       - name: Gardes de la soumission App Store
-        # Lot 6 (docs/mobile-swift/APP_STORE.md) : entrées et confirmation, provenance du build, clôture des
-        # lots 4 et 5, garde Apple 4.2, absence de mise à jour à chaud, workflow manuel aux actions épinglées.
+        # Lot 6 (docs/mobile-swift/APP_STORE.md) : entrées, mode à blanc et confirmation, provenance du build,
+        # CI iOS verte sur son commit, clôture des lots 1 à 5, garde Apple 4.2, absence de mise à jour à chaud,
+        # câblage du workflow manuel (sous-processus, structure des jobs) et actions épinglées.
         # La scission des livraisons par plateforme est gardée par mobile-delivery-plan.node.mjs, ci-dessus.
         run: node --test tests/node/ios-native-app-store.node.mjs
 

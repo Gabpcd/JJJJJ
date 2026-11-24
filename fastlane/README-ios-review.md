@@ -1,10 +1,21 @@
 # iOS review replacement
 
-`ios submit` uploads the configured build if absent and waits for that exact iOS
-marketing version/build to become `VALID`, including on retries. Jolene's export
-declaration must be `usesNonExemptEncryption: false`; true or unknown requires a
-separate compliance check. A failed, invalid, expired, ambiguous or timed-out build
-never causes review cancellation.
+Since lot 6, the guard is used by `ios submit_native` (Swift app, workflow
+`.github/workflows/ios-native-app-store.yml`, `docs/mobile-swift/APP_STORE.md`).
+The former `ios submit` lane of the Capacitor shell is retired and only raises
+an explicit error.
+
+`ios submit_native` never uploads a binary: the build must already be on
+TestFlight. If it is absent, the lane stops; otherwise it waits for that exact iOS
+marketing version/build to become `VALID`, including on retries. It refuses to run
+outside the `soumettre` job of that workflow on `main`, without the verdict of the
+guards of the same run attempt, or without the exact confirmation phrase
+(`IosReviewSubmission.exiger_contexte_workflow!`). It submits with a phased release
+over seven days; release after approval is automatic or manual, as chosen when the
+workflow is dispatched. Jolene's export declaration must be
+`usesNonExemptEncryption: false`; true or unknown requires a separate compliance
+check. A failed, invalid, expired, ambiguous or timed-out build never causes
+review cancellation.
 
 The guard only cancels an observed `WAITING_FOR_REVIEW` version with exactly one
 matching review submission containing exactly one matching App Store version
@@ -15,7 +26,7 @@ stop automatically. The distributed version is never changed by the guard.
 
 Cancellation uses `PATCH /v1/reviewSubmissions/{id}` with `canceled: true`.
 The guard waits for `DEVELOPER_REJECTED` and no active cancellation before allowing
-deliver to select and submit the new build with automatic release. It never uses
+deliver to select and submit the new build (phased, automatic or manual release). It never uses
 the deprecated appStoreVersionSubmissions deletion API or deliver's implicit
 `reject_if_possible` behavior. No mutation is retried automatically after an error.
 

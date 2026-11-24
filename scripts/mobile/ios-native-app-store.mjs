@@ -6,11 +6,12 @@
 // reste verrouillé » : chaque refus nomme sa garde et renvoie à la doc. Aucun secret n'est affiché.
 //
 // Sous-commandes :
-//   entrees            entrées du déclenchement (build, phrase de confirmation, publication) et notes de version
+//   entrees            entrées du déclenchement (mode, build, phrase de confirmation, publication) et notes de version
 //   provenance <N>     commit dont est issu le build TestFlight N (run GitHub Actions) ; main n'a pas avancé
-//   source <dossier>   arbre source de ce commit : lots 4 et 5 clos, garde Apple 4.2, aucune mise à jour à chaud
+//   ci <commit>        dernier run de ios-swift-ci.yml sur ce commit de main : réussi (revue M1 de #1177)
+//   source <dossier>   arbre source de ce commit : lots 1 à 5 clos, garde Apple 4.2, aucune mise à jour à chaud
 //   build <N>          build N dans App Store Connect : VALID, non expiré, bonne version, chiffrement exempté
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +25,11 @@ export const NOTES = 'config/mobile-release-notes-ios.txt';
 /** Limite Apple du champ « Nouveautés » (What's New in This Version). */
 export const NOTES_MAX = 4000;
 export const PUBLICATIONS = Object.freeze({ automatique: true, manuelle: false });
+/** « verifier » (défaut du workflow) joue toutes les gardes et s'arrête avant la lane et le tag. */
+export const MODES = Object.freeze({ verifier: 'verifier', soumettre: 'soumettre' });
+/** Rétention de l'artefact de provenance (`retention-days` de ios-native-testflight.yml), en jours. */
+export const RETENTION_PROVENANCE_JOURS = 14;
+export const WORKFLOW_CI_IOS = '.github/workflows/ios-swift-ci.yml';
 
 function collector() {
   const failures = [];
@@ -39,8 +45,10 @@ export const phraseConfirmation = (marketingVersion, buildNumber) => `SOUMETTRE 
 // Garde « entrees » : build, confirmation explicite, mode de publication
 // ---------------------------------------------------------------------------------------------
 
-export function evaluateEntrees({ build, confirmation, publication }, config) {
+export function evaluateEntrees({ mode, build, confirmation, publication }, config) {
   const { fail, done } = collector();
+  if (!Object.hasOwn(MODES, mode ?? '')) fail('entrees', 'mode inconnu : « verifier » ou « soumettre » exigé.');
+  const soumission = mode === MODES.soumettre;
   const { marketingVersion, minimumBuildNumber } = config.ios;
   const raw = String(build ?? '').trim();
   let buildNumber = null;
@@ -53,11 +61,12 @@ export function evaluateEntrees({ build, confirmation, publication }, config) {
   }
   if (!Object.hasOwn(PUBLICATIONS, publication ?? '')) fail('entrees', 'mode de publication inconnu : « automatique » ou « manuelle » exigé.');
   // Comparaison stricte : ni espace en trop, ni autre casse, ni autre numéro. La saisie n'est pas réaffichée.
-  if (buildNumber !== null && confirmation !== phraseConfirmation(marketingVersion, buildNumber)) {
+  // En mode « verifier », rien n'est soumis : la phrase n'est pas exigée.
+  if (soumission && buildNumber !== null && confirmation !== phraseConfirmation(marketingVersion, buildNumber)) {
     fail('entrees', `confirmation absente ou inexacte : écrire exactement « ${phraseConfirmation(marketingVersion, buildNumber)} ».`);
   }
   done();
-  return { buildNumber, marketingVersion, automaticRelease: PUBLICATIONS[publication] };
+  return { mode, buildNumber, marketingVersion, automaticRelease: PUBLICATIONS[publication] };
 }
 
 /** Notes de version (« Nouveautés ») : le plan exige d'annoncer la reconnexion et Face ID. */
@@ -89,6 +98,7 @@ export async function findProvenance({ api, build }) {
   const { fail, done } = collector();
   const motif = new RegExp(`^ios-native-testflight-${build}-([a-f0-9]{40})$`);
   const trouves = [];
+  const expires = [];
   let total = null;
   let lus = 0;
   for (let page = 1; page <= 5; page += 1) {
@@ -107,19 +117,59 @@ export async function findProvenance({ api, build }) {
         const sha = motif.exec(artefact?.name ?? '')?.[1];
         if (!sha) continue;
         if (sha !== run.head_sha) fail('provenance', `l'artefact du run ${run.id} nomme un autre commit que celui du run : provenance incohérente.`);
+        else if (artefact.expired !== false) expires.push(run.id);
         else trouves.push({ sha, runId: run.id });
       }
     }
     if (lus >= total || reponse.workflow_runs.length === 0) break;
   }
   if (total !== null && lus < total) fail('provenance', 'historique des envois TestFlight trop long pour être relu en entier.');
-  if (trouves.length === 0) {
-    fail('provenance', `aucun envoi TestFlight réussi depuis main n'a produit le build ${build} (artefact ios-native-testflight-${build}-<commit> introuvable) : relancer ios-native-testflight.yml depuis main, puis soumettre le nouveau build.`);
+  // Revue m2 de #1177 : la preuve de provenance est un artefact conservé RETENTION_PROVENANCE_JOURS jours.
+  // Au-delà, GitHub le purge : le build ne se soumet plus, même après un refus d'Apple. Jamais de repli.
+  const delai = `la provenance repose sur l'artefact du run TestFlight, conservé ${RETENTION_PROVENANCE_JOURS} jours : un build envoyé il y a plus de ${RETENTION_PROVENANCE_JOURS} jours ne se soumet plus`;
+  if (trouves.length === 0 && expires.length) {
+    fail('provenance', `l'artefact de provenance du build ${build} a expiré (run ${expires.join(', ')}) : ${delai}. Refaire un envoi TestFlight depuis main, puis soumettre le nouveau build.`);
+  } else if (trouves.length === 0) {
+    fail('provenance', `aucun envoi TestFlight réussi depuis main n'a produit le build ${build} (artefact ios-native-testflight-${build}-<commit> introuvable ; ${delai}) : relancer ios-native-testflight.yml depuis main, puis soumettre le nouveau build.`);
   } else if (trouves.length > 1) {
     fail('provenance', `plusieurs envois TestFlight revendiquent le build ${build} (runs ${trouves.map((t) => t.runId).join(', ')}) : provenance ambiguë.`);
   }
   done();
   return trouves[0];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Garde « ci-ios » : la CI de l'app Swift est verte sur le commit dont le build est issu
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Revue M1 de #1177 : les listes de ports en attente ne sont vraies que si les tests Swift passent
+ * (`testAucunPortNonCable`). Exige que le DERNIER run de ios-swift-ci.yml sur ce commit exact de main
+ * (push ou déclenchement manuel ; l'API rend l'état de sa dernière tentative) soit terminé et réussi.
+ * Aucun run sur ce commit (filtre de chemins, run annulé puis remplacé) : refus, jamais de repli sur un
+ * ancêtre. Lecture seule de l'API GitHub.
+ */
+export async function evaluateCiIos({ api, sha }) {
+  const { fail, done } = collector();
+  if (!estSha(sha)) throw new Error('Commit source illisible pour la garde ci-ios');
+  const reponse = await api(`actions/workflows/ios-swift-ci.yml/runs?head_sha=${sha}&branch=main&per_page=100`);
+  if (!Array.isArray(reponse?.workflow_runs)) throw new Error('Historique de ios-swift-ci.yml illisible');
+  if (!Number.isSafeInteger(reponse.total_count) || reponse.total_count > reponse.workflow_runs.length) {
+    fail('ci-ios', `historique de ios-swift-ci.yml sur le commit ${sha.slice(0, 12)} incomplet : il ne peut pas être relu en entier.`);
+  }
+  const runs = reponse.workflow_runs.filter((run) => run?.path === WORKFLOW_CI_IOS && run.head_sha === sha && run.head_branch === 'main'
+    && ['push', 'workflow_dispatch'].includes(run.event) && run.repository?.full_name === REPO
+    && run.head_repository?.full_name === REPO && Number.isSafeInteger(run.id))
+    .sort((a, b) => b.id - a.id);
+  const [dernier] = runs;
+  if (!dernier) {
+    fail('ci-ios', `aucun run de « iOS Swift — socle natif » (ios-swift-ci.yml) sur le commit ${sha.slice(0, 12)} de main : le lancer sur main à ce commit et attendre qu'il soit vert, ou envoyer un nouveau build depuis un commit dont la CI iOS est verte.`);
+  } else if (dernier.status !== 'completed' || dernier.conclusion !== 'success') {
+    const lu = dernier.status === 'completed' ? `conclusion « ${dernier.conclusion ?? 'inconnue'} »` : `état « ${dernier.status ?? 'inconnu'} »`;
+    fail('ci-ios', `le dernier run de ios-swift-ci.yml sur le commit ${sha.slice(0, 12)} (run ${dernier.id}, tentative ${dernier.run_attempt ?? '?'}) a la ${lu}, « success » exigée : les tests Swift, dont testAucunPortNonCable, ne sont pas prouvés pour ce build.`);
+  }
+  done();
+  return dernier;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -135,25 +185,79 @@ const ECRANS_COEUR = Object.freeze({
   pointage: 'ios-native/Jolene/Screens/Presences/PointageCodeView.swift',
 });
 const RACINE_APP = Object.freeze(['ios-native/Jolene/JoleneApp.swift', 'ios-native/Jolene/Screens/RootView.swift', 'ios-native/Jolene/Screens/MainTabView.swift']);
-const MISE_A_JOUR_A_CHAUD = /capawesome|live[-_ ]?update|mobile-ota|codepush|hot[-_ ]?update/i;
+const MISE_A_JOUR_A_CHAUD = /capawesome|live[-_ ]?update|mobile-ota|code[-_ ]?push|hot[-_ ]?update|expo-updates|jspatch|rollout\.io/i;
+/** Manifestes de dépendances lus par la garde `ota` en plus des sources Swift (revue m7 de #1177). */
+const MANIFESTES = Object.freeze(['Package.swift', 'Package.resolved', 'project.yml']);
 
-/** Liste `portsEnAttenteLotN` de DemoWorldTests.swift : source unique des ports non câblés d'un lot. */
+/** Retire les commentaires Swift (de ligne, et de bloc même imbriqués) hors des chaînes, sauts de ligne gardés. */
+export function sansCommentaires(source) {
+  let sortie = '';
+  let profondeur = 0;
+  let chaine = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    const deux = source.slice(i, i + 2);
+    if (profondeur > 0) {
+      if (deux === '/*') { profondeur += 1; i += 1; } else if (deux === '*/') { profondeur -= 1; i += 1; } else if (c === '\n') sortie += '\n';
+    } else if (chaine) {
+      sortie += c;
+      if (c === '\\') { sortie += source[i + 1] ?? ''; i += 1; } else if (c === '"' || c === '\n') chaine = false;
+    } else if (deux === '//') {
+      while (i + 1 < source.length && source[i + 1] !== '\n') i += 1;
+    } else if (deux === '/*') {
+      profondeur = 1; i += 1;
+    } else {
+      if (c === '"') chaine = true;
+      sortie += c;
+    }
+  }
+  return sortie;
+}
+
+/**
+ * Liste `portsEnAttenteLotN` de DemoWorldTests.swift : source unique des ports non câblés d'un lot.
+ * Lecture stricte (revue m1 de #1177) : commentaires retirés d'abord, une seule déclaration, un littéral
+ * de tableau fait uniquement de noms entre guillemets, rien qui le prolonge (`+`, `.`, appel, `as`…).
+ * Tout le reste est « illisible » : en cas de doute, la garde `lots` refuse.
+ */
+export function lirePortsEnAttente(source, lot) {
+  if (typeof source !== 'string') return { etat: 'absente' };
+  const texte = sansCommentaires(source);
+  const declarations = [...texte.matchAll(new RegExp(`\\bstatic\\s+let\\s+portsEnAttenteLot${lot}\\b`, 'g'))];
+  if (declarations.length === 0) return { etat: 'absente' };
+  if (declarations.length > 1) return { etat: 'illisible', raison: 'déclarée plusieurs fois' };
+  const apres = texte.slice(declarations[0].index + declarations[0][0].length);
+  const tete = /^\s*(?::\s*\[\s*String\s*\]\s*)?=\s*\[/.exec(apres);
+  if (!tete) return { etat: 'illisible', raison: 'pas un littéral de tableau' };
+  const corps = apres.slice(tete[0].length);
+  const fin = /^((?:[^\]"]|"[^"\n]*")*)\]/.exec(corps);
+  if (!fin) return { etat: 'illisible', raison: 'tableau non fermé' };
+  const NOM = '"[A-Za-z0-9_.]+"';
+  if (!new RegExp(`^\\s*(?:${NOM}\\s*(?:,\\s*${NOM}\\s*)*,?\\s*)?$`).test(fin[1])) return { etat: 'illisible', raison: 'éléments autres que des noms de ports' };
+  const suite = corps.slice(fin[0].length);
+  // Après le `]` : fin du fichier ou début d'une autre déclaration, jamais un opérateur ni `as`/`is`.
+  if (!/^\s*(?:$|[A-Za-z_@#}])/.test(suite) || /^\s*(?:as|is)\b/.test(suite)) return { etat: 'illisible', raison: 'expression prolongée après le tableau' };
+  return { etat: 'lue', ports: [...fin[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]) };
+}
+
+/** Ports en attente du lot, `null` si la liste est absente ou illisible (la garde `lots` refuse alors). */
 export function portsEnAttente(source, lot) {
-  const declaration = new RegExp(`static let portsEnAttenteLot${lot}(?:\\s*:\\s*\\[String\\])?\\s*=\\s*\\[([^\\]]*)\\]`).exec(source ?? '');
-  if (!declaration) return null;
-  return [...declaration[1].replace(/\/\/.*$/gm, '').matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const lu = lirePortsEnAttente(source, lot);
+  return lu.etat === 'lue' ? lu.ports : null;
 }
 
 export function evaluateSource(files) {
   const { fail, done } = collector();
-  // Lots clos : décision du 24/11/2026, la soumission part dès que les lots 4 et 5 sont sur main.
+  // Lots clos : AUCUN port en attente, quel que soit le lot (revue M2 de #1177). Pas d'exception en dur :
+  // soumettre avec un port non câblé exigerait une décision écrite de la fondatrice et une PR de ce fichier.
+  // Au 24/11/2026, portsEnAttenteLot1 = ["recovery"] : réinitialisation native du mot de passe (LOT6_PLAN §2).
   const attente = {};
   for (const lot of [1, 2, 3, 4, 5]) {
-    attente[lot] = portsEnAttente(files.demoWorldTests, lot);
-    if (attente[lot] === null) fail('lots', `liste portsEnAttenteLot${lot} introuvable dans ${DEMO_WORLD_TESTS} : la clôture des lots ne peut pas être établie.`);
-  }
-  for (const lot of [4, 5]) {
-    if (attente[lot]?.length) fail('lots', `le lot ${lot} n'est pas clos dans la source de ce build : ports non câblés ${attente[lot].join(', ')}.`);
+    const lu = lirePortsEnAttente(files.demoWorldTests, lot);
+    attente[lot] = lu.etat === 'lue' ? lu.ports : null;
+    if (lu.etat === 'absente') fail('lots', `liste portsEnAttenteLot${lot} introuvable dans ${DEMO_WORLD_TESTS} : la clôture des lots ne peut pas être établie.`);
+    else if (lu.etat === 'illisible') fail('lots', `liste portsEnAttenteLot${lot} illisible dans ${DEMO_WORLD_TESTS} (${lu.raison}) : la clôture des lots ne peut pas être établie.`);
+    else if (lu.ports.length) fail('lots', `le lot ${lot} n'est pas clos dans la source de ce build : ports non câblés ${lu.ports.join(', ')}.`);
   }
   // Apple 4.2 : jamais de soumission sans tableau de bord, missions et pointage natifs.
   const enAttente = Object.values(attente).flatMap((ports) => ports ?? []);
@@ -176,16 +280,37 @@ export function evaluateSource(files) {
     if (texte === undefined) fail('apple-4.2', `${chemin} absent : la racine de l'app ne peut pas être contrôlée.`);
     else if (/\bWKWebView\b|\bSFSafariViewController\b/.test(texte.replace(/\/\/.*$/gm, ''))) fail('apple-4.2', `${chemin} monte une vue web à la racine : l'app ne doit pas être un site réemballé.`);
   }
-  // Apple 2.5.2 : aucun téléchargement de code qui change l'app.
-  const fautifs = Object.entries(files.swiftSources ?? {}).filter(([, texte]) => MISE_A_JOUR_A_CHAUD.test(texte)).map(([chemin]) => chemin);
+  // Apple 2.5.2 : aucun téléchargement de code qui change l'app. Sources Swift ET manifestes de dépendances.
+  const manifestes = Object.keys(files.manifestes ?? {});
+  for (const nom of ['Package.swift', 'Package.resolved']) {
+    if (!manifestes.some((chemin) => chemin.endsWith(`/${nom}`))) fail('ota', `aucun ${nom} lu sous ios-native/ : les dépendances de l'app ne peuvent pas être contrôlées.`);
+  }
+  const fautifs = Object.entries({ ...(files.swiftSources ?? {}), ...(files.manifestes ?? {}) })
+    .filter(([, texte]) => MISE_A_JOUR_A_CHAUD.test(texte)).map(([chemin]) => chemin);
   if (fautifs.length) fail('ota', `client de mise à jour à chaud détecté (${fautifs.slice(0, 3).join(', ')}) : interdit dans l'app iOS native (Apple 2.5.2).`);
   done();
+}
+
+/** Package.swift, Package.resolved et project.yml sous ios-native/ (hors produits de build). */
+export function listerManifestes(root) {
+  const trouves = {};
+  const parcourir = (relatif) => {
+    for (const entree of readdirSync(join(root, relatif), { withFileTypes: true })) {
+      const chemin = `${relatif}/${entree.name}`;
+      if (entree.isDirectory()) {
+        if (!['.build', '.swiftpm', 'DerivedData', 'build', 'node_modules', '.git'].includes(entree.name)) parcourir(chemin);
+      } else if (MANIFESTES.includes(entree.name)) trouves[chemin] = readFileSync(join(root, chemin), 'utf8');
+    }
+  };
+  if (existsSync(join(root, 'ios-native'))) parcourir('ios-native');
+  return trouves;
 }
 
 export function loadSourceTree(root) {
   const chemins = [...Object.values(ECRANS_COEUR), ...RACINE_APP];
   const lire = (chemin) => (existsSync(join(root, chemin)) ? readFileSync(join(root, chemin), 'utf8') : undefined);
   return {
+    manifestes: listerManifestes(root),
     demoWorldTests: lire(DEMO_WORLD_TESTS),
     present: Object.fromEntries(chemins.map((chemin) => [chemin, existsSync(join(root, chemin))])),
     textes: Object.fromEntries(chemins.map((chemin) => [chemin, lire(chemin)]).filter(([, texte]) => texte !== undefined)),
@@ -269,12 +394,21 @@ async function main(command, args) {
       if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' || process.env.GITHUB_REF !== 'refs/heads/main') {
         throw new GuardFailure([`[entrees] la soumission ne part que d'un déclenchement manuel sur main (voir ${DOC}, garde « entrees »)`]);
       }
+      // Tentative du run : le job `soumettre` refuse des gardes d'une autre tentative (revue m5 de #1177).
+      const tentative = process.env.GITHUB_RUN_ATTEMPT;
+      if (!/^[1-9]\d{0,5}$/.test(tentative ?? '')) throw new Error('GITHUB_RUN_ATTEMPT absent ou illisible');
       const entrees = evaluateEntrees({
-        build: process.env.JOLENE_BUILD_INPUT, confirmation: process.env.JOLENE_CONFIRMATION, publication: process.env.JOLENE_PUBLICATION,
+        mode: process.env.JOLENE_MODE, build: process.env.JOLENE_BUILD_INPUT,
+        confirmation: process.env.JOLENE_CONFIRMATION, publication: process.env.JOLENE_PUBLICATION,
       }, config);
       evaluateNotes(existsSync(join(ROOT, NOTES)) ? readFileSync(join(ROOT, NOTES), 'utf8') : '');
-      output({ build_number: entrees.buildNumber, marketing_version: entrees.marketingVersion, automatic_release: entrees.automaticRelease });
-      summary(`✓ Entrées : ${APP.bundleId} ${entrees.marketingVersion} (${entrees.buildNumber}), confirmation exacte, publication ${entrees.automaticRelease ? 'automatique' : 'manuelle'} après approbation, progressive sur sept jours.`);
+      output({
+        mode: entrees.mode, build_number: entrees.buildNumber, marketing_version: entrees.marketingVersion,
+        automatic_release: entrees.automaticRelease, run_attempt: tentative,
+      });
+      summary(entrees.mode === MODES.soumettre
+        ? `✓ Entrées : ${APP.bundleId} ${entrees.marketingVersion} (${entrees.buildNumber}), mode soumettre, confirmation exacte, publication ${entrees.automaticRelease ? 'automatique' : 'manuelle'} après approbation, progressive sur sept jours.`
+        : `✓ Entrées : ${APP.bundleId} ${entrees.marketingVersion} (${entrees.buildNumber}), mode verifier : gardes seulement, ni soumission ni tag.`);
       return;
     }
     case 'provenance': {
@@ -293,10 +427,16 @@ async function main(command, args) {
       summary(`✓ Provenance : build ${build} envoyé par le run TestFlight ${origine.runId}, depuis le commit ${origine.sha.slice(0, 12)} de main.`);
       return;
     }
+    case 'ci': {
+      if (!estSha(args[0])) throw new Error('ci <commit source du build> exigé');
+      const run = await evaluateCiIos({ api: githubApi(), sha: args[0] });
+      summary(`✓ CI iOS : dernier run de ios-swift-ci.yml sur ${args[0].slice(0, 12)} réussi (run ${run.id}, tentative ${run.run_attempt ?? '?'}).`);
+      return;
+    }
     case 'source': {
       if (!args[0] || !existsSync(join(args[0], 'ios-native'))) throw new Error('source <dossier contenant ios-native/> exigé');
       evaluateSource(loadSourceTree(args[0]));
-      summary('✓ Source du build : lots 4 et 5 clos, tableau de bord, missions et pointage natifs (Apple 4.2), aucune mise à jour à chaud (Apple 2.5.2).');
+      summary('✓ Source du build : lots 1 à 5 clos, tableau de bord, missions et pointage natifs (Apple 4.2), aucune mise à jour à chaud (Apple 2.5.2).');
       return;
     }
     case 'build': {

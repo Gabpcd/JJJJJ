@@ -9,8 +9,8 @@
 
 | Question | Réponse au 24/11/2026 |
 |---|---|
-| Peut-on soumettre l'app Swift aujourd'hui ? | Non. Les lots 4 et 5 ne sont pas clos sur `main` (treize ports en attente) : la garde `lots` refuse le build 31 et tout build fait depuis `main`. |
-| Que manque-t-il côté code ? | La clôture des lots 4 et 5, puis un nouvel envoi TestFlight (build 32 ou plus). Le reste du chemin est écrit et testé sur cette branche. |
+| Peut-on soumettre l'app Swift aujourd'hui ? | Non. Quatorze ports sont en attente sur `main` : `recovery` au lot 1, onze au lot 4, deux au lot 5. La garde `lots` exige les cinq listes vides et refuse le build 31 et tout build fait depuis `main`. |
+| Que manque-t-il côté code ? | Le câblage de `recovery` (réinitialisation native du mot de passe, ci-dessous), la clôture des lots 4 et 5, une CI iOS verte sur le commit du build, puis un nouvel envoi TestFlight (build 32 ou plus). Le reste du chemin est écrit et testé sur cette branche. |
 | Que manque-t-il côté consoles ? | Les saisies de la fondatrice dans App Store Connect (§3). |
 | Peut-on publier Android aujourd'hui ? | Pas avant le merge de cette branche : sur `main`, le mode `native` construit et soumet aussi la coquille iOS. Ensuite, par un build natif 1.0.8 (25) ; pas par OTA (§5). |
 
@@ -33,12 +33,25 @@ Plan §5 « Lot 6 », l.225 à l.234.
 | Déploiement progressif sur 7 jours | **fait** | lane `ios submit_native`, `phased_release: true` (A3) |
 | Suivi par `mobile-store-status.yml` | **fait** (existant) | lit l'état de la version et de la publication progressive, en lecture seule |
 | Bêta externe, 14 jours de bêta (lots 3 et 4) | **abandonné** sur décision du 24/11 | D1 |
+| **Prérequis de soumission : réinitialisation native du mot de passe (`recovery`)** | **manquant**, sans tranche | `DemoWorldTests.portsEnAttenteLot1 = ["recovery"]` ; voir ci-dessous |
+
+**Manque connu, bloquant pour la soumission : `recovery`.** La réinitialisation native du mot de passe
+(« Mot de passe oublié ? » sur la connexion, `SupabaseRecoveryGateway`, `ResetPasswordScreen`,
+quarantaine de la session de récupération) est absente de l'app Swift : `UnwiredRecoveryPort` dans les
+deux mondes, aucun « Mot de passe oublié ? » sous `ios-native/Jolene`. Reste de L1-T10, elle n'a de
+tranche ni au lot 1 ni au lot 3 (`DECISIONS_LOT3.md`, « À planifier ») ; son préalable était fixé
+« avant TestFlight externe », étape que D1 supprime. Or `config/mobile-release-notes-ios.txt` annonce à
+tous les utilisateurs une reconnexion par mot de passe : sans réinitialisation native, celui qui l'a
+oublié passe par le site. La garde `lots` exige les cinq listes vides (revue M2 de #1177) et refuse donc
+toute soumission tant que `recovery` n'est pas câblé. Deux issues : câbler `recovery` dans une tranche
+dédiée avant la soumission (recommandé), ou une décision écrite de la fondatrice dans `DECISIONS_LOT6.md`
+qui l'accepte, suivie d'une PR qui modifie la garde. Le code Swift n'est pas modifié par cette branche.
 
 Critères de sortie du plan (l.228 à l.234) :
 
 | Critère | État |
 |---|---|
-| Garde Apple 4.2 écrite et respectée | **écrite** (gardes `apple-4.2` et `lots`, rejouées sur la source du build) ; respectée à chaque soumission |
+| Garde Apple 4.2 écrite et respectée | **écrite** (gardes `apple-4.2` et `lots`, rejouées sur la source du build, et `ci-ios` : CI de l'app Swift verte sur ce commit) ; respectée à chaque soumission |
 | Garde fastlane : version > 1.0.7, build > 24, `uses_non_exempt_encryption = false` | **fait** (garde `build`, lane, `ios_review_submission.rb`) |
 | AASA inchangée | **fait** : aucun changement de `public/.well-known/apple-app-site-association` depuis le 07/09/2026, antérieur à 1.0.7 (24) |
 | Liens universels vérifiés sur le build de production (reset, invitation, PSC, Stripe Connect) | **à faire**, sur iPhone, avec le build à soumettre — non vérifié |
@@ -60,7 +73,8 @@ Le code ne fait aucune de ces saisies. Le workflow de soumission ne touche que l
 | 5 | Classification : vérifier que le questionnaire à cinq paliers est rempli | une app non classée ne se publie pas ; les nouvelles questions étaient à remplir avant le 31/01/2026 | A5, A6 |
 | 6 | Captures : remplacer les captures iPhone et iPad par des captures de l'app Swift | les captures doivent montrer l'app en usage ; format iPad exigé puisque l'app tourne sur iPad | A1 (2.3.3), A2 |
 | 7 | Conformité export : rien à saisir si le build affiche « false » ; la garde `build` le vérifie | — | A11 (non vérifié) |
-| 8 | Lancer la soumission : Actions → « iOS Swift — soumission App Store » → numéro du build, phrase de confirmation, mode de publication | geste manuel décidé le 24/11 | D1, `APP_STORE.md` |
+| 8 | Lancer la soumission : Actions → « iOS Swift — soumission App Store » → d'abord en mode `verifier` (gardes seules), puis en mode `soumettre` avec le numéro du build, la phrase de confirmation et le mode de publication | geste manuel décidé le 24/11 | D1, `APP_STORE.md` |
+| 8 bis | Propriétaire du dépôt : créer un environnement GitHub restreint à `main` et y placer les secrets App Store Connect (réglage hors code, non fait) | sans lui, « depuis `main` seulement » n'est garanti que par le fichier du workflow | `APP_STORE.md`, « Secrets et droits » |
 | 9 | Si la mise en vente est « manuelle » : cliquer « Release this version » après l'approbation | la version attend sinon en « Pending Developer Release » | A8 |
 | 10 | Pendant les sept jours : suivre Sentry et `mobile-store-status.yml` ; mettre la publication progressive en pause si besoin (30 jours au plus) | sans bêta, c'est le premier signal d'usage réel | A3 |
 
@@ -121,7 +135,7 @@ Courtes, dans l'ordre. T1 à T4 sont sur cette branche.
 | T5 | Captures App Store depuis l'app Swift en mode démo (détail ci-dessous) | à faire | PNG contrôlés en dimensions |
 | T6 | Écran d'accueil après la mise à jour (reconnexion, Face ID), sans texte juridique nouveau | à faire | XCUITest démo |
 | T7 | Retour arrière iOS : procédure ci-dessous, à tester une fois ou à abandonner | écrit, non testé | — |
-| T8 | Clôture des lots 4 et 5, envoi TestFlight du build à soumettre, recette sur iPhone (liens universels, push de production) | dépend des lots 4 et 5 | `RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md` |
+| T8 | Câblage de `recovery` (lot 1), clôture des lots 4 et 5, CI iOS verte sur le commit, envoi TestFlight du build à soumettre (soumis dans les 14 jours), recette sur iPhone (liens universels, push de production) | dépend de `recovery` et des lots 4 et 5 | `RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md` |
 | T9 | Soumission (geste de la fondatrice), puis suivi de la publication progressive | après T8 et §3 | tag `mobile-native-ios-N`, `mobile-store-status.yml` |
 | T10 | PR de release Android 1.0.8 (25), puis livraison native (§5) | indépendant d'iOS | tag `mobile-native-android-25` |
 
@@ -160,8 +174,12 @@ Si 2.0.0 doit être retirée après sa mise en vente :
 3. en dernier recours, republier la coquille Capacitor : restaurer le job iOS de `mobile-delivery.yml` et
    la lane `ios submit` depuis le commit `f6e6be49`, donner à `ios/` une version supérieure à la version
    en vente et un build supérieur au dernier build d'App Store Connect, mettre à jour la constante
-   `COQUILLE_IOS_FIGEE`, puis lancer la livraison. Les utilisateurs devraient se reconnecter une seconde
-   fois. Cette voie n'a jamais été exécutée depuis la scission.
+   `COQUILLE_IOS_FIGEE`, puis lancer la livraison. Il faut aussi défaire, dans la même PR, ce qui
+   verrouille aujourd'hui iOS sur l'app Swift : `release-config.mjs` (qui exige `ios.runtime = swift` et
+   interdit `ios.buildNumber`), le refus d'iOS par le planificateur (`plateformeMobileDelivery` dans
+   `delivery-plan.mjs`) et `release-state.mjs` (pour iOS : aucune réservation de source, numéro lu dans
+   `RELEASE_BUILD_NUMBER`, au moins `ios.minimumBuildNumber`). Les utilisateurs devraient se reconnecter une seconde fois. Cette voie n'a jamais été exécutée
+   depuis la scission, et ces retraits ne sont pas testés.
 
 ## 7. Écarts avec le plan général
 

@@ -29,6 +29,13 @@ platform :ios do
     release = release_config('ios')
     marketing = release.fetch('marketingVersion')
     number = ENV.fetch('IOS_NATIVE_BUILD_NUMBER')
+    # Jamais hors du job `soumettre` de ios-native-app-store.yml : ni depuis un poste, ni sans les gardes
+    # de la même tentative, ni sans la phrase exacte (revue m8 de #1177, docs/mobile-swift/APP_STORE.md).
+    begin
+      IosReviewSubmission.exiger_contexte_workflow!(env: ENV, marketing: marketing, number: number)
+    rescue IosReviewSubmission::Failure => error
+      UI.user_error!(error.message)
+    end
     unless number.match?(/\A[1-9]\d{0,8}\z/) && number.to_i >= release.fetch('minimumBuildNumber') && number.to_i > 24
       UI.user_error!("Build #{number.inspect} refusé : numéro d'un build TestFlight, au moins #{release.fetch('minimumBuildNumber')}.")
     end

@@ -18,7 +18,10 @@ Conséquences :
    ligne « TestFlight externe ouvert à une cohorte de soignants pilotes » du lot 3 (l.200).
    `docs/mobile-swift/BETA_LOT4.md` reste un squelette non rempli.
 2. **La soumission se fait dès que les lots 4 et 5 sont sur `main`.** La condition est vérifiée par le code,
-   sur la source du build soumis (D8), pas par une date.
+   sur la source du build soumis (D8), pas par une date. *Précision après la revue de #1177 (M2) : le code
+   exige aussi qu'il ne reste aucun port en attente des lots 1 à 3. Aujourd'hui, `recovery` (lot 1) reste
+   en attente : la soumission est bloquée tant qu'il n'est pas câblé ou accepté par écrit (« En attente »,
+   n° 8).*
 3. **La soumission reste un geste manuel** : un workflow lancé à la main depuis `main`, avec une phrase de
    confirmation. Aucun merge, aucun push, aucune fin de workflow ne soumet quoi que ce soit.
 
@@ -78,6 +81,13 @@ seul, et la soumission iOS part d'un build déjà traité par Apple.
 | `mobile-native-android-N` | `mobile-delivery.yml`, après la soumission Google Play | runtime Android N soumis ; base des OTA |
 | `mobile-native-ios-N` | `ios-native-app-store.yml`, job `consigner` | build Swift N soumis à la revue, sur son commit source |
 
+**Préfixe partagé, à connaître.** Les tags `mobile-native-ios-20…24` existants sont ceux de la coquille
+Capacitor (avant la scission) ; les tags `mobile-native-ios-N` posés désormais, avec N ≥ 32
+(`ios.minimumBuildNumber`), sont ceux de l'app Swift. Les deux familles portent le même préfixe et ne se
+distinguent que par le numéro : les numéros 25 à 31 n'ont pas de tag (builds TestFlight non soumis).
+Aucun lecteur ne mélange les deux aujourd'hui : le planificateur Android ignore les tags iOS, et
+`release-state.mjs record ios` refuse un numéro inférieur à 32.
+
 Les tags communs `mobile-native-20…24` et `mobile-native-source-20…24` restent comme historique. Ils ne
 sont plus créés ; l'action `complete` de `release-state.mjs`, qui exigeait les deux plateformes, est
 remplacée par un refus explicite. Les numéros iOS et Android sont désormais indépendants : un tag iOS ne
@@ -119,9 +129,13 @@ une décision à part (« En attente », n° 6).
 
 ## D7 — Soumission App Store : ce que fait le workflow
 
-- Entrées : numéro du build, phrase `SOUMETTRE 2.0.0 (N)`, mode de publication.
+- Entrées : mode (`verifier` par défaut, `soumettre`), numéro du build, phrase `SOUMETTRE 2.0.0 (N)`
+  (exigée en mode `soumettre`), mode de publication. Le mode `verifier` joue toutes les gardes et
+  s'arrête avant la lane et le tag (revue M3 de #1177).
 - Gardes en lecture seule, dans l'ordre : `entrees`, `notes`, gardes du dépôt du TestFlight, `provenance`,
-  `lots`, `apple-4.2`, `ota`, backend de production déployé, `build`. Détail : `APP_STORE.md`.
+  `ci-ios`, `lots`, `apple-4.2`, `ota`, backend de production déployé, `build`. Détail : `APP_STORE.md`.
+- La lane refuse de tourner hors du job `soumettre` de ce workflow, sans le verdict des gardes de la même
+  tentative ou sans la phrase exacte ; une relance partielle est refusée (revue m5 et m8 de #1177).
 - Écriture chez Apple : la lane `ios submit_native`, protégée par la garde existante
   `fastlane/ios_review_submission.rb` (version supérieure à la version en vente, build VALID, non expiré,
   `usesNonExemptEncryption = false`, une seule soumission en cours).
@@ -140,15 +154,23 @@ une décision à part (« En attente », n° 6).
 Le workflow retrouve le commit dont le build est issu (artefact `ios-native-testflight-<N>-<commit>` du
 run TestFlight), exige qu'il appartienne à `main`, puis lit cette source :
 
-- **`lots`** : `DemoWorldTests.portsEnAttenteLot4` et `portsEnAttenteLot5` sont vides. Ce sont les listes
-  que les lots eux-mêmes vident à leur clôture (`PRINCIPES.md` §2).
+- **`ci-ios`** (revue M1 de #1177) : le dernier run de `ios-swift-ci.yml` sur ce commit exact de `main`
+  est réussi. Les listes de ports ne sont vraies que si `testAucunPortNonCable` passe ; or les checks
+  requis de `main` n'incluent pas ce workflow, et le build 31 (`95a987f2`) est parti sur TestFlight avec
+  un run iOS annulé. Aucun repli sur un ancêtre.
+- **`lots`** : les cinq listes `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides
+  (revue M2 de #1177 : la première version n'exigeait que les lots 4 et 5 et laissait passer
+  `recovery`, lot 1). Ce sont les listes que les lots eux-mêmes vident à leur clôture (`PRINCIPES.md`
+  §2). Aucune exception en dur : `recovery` bloque la soumission tant qu'il n'est pas câblé ou accepté
+  par une décision écrite de la fondatrice (`LOT6_PLAN.md` §2).
 - **`apple-4.2`** (source A1) : les ports `dashboard`, `mesMissions`, `presence` et `pointage` sont câblés ;
   les écrans natifs du tableau de bord, de Mes missions et du pointage existent et les onglets les
   montent ; le client appelle `fn_dashboard_soignant_complet` et `fn_scanner_code_pointage` ; la racine de
   l'app ne monte aucune vue web.
 
 Vérifié à blanc le 24/11 : le build 31 (`95a987f2`) et `main` sont refusés par `lots` seulement (treize
-ports en attente), aucun refus `apple-4.2` ni `ota`.
+ports en attente aux lots 4 et 5, auxquels la garde corrigée ajoute `recovery` au lot 1), aucun refus
+`apple-4.2` ni `ota`.
 
 ## D9 — Captures App Store
 
@@ -176,6 +198,11 @@ G12) : c'est une PR de release, à ouvrir quand le contenu web à livrer est rec
 6. OTA Android pendant le chantier Swift : garder la règle stricte (défaut) ou la rendre indifférente aux
    chemins sans effet sur Android.
 7. Retour arrière iOS : le tester une fois, ou l'abandonner explicitement.
+8. `recovery` (réinitialisation native du mot de passe, lot 1) : le faire câbler avant la soumission
+   (recommandé), ou accepter par écrit de soumettre sans lui. Tant que rien n'est décidé, la garde `lots`
+   refuse (`LOT6_PLAN.md` §2).
+9. Réglage du dépôt : environnement GitHub restreint à `main` pour les secrets Apple et Google
+   (`APP_STORE.md`, « Secrets et droits »).
 
 ## Sources
 

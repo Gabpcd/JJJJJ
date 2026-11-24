@@ -39,7 +39,10 @@ Depuis le lot 6, `mobile-delivery.yml` ne livre plus qu'Android ; la coquille Ca
    concurrence `ios-native-testflight`, sans annulation).
 
 L'IPA et les journaux `xcodebuild` sont conservés 14 jours dans l'artefact
-`ios-native-testflight-<build>-<sha>`.
+`ios-native-testflight-<build>-<sha>`. Cet artefact est aussi la preuve de provenance exigée par la
+soumission App Store : un build se soumet donc dans les 14 jours qui suivent son envoi, pas après
+(`APP_STORE.md`, garde `provenance`). La soumission exige aussi un run vert de `ios-swift-ci.yml` sur le
+même commit (garde `ci-ios`) : si ce commit n'en a pas, lancer `ios-swift-ci.yml` sur `main` avant l'envoi.
 
 ## Numérotation
 
