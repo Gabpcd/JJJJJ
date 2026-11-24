@@ -12,6 +12,7 @@ import {
   evaluateProcessing, evaluateProfile, evaluateSignature, evaluateSources, listBuilds, loadSources, parsePlist,
   parseXcconfig, pngInfo, requiredEntitlements, resolveBuildNumber,
 } from '../../scripts/mobile/ios-native-testflight.mjs';
+import { COQUILLE_IOS_FIGEE, lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const sources = () => structuredClone(loadSources(root));
@@ -66,11 +67,13 @@ test('l\'en-tête PNG donne dimensions et alpha', () => {
 test('le dépôt actuel passe toutes les gardes statiques', () => {
   const files = loadSources(root);
   const { settings, entitlements } = evaluateSources(files);
-  // Versions lues dans la source réelle : une 2.0.1 Swift ou une 1.1.0 Capacitor ne cassent pas ce test.
-  const capacitor = JSON.parse(files.mobileRelease).marketingVersion;
-  assert.ok(isVersion(settings.MARKETING_VERSION) && isVersion(capacitor));
+  // Versions lues dans la source réelle : une 2.0.1 Swift ne casse pas ce test. Lot 6 : la configuration de
+  // livraison est scindée, sa section « ios » porte la version de l'app Swift.
+  const livraison = lireConfigLivraison(files.mobileRelease);
+  assert.ok(isVersion(settings.MARKETING_VERSION));
   assert.ok(compareVersions(settings.MARKETING_VERSION, APP.minimumMarketingVersion) >= 0);
-  assert.ok(compareVersions(settings.MARKETING_VERSION, capacitor) > 0);
+  assert.ok(compareVersions(settings.MARKETING_VERSION, COQUILLE_IOS_FIGEE.marketingVersion) > 0);
+  assert.equal(settings.MARKETING_VERSION, livraison.ios.marketingVersion);
   const requis = requiredEntitlements(entitlements, settings);
   assert.equal(requis['aps-environment'], 'production');
   assert.ok(requis['com.apple.developer.associated-domains'].includes('applinks:jolene.app'));
@@ -80,10 +83,11 @@ for (const [nom, garde, mutation, fragment] of [
   ['un autre bundle', 'identite', (f) => { f.baseXcconfig = f.baseXcconfig.replace(/^PRODUCT_BUNDLE_IDENTIFIER = .*$/m, 'PRODUCT_BUNDLE_IDENTIFIER = app.autre'); }, /PRODUCT_BUNDLE_IDENTIFIER/],
   ['une autre équipe', 'identite', (f) => { f.baseXcconfig = f.baseXcconfig.replace(/^DEVELOPMENT_TEAM = .*$/m, 'DEVELOPMENT_TEAM = FPQ78HDF4Y'); }, /DEVELOPMENT_TEAM/],
   ['la signature automatique', 'identite', (f) => { f.baseXcconfig = f.baseXcconfig.replace(/^CODE_SIGN_STYLE = .*$/m, 'CODE_SIGN_STYLE = Automatic'); }, /Manual/],
-  ['une version Swift non supérieure à Capacitor', 'identite', (f) => {
-    const swift = { ...parseXcconfig(f.baseXcconfig), ...parseXcconfig(f.productionXcconfig) }.MARKETING_VERSION;
-    f.mobileRelease = JSON.stringify({ ...JSON.parse(f.mobileRelease), marketingVersion: swift });
-  }, /dépasser la coquille Capacitor/],
+  ['une version Swift différente de la configuration de livraison', 'identite', (f) => {
+    const livraison = JSON.parse(f.mobileRelease);
+    f.mobileRelease = JSON.stringify({ ...livraison, ios: { ...livraison.ios, marketingVersion: '9.9.9' } });
+  }, /diffère de ios\.marketingVersion 9\.9\.9/],
+  ['une configuration de livraison non scindée', 'identite', (f) => { f.mobileRelease = JSON.stringify({ marketingVersion: '1.0.7', buildNumber: 24 }); }, /scindée par plateforme/],
   ['un push figé hors xcconfig', 'entitlements', (f) => { f.entitlements = f.entitlements.replace('<string>$(APS_ENVIRONMENT)</string>', '<string>development</string>'); }, /aps-environment/],
   ['des associated domains absents', 'entitlements', (f) => { f.entitlements = f.entitlements.replace(/<key>com\.apple\.developer\.associated-domains<\/key>\s*<array>[\s\S]*?<\/array>/, ''); }, /associated-domains absent/],
   ['le pistage', 'confidentialite', (f) => { f.privacyInfo = f.privacyInfo.replace(/(<key>NSPrivacyTracking<\/key>\s*)<false\/>/, '$1<true/>'); }, /NSPrivacyTracking/],
@@ -170,8 +174,9 @@ test('le numéro par défaut vaut max(dernier build App Store Connect, plancher)
   assert.equal(resolveBuildNumber({ requested: '', existing: [], floor: 24 }), 25);
   assert.equal(resolveBuildNumber({ requested: undefined, existing: ['20', '24', '23'], floor: 24 }), 25);
   assert.equal(resolveBuildNumber({ requested: ' ', existing: ['9', '100', '30'], floor: 24 }), 101);
-  assert.equal(resolveBuildNumber({ requested: '', existing: ['24'], floor: buildFloor({ buildNumber: 27 }) }), 28);
-  assert.equal(buildFloor({ buildNumber: 12 }), 24);
+  assert.equal(resolveBuildNumber({ requested: '', existing: ['24'], floor: buildFloor({ ios: { minimumBuildNumber: 28 } }) }), 28);
+  assert.equal(buildFloor({ ios: { minimumBuildNumber: 12 } }), 24);
+  assert.equal(buildFloor({ buildNumber: 40 }), 24, 'l\'ancien format à plat ne relève plus le plancher');
 });
 
 test('un numéro saisi est refusé s\'il est invalide, inférieur ou égal à 24, ou déjà pris', () => {
@@ -499,9 +504,12 @@ test('l\'archive est signée par l\'identité et le profil attendus, et le trous
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'ordre des gardes avant l\'envoi');
 });
 
-test('la configuration Capacitor reste lisible à l\'identique (marketingVersion, buildNumber au premier niveau)', () => {
-  const release = JSON.parse(readFileSync(join(root, 'config/mobile-release.json'), 'utf8'));
-  assert.ok(isVersion(release.marketingVersion), release.marketingVersion);
-  assert.ok(Number.isSafeInteger(release.buildNumber));
+test('la configuration de livraison est scindée (lot 6) : le plancher TestFlight vient de ios.minimumBuildNumber', () => {
+  const release = lireConfigLivraison(readFileSync(join(root, 'config/mobile-release.json'), 'utf8'));
+  assert.ok(isVersion(release.ios.marketingVersion), release.ios.marketingVersion);
+  assert.ok(Number.isSafeInteger(release.ios.minimumBuildNumber));
+  assert.equal(buildFloor(release), release.ios.minimumBuildNumber - 1);
   assert.ok(buildFloor(release) >= APP.buildFloor);
+  // Premier numéro calculé quand App Store Connect ne connaît rien au-dessus du plancher.
+  assert.equal(resolveBuildNumber({ requested: '', existing: ['24', '25'], floor: buildFloor(release) }), release.ios.minimumBuildNumber);
 });

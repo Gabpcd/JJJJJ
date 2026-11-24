@@ -1,4 +1,12 @@
 {
-  "marketingVersion": "1.0.7",
-  "buildNumber": 24
+  "ios": {
+    "runtime": "swift",
+    "marketingVersion": "2.0.0",
+    "minimumBuildNumber": 32
+  },
+  "android": {
+    "runtime": "capacitor",
+    "marketingVersion": "1.0.7",
+    "buildNumber": 24
+  }
 }

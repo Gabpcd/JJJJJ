@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-const build = JSON.parse(readFileSync('config/mobile-release.json', 'utf8')).buildNumber;
+import { chargerConfigLivraison, exigerOtaAndroidSeul } from './release-config.mjs';
+// Android Capacitor runtime only (docs/mobile-swift/DECISIONS_LOT6.md) ; the tag keeps the name the
+// installed client reads (src/lib/mobileUpdates.ts).
+const build = exigerOtaAndroidSeul(chargerConfigLivraison()).buildNumber;
 const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const tag = `mobile-ota-${build}`;
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

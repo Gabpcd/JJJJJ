@@ -1,7 +1,17 @@
-import { appendFileSync, readFileSync } from 'node:fs';
+// État de livraison par plateforme, porté par des tags git (docs/mobile-swift/DECISIONS_LOT6.md, D4).
+//
+//   reserve android   fige le commit d'une livraison Android : mobile-native-source-android-N
+//   check <plateforme>   la plateforme est-elle déjà soumise depuis ce commit ?
+//   record <plateforme>  consigne la soumission : mobile-native-android-N ou mobile-native-ios-N
+//
+// Android lit son versionCode dans config/mobile-release.json. iOS (Swift) reçoit le numéro du build
+// TestFlight soumis dans RELEASE_BUILD_NUMBER : il n'est pas figé dans le dépôt. Aucune action
+// n'exige les deux plateformes ; l'ancien tag commun mobile-native-N n'est plus créé.
+import { appendFileSync } from 'node:fs';
+import { DOC, PLATEFORMES, buildIosSoumis, chargerConfigLivraison, tagsLivraison } from './release-config.mjs';
+
 const sha = process.env.RELEASE_SHA;
 const repo = process.env.GITHUB_REPOSITORY;
-const build = JSON.parse(readFileSync('config/mobile-release.json', 'utf8')).buildNumber;
 if (repo !== 'Gabpcd/JJJJJ' || !/^[a-f0-9]{40}$/.test(sha || '')) throw new Error('Invalid release identity');
 async function api(path, method = 'GET', body) {
   const response = await fetch(`https://api.github.com/repos/${repo}/${path}`, {
@@ -18,17 +28,23 @@ async function record(tag) {
   if (existing && existing !== sha) throw new Error(`${tag} already belongs to another commit`);
   if (!existing) await api('git/refs', 'POST', { ref: `refs/tags/${tag}`, sha });
 }
+
 const [action, platform] = process.argv.slice(2);
-if (platform && !['ios', 'android'].includes(platform)) throw new Error('Invalid platform');
-if (action === 'reserve') await record(`mobile-native-source-${build}`);
-else if (action === 'check') {
-  const existing = await read(`mobile-native-${platform}-${build}`);
+if (action === 'complete') {
+  // Verrou : l'ancienne clôture exigeait les tags iOS et Android puis posait mobile-native-N.
+  throw new Error(`Action « complete » retirée : les tags sont scindés par plateforme, « record <plateforme> » clôt la livraison (voir ${DOC})`);
+}
+if (!['reserve', 'check', 'record'].includes(action)) throw new Error('Unknown release-state action');
+if (!PLATEFORMES.includes(platform)) throw new Error(`Invalid platform: « ${platform ?? ''} » (ios ou android exigé, voir ${DOC})`);
+const config = chargerConfigLivraison();
+const build = platform === 'android' ? config.android.buildNumber : buildIosSoumis(config, process.env.RELEASE_BUILD_NUMBER);
+const tags = tagsLivraison(platform, build);
+
+if (action === 'reserve') {
+  if (!tags.source) throw new Error(`iOS natif ne réserve aucune source : le build soumis vient de TestFlight (voir ${DOC})`);
+  await record(tags.source);
+} else if (action === 'check') {
+  const existing = await read(tags.soumis);
   if (existing && existing !== sha) throw new Error('Platform submitted from another commit');
   appendFileSync(process.env.GITHUB_OUTPUT, `submitted=${existing === sha}\n`);
-} else if (action === 'record') await record(`mobile-native-${platform}-${build}`);
-else if (action === 'complete') {
-  for (const target of ['ios', 'android']) {
-    if (await read(`mobile-native-${target}-${build}`) !== sha) throw new Error(`Submission missing for ${target}`);
-  }
-  await record(`mobile-native-${build}`);
-} else throw new Error('Unknown release-state action');
+} else await record(tags.soumis);
