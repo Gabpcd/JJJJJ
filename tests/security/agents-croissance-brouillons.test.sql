@@ -657,11 +657,13 @@ BEGIN
   FROM (VALUES
     ('01 00 00 10 01', '0100001001'), ('01.00.00.10.01', '0100001001'), ('+33 1 00 00 10 01', '0100001001'),
     ('0033 1 00 00 10 01', '0100001001'), ('33100001001', '0100001001'),
-    ('100001001', NULL), ('12345', NULL), ('01 00 00 10 01 / 01 00 00 10 02', NULL), ('', NULL), (NULL, NULL)
+    ('+33 (0)1 00 00 10 01', '0100001001'), ('0033 (0) 1 00 00 10 01', '0100001001'),
+    ('100001001', NULL), ('12345', NULL), ('01 00 00 10 01 / 01 00 00 10 02', NULL),
+    ('+262 262 00 10 01', NULL), ('', NULL), (NULL, NULL)
   ) AS t(saisi, attendu)
   WHERE private.fn_growth_telephone_national(t.saisi) IS NOT DISTINCT FROM t.attendu;
-  IF v_n IS DISTINCT FROM 10 THEN
-    RAISE EXCEPTION 'Appels : fn_growth_telephone_national juste sur % cas sur 10', v_n;
+  IF v_n IS DISTINCT FROM 13 THEN
+    RAISE EXCEPTION 'Appels : fn_growth_telephone_national juste sur % cas sur 13', v_n;
   END IF;
 
   -- 11.b Décompte : quatorze établissements ciblés (la pharmacie est hors
@@ -690,7 +692,7 @@ BEGIN
   INSERT INTO public.sales_contacts (type, nom, email, telephone, finess, statut, ne_plus_contacter)
   VALUES
     ('ETABLISSEMENT', 'STOP par numéro recette', NULL, '01 00 00 10 04', NULL, 'PERDU', true),
-    ('ETABLISSEMENT', 'STOP par numéro international recette', NULL, '+33 1 00 00 10 15', NULL, 'PERDU', true),
+    ('ETABLISSEMENT', 'STOP par numéro international recette', NULL, '+33 (0)1 00 00 10 15', NULL, 'PERDU', true),
     ('ETABLISSEMENT', 'STOP par adresse recette', 'stop@ssiad-appel.mssante.fr', NULL, NULL, 'PERDU', true),
     ('ETABLISSEMENT', 'STOP par adresse A3 recette', 'stop-a3@ehpad-appel.mssante.fr', NULL, NULL, 'PERDU', true),
     ('ETABLISSEMENT', 'Contact CRM existant recette', NULL, NULL, 'ZYTEL014', 'PROSPECT', false);
@@ -728,7 +730,7 @@ BEGIN
 
   -- 11.d Liste d'appels : trois fiches (EHPAD, hôpital, école) sur huit cibles
   -- examinées. Écartés dans la boucle : STOP par le numéro (004), STOP noté
-  -- « +33 » au CRM (015), STOP par l'adresse bien que MSSanté (017 et 011),
+  -- « +33 (0) » au CRM (015), STOP par l'adresse bien que MSSanté (017 et 011),
   -- standard partagé avec 002 écrit « +33 » (005). Hors sélection : numéro
   -- court (006), deux numéros (018), opposition (003), déjà au CRM (010, 014),
   -- cible prise par l'email (007), type hors cible (008).
@@ -738,7 +740,11 @@ BEGIN
      OR (v_res->>'exclus_stop')::integer IS DISTINCT FROM 4 OR (v_res->>'numeros_deja_en_file')::integer IS DISTINCT FROM 1
      OR (v_res->>'candidats_examines')::integer IS DISTINCT FROM 8
      OR COALESCE(v_places, 0) < 3
-     OR (v_res->>'places_non_pourvues')::integer IS DISTINCT FROM v_places - 3 THEN
+     OR (v_res->>'places_non_pourvues')::integer IS DISTINCT FROM v_places - 3
+     -- Ce qui borne la liste est dit : fiches de la semaine sur le quota, fiches en file sur le plafond.
+     OR (v_res->>'fiches_de_la_semaine')::integer IS DISTINCT FROM (v_res->>'quota_semaine')::integer - v_places + 3
+     OR (v_res->>'file_max')::integer IS DISTINCT FROM 500
+     OR COALESCE((v_res->>'fiches_en_file')::integer, 0) < 3 THEN
     RAISE EXCEPTION 'Appels : 3 fiches, 4 STOP, 1 numéro déjà en file sur 8 cibles examinées attendus — %', v_res;
   END IF;
   IF (SELECT count(*) FROM public.growth_brouillons
@@ -762,12 +768,14 @@ BEGIN
   -- Script : la phrase de commission de la FAQ de l'accueil, la possibilité de
   -- ne plus être rappelé, aucune comparaison avec un autre prestataire.
   IF COALESCE(position('Jolene facture à l''établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée' IN v_corps), 0) = 0
+     OR COALESCE(position('publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé)' IN v_corps), 0) = 0
      OR COALESCE(position('Jolene ne vous rappellera plus' IN v_corps), 0) = 0
      OR v_corps ~* '(intérim|agence)' THEN
     RAISE EXCEPTION 'Appels : script établissement inattendu — %', v_corps;
   END IF;
   SELECT corps INTO v_corps FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL009';
   IF COALESCE(position('jeunes diplômés' IN v_corps), 0) = 0 OR COALESCE(position('gratuite pour les soignants' IN v_corps), 0) = 0
+     OR COALESCE(position('publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé)' IN v_corps), 0) = 0
      OR COALESCE(position('Jolene ne vous rappellera plus' IN v_corps), 0) = 0
      OR position('commission' IN v_corps) > 0 OR v_corps ~ '[0-9]' THEN
     RAISE EXCEPTION 'Appels : script école inattendu — %', v_corps;
@@ -939,6 +947,13 @@ BEGIN
      OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZYTEL002', 'nouvelle-adresse@appel-recette.test', NULL, NULL) IS DISTINCT FROM 'STOP' THEN
     RAISE EXCEPTION 'Appels : un STOP noté au téléphone doit bloquer l''appel (FINESS et numéro partagé) et l''email';
   END IF;
+  -- Un refus est aussi porté par le prospect : il ne dépend pas du seul contact CRM.
+  IF (SELECT count(*) FROM public.prospects_etablissements pe
+      WHERE (pe.finess IN ('ZYTEL002', 'ZYTEL027') AND pe.statut_sourcing = 'OPPOSITION')
+         OR (pe.finess IN ('ZYTEL001', 'ZYTEL024', 'ZYTEL025', 'ZYTEL026') AND pe.statut_sourcing = 'QUALIFIE')
+     ) IS DISTINCT FROM 6 THEN
+    RAISE EXCEPTION 'Appels : après « STOP » ou « pas intéressé » le prospect doit être en opposition, après un autre résultat seulement rattaché au CRM';
+  END IF;
   IF (SELECT count(*) FROM public.sales_contacts sc
       WHERE (sc.finess = 'ZYTEL024' AND sc.statut = 'CONTACTE' AND sc.reponse = 'POSITIVE' AND sc.a_rappeler IS TRUE AND sc.sequence_active IS TRUE)
          OR (sc.finess = 'ZYTEL025' AND sc.statut = 'PROSPECT' AND sc.a_rappeler IS TRUE AND sc.sequence_active IS TRUE AND sc.prochaine_action_le > now())
@@ -987,7 +1002,18 @@ BEGIN
     (SELECT id FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL021'), 'VALIDER');
   EXECUTE 'RESET ROLE';
   UPDATE public.prospects_etablissements SET statut_sourcing = 'OPPOSITION' WHERE finess IN ('ZYTEL012', 'ZYTEL020', 'ZYTEL021');
+  INSERT INTO public.sales_contacts (type, nom, finess, statut)
+  VALUES ('ETABLISSEMENT', 'Inscrit entre l''appel et la note recette', 'ZYTEL023', 'INSCRIT');
   EXECUTE 'SET LOCAL ROLE authenticated';
+  -- Établissement entré au CRM (ici déjà inscrit) entre l'appel et la note : un résultat ordinaire
+  -- ne réécrit pas son suivi.
+  v_res := public.fn_admin_growth_brouillon_decider(
+    (SELECT id FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL023'),
+    'MARQUER_ENVOYE', NULL, NULL, 'SANS_REPONSE');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE'
+     OR v_res->>'raison' IS DISTINCT FROM 'Établissement déjà suivi au CRM, déjà inscrit ou écarté : appel non enregistré au CRM' THEN
+    RAISE EXCEPTION 'Appels : un résultat ordinaire sur une cible entrée au CRM depuis l''appel doit être refusé — %', v_res;
+  END IF;
   v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_constat, 'VALIDER');
   IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE'
      OR v_res->>'raison' IS DISTINCT FROM 'Contact en opposition (STOP) ou perdu : ne pas appeler' THEN
@@ -1025,6 +1051,8 @@ BEGIN
       WHERE id IN (v_id_tel_tardif, v_id_tel_constat) AND statut = 'REJETE'
         AND motif_rejet = 'Opposition (STOP) ou contact perdu' AND envoye_le IS NULL) IS DISTINCT FROM 2
      OR EXISTS (SELECT 1 FROM public.sales_contacts WHERE finess IN ('ZYTEL009', 'ZYTEL012', 'ZYTEL020'))
+     OR EXISTS (SELECT 1 FROM public.sales_taches WHERE idempotence_key = 'growth:appel:' || (
+                  SELECT id FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL023'))
      OR EXISTS (SELECT 1 FROM public.sales_taches
                 WHERE idempotence_key IN ('growth:appel:' || v_id_tel_tardif, 'growth:appel:' || v_id_tel_constat)) THEN
     RAISE EXCEPTION 'Appels : rejet non persisté, ou fiche CRM créée malgré l''opposition';
@@ -1034,10 +1062,13 @@ BEGIN
         AND ((b.cible_id = 'ZYTEL020' AND b.statut = 'REJETE' AND b.contexte->>'resultat_appel' = 'APPEL_REPONDU')
           OR (b.cible_id = 'ZYTEL021' AND b.statut = 'ENVOYE' AND b.contexte->>'resultat_appel' = 'STOP')
           OR (b.cible_id = 'ZYTEL022' AND b.statut = 'REJETE' AND b.motif_rejet = 'Établissement déjà suivi au CRM, déjà inscrit ou écarté')
-          OR (b.cible_id = 'ZYTEL023' AND b.statut = 'VALIDE' AND b.contexte->>'telephone' = '01 00 00 10 93'))
+          OR (b.cible_id = 'ZYTEL023' AND b.statut = 'REJETE' AND b.contexte->>'telephone' = '01 00 00 10 93'
+              AND b.contexte->>'resultat_appel' = 'SANS_REPONSE'))
      ) IS DISTINCT FROM 4
      OR NOT EXISTS (SELECT 1 FROM public.sales_contacts
                     WHERE finess = 'ZYTEL021' AND statut = 'PERDU' AND ne_plus_contacter IS TRUE)
+     OR (SELECT statut_sourcing FROM public.prospects_etablissements WHERE finess = 'ZYTEL021') IS DISTINCT FROM 'OPPOSITION'
+     OR (SELECT statut FROM public.sales_contacts WHERE finess = 'ZYTEL023') IS DISTINCT FROM 'INSCRIT'
      OR private.fn_growth_appel_bloque('ZYTEL021', NULL, NULL) IS DISTINCT FROM 'STOP' THEN
     RAISE EXCEPTION 'Appels : résultat perdu au constat refusé, refus entendu non enregistré, cible déjà suivie acceptée ou numéro non suivi';
   END IF;

@@ -112,13 +112,15 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   const source = appel ? sourceFiche(b.contexte) : null;
   const resultatNote = appel ? libelleResultatAppel(b.contexte?.resultat_appel) : null;
 
-  const decider = async (action: ActionBrouillon, motif?: string) => {
+  // `sansTexte` : une revérification avant appel ne réécrit pas le script (un autre onglet a pu le modifier).
+  const decider = async (action: ActionBrouillon, motif?: string, sansTexte = false) => {
     setEnCours(action);
+    const avecTexte = !sansTexte && (action === 'MODIFIER' || action === 'VALIDER');
     const { data, error } = await db.rpc('fn_admin_growth_brouillon_decider', {
       p_id: b.id,
       p_action: action,
-      p_sujet: action === 'MODIFIER' || action === 'VALIDER' ? sujet : null,
-      p_corps: action === 'MODIFIER' || action === 'VALIDER' ? corps : null,
+      p_sujet: avecTexte ? sujet : null,
+      p_corps: avecTexte ? corps : null,
       p_motif: motif ?? null,
     });
     setEnCours(null);
@@ -141,7 +143,7 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
   // Rien n'est composé à la place de la fondatrice : elle confirme l'appel sur son téléphone.
   const appeler = async () => {
     setVerification(true);
-    const ok = await decider('VALIDER');
+    const ok = await decider('VALIDER', undefined, true);
     setVerification(false);
     if (!ok) { setNumeroVerifie(null); return; }
     const verifie = derniereReponse.current?.telephone ?? numero;
@@ -310,6 +312,9 @@ function CarteBrouillon({ b, onChange }: { b: BrouillonCroissance; onChange: () 
                     </span>
                   ) : null}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Cliquez sur « Appeler » avant chaque appel, même si vous composez le numéro vous-même : la fiche est revérifiée à ce moment-là.
+                </p>
                 <div role="group" aria-label="Résultat de l’appel" className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-muted-foreground">Après l’appel :</span>
                   {RESULTATS_APPEL.map((r) => (
@@ -403,6 +408,8 @@ export default function AdminAgentsCroissance() {
   const [bascule, setBascule] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [rapportCibles, setRapportCibles] = useState<RapportCibles | null>(null);
+  // Erreur propre au décompte : un autre chargement réussi ne doit pas l'effacer.
+  const [erreurCibles, setErreurCibles] = useState<string | null>(null);
 
   const chargerFile = useCallback(async () => {
     let q = db.from('growth_brouillons').select('*').order('cree_le', { ascending: false }).limit(150);
@@ -445,7 +452,8 @@ export default function AdminAgentsCroissance() {
       .is('erreur', null)
       .order('debut_le', { ascending: false })
       .limit(1);
-    if (error) { setErreur(`Décompte des cibles illisible : ${error.message}`); return; }
+    if (error) { setErreurCibles(`Décompte des cibles illisible : ${error.message}`); return; }
+    setErreurCibles(null);
     const dernier = ((data ?? []) as Array<{ debut_le: string; details: Record<string, unknown> | null }>)[0];
     const cibles = lireCibles(dernier?.details?.cibles);
     setRapportCibles(dernier && cibles ? { le: dernier.debut_le, cibles, passage: lirePassage(dernier.details) } : null);
@@ -551,6 +559,7 @@ export default function AdminAgentsCroissance() {
         ) : null}
 
         {erreur ? <p role="alert" className="text-sm text-destructive">{erreur}</p> : null}
+        {erreurCibles ? <p role="alert" className="text-sm text-destructive">{erreurCibles}</p> : null}
 
         <Tabs value={vue} onValueChange={changerVue}>
           <AdminTabsList disposition="grid" colonnes={3} className="sm:w-fit" aria-label="Vues des agents de croissance">

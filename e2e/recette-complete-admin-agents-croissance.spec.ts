@@ -49,7 +49,7 @@ const SCRIPT_APPEL = [
   'Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne.',
   'Jolene facture à l\'établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez.',
   'Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ?',
-  'Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.',
+  'Je vous appelle au numéro de votre établissement, publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.',
 ].join('\n\n');
 
 const ID_APPEL = '99110000-0000-4000-8000-000000000011';
@@ -101,7 +101,7 @@ async function simulerAgents(page: Page, { appels = false }: { appels?: boolean 
   const resultats: Array<{ p_id: string; p_motif: string | null }> = [];
   // Passage automatique du matin : l'agent email ne prépare rien et le dit, l'agent d'appels a préparé trois fiches.
   let executions: Array<Record<string, unknown>> = appels ? [
-    { id: 11, agent: 'APPEL_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:01Z', brouillons_crees: 5, erreur: null, details: { brouillons_crees: 5, fiches_appel: 5, places_de_la_semaine: 30, places_non_pourvues: 25, quota_semaine: 30, candidats_examines: 8, exclus_stop: 2, numeros_deja_en_file: 1 } },
+    { id: 11, agent: 'APPEL_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:01Z', brouillons_crees: 5, erreur: null, details: { brouillons_crees: 5, fiches_appel: 5, places_de_la_semaine: 30, places_non_pourvues: 25, quota_semaine: 30, fiches_de_la_semaine: 5, file_max: 60, fiches_en_file: 5, candidats_examines: 8, exclus_stop: 2, numeros_deja_en_file: 1 } },
     { id: 10, agent: 'PROSPECTION_ETABLISSEMENT', declencheur: 'CRON', debut_le: '2026-11-24T05:50:00Z', brouillons_crees: 0, erreur: null, details: { premiers_contacts: 0, places_du_jour: 20, places_non_pourvues: 20, cibles } },
   ] : [];
   const rapports = appels ? [{ semaine_debut: '2026-11-16', donnees: { ...entonnoir, prospection: { ...entonnoir.prospection, fiches_appel_notees_periode: 2, cibles_agent: cibles } } }] : [];
@@ -364,13 +364,16 @@ test('admin — zéro visible et liste d’appels : avertissement, fiche, appel 
   await expect(resultat.getByRole('button')).toHaveText(['A répondu', 'Sans réponse', 'Intéressé', 'À rappeler', 'Pas intéressé', 'STOP']);
   await expect(glycines.getByRole('button', { name: 'Valider la fiche' })).toHaveCount(0);
   await expect(glycines.getByRole('link')).toHaveCount(0);
+  await expect(glycines.getByText('Cliquez sur « Appeler » avant chaque appel, même si vous composez le numéro vous-même : la fiche est revérifiée à ce moment-là.', { exact: true })).toBeVisible();
+  await expect(glycines.getByLabel('Script d’appel')).toHaveValue(/publié dans les annuaires publics des établissements de santé \(répertoire FINESS et Annuaire Santé\)\. Si vous préférez ne pas être rappelé/);
   expect(await ouverts()).toEqual([]);
-  expect(sim.decisions).toHaveLength(1);
+  expect(sim.decisions).toEqual([{ p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: '' }]);
   await glycines.getByRole('button', { name: 'Appeler le 01 00 00 10 01' }).click();
   await expect(glycines.getByText(/Fiche revérifiée à l’instant\. Si l’appel ne s’est pas lancé :/)).toBeVisible();
   await expect(glycines.getByRole('link', { name: 'composer le 01 00 00 10 01' })).toHaveAttribute('href', 'tel:0100001001');
   expect(await ouverts()).toEqual(['tel:0100001001']);
-  expect(sim.decisions.map((d) => d.p_action)).toEqual(['VALIDER', 'VALIDER']);
+  // La revérification avant appel ne renvoie pas le texte : elle ne peut pas écraser un script modifié ailleurs.
+  expect(sim.decisions).toEqual([{ p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: '' }, { p_id: ID_APPEL, p_action: 'VALIDER', p_sujet: null }]);
   expect(sim.resultats).toEqual([]);
   await sansDebordement();
   await preuve(page, 'agents-appels-validee', info);

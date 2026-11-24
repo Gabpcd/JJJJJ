@@ -128,13 +128,15 @@ export function telephoneFiche(contexte: Record<string, unknown>): string | null
 /**
  * Forme nationale d'un numéro français (dix chiffres commençant par 0), ou null si le champ n'en
  * contient pas exactement un. Miroir de private.fn_growth_telephone_national : « 01 23… »,
- * « +33 1 23… » et « 0033 1 23… » désignent le même numéro.
+ * « +33 1 23… », « +33 (0)1 23… » et « 0033 1 23… » désignent le même numéro.
  */
 export function telephoneNational(numero: string | null | undefined): string | null {
   const chiffres = (numero ?? '').replace(/\D/g, '');
   if (/^0[1-9]\d{8}$/.test(chiffres)) return chiffres;
   if (/^33[1-9]\d{8}$/.test(chiffres)) return `0${chiffres.slice(2)}`;
+  if (/^330[1-9]\d{8}$/.test(chiffres)) return chiffres.slice(2);
   if (/^0033[1-9]\d{8}$/.test(chiffres)) return `0${chiffres.slice(4)}`;
+  if (/^00330[1-9]\d{8}$/.test(chiffres)) return chiffres.slice(4);
   return null;
 }
 
@@ -166,9 +168,17 @@ export function resumeAppels(details: unknown): ResumeAppels | null {
   if (places === null || quota === null) return null;
   const vides = n('places_non_pourvues') ?? 0;
   const morceaux: string[] = [];
-  morceaux.push(places === 0
-    ? `Liste de la semaine complète (${quota} ${quota > 1 ? 'fiches' : 'fiche'}) : la prochaine arrive lundi`
-    : `${places} ${places > 1 ? 'places restaient' : 'place restait'} sur ${quota} cette semaine`);
+  // Ce qui borne la liste : le quota de la semaine, ou le plafond de fiches en attente.
+  const semaine = n('fiches_de_la_semaine');
+  const enFile = n('fiches_en_file');
+  const fileMax = n('file_max');
+  if (places > 0) {
+    morceaux.push(`${places} ${places > 1 ? 'places restaient' : 'place restait'} sur ${quota} cette semaine`);
+  } else if (semaine !== null && semaine < quota && enFile !== null && fileMax !== null && enFile >= fileMax) {
+    morceaux.push(`File pleine (${fileMax} fiches en attente) : traitez des fiches pour en recevoir d’autres`);
+  } else {
+    morceaux.push(`Liste de la semaine complète (${quota} ${quota > 1 ? 'fiches' : 'fiche'}) : la prochaine arrive lundi`);
+  }
   const stop = n('exclus_stop') ?? 0;
   if (stop > 0) morceaux.push(`${stop} ${stop > 1 ? 'cibles écartées' : 'cible écartée'} pour opposition`);
   const numeros = n('numeros_deja_en_file') ?? 0;

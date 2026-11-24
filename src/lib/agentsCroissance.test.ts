@@ -137,11 +137,11 @@ describe('agents de croissance — fiches d’appel', () => {
     expect(telephoneFiche({ telephone: '' })).toBeNull();
     expect(telephoneFiche({})).toBeNull();
     // Mêmes cas que private.fn_growth_telephone_national (suite SQL, section 11.a).
-    for (const saisi of ['01 00 00 10 01', '01.00.00.10.01', '+33 1 00 00 10 01', '0033 1 00 00 10 01', '33100001001']) {
+    for (const saisi of ['01 00 00 10 01', '01.00.00.10.01', '+33 1 00 00 10 01', '0033 1 00 00 10 01', '33100001001', '+33 (0)1 00 00 10 01', '0033 (0) 1 00 00 10 01']) {
       expect(telephoneNational(saisi)).toBe('0100001001');
       expect(lienTel(saisi)).toBe('tel:0100001001');
     }
-    for (const saisi of ['100001001', '12345', '01 00 00 10 01 / 01 00 00 10 02', '', null, undefined]) {
+    for (const saisi of ['100001001', '12345', '01 00 00 10 01 / 01 00 00 10 02', '+262 262 00 10 01', '', null, undefined]) {
       expect(telephoneNational(saisi)).toBeNull();
       expect(lienTel(saisi)).toBeNull();
     }
@@ -166,6 +166,11 @@ describe('agents de croissance — fiches d’appel', () => {
       texte: '1 place restait sur 30 cette semaine · 1 cible écartée pour opposition',
       epuisee: false,
     });
+    // Aucune place : le quota de la semaine, ou le plafond de fiches en attente.
+    expect(resumeAppels({ places_de_la_semaine: 0, quota_semaine: 30, fiches_de_la_semaine: 30, fiches_en_file: 12, file_max: 60 })?.texte)
+      .toBe('Liste de la semaine complète (30 fiches) : la prochaine arrive lundi');
+    expect(resumeAppels({ places_de_la_semaine: 0, quota_semaine: 30, fiches_de_la_semaine: 10, fiches_en_file: 60, file_max: 60 })?.texte)
+      .toBe('File pleine (60 fiches en attente) : traitez des fiches pour en recevoir d’autres');
     expect(resumeAppels({ fiches_appel: 3 })).toBeNull();
     expect(resumeAppels(null)).toBeNull();
   });

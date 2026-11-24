@@ -137,7 +137,7 @@ test('contraintes : élargissement seul, une fiche d\'appel exige un prospect et
   const alter = /ALTER TABLE public\.growth_brouillons([\s\S]*?);/.exec(code)[1];
   assert.match(alter, /DROP CONSTRAINT growth_brouillons_agent_check,\s+ADD CONSTRAINT growth_brouillons_agent_check CHECK \(agent IN \(\s+'PROSPECTION_ETABLISSEMENT', 'APPEL_ETABLISSEMENT', 'POST_SOCIAL', 'MISSION_A_POURVOIR', 'REACTIVATION'\s+\)\)/);
   assert.match(alter, /DROP CONSTRAINT growth_brouillons_canal_check,\s+ADD CONSTRAINT growth_brouillons_canal_check CHECK \(canal IN \('EMAIL', 'TELEPHONE', 'LINKEDIN', 'FACEBOOK_GROUPE'\)\)/);
-  assert.match(alter, /ADD CONSTRAINT growth_brouillons_telephone_destinataire CHECK \(\s+canal <> 'TELEPHONE'\s+OR \(cible_type = 'PROSPECT_ETABLISSEMENT'\s+AND cible_id IS NOT NULL\s+AND regexp_replace\(COALESCE\(contexte->>'telephone', ''\), '\\D', '', 'g'\) ~ '\^\(0\|33\|0033\)\[1-9\]\[0-9\]\{8\}\$'\)/);
+  assert.match(alter, /ADD CONSTRAINT growth_brouillons_telephone_destinataire CHECK \(\s+canal <> 'TELEPHONE'\s+OR \(cible_type = 'PROSPECT_ETABLISSEMENT'\s+AND cible_id IS NOT NULL\s+AND regexp_replace\(COALESCE\(contexte->>'telephone', ''\), '\\D', '', 'g'\) ~ '\^\(0\|330\?\|00330\?\)\[1-9\]\[0-9\]\{8\}\$'\)/);
   assert.equal(code.match(/\bALTER TABLE\b/g).length, 1);
   assert.doesNotMatch(code, /\b(DROP TABLE|DROP COLUMN|TRUNCATE|DROP FUNCTION|DROP POLICY|CREATE POLICY)\b/i);
 });
@@ -184,7 +184,7 @@ test('agent email : corps d\'origine, sélection déplacée dans l\'univers uniq
   assert.ok(univers.includes("'agents_types_cibles', 'EHPAD,HANDICAP,DOMICILE,CENTRE_SANTE,HOPITAL,DIALYSE,ECOLE_SANTE'));"));
   const utilisable = /\(NULLIF\(btrim\(p\.email\), ''\) IS NOT NULL\s+AND btrim\(p\.email\) ~\* '[^']+'\s+(?:--[^\n]*\s+)?AND NOT private\.fn_growth_email_mssante\(p\.email\)\) AS email_utilisable,/;
   assert.match(univers, utilisable);
-  assert.match(univers, /\(p\.email_envoye_le IS NULL\s+AND p\.ajoute_crm_le IS NULL\s+AND p\.statut_sourcing NOT IN \('IGNORE', 'OPPOSITION'\)\s+(?:--[^\n]*\s+)?AND NOT EXISTS \(SELECT 1 FROM public\.sales_contacts sc WHERE sc\.finess = p\.finess\)\s+AND NOT EXISTS \(SELECT 1 FROM public\.etablissements e\s+WHERE e\.finess = p\.finess AND e\.supprime_le IS NULL\)\s+AND NOT EXISTS \(\s+SELECT 1 FROM public\.growth_brouillons b/);
+  assert.match(univers, /\(p\.email_envoye_le IS NULL\s+AND p\.ajoute_crm_le IS NULL\s+AND p\.statut_sourcing NOT IN \('IGNORE', 'OPPOSITION'\)\s+(?:--[^\n]*\s+)*AND NOT EXISTS \(SELECT 1 FROM public\.sales_contacts sc WHERE sc\.finess = p\.finess\)\s+AND NOT EXISTS \(SELECT 1 FROM public\.etablissements e WHERE e\.finess = p\.finess\)\s+AND NOT EXISTS \(\s+SELECT 1 FROM public\.growth_brouillons b/);
   assert.match(univers, /\(private\.fn_growth_telephone_national\(p\.telephone\) IS NOT NULL\) AS telephone_utilisable,/);
   // Les contrôles cible par cible restent dans la boucle : STOP, puis une séquence par adresse.
   assert.ok(apres.includes("IF private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', r.finess, r.email, r.telephone, NULL) IS NOT NULL THEN"));
@@ -203,11 +203,11 @@ test('univers ciblé, règle téléphone et décompte : écrits une fois, lus pa
   assert.equal(code.match(/private\.fn_growth_cibles_prospection\(\)/g).filter(Boolean).length >= 3, true);
   assert.match(definition(migration, 'private.fn_growth_entonnoir').corps, /'cibles_agent', private\.fn_growth_cibles_prospection\(\)/);
   // Règle téléphone : le prédicat unique, moins le motif propre à l'email.
-  // Le STOP est comparé sous les trois écritures du numéro ; MSSANTE ne vient que de l'adresse.
+  // Le STOP est comparé sous les cinq écritures du numéro ; MSSANTE ne vient que de l'adresse.
   assert.equal(sansCommentaires(definition(migration, 'private.fn_growth_appel_bloque').corps).replace(/\s+/g, ' ').trim(),
-    "SELECT CASE WHEN 'STOP' IN (COALESCE(v.national, ''), COALESCE(v.international, ''), COALESCE(v.international_00, '')) THEN 'STOP' ELSE NULLIF(v.national, 'MSSANTE') END FROM ( SELECT private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, p_email, COALESCE(n.numero, p_telephone), NULL) AS national, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || substr(n.numero, 2), NULL) AS international, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || substr(n.numero, 2), NULL) AS international_00 FROM (SELECT private.fn_growth_telephone_national(p_telephone) AS numero) n ) v;");
+    "SELECT CASE WHEN 'STOP' IN (COALESCE(v.national, ''), COALESCE(v.i33, ''), COALESCE(v.i330, ''), COALESCE(v.i0033, ''), COALESCE(v.i00330, '')) THEN 'STOP' ELSE NULLIF(v.national, 'MSSANTE') END FROM ( SELECT private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, p_email, COALESCE(n.numero, p_telephone), NULL) AS national, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || substr(n.numero, 2), NULL) AS i33, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || n.numero, NULL) AS i330, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || substr(n.numero, 2), NULL) AS i0033, private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || n.numero, NULL) AS i00330 FROM (SELECT private.fn_growth_telephone_national(p_telephone) AS numero) n ) v;");
   assert.equal(sansCommentaires(definition(migration, 'private.fn_growth_telephone_national').corps).replace(/\s+/g, ' ').trim(),
-    "SELECT CASE WHEN n.chiffres ~ '^0[1-9][0-9]{8}$' THEN n.chiffres WHEN n.chiffres ~ '^33[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 3) WHEN n.chiffres ~ '^0033[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 5) END FROM (SELECT regexp_replace(COALESCE(p_telephone, ''), '\\D', '', 'g') AS chiffres) n;");
+    "SELECT CASE WHEN n.chiffres ~ '^0[1-9][0-9]{8}$' THEN n.chiffres WHEN n.chiffres ~ '^33[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 3) WHEN n.chiffres ~ '^330[1-9][0-9]{8}$' THEN substr(n.chiffres, 3) WHEN n.chiffres ~ '^0033[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 5) WHEN n.chiffres ~ '^00330[1-9][0-9]{8}$' THEN substr(n.chiffres, 5) END FROM (SELECT regexp_replace(COALESCE(p_telephone, ''), '\\D', '', 'g') AS chiffres) n;");
   assert.ok(definition(migration, 'private.fn_growth_agent_appels').corps.includes(
     'IF private.fn_growth_appel_bloque(r.finess, btrim(r.email), r.telephone) IS NOT NULL THEN'));
   assert.ok(definition(migration, 'public.fn_admin_growth_brouillon_decider').corps.includes(
@@ -275,10 +275,13 @@ test('décideur : garde admin et parcours email intacts, canal téléphone ajout
     "          WHEN 'STOP' THEN 'Contact en opposition (STOP) ou perdu : aucun envoi possible'",
     "          WHEN 'EMAILS_DESACTIVES' THEN 'Le destinataire a désactivé ces emails : aucun envoi possible'",
     "          ELSE 'Destinataire invalide : aucun envoi possible' END);",
+    "           statut = 'VALIDE', valide_par = auth.uid(), valide_le = now(), maj_le = now()",
     "       SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now()",
     "    'contact_crm_id', v_contact_id);",
   ]);
-  assert.equal(ajoutees.length, 86);
+  assert.equal(ajoutees.length, 99);
+  // Email : la date de validation reste posée à chaque validation, comme avant ; seule la fiche d'appel garde la première.
+  assert.match(apres, /statut = 'VALIDE', valide_par = auth\.uid\(\), maj_le = now\(\),\s+(?:--[^\n]*\s+)*valide_le = CASE WHEN v_b\.canal = 'TELEPHONE' AND v_b\.valide_le IS NOT NULL THEN v_b\.valide_le ELSE now\(\) END/);
   // La réponse porte le numéro revérifié (l'écran ne compose jamais un numéro périmé).
   assert.match(apres, /'contact_crm_id', v_contact_id,\s+--[^\n]*\s+'telephone', v_b\.contexte->>'telephone'\);/);
   assert.ok(apres.includes("               ELSE 'Destinataire invalide' END,"), 'le texte de refus par défaut reste le même');
@@ -298,8 +301,11 @@ test('décideur : garde admin et parcours email intacts, canal téléphone ajout
   // inscrite ou écartée, numéro modifié) ; au constat, un refus entendu est toujours enregistré
   // et tout autre résultat refusé au CRM reste lisible sur la fiche.
   assert.ok(apres.includes("IF v_action IN ('MODIFIER', 'VALIDER', 'REJETER') AND v_b.statut NOT IN ('BROUILLON', 'VALIDE') THEN"));
-  assert.match(apres, /IF v_motif IS NULL AND v_action = 'VALIDER' THEN[\s\S]*?IF v_prospect\.statut_sourcing = 'IGNORE'\s+OR EXISTS \(SELECT 1 FROM public\.sales_contacts sc WHERE sc\.finess = v_b\.cible_id\)\s+OR EXISTS \(SELECT 1 FROM public\.etablissements e\s+WHERE e\.finess = v_b\.cible_id AND e\.supprime_le IS NULL\) THEN\s+v_motif := 'DEJA_SUIVI';/);
-  assert.match(apres, /ELSIF v_motif = 'STOP' AND v_b\.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'\s+AND v_resultat IN \('PAS_INTERESSE', 'STOP'\) THEN[\s\S]*?v_motif := NULL;\s+ELSIF v_motif IS NOT NULL THEN/);
+  // « Déjà suivi » est relu avant l'appel ET au constat (seconde revue, m2) ; le suivi du numéro, avant l'appel seulement.
+  assert.match(apres, /IF v_motif IS NULL AND \(\s+v_prospect\.statut_sourcing = 'IGNORE'\s+OR EXISTS \(SELECT 1 FROM public\.sales_contacts sc WHERE sc\.finess = v_b\.cible_id\)\s+OR EXISTS \(SELECT 1 FROM public\.etablissements e WHERE e\.finess = v_b\.cible_id\)\) THEN\s+v_motif := 'DEJA_SUIVI';\s+END IF;\s+IF v_motif IS NULL AND v_action = 'VALIDER' THEN/);
+  assert.match(apres, /ELSIF v_motif IN \('STOP', 'DEJA_SUIVI'\) AND v_b\.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'\s+AND v_resultat IN \('PAS_INTERESSE', 'STOP'\) THEN[\s\S]*?v_motif := NULL;\s+ELSIF v_motif IS NOT NULL THEN/);
+  // Un refus entendu est aussi porté par le prospect (seconde revue, m3).
+  assert.match(apres, /IF v_resultat IN \('PAS_INTERESSE', 'STOP'\) THEN\s+UPDATE public\.prospects_etablissements SET statut_sourcing = 'OPPOSITION' WHERE finess = v_b\.cible_id;\s+END IF;/);
   assert.match(apres, /contexte = CASE WHEN v_b\.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'\s+THEN contexte \|\| jsonb_build_object\('resultat_appel', v_resultat\)\s+ELSE contexte END\s+WHERE id = p_id;\s+RETURN jsonb_build_object\('success', false/);
   assert.ok(apres.includes("v_consigne := CASE WHEN v_action = 'VALIDER' THEN 'ne pas appeler' ELSE 'appel non enregistré au CRM' END;"));
   // Aucune nouvelle suppression, aucun envoi.
@@ -357,18 +363,26 @@ test('script d\'appel : uniquement des phrases publiées sur le site, comparées
   for (const texte of [...ecole, ...etablissement]) {
     assert.doesNotMatch(texte, /intérim|agence|freelance|concurren|moins cher|garanti|en quelques minutes|sous \d|loi|décret|article|code du travail|RGPD|CNIL/i, texte);
   }
-  // Chaque script se termine par la possibilité de ne plus être rappelé.
+  // Chaque script se termine par l'origine du numéro puis la possibilité de ne plus être rappelé
+  // (information, opposition simple et gratuite : CNIL, prospection téléphonique entre professionnels).
+  const information = 'Je vous appelle au numéro de votre établissement, publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé).';
   const opposition = 'Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.';
-  assert.equal(ecole.at(-1), opposition);
-  assert.equal(etablissement.at(-1), opposition);
+  assert.equal(ecole.at(-1), `${information} ${opposition}`);
+  assert.equal(etablissement.at(-1), `${information} ${opposition}`);
+  // Même désignation des sources que la mention d'opposition des emails (20261109140000) et que la fiche d'appel.
+  assert.ok(base.includes('(répertoire FINESS et Annuaire Santé)'));
+  assert.ok(definition(migration, 'private.fn_growth_agent_appels').corps.includes("'Annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé)'"));
 });
 
 test('aucun envoi, aucun appel automatique, aucun réglage écrit, aucun cron touché', () => {
   assert.doesNotMatch(code, /net\.http|pg_net|resend|send-email|twilio|\bsms\b|cron\.(schedule|alter_job|unschedule)/i);
   assert.doesNotMatch(code, /(INSERT INTO|UPDATE|DELETE FROM) public\.growth_config/i, 'les volumes sont des défauts du code');
-  // Seule écriture sur les prospects : le constat d'envoi d'email, déjà dans le corps d'origine du décideur.
+  // Écritures sur les prospects : le constat d'envoi d'email (corps d'origine du décideur) et
+  // l'opposition posée après un refus entendu au téléphone. Aucune adresse, aucun numéro modifié.
   const ecrituresProspects = sql => sansCommentaires(sql).match(/(INSERT INTO|UPDATE|DELETE FROM) public\.prospects_etablissements/gi) ?? [];
-  assert.deepEqual(ecrituresProspects(migration), ['UPDATE public.prospects_etablissements']);
+  assert.deepEqual(ecrituresProspects(migration), ['UPDATE public.prospects_etablissements', 'UPDATE public.prospects_etablissements']);
+  assert.equal(sansCommentaires(migration).match(/UPDATE public\.prospects_etablissements\s+SET (\w+)/g).join('|'),
+    'UPDATE public.prospects_etablissements\n         SET email_envoye_le|UPDATE public.prospects_etablissements SET statut_sourcing');
   assert.deepEqual(ecrituresProspects(definition(base, 'public.fn_admin_growth_brouillon_decider').corps), ['UPDATE public.prospects_etablissements']);
 });
 

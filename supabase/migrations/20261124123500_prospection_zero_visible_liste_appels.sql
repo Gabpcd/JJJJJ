@@ -39,12 +39,14 @@
 --     classement (STOP, adresse ou numéro déjà pris) ne tarissent plus la liste.
 --     Chaque agent dit dans son résultat combien de places il n'a pas pourvues ;
 --   * « cible disponible » exclut aussi un établissement déjà au CRM (par son
---     FINESS) ou déjà inscrit sur la plateforme ;
+--     FINESS) ou qui s'est déjà inscrit sur la plateforme, compte supprimé
+--     compris ;
 --   * une cible n'a qu'un canal, et un brouillon rejeté, ou validé puis expiré,
 --     ferme la cible aux DEUX canaux (prudence : la fondatrice a écarté cet
 --     établissement, ou a pu le contacter sans le noter) ;
---   * un numéro est comparé sous sa forme nationale (0X…, +33 X… et 0033 X…
---     désignent le même numéro), pour le dédoublonnage comme pour le STOP ;
+--   * un numéro est comparé sous sa forme nationale (0X…, +33 X…, +33 (0)X… et
+--     0033 X… désignent le même numéro), pour le dédoublonnage comme pour le
+--     STOP ;
 --   * la fiche est revérifiée à chaque demande d'appel (VALIDER est rejouable) ;
 --     au constat, un refus entendu au téléphone est toujours enregistré, même
 --     si une opposition est arrivée entre-temps.
@@ -56,7 +58,12 @@
 -- est celle du guide (src/lib/seo-contenu/guides.ts). Aucun chiffre sans
 -- source, aucune comparaison avec un autre type de prestataire, aucune règle
 -- de droit. tests/node/prospection-liste-appels.node.mjs compare ces phrases à
--- leur source.
+-- leur source. Le script se termine par l'origine du numéro et la possibilité
+-- de ne plus être rappelé : ce sont les deux règles que la CNIL donne pour la
+-- prospection téléphonique entre professionnels (information, opposition simple
+-- et gratuite ; page « Prospection commerciale par téléphone (hors automate
+-- d'appel) : quelles sont les règles ? », onglet professionnels, 10/06/2026).
+-- La source est citée dans docs/AGENTS_CROISSANCE.md §5, pas à l'interlocuteur.
 --
 -- 0. Préflight fail-closed (CLAUDE.md, garde-fous 9.0 n°2 : toute redéfinition
 --    part de la définition LIVE). Les quatre fonctions redéfinies et le prédicat
@@ -66,7 +73,7 @@
 --    contraintes CHECK élargies doivent porter exactement les valeurs connues.
 -- 1. Contraintes : agent APPEL_ETABLISSEMENT, canal TELEPHONE, et une fiche
 --    d'appel exige un prospect établissement et un numéro français complet
---    (dix chiffres, ou sa forme +33 / 0033).
+--    (dix chiffres, ou sa forme +33 / 0033, avec ou sans « (0) »).
 -- 2 à 7. Fonctions. Toutes SECURITY INVOKER dans le schéma private, sauf le
 --    décideur public.fn_admin_growth_brouillon_decider (SECURITY DEFINER, garde
 --    auth.uid() + est_admin() inchangée), dont l'empreinte est mise à jour dans
@@ -175,7 +182,7 @@ ALTER TABLE public.growth_brouillons
     canal <> 'TELEPHONE'
     OR (cible_type = 'PROSPECT_ETABLISSEMENT'
         AND cible_id IS NOT NULL
-        AND regexp_replace(COALESCE(contexte->>'telephone', ''), '\D', '', 'g') ~ '^(0|33|0033)[1-9][0-9]{8}$')
+        AND regexp_replace(COALESCE(contexte->>'telephone', ''), '\D', '', 'g') ~ '^(0|330?|00330?)[1-9][0-9]{8}$')
   );
 
 -- ---------------------------------------------------------------------------
@@ -183,8 +190,10 @@ ALTER TABLE public.growth_brouillons
 -- ---------------------------------------------------------------------------
 -- Forme nationale d'un numéro français (dix chiffres commençant par 0), ou
 -- NULL si le champ n'en contient pas exactement un : 01 23 45 67 89,
--- +33 1 23 45 67 89 et 0033 1 23 45 67 89 désignent le même numéro. Sert au
--- ciblage, au dédoublonnage et à la comparaison d'un STOP.
+-- +33 1 23 45 67 89, +33 (0)1 23 45 67 89 et 0033 1 23 45 67 89 désignent le
+-- même numéro. Sert au ciblage, au dédoublonnage et à la comparaison d'un STOP.
+-- Un indicatif d'outre-mer écrit à l'international (+262…) n'est pas reconnu :
+-- le numéro n'est alors pas utilisable (il l'est sous sa forme 0262…).
 CREATE OR REPLACE FUNCTION private.fn_growth_telephone_national(p_telephone text)
 RETURNS text
 LANGUAGE sql
@@ -194,7 +203,9 @@ AS $body$
   SELECT CASE
     WHEN n.chiffres ~ '^0[1-9][0-9]{8}$' THEN n.chiffres
     WHEN n.chiffres ~ '^33[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 3)
+    WHEN n.chiffres ~ '^330[1-9][0-9]{8}$' THEN substr(n.chiffres, 3)
     WHEN n.chiffres ~ '^0033[1-9][0-9]{8}$' THEN '0' || substr(n.chiffres, 5)
+    WHEN n.chiffres ~ '^00330[1-9][0-9]{8}$' THEN substr(n.chiffres, 5)
   END
   FROM (SELECT regexp_replace(COALESCE(p_telephone, ''), '\D', '', 'g') AS chiffres) n;
 $body$;
@@ -206,7 +217,7 @@ $body$;
 --   email_utilisable  : adresse bien formée et ouverte à un envoi depuis Gmail ;
 --   telephone_utilisable : un numéro français complet (forme nationale) ;
 --   disponible        : jamais contacté, absent du CRM (date d'ajout ou contact
---                       au même FINESS), pas encore inscrit sur la plateforme,
+--                       au même FINESS), jamais inscrit sur la plateforme,
 --                       ni ignoré ni en opposition, sans brouillon vivant sur
 --                       cette cible, quel qu'en soit le canal (seul un brouillon
 --                       jamais validé puis expiré libère la cible : un brouillon
@@ -237,10 +248,10 @@ AS $body$
          (p.email_envoye_le IS NULL
           AND p.ajoute_crm_le IS NULL
           AND p.statut_sourcing NOT IN ('IGNORE', 'OPPOSITION')
-          -- Déjà suivi au CRM (contact créé hors sourcing) ou déjà inscrit : pas de premier contact.
+          -- Déjà suivi au CRM (contact créé hors sourcing) ou déjà inscrit, même
+          -- si le compte a été supprimé depuis : pas de premier contact à froid.
           AND NOT EXISTS (SELECT 1 FROM public.sales_contacts sc WHERE sc.finess = p.finess)
-          AND NOT EXISTS (SELECT 1 FROM public.etablissements e
-                          WHERE e.finess = p.finess AND e.supprime_le IS NULL)
+          AND NOT EXISTS (SELECT 1 FROM public.etablissements e WHERE e.finess = p.finess)
           AND NOT EXISTS (
             SELECT 1 FROM public.growth_brouillons b
             WHERE b.cible_type = 'PROSPECT_ETABLISSEMENT' AND b.cible_id = p.finess
@@ -305,8 +316,9 @@ $body$;
 -- perdu, comparés par FINESS, adresse et numéro), sans le motif MSSANTE qui ne
 -- dit rien d'un appel. NULL = appel possible ; sinon le motif.
 -- fn_sales_outreach_est_interdit compare les chiffres tels qu'ils sont saisis :
--- le numéro est donc présenté sous ses trois écritures (nationale, 33…, 0033…),
--- pour qu'un STOP noté « +33 1 … » au CRM bloque aussi le « 01 … » de l'annuaire.
+-- le numéro est donc présenté sous ses cinq écritures (nationale, 33…, 330…,
+-- 0033…, 00330…), pour qu'un STOP noté « +33 1 … » ou « +33 (0)1 … » au CRM
+-- bloque aussi le « 01 … » de l'annuaire.
 CREATE OR REPLACE FUNCTION private.fn_growth_appel_bloque(p_finess text, p_email text, p_telephone text)
 RETURNS text
 LANGUAGE sql
@@ -314,13 +326,15 @@ STABLE
 SET search_path TO ''
 AS $body$
   SELECT CASE
-    WHEN 'STOP' IN (COALESCE(v.national, ''), COALESCE(v.international, ''), COALESCE(v.international_00, '')) THEN 'STOP'
+    WHEN 'STOP' IN (COALESCE(v.national, ''), COALESCE(v.i33, ''), COALESCE(v.i330, ''), COALESCE(v.i0033, ''), COALESCE(v.i00330, '')) THEN 'STOP'
     ELSE NULLIF(v.national, 'MSSANTE')
   END
   FROM (
     SELECT private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, p_email, COALESCE(n.numero, p_telephone), NULL) AS national,
-           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || substr(n.numero, 2), NULL) AS international,
-           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || substr(n.numero, 2), NULL) AS international_00
+           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || substr(n.numero, 2), NULL) AS i33,
+           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '33' || n.numero, NULL) AS i330,
+           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || substr(n.numero, 2), NULL) AS i0033,
+           private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', p_finess, NULL, '0033' || n.numero, NULL) AS i00330
     FROM (SELECT private.fn_growth_telephone_national(p_telephone) AS numero) n
   ) v;
 $body$;
@@ -337,14 +351,14 @@ AS $body$
     'Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui accompagne l''insertion professionnelle de vos étudiants et de vos jeunes diplômés ?',
     'Jolene met en relation des soignants et des établissements de santé pour des missions et remplacements ponctuels. L''inscription est gratuite pour les soignants.',
     'Nous démarrons dans votre secteur et aimerions faire connaître Jolene à vos jeunes diplômés. Seriez-vous ouvert à un échange de quinze minutes pour voir comment la présenter à vos promotions (affiche, courte intervention ou information aux diplômés) ?',
-    'Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.')
+    'Je vous appelle au numéro de votre établissement, publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.')
   ELSE concat_ws(E'\n\n',
     'Bonjour, Gabrielle, fondatrice de Jolene. Pourrais-je parler à la personne qui organise les remplacements de soignants ?',
     'Jolene est une plateforme de mise en relation directe entre les établissements de santé et des soignants vérifiés, pour des missions et remplacements ponctuels.',
     'Vous publiez votre besoin, des soignants vérifiés candidatent, et le contrat est signé en ligne.',
     'Jolene facture à l''établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée, majorations et indemnités incluses lorsqu’elles entrent dans cette base. Il n’y a ni abonnement ni frais d’entrée : vous ne payez que lorsque vous recrutez.',
     'Nous démarrons dans votre secteur : je vous propose de publier votre première mission avec vous, au téléphone. Auriez-vous quinze minutes cette semaine ?',
-    'Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.')
+    'Je vous appelle au numéro de votre établissement, publié dans les annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous préférez ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus.')
   END;
 $body$;
 
@@ -697,6 +711,9 @@ BEGIN
     -- Places restées vides alors que toutes les cibles disponibles ont été examinées.
     'places_non_pourvues', greatest(0, v_place - v_crees),
     'quota_semaine', v_quota,
+    'fiches_de_la_semaine', v_deja + v_crees,
+    'file_max', v_file_max,
+    'fiches_en_file', v_file + v_crees,
     'candidats_examines', v_examines,
     'exclus_stop', v_exclus_stop,
     'numeros_deja_en_file', v_numeros_deja_en_file);
@@ -926,11 +943,12 @@ $body$;
 --     constat, par private.fn_growth_appel_bloque (adresse relue sur le
 --     prospect, pour qu'un STOP posé sur l'adresse bloque aussi l'appel).
 --     VALIDER est rejouable sur une fiche déjà validée : l'écran le rappelle à
---     chaque demande d'appel. Avant l'appel, il refuse aussi une cible passée
---     au CRM, inscrite ou écartée entre-temps, et suit un numéro modifié dans
---     l'annuaire. Au constat, un refus entendu (STOP, pas intéressé) est
---     enregistré même si une opposition est arrivée entre-temps ; tout autre
---     résultat est alors refusé au CRM mais reste lisible sur la fiche ;
+--     chaque demande d'appel. Avant l'appel comme au constat, il refuse une
+--     cible passée au CRM, inscrite ou écartée entre-temps ; avant l'appel, il
+--     suit un numéro modifié dans l'annuaire. Au constat, un refus entendu
+--     (STOP, pas intéressé) est toujours enregistré, sur le contact CRM et sur
+--     le prospect (statut OPPOSITION) ; tout autre résultat sur une cible
+--     devenue interdite est refusé au CRM mais reste lisible sur la fiche ;
 --   * MARQUER_ENVOYE exige le résultat de l'appel dans p_motif (mêmes valeurs
 --     que « Actions du jour ») ; il crée la fiche CRM silencieuse, une tâche
 --     « premier appel », puis délègue le résultat à fn_admin_crm_effectuer_action
@@ -1009,14 +1027,17 @@ BEGIN
       ELSE
         -- Mêmes interdits que l'email, sans le motif MSSANTE.
         v_motif := private.fn_growth_appel_bloque(v_b.cible_id, v_prospect.email, v_b.contexte->>'telephone');
-        IF v_motif IS NULL AND v_action = 'VALIDER' THEN
-          -- Avant l'appel, la cible doit encore être à appeler depuis cette fiche.
-          IF v_prospect.statut_sourcing = 'IGNORE'
+        -- Avant l'appel comme au constat, la cible doit encore se traiter depuis
+        -- cette fiche : ni écartée du sourcing, ni entrée au CRM, ni inscrite
+        -- (sinon noter un résultat réécrirait le suivi d'un contact existant).
+        IF v_motif IS NULL AND (
+             v_prospect.statut_sourcing = 'IGNORE'
              OR EXISTS (SELECT 1 FROM public.sales_contacts sc WHERE sc.finess = v_b.cible_id)
-             OR EXISTS (SELECT 1 FROM public.etablissements e
-                        WHERE e.finess = v_b.cible_id AND e.supprime_le IS NULL) THEN
-            v_motif := 'DEJA_SUIVI';
-          ELSIF private.fn_growth_telephone_national(v_prospect.telephone) IS NULL THEN
+             OR EXISTS (SELECT 1 FROM public.etablissements e WHERE e.finess = v_b.cible_id)) THEN
+          v_motif := 'DEJA_SUIVI';
+        END IF;
+        IF v_motif IS NULL AND v_action = 'VALIDER' THEN
+          IF private.fn_growth_telephone_national(v_prospect.telephone) IS NULL THEN
             v_motif := 'CIBLE_INVALIDE';
           ELSIF private.fn_growth_telephone_national(v_prospect.telephone)
                 IS DISTINCT FROM private.fn_growth_telephone_national(v_b.contexte->>'telephone') THEN
@@ -1039,10 +1060,11 @@ BEGIN
       DELETE FROM public.growth_brouillons WHERE id = p_id;
       RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'SUPPRIME',
         'raison', 'Compte supprimé : brouillon effacé, aucun envoi possible');
-    ELSIF v_motif = 'STOP' AND v_b.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'
+    ELSIF v_motif IN ('STOP', 'DEJA_SUIVI') AND v_b.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'
           AND v_resultat IN ('PAS_INTERESSE', 'STOP') THEN
       -- L'appel a eu lieu et l'établissement a refusé : ce refus s'enregistre
-      -- toujours (il protège), même si une opposition est arrivée entre-temps.
+      -- toujours (il protège), même si une opposition, un contact CRM ou une
+      -- inscription sont arrivés entre-temps.
       v_motif := NULL;
     ELSIF v_motif IS NOT NULL THEN
       UPDATE public.growth_brouillons
@@ -1073,7 +1095,10 @@ BEGIN
   ELSIF v_action = 'VALIDER' THEN
     UPDATE public.growth_brouillons
        SET sujet = COALESCE(v_sujet, sujet), corps = COALESCE(v_corps, corps),
-           statut = 'VALIDE', valide_par = auth.uid(), valide_le = now(), maj_le = now()
+           statut = 'VALIDE', valide_par = auth.uid(), maj_le = now(),
+           -- Une fiche d'appel se revérifie à chaque demande d'appel : sa date de
+           -- validation reste celle de la première (elle ne gonfle pas l'entonnoir).
+           valide_le = CASE WHEN v_b.canal = 'TELEPHONE' AND v_b.valide_le IS NOT NULL THEN v_b.valide_le ELSE now() END
      WHERE id = p_id;
   ELSIF v_action = 'REJETER' THEN
     UPDATE public.growth_brouillons
@@ -1120,6 +1145,11 @@ BEGIN
       RETURNING id INTO v_tache_id;
       PERFORM public.fn_admin_crm_effectuer_action(
         v_tache_id, v_resultat, 'Fiche d''appel agent ' || v_b.id, NULL);
+      -- Un refus est aussi porté par le prospect lui-même (fn_admin_sourcing_ajouter_crm
+      -- vient de le passer en QUALIFIE) : l'opposition ne dépend pas du seul contact CRM.
+      IF v_resultat IN ('PAS_INTERESSE', 'STOP') THEN
+        UPDATE public.prospects_etablissements SET statut_sourcing = 'OPPOSITION' WHERE finess = v_b.cible_id;
+      END IF;
     END IF;
     UPDATE public.growth_brouillons
        SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now(),
@@ -1212,6 +1242,7 @@ BEGIN
     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'POSTCONDITION', 'postcondition@interop-mssante.apicrypt.org', NULL, NULL) IS DISTINCT FROM 'MSSANTE'
     OR private.fn_growth_telephone_national('+33 1 23 45 67 89') IS DISTINCT FROM '0123456789'
     OR private.fn_growth_telephone_national('0033123456789') IS DISTINCT FROM '0123456789'
+    OR private.fn_growth_telephone_national('+33 (0)1 23 45 67 89') IS DISTINCT FROM '0123456789'
     OR private.fn_growth_telephone_national('01 23 45 67 89 / 01 98 76 54 32') IS NOT NULL
     OR private.fn_growth_telephone_national('123456789') IS NOT NULL
   THEN

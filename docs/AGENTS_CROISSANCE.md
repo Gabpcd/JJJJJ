@@ -153,16 +153,26 @@ de moins de 90 jours, tension BMO exacte). L'agent email, l'agent d'appels et le
 fonction : aucun ne re-décide le ciblage.
 
 Une cible est **disponible** si elle n'a jamais été contactée, n'est pas au CRM (date d'ajout sur le
-prospect, ou contact CRM au même FINESS), n'est pas déjà inscrite sur la plateforme, n'est ni ignorée ni
-en opposition, et n'a aucun brouillon vivant. Deux décisions à connaître :
+prospect, ou contact CRM au même FINESS), ne s'est jamais inscrite sur la plateforme (compte supprimé
+compris), n'est ni ignorée ni en opposition, et n'a aucun brouillon vivant. Deux décisions à connaître :
 - une cible n'a qu'un canal à la fois, et un brouillon **rejeté**, ou **validé puis expiré**, ferme la
   cible aux deux canaux. « Ne pas appeler » sur une fiche prive donc aussi l'établissement d'un email
   futur. C'est voulu : vous avez écarté cet établissement, ou vous avez pu le contacter sans le noter.
   Seul un brouillon jamais validé qui expire libère sa cible ;
-- un numéro se compare sous sa forme nationale : `01 23 45 67 89`, `+33 1 23 45 67 89` et
-  `0033 1 23 45 67 89` désignent le même numéro (`private.fn_growth_telephone_national`), pour le
-  dédoublonnage comme pour le STOP. Un champ qui contient deux numéros, ou un numéro incomplet, n'est
-  pas utilisable.
+- un numéro se compare sous sa forme nationale : `01 23 45 67 89`, `+33 1 23 45 67 89`,
+  `+33 (0)1 23 45 67 89` et `0033 1 23 45 67 89` désignent le même numéro
+  (`private.fn_growth_telephone_national`), pour le dédoublonnage comme pour le STOP. Un champ qui
+  contient deux numéros, un numéro incomplet, ou un indicatif d'outre-mer écrit à l'international
+  (`+262…`) n'est pas utilisable. Au 24/11/2026, les 2 017 numéros des cibles pilotes sont tous
+  écrits sur dix chiffres.
+
+Conséquences assumées de ces règles, à connaître :
+- un rejet posé par le serveur (opposition, prospect disparu, numéro devenu inutilisable) ferme la
+  cible comme un rejet de votre main ;
+- un « Pas intéressé » ou un STOP posé sur un contact écarte aussi les établissements qui partagent
+  son adresse ou son numéro (siège, standard commun) : c'est le fonctionnement du STOP existant ;
+- au 24/11/2026, aucun ancien brouillon d'email ne ferme de cible : les 67 brouillons MSSanté et
+  Apicrypt ont expiré sans avoir été validés.
 
 **Zéro visible.** `private.fn_growth_cibles_prospection()` compte l'univers : établissements ciblés,
 adresses fermées, adresses utilisables, adresses restant à contacter, téléphones utilisables, téléphones
@@ -171,7 +181,7 @@ et dans l'entonnoir figé chaque semaine (`prospection.cibles_agent`). L'écran 
 - en haut de page, quel que soit l'onglet : « Prospection par email à l'arrêt » quand aucune adresse
   n'est utilisable, « Plus aucune adresse à contacter par email » quand elles sont toutes traitées ;
 - sur la carte de l'agent : « Aucune cible joignable » à la place de « Brouillons seulement », et le décompte ;
-- dans le rapport hebdomadaire : colonnes « Appels notés » et « Adresses utilisables ».
+- dans le rapport hebdomadaire : colonnes « Fiches d'appel notées » et « Adresses utilisables ».
 
 L'agent ne lève pas d'erreur : une exception annulerait aussi les relances préparées au même passage.
 
@@ -199,16 +209,19 @@ script, modifiable.
    téléphone : une opposition, un passage au CRM ou une inscription arrivés depuis la validation sont
    vus avant l'appel, pas après, et un numéro modifié dans l'annuaire est celui qui est composé. C'est
    vous qui confirmez l'appel sur votre téléphone. Un lien « composer le … » reste affiché deux minutes
-   si le composeur ne s'est pas ouvert.
+   si le composeur ne s'est pas ouvert. Le numéro reste lisible sur la fiche : si vous le composez
+   vous-même, cliquez quand même sur « Appeler » juste avant, sinon la fiche n'est pas revérifiée
+   (l'écran le rappelle).
 3. Après l'appel, vous notez le résultat : A répondu, Sans réponse, Intéressé, À rappeler, Pas intéressé
    ou STOP. Le décideur crée la fiche CRM silencieuse (`fn_admin_sourcing_ajouter_crm`) et traite le
    résultat par la logique CRM existante (`fn_admin_crm_effectuer_action`) : les rappels arrivent dans
    Prospects → « Actions du jour » ; « Pas intéressé » et « STOP » ferment tout contact ultérieur, email
    compris.
 
-Si une opposition arrive pendant l'appel lui-même : un refus entendu (STOP, Pas intéressé) est toujours
-enregistré ; tout autre résultat n'entre pas au CRM (« appel non enregistré au CRM ») mais reste lisible
-sur la fiche.
+Si une opposition, un contact CRM ou une inscription arrivent pendant l'appel lui-même : un refus
+entendu (STOP, Pas intéressé) est toujours enregistré, sur le contact CRM et sur le prospect (statut
+« opposition ») ; tout autre résultat n'entre pas au CRM (« appel non enregistré au CRM »), ne réécrit
+pas le suivi du contact existant, et reste lisible sur la fiche.
 
 Le rapport hebdomadaire compte les **fiches d'appel notées** de la semaine. Les rappels suivants se
 suivent dans le CRM.
@@ -216,12 +229,14 @@ suivent dans le CRM.
 Limites connues, non traitées dans ce lot :
 - l'avertissement lit le dernier passage de l'agent email : il apparaît après le premier passage qui
   suit le déploiement (06 h 50, ou « Préparer maintenant ») ;
-- un contact CRM créé pour ce FINESS dans les secondes qui séparent « Appeler » du résultat noté est
-  fusionné par la logique CRM existante ;
+- une fiche validée qui expire (14 jours) avant que le résultat soit noté ne peut plus le recevoir :
+  notez-le alors dans le CRM ;
+- le lien `tel:` s'ouvre après la revérification, donc après un court délai réseau : comportement à
+  vérifier sur un iPhone (le lien « composer le … » sert de secours) ;
 - dans le CRM, un second « À rappeler » sur un contact resté à l'étape 0 ne crée pas de tâche
   (`fn_crm_generer_taches`, clé déjà utilisée) : défaut antérieur à ce lot, à corriger à part ;
 - `fn_sales_outreach_est_interdit` compare les numéros tels qu'ils sont saisis. La liste d'appels
-  présente donc chaque numéro sous ses trois écritures ; les autres écrans du CRM ne le font pas.
+  présente donc chaque numéro sous ses cinq écritures ; les autres écrans du CRM ne le font pas.
 
 **Script d'appel** (`private.fn_growth_script_appel`). Il ne reprend que des phrases déjà publiées :
 
@@ -234,9 +249,11 @@ Limites connues, non traitées dans ce lot :
 | « pour des missions et remplacements ponctuels », « l'inscription est gratuite pour les soignants » | Description de l'accueil (`src/lib/seo-routes.ts`) |
 
 Il ne contient aucun chiffre hors le tarif publié, aucune promesse de délai, aucune comparaison avec un
-autre type de prestataire, aucune règle de droit. Il se termine par : « Si vous préférez ne pas être
-rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus. » Les écoles de santé ont une
-variante (faire connaître Jolene aux jeunes diplômés), sans tarif.
+autre type de prestataire, aucune règle de droit. Il se termine par l'origine du numéro puis la
+possibilité de s'opposer : « Je vous appelle au numéro de votre établissement, publié dans les
+annuaires publics des établissements de santé (répertoire FINESS et Annuaire Santé). Si vous préférez
+ne pas être rappelé, dites-le-moi : je le note et Jolene ne vous rappellera plus. » Les écoles de santé
+ont une variante (faire connaître Jolene aux jeunes diplômés), sans tarif.
 `tests/node/prospection-liste-appels.node.mjs` compare ces phrases à leur source à chaque PR.
 
 Parcours de la fondatrice (Admin → Acquisition → **Agents de croissance**, `/admin/fondateur/agents`) :
@@ -293,10 +310,18 @@ Garde-fous du code :
 - Appels (24/11/2026). Choix de conformité Jolene, sans règle de droit affichée : les fiches ne visent
   que le numéro publié de l'établissement dans les annuaires publics (FINESS, Annuaire Santé), jamais un
   particulier ; la fondatrice appelle elle-même ; le script propose de ne plus être rappelé, et « STOP »
-  ou « Pas intéressé » sont définitifs pour tous les canaux. Aucun texte de loi n'est cité à
-  l'interlocuteur ni affirmé ici : le cadre juridique du démarchage téléphonique entre professionnels
-  n'a pas été instruit dans ce lot (à faire avec sa source primaire avant d'en écrire une ligne, HARD
-  STOP n°4). La phrase d'opposition du script est une proposition soumise à Gabrielle.
+  ou « Pas intéressé » sont définitifs pour tous les canaux. Source lue le 24/11/2026 : CNIL,
+  [« Prospection commerciale par téléphone (hors automate d'appel) : quelles sont les règles ? »](https://www.cnil.fr/fr/prospection-commerciale-par-telephone-hors-automate-dappel-quelles-sont-les-regles)
+  (page datée du 10/06/2026, doctrine de l'autorité). Elle indique que les règles ont changé le
+  11/08/2026 : consentement préalable pour les particuliers (elle renvoie à l'article L. 223-1 du code
+  de la consommation, qui ne vise que les consommateurs), et, pour les professionnels, deux règles,
+  « Information » et « Opposition simple et gratuite », la prospection pouvant se fonder sur l'intérêt
+  légitime « lorsque l'objet de la sollicitation est en rapport avec la profession de la personne
+  démarchée ». D'où les deux dernières phrases du script (origine du numéro, possibilité de ne plus
+  être rappelé) et l'affichage de la source sur la fiche. Aucun texte n'est cité à l'interlocuteur.
+  Le texte de l'article L. 223-1 n'a pas été relu sur Légifrance dans ce lot : il n'est invoqué par
+  aucune phrase du script. Ces deux phrases du script sont une décision prise par Claude sur
+  délégation explicite de Gabrielle du 08/11/2026, à relire par elle (HARD STOP n°4).
 - Un **prédicat unique**, `private.fn_growth_destinataire_bloque`, sert aux agents comme à la
   validation. Il refuse un compte supprimé, les emails désactivés (préférence globale ou événement
   `SERIE_ONBOARDING`), les oppositions STOP et, en dernier, les adresses MSSanté (motif `MSSANTE`,
