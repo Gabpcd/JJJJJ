@@ -1,0 +1,96 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "pdf": {
+    "fichier": "demo-copie.pdf",
+    "sha256": "fbad7ed6c4d8b7605a36dee0b91de6822c0e1d8ef093e6c8b5486b57ae631770",
+    "taille_octets": 812
+  },
+  "copies": [
+    {
+      "id": "c0b1e000-0000-4000-8000-000000000001",
+      "etablissement_id": "e7ab0000-0000-4000-8000-000000000002",
+      "etablissement_nom": "Établissement fictif des Lilas",
+      "soignant_id": "50190000-0000-4000-8000-000000000001",
+      "soignant_nom": "Démonstration",
+      "soignant_prenom": "Soignant",
+      "periode_debut": "2026-10-01",
+      "periode_fin": "2026-10-31",
+      "statut": "PUBLIEE",
+      "version": 2,
+      "publie_le": "2026-10-31T09:30:00.000Z",
+      "remplace_id": "c0b1e000-0000-4000-8000-000000000002",
+      "motif_remplacement": "CONTENU",
+      "mission_ids": [
+        "a1551000-0000-4000-8000-000000000001",
+        "a1551000-0000-4000-8000-000000000002"
+      ],
+      "taille_octets": 812,
+      "sha256": "fbad7ed6c4d8b7605a36dee0b91de6822c0e1d8ef093e6c8b5486b57ae631770",
+      "signalee": false
+    },
+    {
+      "id": "c0b1e000-0000-4000-8000-000000000002",
+      "etablissement_id": "e7ab0000-0000-4000-8000-000000000002",
+      "etablissement_nom": "Établissement fictif des Lilas",
+      "soignant_id": "50190000-0000-4000-8000-000000000001",
+      "soignant_nom": "Démonstration",
+      "soignant_prenom": "Soignant",
+      "periode_debut": "2026-10-01",
+      "periode_fin": "2026-10-31",
+      "statut": "REMPLACEE",
+      "version": 1,
+      "publie_le": "2026-10-30T10:00:00.000Z",
+      "remplace_id": null,
+      "motif_remplacement": null,
+      "mission_ids": [
+        "a1551000-0000-4000-8000-000000000001",
+        "a1551000-0000-4000-8000-000000000002"
+      ],
+      "taille_octets": 812,
+      "sha256": "fbad7ed6c4d8b7605a36dee0b91de6822c0e1d8ef093e6c8b5486b57ae631770",
+      "signalee": false
+    },
+    {
+      "id": "c0b1e000-0000-4000-8000-000000000003",
+      "etablissement_id": "e7ab0000-0000-4000-8000-000000000003",
+      "etablissement_nom": "Cabinet fictif du Parc",
+      "soignant_id": "50190000-0000-4000-8000-000000000001",
+      "soignant_nom": "Démonstration",
+      "soignant_prenom": "Soignant",
+      "periode_debut": "2026-09-01",
+      "periode_fin": "2026-09-30",
+      "statut": "PUBLIEE",
+      "version": 1,
+      "publie_le": "2026-10-06T00:00:00.000Z",
+      "remplace_id": null,
+      "motif_remplacement": null,
+      "mission_ids": [
+        "a1551000-0000-4000-8000-000000000003"
+      ],
+      "taille_octets": 812,
+      "sha256": "6ff2ddecc48d12f5d8844294f652971c8453b864b5036c52aea5b4b78a28ced7",
+      "signalee": false
+    },
+    {
+      "id": "c0b1e000-0000-4000-8000-000000000004",
+      "etablissement_id": "e7ab0000-0000-4000-8000-000000000003",
+      "etablissement_nom": "Cabinet fictif du Parc",
+      "soignant_id": "50190000-0000-4000-8000-000000000001",
+      "soignant_nom": "Démonstration",
+      "soignant_prenom": "Soignant",
+      "periode_debut": "2026-08-01",
+      "periode_fin": "2026-08-31",
+      "statut": "RETIREE",
+      "version": 1,
+      "publie_le": "2026-09-05T00:00:00.000Z",
+      "remplace_id": null,
+      "motif_remplacement": null,
+      "mission_ids": [
+        "a1551000-0000-4000-8000-000000000004"
+      ],
+      "taille_octets": 812,
+      "sha256": "fbad7ed6c4d8b7605a36dee0b91de6822c0e1d8ef093e6c8b5486b57ae631770",
+      "signalee": true
+    }
+  ]
+}

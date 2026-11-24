@@ -882,6 +882,20 @@ public enum TextesWeb {
         }
     }
 
+    /// Copies officielles des bulletins (lot 4, T10, `docs/mobile-swift/LOT4_PLAN.md` §3 T10 ; HARD STOP n°4 : textes
+    /// repris verbatim du web, en attente de la relecture de Gabrielle). Mention affichée en tête de la liste : les PDF
+    /// sont déposés par l'employeur, Jolene ne les établit pas, et une copie ne vaut pas preuve de paiement. Avertissement
+    /// affiché avant la confirmation d'un signalement « Ce document ne me concerne pas » : `fn_signaler_copie_bulletin`
+    /// retire alors la copie (`statut = 'RETIREE'`), sans retour possible depuis l'app. Les autres libellés de l'écran
+    /// sont dans `LibellesWeb.CopiesBulletins`.
+    public enum CopiesBulletins {
+        // source: src/components/CopiesBulletins.tsx:44 [juridique]
+        public static let mentionEmployeur = "Retrouvez les PDF déposés par l’employeur, déjà remis par son service paie. Une copie disponible ne confirme pas le paiement du salaire."
+
+        // source: src/components/CopiesBulletinsListe.tsx:90 [juridique]
+        public static let avertissementRetrait = "La copie sera immédiatement retirée et son PDF ne sera plus accessible dans Jolene."
+    }
+
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
         .init(cle: "ConsentementGps.titre", texte: ConsentementGps.titre),
@@ -1051,5 +1065,7 @@ public enum TextesWeb {
         .init(cle: "Annulation.candidatureAnnulee", texte: Annulation.candidatureAnnulee),
         .init(cle: "Annulation.participationAnnulee", texte: Annulation.participationAnnulee),
         .init(cle: "Annulation.ouiAnnuler", texte: Annulation.ouiAnnuler),
+        .init(cle: "CopiesBulletins.mentionEmployeur", texte: CopiesBulletins.mentionEmployeur),
+        .init(cle: "CopiesBulletins.avertissementRetrait", texte: CopiesBulletins.avertissementRetrait),
     ]
 }

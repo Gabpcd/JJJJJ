@@ -113,6 +113,10 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
   const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
     'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
+  // Lot 4, tranche T10 (LOT4_PLAN §3 T10) : copies officielles des bulletins — mention de l'employeur et avertissement
+  // de retrait (HARD STOP), libellés de la liste, messages de la bibliothèque, titre du partage.
+  const lot4 = ['src/components/CopiesBulletins.tsx', 'src/components/CopiesBulletinsListe.tsx',
+    'src/lib/copiesBulletins.ts', 'src/lib/copiesBulletinsPartageNatif.ts'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
@@ -144,7 +148,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/pages/MesDocuments.tsx',
     'src/pages/PageStripeConnect.tsx', // L3-T14a (revue B8 de #1144, m1) : cartes contractuelles de Stripe Connect
     'src/pages/PresencesSoignant.tsx',
-  ].concat(lot5).sort());
+  ].concat(lot5, lot4).sort());
 });
 
 // Textes exigés par LOT2_PLAN v2 §3 « TL », item par item, par NOM de constante (les lignes du
@@ -230,6 +234,10 @@ const EXIGES = {
   'src/components/FormulaireMission.tsx': [
     'PublicationEtablissement.optionSalarieLibelle', 'PublicationEtablissement.optionSalarieDescription',
   ],
+  // Lot 4, T10 (LOT4_PLAN §3 T10, HARD STOP n°4) : mention de l'employeur en tête des copies officielles
+  // (CopiesBulletins.tsx l.44) et avertissement de retrait d'un signalement « DESTINATAIRE » (CopiesBulletinsListe.tsx l.90).
+  'src/components/CopiesBulletins.tsx': ['CopiesBulletins.mentionEmployeur'],
+  'src/components/CopiesBulletinsListe.tsx': ['CopiesBulletins.avertissementRetrait'],
 };
 
 // Libellés et textes repris en plus du blueprint (revues fraîches de TL), pour que les écrans du

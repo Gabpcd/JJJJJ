@@ -1235,6 +1235,150 @@ public enum LibellesWeb {
         public static let garderCandidature = "Garder la candidature"
     }
 
+    /// Copies officielles des bulletins (lot 4, T10) : libellés non juridiques de `CopiesBulletins.tsx`, du composant
+    /// réellement monté `CopiesBulletinsListe.tsx` et des messages de `copiesBulletins.ts`. La mention de l'employeur et
+    /// l'avertissement de retrait : `TextesWeb.CopiesBulletins` (HARD STOP n°4). Les lignes assemblées (période, version
+    /// et publication, motif de remplacement) le sont par `BulletinsPresentation` à partir des fragments ci-dessous.
+    public enum CopiesBulletins {
+        // source: src/components/CopiesBulletins.tsx:43
+        public static let titre = "Copies des bulletins officiels"
+
+        // source: src/components/CopiesBulletins.tsx:46
+        public static let chargement = "Chargement des copies…"
+
+        // source: src/components/CopiesBulletins.tsx:47
+        public static let reessayer = "Réessayer les copies"
+
+        // source: src/lib/copiesBulletins.ts:94
+        public static let chargementImpossible = "Impossible de charger les copies des bulletins. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutPubliee = "Copie disponible"
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutRemplacee = "Version remplacée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutRetiree = "Copie retirée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifDestinataire = "Ce document ne me concerne pas"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifContenu = "Le contenu contient une erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifAutre = "Autre erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:33
+        public static let ouvertureImpossible = "Impossible d’ouvrir ce PDF. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:43
+        public static let copieRetiree = "La copie a été retirée. Son PDF n’est plus accessible dans Jolene."
+
+        // source: src/components/CopiesBulletinsListe.tsx:44
+        public static let signalementEnregistre = "Le signalement est enregistré. L’établissement peut le consulter."
+
+        // source: src/components/CopiesBulletinsListe.tsx:46
+        public static let operationNonConfirmee = "L’opération n’a pas été confirmée. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:53
+        public static let copieDemandeeIndisponible = "La copie demandée n’est pas disponible pour ce compte. Les documents accessibles sont affichés ci-dessous."
+
+        // source: src/components/CopiesBulletinsListe.tsx:54
+        public static let employeur = "Employeur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:56
+        public static let tousLesEmployeurs = "Tous les employeurs"
+
+        // source: src/components/CopiesBulletinsListe.tsx:60
+        public static let vide = "Aucune copie de bulletin officiel disponible. Les simulations sont présentées séparément."
+
+        // source: src/components/CopiesBulletinsListe.tsx:61
+        public static let accessibiliteVersion = "Copie du bulletin, version"
+
+        // source: src/components/CopiesBulletinsListe.tsx:65
+        public static let periodeDu = "Du"
+
+        // source: src/components/CopiesBulletinsListe.tsx:65
+        public static let periodeAu = "au"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let version = "Version"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let publieeLe = "· publiée le"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let separateur = "·"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let mission = "mission"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let liee = "liée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let motifRemplacement = "Motif de remplacement :"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let remplacementContenu = "correction du contenu"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let remplacementAutre = "autre correction"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let point = "."
+
+        // source: src/components/CopiesBulletinsListe.tsx:71
+        public static let erreurSignalee = "Une erreur a été signalée sur cette version."
+
+        // source: src/components/CopiesBulletinsListe.tsx:72
+        public static let ancienneVersion = "Cette ancienne version est conservée. Consultez la version la plus récente."
+
+        // source: src/components/CopiesBulletinsListe.tsx:73
+        public static let pdfPlusAccessible = "Le PDF de cette version n’est plus accessible."
+
+        // source: src/components/CopiesBulletinsListe.tsx:75
+        public static let ouverture = "Ouverture…"
+
+        // source: src/components/CopiesBulletinsListe.tsx:75
+        public static let ouvrir = "Ouvrir / télécharger le PDF original"
+
+        // source: src/components/CopiesBulletinsListe.tsx:77
+        public static let signaler = "Signaler une erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:84
+        public static let signalementDescription = "Le signalement concerne uniquement cette version du document."
+
+        // source: src/components/CopiesBulletinsListe.tsx:87
+        public static let signalementQuestion = "Quelle erreur souhaitez-vous signaler ?"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let annuler = "Annuler"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let enregistrement = "Enregistrement…"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let envoyerSignalement = "Envoyer le signalement"
+
+        // source: src/lib/copiesBulletins.ts:217
+        public static let signalementNonConfirme = "Le signalement n’a pas été confirmé. Réessayez."
+
+        // source: src/lib/copiesBulletins.ts:226
+        public static let copieDejaRetiree = "Cette copie a été retirée. Son PDF n’est plus accessible."
+
+        // source: src/lib/copiesBulletins.ts:234
+        public static let pdfIndisponible = "Le PDF ne peut pas être ouvert. Votre accès ou la disponibilité du document a pu changer. Réessayez."
+
+        // source: src/lib/copiesBulletins.ts:238
+        public static let integriteNonConfirmee = "L’intégrité du PDF ne peut pas être confirmée. Réessayez."
+
+        // source: src/lib/copiesBulletinsPartageNatif.ts:84
+        public static let titrePartage = "Copie du bulletin de paie"
+    }
+
     /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
     static func deuxChiffres(_ valeur: Int) -> String {
         valeur < 10 ? String(0) + String(valeur) : String(valeur)
@@ -1552,5 +1696,51 @@ public enum LibellesWeb {
         .init(cle: "Annulation.explicationExemple", texte: Annulation.explicationExemple),
         .init(cle: "Annulation.choisirFichier", texte: Annulation.choisirFichier),
         .init(cle: "Annulation.garderCandidature", texte: Annulation.garderCandidature),
+        .init(cle: "CopiesBulletins.titre", texte: CopiesBulletins.titre),
+        .init(cle: "CopiesBulletins.chargement", texte: CopiesBulletins.chargement),
+        .init(cle: "CopiesBulletins.reessayer", texte: CopiesBulletins.reessayer),
+        .init(cle: "CopiesBulletins.chargementImpossible", texte: CopiesBulletins.chargementImpossible),
+        .init(cle: "CopiesBulletins.statutPubliee", texte: CopiesBulletins.statutPubliee),
+        .init(cle: "CopiesBulletins.statutRemplacee", texte: CopiesBulletins.statutRemplacee),
+        .init(cle: "CopiesBulletins.statutRetiree", texte: CopiesBulletins.statutRetiree),
+        .init(cle: "CopiesBulletins.motifDestinataire", texte: CopiesBulletins.motifDestinataire),
+        .init(cle: "CopiesBulletins.motifContenu", texte: CopiesBulletins.motifContenu),
+        .init(cle: "CopiesBulletins.motifAutre", texte: CopiesBulletins.motifAutre),
+        .init(cle: "CopiesBulletins.ouvertureImpossible", texte: CopiesBulletins.ouvertureImpossible),
+        .init(cle: "CopiesBulletins.copieRetiree", texte: CopiesBulletins.copieRetiree),
+        .init(cle: "CopiesBulletins.signalementEnregistre", texte: CopiesBulletins.signalementEnregistre),
+        .init(cle: "CopiesBulletins.operationNonConfirmee", texte: CopiesBulletins.operationNonConfirmee),
+        .init(cle: "CopiesBulletins.copieDemandeeIndisponible", texte: CopiesBulletins.copieDemandeeIndisponible),
+        .init(cle: "CopiesBulletins.employeur", texte: CopiesBulletins.employeur),
+        .init(cle: "CopiesBulletins.tousLesEmployeurs", texte: CopiesBulletins.tousLesEmployeurs),
+        .init(cle: "CopiesBulletins.vide", texte: CopiesBulletins.vide),
+        .init(cle: "CopiesBulletins.accessibiliteVersion", texte: CopiesBulletins.accessibiliteVersion),
+        .init(cle: "CopiesBulletins.periodeDu", texte: CopiesBulletins.periodeDu),
+        .init(cle: "CopiesBulletins.periodeAu", texte: CopiesBulletins.periodeAu),
+        .init(cle: "CopiesBulletins.version", texte: CopiesBulletins.version),
+        .init(cle: "CopiesBulletins.publieeLe", texte: CopiesBulletins.publieeLe),
+        .init(cle: "CopiesBulletins.separateur", texte: CopiesBulletins.separateur),
+        .init(cle: "CopiesBulletins.mission", texte: CopiesBulletins.mission),
+        .init(cle: "CopiesBulletins.liee", texte: CopiesBulletins.liee),
+        .init(cle: "CopiesBulletins.motifRemplacement", texte: CopiesBulletins.motifRemplacement),
+        .init(cle: "CopiesBulletins.remplacementContenu", texte: CopiesBulletins.remplacementContenu),
+        .init(cle: "CopiesBulletins.remplacementAutre", texte: CopiesBulletins.remplacementAutre),
+        .init(cle: "CopiesBulletins.point", texte: CopiesBulletins.point),
+        .init(cle: "CopiesBulletins.erreurSignalee", texte: CopiesBulletins.erreurSignalee),
+        .init(cle: "CopiesBulletins.ancienneVersion", texte: CopiesBulletins.ancienneVersion),
+        .init(cle: "CopiesBulletins.pdfPlusAccessible", texte: CopiesBulletins.pdfPlusAccessible),
+        .init(cle: "CopiesBulletins.ouverture", texte: CopiesBulletins.ouverture),
+        .init(cle: "CopiesBulletins.ouvrir", texte: CopiesBulletins.ouvrir),
+        .init(cle: "CopiesBulletins.signaler", texte: CopiesBulletins.signaler),
+        .init(cle: "CopiesBulletins.signalementDescription", texte: CopiesBulletins.signalementDescription),
+        .init(cle: "CopiesBulletins.signalementQuestion", texte: CopiesBulletins.signalementQuestion),
+        .init(cle: "CopiesBulletins.annuler", texte: CopiesBulletins.annuler),
+        .init(cle: "CopiesBulletins.enregistrement", texte: CopiesBulletins.enregistrement),
+        .init(cle: "CopiesBulletins.envoyerSignalement", texte: CopiesBulletins.envoyerSignalement),
+        .init(cle: "CopiesBulletins.signalementNonConfirme", texte: CopiesBulletins.signalementNonConfirme),
+        .init(cle: "CopiesBulletins.copieDejaRetiree", texte: CopiesBulletins.copieDejaRetiree),
+        .init(cle: "CopiesBulletins.pdfIndisponible", texte: CopiesBulletins.pdfIndisponible),
+        .init(cle: "CopiesBulletins.integriteNonConfirmee", texte: CopiesBulletins.integriteNonConfirmee),
+        .init(cle: "CopiesBulletins.titrePartage", texte: CopiesBulletins.titrePartage),
     ]
 }

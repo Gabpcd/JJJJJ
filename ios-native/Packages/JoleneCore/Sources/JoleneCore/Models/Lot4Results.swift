@@ -418,23 +418,38 @@ public enum StatutCopieBulletin: String, Equatable, Sendable, CaseIterable {
     case retiree = "RETIREE"
 }
 
+/// `motif_remplacement` d'une version qui en remplace une autre (`MotifRemplacementCopie`, `copiesBulletins.ts` l.11).
+public enum MotifRemplacementCopie: String, Equatable, Sendable, CaseIterable {
+    case contenu = "CONTENU"
+    case autre = "AUTRE"
+}
+
 /// Ligne de `fn_lister_copies_bulletins`, validée STRICTEMENT (exception assumée au décodage tolérant, §2.4).
+/// T10 : `etablissementId` (clé du filtre « Employeur »), `version`, `publieLe` et `motifRemplacement`, affichés tels
+/// que le serveur les rend ; les champs que l'écran du soignant n'affiche pas (`soignant_*`, `remplace_id`) sont
+/// contrôlés par la validation mais ne sont pas gardés.
 public struct CopieBulletin: Equatable, Sendable, Identifiable {
     public var id: String
+    public var etablissementId: String
     public var employeurNom: String?
     public var periodeDebut: String
     public var periodeFin: String
     public var statut: StatutCopieBulletin
+    public var version: Int
+    public var publieLe: String
+    public var motifRemplacement: MotifRemplacementCopie?
     public var tailleOctets: Int
     public var sha256: String
     public var missionIds: [String]
     public var signalee: Bool
 
-    public init(id: String, employeurNom: String?, periodeDebut: String, periodeFin: String, statut: StatutCopieBulletin,
+    public init(id: String, etablissementId: String, employeurNom: String?, periodeDebut: String, periodeFin: String,
+                statut: StatutCopieBulletin, version: Int, publieLe: String, motifRemplacement: MotifRemplacementCopie?,
                 tailleOctets: Int, sha256: String, missionIds: [String], signalee: Bool) {
-        self.id = id; self.employeurNom = employeurNom; self.periodeDebut = periodeDebut; self.periodeFin = periodeFin
-        self.statut = statut; self.tailleOctets = tailleOctets; self.sha256 = sha256; self.missionIds = missionIds
-        self.signalee = signalee
+        self.id = id; self.etablissementId = etablissementId; self.employeurNom = employeurNom
+        self.periodeDebut = periodeDebut; self.periodeFin = periodeFin; self.statut = statut; self.version = version
+        self.publieLe = publieLe; self.motifRemplacement = motifRemplacement; self.tailleOctets = tailleOctets
+        self.sha256 = sha256; self.missionIds = missionIds; self.signalee = signalee
     }
 }
 
