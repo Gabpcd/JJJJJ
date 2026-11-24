@@ -1,6 +1,7 @@
 -- Agents de croissance (20261109140000) : brouillons seulement, garde STOP,
 -- opposition, idempotence, décisions admin et entonnoir de la cohorte réelle.
 -- §9 : adresses MSSanté exclues et brouillons MSSanté expirés (20261116143942).
+-- §11 : zéro visible (décompte des cibles) et liste d'appels hebdomadaire (20261124123500).
 -- Staging uniquement ; toutes les fixtures et mutations sont annulées.
 BEGIN;
 SET LOCAL statement_timeout = '60s';
@@ -24,6 +25,13 @@ DECLARE
   v_places_avant integer;
   v_places_apres integer;
   v_refus boolean;
+  v_cibles jsonb;
+  v_id_tel uuid;
+  v_id_tel_stop uuid;
+  v_id_tel_tardif uuid;
+  v_id_tel_constat uuid;
+  v_id_tel_orphelin uuid;
+  v_appels_avant integer;
 BEGIN
   -- 1. Droits : RPC admin fermées à anon, primitives private fermées à tous.
   IF has_function_privilege('anon', 'public.fn_admin_growth_brouillon_decider(uuid,text,text,text,text)', 'EXECUTE')
@@ -176,8 +184,8 @@ BEGIN
   END IF;
   UPDATE public.growth_config SET valeur = 'true' WHERE cle = 'agents_croissance_actifs';
   v_res := private.fn_growth_agents_executer('CRON');
-  IF v_res->'agents' IS NULL OR (SELECT count(*) FROM jsonb_object_keys(v_res->'agents')) <> 4 THEN
-    RAISE EXCEPTION 'Orchestrateur : 4 agents attendus — %', v_res;
+  IF v_res->'agents' IS NULL OR (SELECT count(*) FROM jsonb_object_keys(v_res->'agents')) <> 5 THEN
+    RAISE EXCEPTION 'Orchestrateur : 5 agents attendus — %', v_res;
   END IF;
   IF EXISTS (SELECT 1 FROM public.growth_agent_executions
              WHERE declencheur = 'CRON' AND erreur IS NOT NULL AND debut_le >= now()) THEN
@@ -618,6 +626,310 @@ BEGIN
      OR (SELECT count(*) FROM public.growth_brouillons
          WHERE cible_id = 'ZZGROW052' AND statut = 'BROUILLON' AND motif_rejet IS NULL) <> 1 THEN
     RAISE EXCEPTION 'Apicrypt : le brouillon interop-mssante doit expirer avec le motif et libérer sa clé, le faux ami rester en file (% ligne(s))', v_n;
+  END IF;
+
+  -- 11. Zéro visible et liste d'appels (20261124123500). Marché fictif ZY,
+  -- distinct de ZZ : chaque décompte porte sur des témoins créés ici et comptés.
+  -- Un seul univers ciblé (private.fn_growth_prospects_cibles) pour l'agent
+  -- email, l'agent d'appels et le décompte ; les interdits du prédicat unique
+  -- valent pour l'appel, sauf le motif MSSANTE.
+  UPDATE public.growth_config SET valeur = 'ZY' WHERE cle = 'agents_departements_cibles';
+
+  -- 11.a Droits : les cinq fonctions neuves restent fermées à anon et authenticated.
+  IF EXISTS (SELECT 1 FROM unnest(ARRAY[
+               'private.fn_growth_prospects_cibles()', 'private.fn_growth_cibles_prospection()',
+               'private.fn_growth_appel_bloque(text,text,text)', 'private.fn_growth_script_appel(text)',
+               'private.fn_growth_agent_appels()']) AS f(sig)
+             WHERE has_function_privilege('anon', f.sig, 'EXECUTE')
+                OR has_function_privilege('authenticated', f.sig, 'EXECUTE')) THEN
+    RAISE EXCEPTION 'Appels : une fonction private du lot est exécutable par anon ou authenticated';
+  END IF;
+
+  -- 11.b Décompte : dix établissements ciblés (la pharmacie est hors cible),
+  -- cinq adresses en messagerie fermée, aucune adresse utilisable, neuf
+  -- téléphones utilisables (un numéro trop court), sept encore disponibles
+  -- (une opposition, un prospect déjà au CRM).
+  INSERT INTO public.prospects_etablissements
+    (finess, nom, type_jolene, email, telephone, ville, departement, statut_sourcing, ajoute_crm_le)
+  VALUES
+    ('ZYTEL001', 'EHPAD Appel Un', 'EHPAD', 'contact@ehpad-appel-un.mssante.fr', '01 00 00 10 01', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL002', 'Hôpital Appel Deux', 'HOPITAL', NULL, '0100001002', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL003', 'EHPAD Appel Opposition', 'EHPAD', 'direction@interop-mssante.apicrypt.org', '0100001003', 'Appelville', 'ZY', 'OPPOSITION', NULL),
+    ('ZYTEL004', 'EHPAD Appel Stop numéro', 'EHPAD', NULL, '0100001004', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL005', 'Foyer Appel Standard partagé', 'HANDICAP', NULL, '01.00.00.10.02', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL006', 'EHPAD Appel Numéro court', 'EHPAD', NULL, '12345', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL007', 'Centre Appel Adresse', 'CENTRE_SANTE', 'accueil@centre-appel.mssante.fr', '0100001007', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL008', 'Pharmacie Appel', 'PHARMACIE', 'contact@pharmacie-appel.test', '0100001008', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL009', 'Institut Appel École', 'ECOLE_SANTE', NULL, '0100001009', 'Appelville', 'ZY', 'A_QUALIFIER', NULL),
+    ('ZYTEL010', 'EHPAD Appel Déjà au CRM', 'EHPAD', 'rh@ehpad-appel-crm.mssante.fr', '0100001010', 'Appelville', 'ZY', 'QUALIFIE', now()),
+    ('ZYTEL011', 'SSIAD Appel Stop adresse', 'DOMICILE', 'stop@ssiad-appel.mssante.fr', '0100001011', 'Appelville', 'ZY', 'A_QUALIFIER', NULL);
+  INSERT INTO public.sales_contacts (type, nom, email, telephone, statut, ne_plus_contacter)
+  VALUES
+    ('ETABLISSEMENT', 'STOP par numéro recette', NULL, '01 00 00 10 04', 'PERDU', true),
+    ('ETABLISSEMENT', 'STOP par adresse recette', 'stop@ssiad-appel.mssante.fr', NULL, 'PERDU', true);
+
+  v_cibles := private.fn_growth_cibles_prospection();
+  IF v_cibles - 'departements' IS DISTINCT FROM jsonb_build_object(
+       'etablissements_cibles', 10, 'adresses_fermees', 5, 'adresses_utilisables', 0, 'adresses_restantes', 0,
+       'telephones_utilisables', 9, 'telephones_restants', 7)
+     OR v_cibles->'departements' IS DISTINCT FROM '["ZY"]'::jsonb THEN
+    RAISE EXCEPTION 'Appels : décompte des cibles inexact — %', v_cibles;
+  END IF;
+
+  -- 11.c Zéro visible : sans adresse utilisable, l'agent email ne prépare rien
+  -- et le dit dans son résultat ; dès qu'une adresse ouverte existe, il la
+  -- prend et il n'en reste plus.
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'premiers_contacts')::integer <> 0 OR (v_res->>'places_du_jour')::integer < 1
+     OR v_res->'cibles' IS DISTINCT FROM v_cibles THEN
+    RAISE EXCEPTION 'Zéro visible : aucun premier contact attendu, places disponibles et décompte dans le résultat — %', v_res;
+  END IF;
+  UPDATE public.prospects_etablissements SET email = 'accueil@centre-appel.test' WHERE finess = 'ZYTEL007';
+  v_res := private.fn_growth_agent_prospection();
+  IF (v_res->>'premiers_contacts')::integer <> 1
+     OR (v_res->'cibles'->>'adresses_utilisables')::integer <> 1
+     OR (v_res->'cibles'->>'adresses_restantes')::integer <> 0
+     OR (v_res->'cibles'->>'adresses_fermees')::integer <> 4
+     OR (v_res->'cibles'->>'telephones_restants')::integer <> 6
+     OR NOT EXISTS (SELECT 1 FROM public.growth_brouillons
+                    WHERE agent = 'PROSPECTION_ETABLISSEMENT' AND canal = 'EMAIL' AND cible_id = 'ZYTEL007'
+                      AND statut = 'BROUILLON' AND (contexte->'score'->>'type')::integer = 20) THEN
+    RAISE EXCEPTION 'Zéro visible : l''adresse ouverte doit être prise par l''agent email et décomptée — %', v_res;
+  END IF;
+
+  -- 11.d Liste d'appels : trois fiches (EHPAD, hôpital, école). Écartés : STOP
+  -- par le numéro (004), STOP par l'adresse bien que MSSanté (011), standard
+  -- partagé avec 002 (005), numéro trop court (006), opposition (003), déjà
+  -- au CRM (010), cible prise par l'email (007), type hors cible (008).
+  v_res := private.fn_growth_agent_appels();
+  IF (v_res->>'fiches_appel')::integer <> 3 OR (v_res->>'brouillons_crees')::integer <> 3
+     OR (v_res->>'exclus_stop')::integer <> 2 OR (v_res->>'numeros_deja_en_file')::integer <> 1
+     OR (v_res->>'places_de_la_semaine')::integer <> 30 THEN
+    RAISE EXCEPTION 'Appels : 3 fiches, 2 STOP, 1 numéro déjà en file et 30 places attendus — %', v_res;
+  END IF;
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE agent = 'APPEL_ETABLISSEMENT' AND canal = 'TELEPHONE' AND cible_type = 'PROSPECT_ETABLISSEMENT'
+        AND cible_id IN ('ZYTEL001', 'ZYTEL002', 'ZYTEL009') AND statut = 'BROUILLON'
+        AND destinataire_email IS NULL AND sujet IS NULL AND departement = 'ZY'
+        AND expire_le > now() + interval '13 days') <> 3
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons
+                WHERE canal = 'TELEPHONE' AND cible_id NOT IN ('ZYTEL001', 'ZYTEL002', 'ZYTEL009')) THEN
+    RAISE EXCEPTION 'Appels : fiches attendues pour 001, 002 et 009 seulement';
+  END IF;
+  SELECT id, corps INTO v_id_tel, v_corps FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL001';
+  IF (SELECT score FROM public.growth_brouillons WHERE id = v_id_tel) <> 40
+     OR (SELECT contexte->>'telephone' FROM public.growth_brouillons WHERE id = v_id_tel) <> '01 00 00 10 01'
+     OR (SELECT (contexte->'score'->>'type')::integer FROM public.growth_brouillons WHERE id = v_id_tel) <> 40
+     OR (SELECT contexte->'score' ? 'email' FROM public.growth_brouillons WHERE id = v_id_tel) THEN
+    RAISE EXCEPTION 'Appels : score (type 40, sans part email) ou numéro absent de la fiche 001';
+  END IF;
+  -- Script : la phrase de commission de la FAQ de l'accueil, la possibilité de
+  -- ne plus être rappelé, aucune comparaison avec un autre prestataire.
+  IF position('Jolene facture à l''établissement une commission de 15 % HT sur la base financière validée : honoraires HT pour une mission libérale ou rémunération brute contractuelle pour une mission salariée' IN v_corps) = 0
+     OR position('Jolene ne vous rappellera plus' IN v_corps) = 0
+     OR v_corps ~* '(intérim|agence)' THEN
+    RAISE EXCEPTION 'Appels : script établissement inattendu — %', v_corps;
+  END IF;
+  SELECT corps INTO v_corps FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL009';
+  IF position('jeunes diplômés' IN v_corps) = 0 OR position('gratuite pour les soignants' IN v_corps) = 0
+     OR position('Jolene ne vous rappellera plus' IN v_corps) = 0
+     OR position('commission' IN v_corps) > 0 OR v_corps ~ '[0-9]' THEN
+    RAISE EXCEPTION 'Appels : script école inattendu — %', v_corps;
+  END IF;
+
+  -- Idempotence, puis quota de la semaine : une place, une fiche ; plus de
+  -- place, plus de fiche, même s'il reste une cible.
+  v_res := private.fn_growth_agent_appels();
+  IF (v_res->>'fiches_appel')::integer <> 0 OR (v_res->>'places_de_la_semaine')::integer <> 27 THEN
+    RAISE EXCEPTION 'Appels : second passage non idempotent ou quota de la semaine mal décompté — %', v_res;
+  END IF;
+  INSERT INTO public.growth_config (cle, valeur, maj_le) VALUES ('agents_appels_quota_semaine', '4', now())
+  ON CONFLICT (cle) DO UPDATE SET valeur = EXCLUDED.valeur, maj_le = now();
+  INSERT INTO public.prospects_etablissements (finess, nom, type_jolene, telephone, ville, departement, statut_sourcing)
+  VALUES
+    ('ZYTEL012', 'EHPAD Appel Quota A', 'EHPAD', '0100001012', 'Appelville', 'ZY', 'A_QUALIFIER'),
+    ('ZYTEL013', 'EHPAD Appel Quota B', 'EHPAD', '0100001013', 'Appelville', 'ZY', 'A_QUALIFIER');
+  v_res := private.fn_growth_agent_appels();
+  IF (v_res->>'fiches_appel')::integer <> 1 OR (v_res->>'places_de_la_semaine')::integer <> 1
+     OR NOT EXISTS (SELECT 1 FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL012')
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL013') THEN
+    RAISE EXCEPTION 'Appels : quota de la semaine (4) : une seule fiche de plus attendue, pour 012 — %', v_res;
+  END IF;
+  v_res := private.fn_growth_agent_appels();
+  IF (v_res->>'fiches_appel')::integer <> 0 OR (v_res->>'places_de_la_semaine')::integer <> 0
+     OR EXISTS (SELECT 1 FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL013') THEN
+    RAISE EXCEPTION 'Appels : quota de la semaine atteint, aucune fiche attendue — %', v_res;
+  END IF;
+
+  -- 11.e Contraintes : une fiche d'appel exige un prospect établissement et un numéro.
+  v_refus := false;
+  BEGIN
+    INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, corps, idempotence_key)
+    VALUES ('APPEL_ETABLISSEMENT', 'TELEPHONE', 'PROSPECT_ETABLISSEMENT', 'ZYTEL098', 'Recette', 'recette-appel:sans-numero');
+  EXCEPTION WHEN check_violation THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Appels : une fiche sans numéro a été acceptée'; END IF;
+  v_refus := false;
+  BEGIN
+    INSERT INTO public.growth_brouillons (agent, canal, cible_type, corps, contexte, idempotence_key)
+    VALUES ('APPEL_ETABLISSEMENT', 'TELEPHONE', 'PUBLIC', 'Recette', '{"telephone":"0100001098"}', 'recette-appel:sans-prospect');
+  EXCEPTION WHEN check_violation THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Appels : une fiche sans prospect établissement a été acceptée'; END IF;
+
+  -- 11.f Décision admin : valider, appeler soi-même, noter le résultat.
+  SELECT id INTO v_id_tel_stop FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL002';
+  SELECT id INTO v_id_tel_tardif FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL009';
+  SELECT id INTO v_id_tel_constat FROM public.growth_brouillons WHERE canal = 'TELEPHONE' AND cible_id = 'ZYTEL012';
+  INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_nom, corps, contexte, idempotence_key)
+  VALUES ('APPEL_ETABLISSEMENT', 'TELEPHONE', 'PROSPECT_ETABLISSEMENT', 'ZYTEL099', 'Prospect disparu recette', 'Recette',
+    '{"telephone":"0100001099"}', 'recette-appel:prospect-disparu')
+  RETURNING id INTO v_id_tel_orphelin;
+  INSERT INTO public.growth_brouillons (agent, canal, cible_type, cible_id, destinataire_email, sequence_etape, corps, idempotence_key)
+  VALUES ('PROSPECTION_ETABLISSEMENT', 'EMAIL', 'PROSPECT_ETABLISSEMENT', 'ZYTEL097', 'direction@ehpad-appel-email.mssante.fr',
+    1, 'Recette', 'recette-appel:email-mssante')
+  RETURNING id INTO v_id_mss;
+  v_appels_avant := (private.fn_growth_entonnoir(now() - interval '1 day', now() + interval '1 minute')
+                       ->'prospection'->>'appels_journalises_periode')::integer;
+
+  PERFORM set_config('request.jwt.claim.sub', v_user::text, true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_user, 'role', 'authenticated')::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  v_refus := false;
+  BEGIN
+    PERFORM public.fn_admin_growth_brouillon_decider(v_id_tel, 'VALIDER');
+  EXCEPTION WHEN insufficient_privilege THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Appels : un non-admin a pu valider une fiche d''appel'; END IF;
+  EXECUTE 'RESET ROLE';
+
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  v_refus := false;
+  BEGIN
+    PERFORM public.fn_admin_growth_brouillon_decider(v_id_tel, 'MARQUER_ENVOYE', NULL, NULL, 'SANS_REPONSE');
+  EXCEPTION WHEN raise_exception THEN v_refus := true;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Appels : un appel a pu être noté sur une fiche non validée'; END IF;
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel, 'VALIDER');
+  IF v_res->>'statut' IS DISTINCT FROM 'VALIDE' THEN
+    RAISE EXCEPTION 'Appels : validation d''une fiche refusée — %', v_res;
+  END IF;
+  v_refus := false;
+  BEGIN
+    PERFORM public.fn_admin_growth_brouillon_decider(v_id_tel, 'MARQUER_ENVOYE');
+  EXCEPTION WHEN raise_exception THEN v_refus := position('Résultat d''appel requis' IN SQLERRM) > 0;
+  END;
+  IF NOT v_refus THEN RAISE EXCEPTION 'Appels : un appel a pu être noté sans résultat'; END IF;
+  -- Sans réponse : fiche CRM, rappel programmé, rien d'envoyé.
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel, 'MARQUER_ENVOYE', NULL, NULL, ' sans_reponse ');
+  v_contact := (v_res->>'contact_crm_id')::uuid;
+  IF v_res->>'statut' IS DISTINCT FROM 'ENVOYE' OR v_contact IS NULL THEN
+    RAISE EXCEPTION 'Appels : constat « sans réponse » échoué — %', v_res;
+  END IF;
+  -- STOP au téléphone : définitif, pour tous les canaux.
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_stop, 'VALIDER');
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_stop, 'MARQUER_ENVOYE', NULL, NULL, 'STOP');
+  IF v_res->>'statut' IS DISTINCT FROM 'ENVOYE' THEN
+    RAISE EXCEPTION 'Appels : constat « STOP » échoué — %', v_res;
+  END IF;
+  EXECUTE 'RESET ROLE';
+
+  IF NOT EXISTS (SELECT 1 FROM public.sales_contacts
+                 WHERE id = v_contact AND finess = 'ZYTEL001' AND statut = 'RELANCE' AND a_rappeler IS TRUE
+                   AND sequence_active IS TRUE AND prochaine_action_le > now() AND ne_plus_contacter IS NOT TRUE)
+     OR NOT EXISTS (SELECT 1 FROM public.sales_taches
+                    WHERE idempotence_key = 'growth:appel:' || v_id_tel AND contact_id = v_contact
+                      AND canal = 'TELEPHONE' AND statut = 'TERMINEE')
+     OR NOT EXISTS (SELECT 1 FROM public.sales_taches
+                    WHERE contact_id = v_contact AND canal = 'TELEPHONE' AND statut = 'A_FAIRE'
+                      AND idempotence_key <> 'growth:appel:' || v_id_tel)
+     OR NOT EXISTS (SELECT 1 FROM public.sales_activites
+                    WHERE contact_id = v_contact AND action_type = 'TACHE_TRAITEE' AND canal = 'TELEPHONE'
+                      AND resultat = 'SANS_REPONSE') THEN
+    RAISE EXCEPTION 'Appels : le constat « sans réponse » doit créer la fiche CRM, clore la tâche d''appel et programmer le rappel';
+  END IF;
+  IF (SELECT contexte->>'resultat_appel' FROM public.growth_brouillons WHERE id = v_id_tel) IS DISTINCT FROM 'SANS_REPONSE'
+     OR (SELECT envoye_le FROM public.growth_brouillons WHERE id = v_id_tel) IS NULL
+     OR (SELECT ajoute_crm_le FROM public.prospects_etablissements WHERE finess = 'ZYTEL001') IS NULL
+     OR (SELECT email_envoye_le FROM public.prospects_etablissements WHERE finess = 'ZYTEL001') IS NOT NULL THEN
+    RAISE EXCEPTION 'Appels : résultat non conservé sur la fiche, prospect non rattaché au CRM, ou email marqué envoyé à tort';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.sales_contacts
+                 WHERE finess = 'ZYTEL002' AND statut = 'PERDU' AND ne_plus_contacter IS TRUE AND sequence_active IS FALSE)
+     OR private.fn_growth_appel_bloque('ZYTEL002', NULL, '0100001002') IS DISTINCT FROM 'STOP'
+     OR private.fn_growth_appel_bloque('ZYTEL005', NULL, '01.00.00.10.02') IS DISTINCT FROM 'STOP'
+     OR private.fn_growth_destinataire_bloque('PROSPECT_ETABLISSEMENT', 'ZYTEL002', 'nouvelle-adresse@appel-recette.test', NULL, NULL) IS DISTINCT FROM 'STOP' THEN
+    RAISE EXCEPTION 'Appels : un STOP noté au téléphone doit bloquer l''appel (FINESS et numéro partagé) et l''email';
+  END IF;
+
+  -- Opposition arrivée après la préparation de la fiche : la validation rejette et persiste.
+  INSERT INTO public.sales_contacts (type, nom, telephone, statut, ne_plus_contacter)
+  VALUES ('ETABLISSEMENT', 'Opposition tardive par numéro recette', '01 00 00 10 09', 'PERDU', true);
+  -- Opposition arrivée entre la validation et le constat : le constat rejette, rien n'entre au CRM.
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_tardif, 'VALIDER');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE'
+     OR v_res->>'raison' IS DISTINCT FROM 'Contact en opposition (STOP) ou perdu : ne pas appeler' THEN
+    RAISE EXCEPTION 'Appels : une opposition tardive doit rejeter la fiche — %', v_res;
+  END IF;
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_constat, 'VALIDER');
+  IF v_res->>'statut' IS DISTINCT FROM 'VALIDE' THEN
+    RAISE EXCEPTION 'Appels : validation de la fiche 012 refusée — %', v_res;
+  END IF;
+  EXECUTE 'RESET ROLE';
+  UPDATE public.prospects_etablissements SET statut_sourcing = 'OPPOSITION' WHERE finess = 'ZYTEL012';
+  EXECUTE 'SET LOCAL ROLE authenticated';
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_constat, 'MARQUER_ENVOYE', NULL, NULL, 'APPEL_REPONDU');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE OR v_res->>'statut' IS DISTINCT FROM 'REJETE' THEN
+    RAISE EXCEPTION 'Appels : une opposition arrivée avant le constat doit rejeter la fiche — %', v_res;
+  END IF;
+  -- Prospect disparu du répertoire : fiche rejetée, sans erreur brute.
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_tel_orphelin, 'VALIDER');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE
+     OR v_res->>'raison' IS DISTINCT FROM 'Destinataire invalide : ne pas appeler' THEN
+    RAISE EXCEPTION 'Appels : une fiche dont le prospect a disparu doit être rejetée — %', v_res;
+  END IF;
+  -- Parcours email inchangé : même refus, même texte.
+  v_res := public.fn_admin_growth_brouillon_decider(v_id_mss, 'VALIDER');
+  IF COALESCE((v_res->>'success')::boolean, true) IS NOT FALSE
+     OR v_res->>'raison' IS DISTINCT FROM 'Destinataire invalide : aucun envoi possible' THEN
+    RAISE EXCEPTION 'Appels : le refus d''un email MSSanté a changé de texte — %', v_res;
+  END IF;
+  EXECUTE 'RESET ROLE';
+  IF (SELECT count(*) FROM public.growth_brouillons
+      WHERE id IN (v_id_tel_tardif, v_id_tel_constat) AND statut = 'REJETE'
+        AND motif_rejet = 'Opposition (STOP) ou contact perdu' AND envoye_le IS NULL) <> 2
+     OR EXISTS (SELECT 1 FROM public.sales_contacts WHERE finess IN ('ZYTEL009', 'ZYTEL012'))
+     OR EXISTS (SELECT 1 FROM public.sales_taches
+                WHERE idempotence_key IN ('growth:appel:' || v_id_tel_tardif, 'growth:appel:' || v_id_tel_constat)) THEN
+    RAISE EXCEPTION 'Appels : rejet non persisté, ou fiche CRM créée malgré l''opposition';
+  END IF;
+
+  -- 11.g Orchestrateur, exécutions et rapport : l'agent d'appels est tracé, le
+  -- décompte figure dans les détails de l'agent email et dans l'entonnoir figé.
+  v_res := private.fn_growth_agents_executer('ADMIN');
+  IF (SELECT count(*) FROM jsonb_object_keys(v_res->'agents')) <> 5
+     OR v_res->'agents'->'APPEL_ETABLISSEMENT'->>'places_de_la_semaine' IS DISTINCT FROM '0'
+     OR v_res->'agents'->'PROSPECTION_ETABLISSEMENT'->'cibles'->>'etablissements_cibles' IS DISTINCT FROM '12'
+     OR NOT EXISTS (SELECT 1 FROM public.growth_agent_executions
+                    WHERE agent = 'APPEL_ETABLISSEMENT' AND declencheur = 'ADMIN' AND erreur IS NULL
+                      AND details ? 'fiches_appel')
+     OR NOT EXISTS (SELECT 1 FROM public.growth_agent_executions
+                    WHERE agent = 'PROSPECTION_ETABLISSEMENT' AND declencheur = 'ADMIN' AND erreur IS NULL
+                      AND details->'cibles' ? 'adresses_utilisables') THEN
+    RAISE EXCEPTION 'Appels : orchestrateur à 5 agents, exécution tracée et décompte dans les détails attendus — %', v_res;
+  END IF;
+  v_res := private.fn_growth_entonnoir(now() - interval '1 day', now() + interval '1 minute');
+  IF (v_res->'prospection'->>'appels_journalises_periode')::integer <> v_appels_avant + 2
+     OR v_res->'prospection'->'cibles_agent' IS DISTINCT FROM private.fn_growth_cibles_prospection() THEN
+    RAISE EXCEPTION 'Appels : entonnoir sans les deux appels notés ou sans le décompte des cibles — %', v_res->'prospection';
+  END IF;
+  v_res := private.fn_growth_snapshot_hebdo();
+  IF (SELECT donnees->'prospection'->'cibles_agent'->>'etablissements_cibles' FROM public.growth_rapports_hebdo
+      WHERE semaine_debut = (v_res->>'semaine_debut')::date) IS NULL THEN
+    RAISE EXCEPTION 'Appels : le rapport hebdomadaire figé ne porte pas le décompte des cibles';
   END IF;
 END;
 $test$;

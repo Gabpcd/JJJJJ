@@ -153,6 +153,9 @@ jobs:
       - name: Prospection sans Apicrypt (B9) — préflight, règle unique élargie et expiration sans réseau
         run: node --test tests/node/prospection-sans-apicrypt.node.mjs
 
+      - name: Zéro visible et liste d'appels (B9) — préflight, corps d'origine, univers unique et script sourcé sans réseau
+        run: node --test tests/node/prospection-liste-appels.node.mjs
+
       - name: Litiges auto-créés (B9, HARD STOP n°4) — textes de délai dérivés, corps LIVE et empreintes sans réseau
         run: node --test tests/node/litiges-auto-textes-delais.node.mjs
 
