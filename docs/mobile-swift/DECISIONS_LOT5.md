@@ -407,6 +407,71 @@ juridique ; aucun texte juridique n'est ajouté.
    aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
    `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
+## Précisions relevées par la tranche T8 (présences, 24/11/2026)
+
+**B9 paiements/escrow (D7)** : valider une présence déclenche côté serveur la libération du séquestre
+(`trg_escrow_release_on_validation`), contester la bloque (`motif_litige`). La tranche est poussée avec ses tests,
+**jamais mergée sans l'accord explicite de Gabrielle**. Aucune précision ne change une décision du §7 ni une règle
+juridique ; aucun texte juridique n'est ajouté (libellés d'interface du web repris, refus serveur verbatim, quelques
+textes natifs de navigation). Lignes citées : web et dump de `main` au 24/11/2026 (après #1153 et le re-baseline #1174).
+
+1. **RPC appelées telles quelles, une requête par geste, jamais renvoyée.** `fn_valider_presence(p_presence_id)`,
+   `fn_valider_presences_lot(p_ids)`, `fn_contester_presence(p_presence_id, p_motif)`,
+   `fn_creer_notation_mission(p_mission_id, 'ETAB_VERS_SOIGNANT', note ×4, NULL)`,
+   `fn_declarer_fin_retroactive(p_mission_id, p_heure_fin, p_raison)`, puis les relectures (`presences` par identifiant,
+   `fn_etat_pointage_mission.segment_ouvert`). Aucun montant ni aucune durée n'est lu, calculé ou envoyé ; aucun audit
+   doublé (le serveur écrit `PRESENCE_VALIDATION`, `PRESENCE_VALIDATION_LOT`, `PRESENCE_CONTESTATION` ; le web les double).
+2. **« Validée » après relecture seulement.** La gateway relit `valide_par_etablissement` et `valide_le` avant de rendre
+   `.validee` (relecture fausse → erreur, jamais un succès) ; le modèle n'écrit aucun état local (la mise à jour
+   optimiste du web, l.265-267, n'est pas portée) et relit la liste après chaque action. Issue inconnue (délai,
+   transport) : liste relue, jamais la mutation renvoyée. `enCours` est posé avant tout `await` : double toucher = un appel.
+3. **Lecture en liste blanche.** `presences` : `PresenceEtab.clesDecodees` + `missions!inner(id, intitule, service,
+   debut_le, fin_le, nb_creneaux, etablissement_id)` — jamais `arrivee_lat/lng`, `depart_lat/lng`, `coherence_incidents`,
+   `duree_heures`, `heures_reelles`, `alertes_fraude`, précisions GPS, ni aucun montant. « Prévu » et « Réel » sont les
+   sommes de `SynthesePresence` (lot 2, port doré) sur les créneaux relus : des durées planifiée et pointée, jamais une
+   durée facturée. **Écart** : l'écart en minutes du web (`CarteValidation.tsx` l.144-148) n'est pas affiché.
+4. **Nom du soignant** : le blueprint ne le lisait pas ; `fn_soignant_pour_etablissement` (port de T5, déjà consommée)
+   est appelée une fois par soignant listé (25 au plus par lecture, au mieux) ; en échec, « Soignant » (repli du web
+   l.430). `fn_mes_soignants_etablissement` et la table `soignants` ne sont pas lues.
+5. **Contestation** : proposée pour une présence « à valider » seulement ; motif de 3 caractères au moins après
+   nettoyage (borne et message du serveur, sans requête en dessous), saisie bornée à 500 caractères (choix natif). La
+   contestation d'une présence **validée** (`PanneauContestation`, fenêtre lue au serveur depuis #1153), l'ouverture d'un
+   litige et le fil de litige restent sur jolene.app : aucun texte de délai n'est affiché.
+6. **Clôture rétroactive** : action offerte avec la permission `pointage` servie (§2.7), sans table de rôles côté natif.
+   Le serveur exige en plus `est_admin_etablissement()` : un membre `POINTAGE_ONLY` reçoit son refus 42501 mot pour mot,
+   comme sur le web (amendement de la fiche, revue B8 de T0, mineur 4). **D28 verrouillé deux fois** : `ClotureSegment`
+   (modèle) et la gateway refusent une heure postérieure à maintenant avant tout envoi ; le sélecteur est borné à
+   [début du segment ouvert, maintenant], en heure de Paris. La saisie passe par `DateHeureParis.instantDepuisSaisie`
+   comme le web : une heure que le fuseau refuse (inexistante au printemps, répétée à l'automne) reçoit le message du web.
+   Le dump actuel ne sert plus `nouveau_code` ni `nouveau_hmac` ; la gateway ne lit que `creneau_effectif_id`.
+7. **Note (D6)** : obligatoire avant la validation unitaire, envoyée après la validation relue, au mieux ; un refus
+   serveur de la note (« Seules les missions TERMINEE peuvent être notées »…) s'affiche à part, mot pour mot, sans
+   défaire la validation. La validation en lot ne note pas (parité web). Le détail par critère du web n'est pas porté
+   (la note est répliquée sur les quatre critères).
+8. **Compteur de l'Accueil non branché** (écart au blueprint) : le web n'a pas ce compteur (correction 20) et le
+   brancher imposerait de relire toutes les présences et leurs créneaux à chaque ouverture de l'Accueil, sur une base à
+   CPU partagé. L'action « Valider les présences » reste sans compteur ; `PresencesEtabRules.repartir` le fournirait.
+9. **Monde démo** : `demo-etab-presences.json` (`scripts/mobile/demo-etab-presences.mjs`) **dérive** l'embed et le planning
+   de `demo-etab-missions.json` et les segments de M4 et M6 du dernier état de `demo-etab-pointage.json`. Écarts au
+   §2.10 : le segment à clôturer est celui de **M4** (T7 a livré M6 avec son premier créneau fermé) ; aucune présence
+   validée au départ (pas de douzième mission dans la fixture commune) ; les écritures de la session vivent dans un
+   acteur et sont relues. Écart démo assumé : une clôture faite dans Présences n'est pas reportée sur l'écran du code de
+   pointage de M4 (gateway de T7 inchangée). Le serveur fictif reproduit les refus du serveur mot pour mot.
+10. **`EtabDestination.presencesMission.ecranLivre = true`** : `/etablissement/presences/mission/{id}` ouvre les présences
+    de la mission (même écran, sans onglets ni lot) ; `?tab=` d'un lien vers la page sélectionne l'onglet (insertion dans
+    `EtablissementTabView`, jeton `DemandeOngletPresences`). Port étendu de deux lectures (`missionsTerminees`,
+    `creneaux(missionId:)`), signatures existantes inchangées.
+11. **Identifiants ajoutés au blueprint** : `etab-presence-litige-{id}`, `etab-presence-note-refus`,
+    `etab-presences-{succes|avertissement|erreur}`, feuilles `etab-{validation|contestation|cloture|presences-lot}-feuille`.
+    `ContestationEtabSheet` (et non `ContestationSheet`, déjà pris par l'espace soignant).
+12. **XCUITest** `DemoEtabPresencesTests` (quatre tests) dans l'éclat « lot5-etablissement » du job `ui-lot1`, jamais dans
+    le socle. Non compilé ni exécuté localement (Xcode local 16.4, aucun simulateur) : preuve CI. Les cibles iOS seules
+    (`JoleneDesign`, app) ne sont pas compilées localement non plus.
+13. **Textes natifs ajoutés (non juridiques)** : « Chargement des présences… », « Contester la présence », « Annuler »,
+    « L'heure de fin ne peut pas être postérieure à l'heure actuelle. », « N présence(s) validée(s) sur M
+    sélectionnée(s). », « L'action n'a pas pu être confirmée par une relecture. Vérifiez les présences avant de
+    recommencer. ».
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

@@ -145,6 +145,7 @@ final class DemoEtabPresencesTests: JoleneUITestCase {
         }
         XCTAssertFalse(element("etab-presences-tabs").exists, "présences d'une mission : ni onglets ni lot")
         XCTAssertFalse(element("placeholder-etab-presences-mission").exists)
+        XCTAssertTrue(element("etab-presences-lien-pointage").exists, "le code de pointage de la mission reste à un toucher (T7)")
         record("\(proofPrefix)-etab-presences-mission")
     }
 

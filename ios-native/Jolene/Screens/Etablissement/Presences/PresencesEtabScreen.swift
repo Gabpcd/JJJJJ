@@ -19,7 +19,8 @@ import JoleneDesign
 /// `-resultat`), `etab-presences-sans-pointage`, `etab-presence-sans-pointage-{missionId}`, `etab-presence-{id}`,
 /// `etab-presence-statut-{id}`, `etab-presence-alerte-{id}-{teleportation|hors_zone|gps_truque}`,
 /// `etab-presence-litige-{id}`, `etab-presence-valider-{id}`, `etab-presence-contester-{id}`,
-/// `etab-presence-cloturer-{missionId}`, `etab-presence-note-refus`.
+/// `etab-presence-cloturer-{missionId}`, `etab-presence-note-refus`, `etab-presences-lien-pointage` (présences d'une
+/// mission : lien vers le code de pointage de T7).
 struct PresencesEtabScreen: View {
     @StateObject private var model: PresencesEtabModel
     private let snapshot: EtablissementSessionSnapshot
@@ -137,6 +138,16 @@ struct PresencesEtabScreen: View {
             InlineNotice(erreur, tone: .error, identifier: "etab-presences-refresh-error", announcesOnAppear: true)
         }
         annonce
+        // Présences d'une mission : la page web équivalente porte aussi le code de pointage (écran de T7, permission `pointage`).
+        if let missionId = model.missionId, model.peutAgir {
+            NavigationLink(value: EtabDestination.pointage(missionId: missionId)) {
+                Label(CodeRotatifRules.titreCodePointage, systemImage: "qrcode")
+                    .font(JoleneFont.callout.weight(.semibold))
+                    .foregroundStyle(JoleneColor.rose700)
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .accessibilityIdentifier("etab-presences-lien-pointage")
+        }
         if model.missionId == nil, model.onglet == .aValider, model.peutAgir, !repartition.aValider.isEmpty {
             blocLot(aValider: repartition.aValider.count, eligibles: repartition.sansAlerte.count)
         }
