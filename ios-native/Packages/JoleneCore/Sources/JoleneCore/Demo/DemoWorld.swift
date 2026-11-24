@@ -81,7 +81,7 @@ public enum DemoWorld {
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
-            recovery: UnwiredRecoveryPort(),            // T10
+            recovery: DemoRecoveryGateway(),            // T10 (reste : récupération du mot de passe)
             justificatifs: DemoJustificatifStorage()    // T7
         )
         câblerLot2(&gateways)

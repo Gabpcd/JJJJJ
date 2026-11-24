@@ -112,6 +112,8 @@
 		8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */; };
 		8FF2D016E024DEC2B0131A7E /* EnvironmentGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8934442A0F8427B109291C /* EnvironmentGuardTests.swift */; };
 		9007C7A8192742F3219A10D8 /* AttestationSanteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5DE8AE054CB599FCEF928BC /* AttestationSanteView.swift */; };
+		91A4BD2C08AEF2FBDC976B26 /* DemoReinitialisationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26EA0823C1E8AA36AB7B6D80 /* DemoReinitialisationTests.swift */; };
+		926C5AB5A569B303619F141E /* ResetPasswordScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B037426E468B94DB4E70244E /* ResetPasswordScreen.swift */; };
 		929CD4BD887B3949657CD4A0 /* ScoreScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7008423FB5524FA77D4FF341 /* ScoreScreen.swift */; };
 		997CBDFDA40AD985E5EE59AD /* DemoCompletionInscriptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98317DBE720E6BEB75883241 /* DemoCompletionInscriptionTests.swift */; };
 		9DE4879FA571EB99B73E9496 /* ConfirmationInscriptionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676FE905DF85E7AE14260D5C /* ConfirmationInscriptionScreen.swift */; };
@@ -241,6 +243,7 @@
 		246F44BC2A339EC8645FD77E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		25008E8957848F241A595264 /* EtablissementTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtablissementTabView.swift; sourceTree = "<group>"; };
 		25EDBEDE81F4560B71CEEDEC /* RecapAcceptationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecapAcceptationSheet.swift; sourceTree = "<group>"; };
+		26EA0823C1E8AA36AB7B6D80 /* DemoReinitialisationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoReinitialisationTests.swift; sourceTree = "<group>"; };
 		2706B588474C6FFEBB240600 /* DemoAccueilTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAccueilTests.swift; sourceTree = "<group>"; };
 		273E684EB7D14269450AAE87 /* HorsLigneBandeau.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorsLigneBandeau.swift; sourceTree = "<group>"; };
 		28FB327E6E40C91888CFD6A1 /* MesFavorisScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MesFavorisScreen.swift; sourceTree = "<group>"; };
@@ -336,6 +339,7 @@
 		ACC4653075CBE00DD3130FD3 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		ACE59294CC622F36A3F8C949 /* DemoRevenusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRevenusTests.swift; sourceTree = "<group>"; };
 		AE5CC776B1AC0C006081807A /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		B037426E468B94DB4E70244E /* ResetPasswordScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordScreen.swift; sourceTree = "<group>"; };
 		B1142E69AB4C44F4FA274100 /* ChoixModesExerciceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChoixModesExerciceSection.swift; sourceTree = "<group>"; };
 		B2C1F510DF2473734BC92D4D /* AccueilLignes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccueilLignes.swift; sourceTree = "<group>"; };
 		B2D459BCCD9C6F8AA51AF0C4 /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
@@ -628,6 +632,7 @@
 			isa = PBXGroup;
 			children = (
 				636ED369FD9F3FC3E2860BCA /* Accueil */,
+				F49C499F49940F54C459BE8D /* Auth */,
 				23BEDD7396FAF6FF357EC1AF /* Candidature */,
 				4F589E2C82C18C2E528C0437 /* Compte */,
 				A63B5AA924CA7C641DC8985D /* Contrats */,
@@ -936,6 +941,7 @@
 				B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */,
 				D65489D1594FDE00944062B4 /* DemoProfilTests.swift */,
 				D53B5D8BDE7DBB54BF682E49 /* DemoPushTests.swift */,
+				26EA0823C1E8AA36AB7B6D80 /* DemoReinitialisationTests.swift */,
 				ACE59294CC622F36A3F8C949 /* DemoRevenusTests.swift */,
 				F5BB49CC7ACE637676B78FAA /* DemoSignatureContratTests.swift */,
 				1D2F50AD5618266E19F848E4 /* DemoStripeTests.swift */,
@@ -954,6 +960,14 @@
 				40E058FD02D0891E9ADE0752 /* PoolUrgenceScreen.swift */,
 			);
 			path = PoolUrgence;
+			sourceTree = "<group>";
+		};
+		F49C499F49940F54C459BE8D /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				B037426E468B94DB4E70244E /* ResetPasswordScreen.swift */,
+			);
+			path = Auth;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1183,6 +1197,7 @@
 				45BF2836A6AF8ECDBEB42B16 /* RecusJustificatifs.swift in Sources */,
 				087C6C818F79E31636890E08 /* RenvoiWebEtabScreen.swift in Sources */,
 				63F75D7150FF3B2A5F3632C8 /* RenvoiWebScreen.swift in Sources */,
+				926C5AB5A569B303619F141E /* ResetPasswordScreen.swift in Sources */,
 				55081F4F43971CF1AF949846 /* ResumePolicy.swift in Sources */,
 				21EA7193FD5C83A73820D5B1 /* RevenusScreen.swift in Sources */,
 				12E6B9193B807F15C95D84AE /* RootView.swift in Sources */,
@@ -1243,6 +1258,7 @@
 				D30E0483E34614D542AA0B1B /* DemoPresencesTests.swift in Sources */,
 				4CB0366CDA13BFA04A0DB949 /* DemoProfilTests.swift in Sources */,
 				E8D148067CBC8F1EEAB9AFCD /* DemoPushTests.swift in Sources */,
+				91A4BD2C08AEF2FBDC976B26 /* DemoReinitialisationTests.swift in Sources */,
 				590ACEABB2CA11949CFDC137 /* DemoRevenusTests.swift in Sources */,
 				30D7D9C0C1AAB3F339472622 /* DemoSignatureContratTests.swift in Sources */,
 				4C0250FC1A73E3696D06F8BD /* DemoStripeTests.swift in Sources */,

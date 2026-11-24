@@ -2612,6 +2612,36 @@ ses libellés escrow et la note « net estimé » contre le glossaire escrow de 
   relue dans le dump. Aucun arrêt ni avis cité.
 - décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 
+## Reste de L1-T10 — récupération du mot de passe native (24/11/2026, branche `lot1/t10-recovery`)
+
+Livre le point d'extension du point 2 de la section T3b : port `recovery` câblé dans les deux mondes
+(`SupabaseRecoveryGateway`, `DemoRecoveryGateway` ; `portsEnAttenteLot1` vide), « Mot de passe oublié ? »
+(`login-forgot` → `ResetRequestSheet`), lien `/reset-password` (`token_hash`, implicit, sans identifiants) présenté au-dessus
+de tout état (`ResetPasswordScreen`, `BoiteLiensInscription.reinitialisation`, action `.inscription` de l'aiguillage) ;
+`ecranNatifLivre(.resetPassword)` repasse à `true`. Option B inchangée : `?code=` refusé sur la route, sans appel.
+
+- **Quarantaine par isolement (écart au plan §2.5, qui ignorait les événements du client principal pendant le flux).**
+  Le flux tourne sur un `AuthClient` isolé par lien (stockage en mémoire, sans rafraîchissement automatique) : la
+  session de récupération n'entre jamais dans le Keychain, n'émet rien vers `SupabaseAuthGateway` ni `SessionController`,
+  n'est jamais restaurée et disparaît avec le processus. Raison : un filtre d'événements laisserait la session dans le
+  Keychain (relue par `restoreSession` au lancement suivant si l'app est tuée pendant le flux) ; l'isolement rend la fuite
+  impossible par construction et ne touche pas `SupabaseAuthGateway` (partagé).
+- **Demande de lien en flux implicit** sur ce client isolé : aucun verifier PKCE écrit, donc le slot unique du client
+  principal (confirmation d'inscription `?code=`) n'est pas écrasé ; le lien reçu est `token_hash` (modèle §6.6) ou
+  implicit, deux formats acceptés. Préalable Gabrielle inchangé (modèle d'e-mail « Reset Password » en `token_hash`).
+- **Fermeture** : après le mot de passe enregistré (PUT `/auth/v1/user`, utilisateur relu de même identifiant), `signOut`
+  de portée globale comme le web ; sur abandon, refus ou erreur, portée locale (seule la session de récupération est
+  révoquée). Client isolé jeté avant l'appel réseau.
+- **Session déjà ouverte dans l'app** : l'écran s'affiche au-dessus d'elle sans la toucher ; abandon → elle reste ;
+  mot de passe modifié → elle est fermée (`SessionStore.signOut`) et la connexion s'affiche (web : `navigate('/connexion')` ;
+  la déconnexion globale révoque de toute façon les jetons serveur du même compte).
+- **Centre de notifications** : un lien de reset y est sans cible (`CibleNotification.aucune`, exclusion nommée comme la
+  confirmation) ; il n'ouvre plus la page web.
+- **Textes** : tous repris de `PageConnexion.tsx` et `PageResetPassword.tsx` (épinglés ligne à ligne par
+  `ReinitialisationTests`) ; « Retour à la connexion » sert aussi de sortie du formulaire (abandon). Aucun texte juridique.
+- **Non vérifié** : aucun vrai e-mail, aucun vrai lien, aucun appareil ; XCUITest écrits (`DemoReinitialisationTests`,
+  éclat `lot3-push`), non compilés en local.
+
 ## Prérequis bloquants de soumission (lot 6)
 
 À lever avant toute soumission à Apple (TestFlight externe, qui passe la Beta App Review, comme App Store) ; ils ne
@@ -2682,6 +2712,7 @@ bloquent ni les merges du lot 3 ni la recette interne (build Debug installé par
   (mergé sans T10) ni au lot 3 ; en attendant, le lien `token_hash` ouvre la page web et `?code=` est refusé
   (option B). À planifier (préalable inchangé : modèle d'e-mail « Reset Password » au format `token_hash`, §6.6 du
   lot 1). Préalable du §6.10 (TJ2) : la connexion native porte « Mot de passe oublié ? » avant TestFlight externe.
+  Livré le 24/11/2026 (section « Reste de L1-T10 » ci-dessus) ; le modèle d'e-mail reste à régler.
 - **Export RGPD et notes reçues non publiées** (signalé par la T0, confirmé live par T11) : tranché par délégation
   (L3-TJ, TJ4) ; seul le go B9 au merge de la PR backend reste à Gabrielle (§6.6).
 

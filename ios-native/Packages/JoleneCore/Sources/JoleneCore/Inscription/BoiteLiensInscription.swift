@@ -25,6 +25,9 @@ public final class BoiteLiensInscription: ObservableObject {
 
     @Published public private(set) var confirmation: Confirmation?
     @Published public private(set) var inscription: EtapeInscription?
+    /// Reste de L1-T10 : lien `/reset-password` (hors `?code=`, refusé en amont) à présenter au-dessus de tout état
+    /// (`ResetPasswordScreen`), une demande par lien reçu ; identifiants nil → refus sans appel.
+    @Published public private(set) var reinitialisation: Confirmation?
     private var compteur = 0
 
     public init() {}
@@ -41,10 +44,18 @@ public final class BoiteLiensInscription: ObservableObject {
         case .inscription(let etape):
             inscription = etape
             return true
+        case .resetPassword(credentials: .some(.pkce)):
+            return false // option B : refusé par `DeepLinkIntent`, jamais présenté ici
+        case .resetPassword(credentials: let credentials):
+            compteur += 1
+            reinitialisation = Confirmation(id: compteur, credentials: credentials)
+            return true
         default:
             return false
         }
     }
+
+    public func retirerReinitialisation() { reinitialisation = nil }
 
     public func retirerConfirmation() { confirmation = nil }
     public func retirerInscription() { inscription = nil }

@@ -22,17 +22,22 @@ public enum SupabaseGateways {
             throw JoleneError(.environment, "Configuration Supabase incomplète.")
         }
         let client = makeClient(url: url, publishableKey: key, storage: KeychainSessionStorage())
-        return make(client: client, clock: clock, enrich: enrich)
+        // Reste de L1-T10 : récupération du mot de passe sur un client d'authentification isolé (quarantaine).
+        return make(client: client, clock: clock, enrich: enrich,
+                    recovery: SupabaseRecoveryGateway.fabrique(url: url, publishableKey: key))
     }
 
     /// Assemble les ports autour d'un client existant (tests : transport injecté, stockage
     /// en mémoire). Aucune validation d'environnement ici : elle a déjà eu lieu.
     /// Chaque port du lot 1 est câblé ici dans la même PR que sa tranche ; un port encore stub
     /// y est nommé explicitement (`SupabaseGatewaysTests.testAucunPortNonCable`).
+    /// `recovery` (reste de L1-T10) : fabrique du client d'authentification isolé de la récupération du mot de passe ;
+    /// absente (tests d'assemblage), le port est câblé mais verrouillé (`SupabaseRecoveryGateway.nonConfiguree`).
     public static func make(
         client: SupabaseClient,
         clock: any ClockPort = SystemClock(),
-        enrich: @escaping MissionQuery.Enricher = MissionQuery.defaultEnrich
+        enrich: @escaping MissionQuery.Enricher = MissionQuery.defaultEnrich,
+        recovery: SupabaseRecoveryGateway.Fabrique? = nil
     ) -> Gateways {
         var gateways = Gateways(
             auth: SupabaseAuthGateway(client: client),
@@ -47,7 +52,7 @@ public enum SupabaseGateways {
             compte: SupabaseAccountGateway(client: client),
             audit: SupabaseAuditGateway(client: client),
             flags: SupabaseFlagsGateway(client: client),
-            recovery: UnwiredRecoveryPort(),            // T10
+            recovery: SupabaseRecoveryGateway(fabrique: recovery), // T10 (reste)
             justificatifs: SupabaseJustificatifStorage(client: client) // T7
         )
         câblerLot2(&gateways, client: client, clock: clock)

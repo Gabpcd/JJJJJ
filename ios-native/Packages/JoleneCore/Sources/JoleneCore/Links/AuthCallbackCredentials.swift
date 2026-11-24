@@ -36,8 +36,9 @@ public enum AuthCallbackCredentials: Equatable, Sendable, CustomStringConvertibl
             return type == "recovery" ? .implicit(accessToken: accessToken, refreshToken: refreshToken) : nil
         }
 
-        // Le lien PKCE Supabase ne contient pas toujours `type=recovery` : sa nature est
-        // vérifiée après échange grâce au `redirectType` stocké avec le verifier.
+        // Le lien PKCE Supabase ne contient pas toujours `type=recovery` : le web vérifie sa nature après
+        // échange (`redirectType`). Le SDK Swift n'expose pas ce `redirectType` : l'app refuse ce format sur la
+        // route (option B, décision 7 du lot 1, `DeepLinkIntent.reinitialisationRefusee`), sans échange.
         if let type, type != "recovery" { return nil }
         if let code = query.get("code"), !code.isEmpty { return .pkce(code: code) }
 

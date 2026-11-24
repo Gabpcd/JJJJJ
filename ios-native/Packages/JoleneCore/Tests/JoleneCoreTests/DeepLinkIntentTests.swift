@@ -90,9 +90,8 @@ final class DeepLinkIntentTests: XCTestCase {
             "https://jolene.app/soignant/litiges#l1",
             // T7 (confirmation, `soignant`, `reprendre`) et T8 (`completer`) : présentées hors de l'espace
             // (`testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace`).
-            "https://jolene.app/reset-password?token_hash=h&type=recovery",           // reset natif non livré
-            "https://jolene.app/reset-password#access_token=a&refresh_token=r&type=recovery",
-            "https://jolene.app/reset-password",                                      // sans identifiants
+            // Reste de L1-T10 : le reset (`token_hash`, implicit, sans identifiants) en est sorti, présenté hors de
+            // l'espace (`testToutLienHorsEspaceAppartientALaListeNommee`, `ReinitialisationTests`).
             "https://jolene.app/inscription/etablissement",
             "https://jolene.app/auth/psc/callback?status=success",                    // PSC non construit (D8)
             // `/contrat/c1` en est sorti à L2-T10 (contrat natif) ; DPAE et Conformité restent des pages web.
@@ -170,6 +169,10 @@ final class DeepLinkIntentTests: XCTestCase {
             case .confirmerInscription:
                 horsEspace.insert("confirmation")
                 XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
+            case .resetPassword:
+                // Reste de L1-T10 : écran de réinitialisation, présenté hors de l'espace (`BoiteLiensInscription`).
+                horsEspace.insert("reinitialisation")
+                XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
             case .inscription(let etape) where etape.page == .soignant || etape.page == .reprendre || etape.page == .completer:
                 horsEspace.insert("inscription")
                 XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
@@ -178,7 +181,7 @@ final class DeepLinkIntentTests: XCTestCase {
             }
             XCTAssertFalse(aiguillage.aUnLienEnAttente, "\(chemin) : jamais mémorisé pour un espace à venir")
         }
-        XCTAssertEqual(horsEspace, ["connexion", "confirmation", "inscription"],
+        XCTAssertEqual(horsEspace, ["connexion", "confirmation", "inscription", "reinitialisation"],
                        "liste nommée : connexion (sans action), confirmation et inscription (T7, T8, présentées hors espace)")
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         XCTAssertNil(aiguillage.recevoir(url: url("https://jolene.app/connexion")), "écran de connexion : rien à ouvrir")
@@ -370,8 +373,9 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)))
         XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/reset-password?code=c")), .refusReinitialisation)
         let tokenHash = url("https://jolene.app/reset-password?token_hash=h&type=recovery")
-        XCTAssertEqual(aiguillage.recevoir(url: tokenHash), .renvoiWeb(.safari(tokenHash)),
-                       "`token_hash` : la page web de réinitialisation (écran natif non livré)")
+        XCTAssertEqual(aiguillage.recevoir(url: tokenHash), .inscription(DestinationLien(url: tokenHash)!),
+                       "reste de L1-T10 : `token_hash` ouvre l'écran natif, hors de l'espace, jamais mémorisé")
+        XCTAssertFalse(aiguillage.aUnLienEnAttente)
     }
 
     /// `LOT1_PLAN.md` §3 T10 : « un `.safari` issu de l'app n'est jamais rejoué comme lien universel ». Tant que le

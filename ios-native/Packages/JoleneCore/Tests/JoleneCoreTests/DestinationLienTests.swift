@@ -115,7 +115,8 @@ final class DestinationLienTests: XCTestCase {
     /// `?code=` sur `/reset-password` (option B, décision 7 du lot 1) ne dépend pas de cette ligne : `DeepLinkIntent`
     /// le lit sur la route (`DeepLinkIntentTests`). La confirmation d'inscription en est sortie à l'intégration de T7
     /// (`ConfirmationInscriptionScreen`, `testRoutesLot3AvecEcranLivreSontNatives`).
-    func testLiensDeRappelSansEcranNatifRenvoyesVersSafariCanonique() throws {
+    /// Reste de L1-T10 : l'écran natif est livré (`ResetPasswordScreen`) ; le lien ne part plus vers Safari.
+    func testLiensDeReinitialisationOuvrentLEcranNatif() throws {
         let cas: [(String, JoleneRoute)] = [
             ("/reset-password?token_hash=h&type=recovery", .resetPassword(credentials: .tokenHash(tokenHash: "h", otpType: "recovery"))),
             ("/reset-password#access_token=a&refresh_token=r&type=recovery",
@@ -126,8 +127,9 @@ final class DestinationLienTests: XCTestCase {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
             XCTAssertEqual(d.route, route, chemin)
             XCTAssertTrue(d.route.isNative, "\(chemin) : la route reste native dans la table")
-            XCTAssertFalse(DestinationLien.ecranNatifLivre(route), chemin)
-            XCTAssertEqual(d.destination, .safari(url("https://jolene.app" + chemin)), chemin)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(route), chemin)
+            XCTAssertEqual(d.destination, route, chemin)
+            XCTAssertNil(d.destination.externalURL, "\(chemin) : jamais servi par Safari")
         }
     }
 
@@ -452,7 +454,7 @@ final class DestinationLienTests: XCTestCase {
     func testTableDesEcransLivres() {
         let table: [(JoleneRoute, Bool, String)] = [
             (.connexion, true, "lot 0"),
-            (.resetPassword(credentials: nil), false, "écran de réinitialisation natif non livré (reliquat L1-T10, T3b)"),
+            (.resetPassword(credentials: nil), true, "reste de L1-T10 : ResetPasswordScreen, hors espace"),
             (.confirmerInscription(credentials: nil), true, "T7 : ConfirmationInscriptionScreen, hors espace"),
             (.accueil, true, "lot 1"),
             (.explorer, true, "lot 1"),

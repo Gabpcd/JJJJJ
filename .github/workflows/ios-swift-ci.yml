@@ -127,6 +127,7 @@ on:
       - 'src/pages/MonCompteSoignant.tsx'
       - 'src/pages/PageConnexion.tsx'
       - 'src/pages/PageParametresNotifications.tsx'
+      - 'src/pages/PageResetPassword.tsx'
       - 'src/pages/PageStripeConnect.tsx'
       - 'src/pages/ParcoursInscription.tsx'
       - 'src/pages/ProfilSoignant.tsx'
@@ -264,6 +265,7 @@ on:
       - 'src/pages/MonCompteSoignant.tsx'
       - 'src/pages/PageConnexion.tsx'
       - 'src/pages/PageParametresNotifications.tsx'
+      - 'src/pages/PageResetPassword.tsx'
       - 'src/pages/PageStripeConnect.tsx'
       - 'src/pages/ParcoursInscription.tsx'
       - 'src/pages/ProfilSoignant.tsx'
@@ -681,6 +683,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoInscriptionTests \
             -skip-testing:JoleneUITests/DemoCompteLot3Tests \
             -skip-testing:JoleneUITests/DemoPushTests \
+            -skip-testing:JoleneUITests/DemoReinitialisationTests \
             -skip-testing:JoleneUITests/DemoNotificationsTests \
             -skip-testing:JoleneUITests/DemoPreferencesTests \
             -skip-testing:JoleneUITests/DemoProfilTests \
@@ -940,7 +943,9 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-compte.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-compte) : code $code"
-      - name: test-without-building — éclat lot3-push (XCUITest taps push) (${{ matrix.format }})
+      # Reste de L1-T10 : DemoReinitialisationTests (récupération du mot de passe, quatre tests courts) rejoint cet éclat
+      # léger (DemoPushTests seul), sans nouvel éclat.
+      - name: test-without-building — éclat lot3-push (XCUITest taps push, récupération du mot de passe) (${{ matrix.format }})
         id: tests_lot3_push
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -966,6 +971,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoPushTests \
+            -only-testing:JoleneUITests/DemoReinitialisationTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1179,7 +1185,7 @@ jobs:
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
               { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
-              { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
+              { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests", "DemoReinitialisationTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests"] },
               { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
               { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests", "DemoEtabAccueilTests", "DemoEtabPointageTests"] },
