@@ -9,9 +9,8 @@ import XCTest
 /// Ce que ces tests prouvent (niveau 2), et seulement cela :
 /// - `/etablissement/messagerie` ouvre l'onglet Messages de la coquille établissement (écran provisoire), jamais un
 ///   renvoi web ; libellé DEBUG `deeplink-route` = « etab messagerie » ;
-/// - `/etablissement/missions/<id>` ouvre le détail natif (T5) sur l'onglet Missions ; `/contrat/<id>` (contrat
-///   établissement, T10 non livrée) est un renvoi web de son URL canonique dans l'espace établissement — jamais le
-///   contrat soignant ;
+/// - `/etablissement/missions/<id>` ouvre le détail natif (T5) sur l'onglet Missions ; `/contrat/<id>` ouvre le contrat
+///   de l'établissement (T10, `contrat-detail`) sur l'onglet Missions — jamais le contrat soignant ;
 /// - un lien soignant reçu pour l'espace établissement est un renvoi web, jamais un écran soignant ;
 /// - dans l'espace soignant, un lien établissement est un renvoi web, jamais un onglet établissement.
 /// Les règles (table, alias, query, mémorisation, epoch, anti-boucle) sont prouvées au niveau 1 (`EtabRouteTests`,
@@ -50,12 +49,16 @@ final class DemoEtabLiensTests: JoleneUITestCase {
     }
 
     func testContratDansLEspaceEtablissementNOuvreJamaisLeContratSoignant() throws {
-        let lien = "https://jolene.app/contrat/demo-contrat-001"
+        // T10 livrée : `/contrat/<id>` ouvre le contrat de l'établissement (écran du lot 2 sous le contexte de
+        // l'établissement, `contrat-detail`) empilé sur l'onglet Missions, jamais l'écran du contrat soignant.
+        let lien = "https://jolene.app/contrat/demo-etab-contrat-m05"
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_OPEN_URL", lien])
         connecter(email: DemoEtabSessionTests.emailEtablissement)
-        renvoiWeb(attendu: lien, "Le contrat établissement (T10 non livrée) est servi par le renvoi web")
+        let detail = element("contrat-detail")
+        require("Le contrat de l'établissement est empilé par le lien", timeout: 30) { self.containerVisible(detail) }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "écran livré : jamais un renvoi web")
         XCTAssertFalse(element("contrat-screen").exists, "jamais l'écran du contrat soignant dans l'espace établissement")
-        record("\(proofPrefix)-etab-lien-contrat-web")
+        record("\(proofPrefix)-etab-lien-contrat-natif")
     }
 
     func testLienSoignantDansLEspaceEtablissementEstUnRenvoiWeb() throws {

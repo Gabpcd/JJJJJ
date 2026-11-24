@@ -696,6 +696,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoEtabMissionsTests \
             -skip-testing:JoleneUITests/DemoEtabCandidaturesTests \
             -skip-testing:JoleneUITests/DemoEtabPointageTests \
+            -skip-testing:JoleneUITests/DemoEtabContratsTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
             -skip-testing:JoleneUITests/DemoConfirmationPresenceTests \
@@ -1630,7 +1631,9 @@ jobs:
       # 8,7 / 8,1 / 6,2 min (iphone), 11,8 / 12,3 / 8,2 min (ipad-portrait), 11,9 / 11,1 / 13,3 min (ipad-landscape).
       # Session, Accueil et pointage établissement restent dans « lot3-profil-photo » du job `ui` : les six classes
       # ensemble auraient atteint 22 min en paysage.
-      - name: test-without-building — éclat lot5-etablissement (XCUITest liens, missions et candidatures de l'espace établissement) (${{ matrix.format }})
+      # L5-T10 : DemoEtabContratsTests (trois tests, contrats et signature OTP établissement) rejoint cet éclat (6,2 à
+      # 13,3 min mesurées avant l'ajout, sous les 30 min de l'étape).
+      - name: test-without-building — éclat lot5-etablissement (XCUITest liens, missions, candidatures et contrats de l'espace établissement) (${{ matrix.format }})
         id: tests_lot5_etablissement
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1660,6 +1663,7 @@ jobs:
             -only-testing:JoleneUITests/DemoEtabLiensTests \
             -only-testing:JoleneUITests/DemoEtabMissionsTests \
             -only-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -only-testing:JoleneUITests/DemoEtabContratsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1743,7 +1747,7 @@ jobs:
               { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
               { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
               { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
-              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
+              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests", "DemoEtabContratsTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";

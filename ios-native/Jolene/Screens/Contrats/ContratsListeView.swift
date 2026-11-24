@@ -12,20 +12,38 @@ import JoleneDesign
 /// « Mes documents » (T7 : titre dans le contenu, comme le `h2` du web, l.101 ; aucun titre de navigation imposé à
 /// l'écran hôte). Identifiants : `contrats-liste`, `contrats-filtre-<statut>`, `contrat-carte-<id>`, `contrats-vide`,
 /// `contrats-erreur`, `contrats-reessayer`, `contrats-chargement`, `contrats-session-expiree`.
+///
+/// Espace établissement (lot 5, T10 ; D18 : même vue, aucun doublon) : liste de l'établissement confirmé
+/// (`ContratsListeModel(controller:etablissement:)`), filtre initial `?statut=` du lien, titre et états vides de la
+/// branche établissement du web (`EtabContratsPresentation`), « Signer le contrat » tant que l'établissement n'a pas
+/// signé. Chaque carte pousse la destination `.contrat(id:)` du registre (permission et drapeau relus avant l'écran).
+/// Identifiants propres : `etab-contrats-screen` (racine), `etab-contrat-{id}` (carte), `etab-contrat-statut-{id}`.
 struct ContratsListeView: View {
     enum Presentation { case ecran, onglet }
 
     @StateObject private var model: ContratsListeModel
     @ObservedObject private var session: SessionStore
-    private let snapshot: SessionSnapshot
+    private let epoch: Int
     private let presentation: Presentation
 
     init(session: SessionStore, snapshot: SessionSnapshot, presentation: Presentation = .ecran) {
         self.session = session
-        self.snapshot = snapshot
+        self.epoch = snapshot.epoch
         self.presentation = presentation
         _model = StateObject(wrappedValue: ContratsListeModel(controller: session.controller, snapshot: snapshot))
     }
+
+    /// Contrats de l'établissement (lot 5, T10), écran poussé sur l'onglet Missions.
+    init(session: SessionStore, etablissement snapshot: EtablissementSessionSnapshot, statut: String?) {
+        self.session = session
+        self.epoch = snapshot.epoch
+        self.presentation = .ecran
+        _model = StateObject(wrappedValue: ContratsListeModel(
+            controller: session.controller, etablissement: snapshot, filtreInitial: FiltreContrat.initial(statut: statut),
+            relirePerimetre: { [weak session] in await session?.refreshEtablissementScope() }))
+    }
+
+    private var estEtablissement: Bool { model.partie == .etablissement }
 
     var body: some View {
         ScrollView {
@@ -51,8 +69,9 @@ struct ContratsListeView: View {
             .frame(maxWidth: .infinity)
         }
         .background(JoleneColor.lavender.ignoresSafeArea())
-        .accessibilityIdentifier("contrats-liste")
-        .modifier(TitreListe(presentation: presentation))
+        .accessibilityIdentifier(estEtablissement ? "etab-contrats-screen" : "contrats-liste")
+        .modifier(TitreListe(presentation: presentation,
+                             titre: estEtablissement ? EtabContratsPresentation.titre : LibellesWeb.Contrats.titre))
         .task { await model.charger() }
         .refreshable { await model.charger() }
     }
@@ -70,7 +89,8 @@ struct ContratsListeView: View {
                        actionIdentifier: "contrats-session-verifier") {
                 Task {
                     await session.start()
-                    guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+                    let courant = estEtablissement ? session.state.snapshotEtablissement?.epoch : session.state.snapshot?.epoch
+                    guard courant == epoch else { return }
                     await model.charger()
                 }
             }
@@ -81,10 +101,21 @@ struct ContratsListeView: View {
                 Task { await model.charger() }
             }
         case .charge:
-            let cartes = model.affiches.map(ContratPresentation.carte)
+            let cartes = model.affiches.map { ContratPresentation.carte($0, partie: model.partie) }
             if cartes.isEmpty {
-                EmptyState(systemImage: "doc.text", title: LibellesWeb.Contrats.titreVide(model.filtre),
-                           message: LibellesWeb.Contrats.descriptionVide(model.filtre), identifier: "contrats-vide")
+                let vide = estEtablissement ? EtabContratsPresentation.etatVide(model.filtre)
+                    : (titre: LibellesWeb.Contrats.titreVide(model.filtre), message: LibellesWeb.Contrats.descriptionVide(model.filtre))
+                EmptyState(systemImage: "doc.text", title: vide.titre, message: vide.message, identifier: "contrats-vide")
+            } else if estEtablissement {
+                LazyVStack(spacing: JoleneSpacing.md) {
+                    ForEach(cartes) { carte in
+                        NavigationLink(value: EtabDestination.contrat(id: carte.id)) {
+                            CarteContratView(carte: carte, identifiantStatut: "etab-contrat-statut-\(carte.id)")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("etab-contrat-\(carte.id)")
+                    }
+                }
             } else {
                 LazyVStack(spacing: JoleneSpacing.md) {
                     ForEach(cartes) { carte in
@@ -105,10 +136,11 @@ struct ContratsListeView: View {
 /// Titre de navigation de l'écran poussé seulement (l'onglet de « Mes documents » garde le titre de son hôte).
 private struct TitreListe: ViewModifier {
     let presentation: ContratsListeView.Presentation
+    let titre: String
 
     @ViewBuilder func body(content: Content) -> some View {
         switch presentation {
-        case .ecran: content.navigationTitle(LibellesWeb.Contrats.titre)
+        case .ecran: content.navigationTitle(titre)
         case .onglet: content
         }
     }
@@ -118,6 +150,8 @@ private struct TitreListe: ViewModifier {
 /// création, appel « Signer le contrat » ou « Voir le contrat » (ouvre la page du contrat ; aucune signature ici).
 private struct CarteContratView: View {
     let carte: ContratPresentation.Carte
+    /// Identifiant de la pastille de statut (espace établissement seulement, T10).
+    var identifiantStatut: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
@@ -130,7 +164,11 @@ private struct CarteContratView: View {
                     .foregroundStyle(JoleneColor.midnight)
                     .lineLimit(1)
                 Spacer(minLength: JoleneSpacing.sm)
-                JoleneBadge(carte.badge, tone: ton)
+                if let identifiantStatut {
+                    JoleneBadge(carte.badge, tone: ton).accessibilityIdentifier(identifiantStatut)
+                } else {
+                    JoleneBadge(carte.badge, tone: ton)
+                }
             }
             Text(carte.mission)
                 .font(JoleneFont.callout)

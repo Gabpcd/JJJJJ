@@ -33,8 +33,10 @@ struct EtabDestinationEcran: View {
             CodePointageScreen(missionId: missionId, session: session, snapshot: snapshot) // T7
         case .presencesMission:
             provisoire("Présences", "Les présences de la mission arrivent dans une prochaine version de l'application.") // T8
-        case .contrat:
-            provisoire("Contrat", "Le contrat arrive dans une prochaine version de l'application.") // T10
+        case let .contrat(id):
+            ContratEtabScreen(contratId: id, session: session, snapshot: snapshot) // T10
+        case let .contrats(statut):
+            ContratsEtabScreen(statut: statut, session: session, snapshot: snapshot) // T10
         case .conversation:
             provisoire("Message", "La conversation arrive dans une prochaine version de l'application.") // T11
         case .publication:

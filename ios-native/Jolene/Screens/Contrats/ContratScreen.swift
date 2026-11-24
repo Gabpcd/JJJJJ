@@ -30,14 +30,35 @@ import JoleneDesign
 /// `contrat-certificat`, `contrat-certificat-ouvrir`, `contrat-signatures` (+ `-etablissement`, `-soignant`),
 /// `contrat-zone-signature` (+ `SignatureOtpView`), `contrat-renvoi-web` (+ `-message`, `-action`),
 /// `contrat-preparation`, `contrat-deja-signe`, `contrat-pied-de-page`.
+///
+/// Espace établissement (lot 5, T10 ; D18 : réemploi de l'écran, aucun doublon) : même écran, modèle construit sous le
+/// contexte confirmé de l'établissement (`ContratModel(controller:etablissement:contratId:)`), règles lues pour la partie
+/// établissement (bandeaux, « déjà signé », zone « Votre signature »). Différences, toutes portées par le modèle :
+/// identifiant racine `contrat-detail` (jamais `contrat-screen`, l'écran du soignant) ; mode de signature annoncé au-dessus
+/// du formulaire OTP avec les textes du web (`TextesWeb.Contrat.otpLibelle`, `otpDescription`, `ContratMission.tsx`
+/// l.742-745, identifiant `contrat-mode-otp`), seul mode porté (signature manuscrite non portée) ; CDD sans original :
+/// préparation par l'employeur sur jolene.app (`contrat-preparer-web`) ; renvois web ouverts dans l'espace établissement.
 struct ContratScreen: View {
+    /// Espace qui regarde le contrat : epoch de sa session et partie du contrat.
+    enum Cadre {
+        case soignant(SessionSnapshot)
+        case etablissement(EtablissementSessionSnapshot)
+
+        var epoch: Int {
+            switch self {
+            case let .soignant(snapshot): return snapshot.epoch
+            case let .etablissement(snapshot): return snapshot.epoch
+            }
+        }
+    }
+
     /// Textes de l'écran de session à vérifier (lot 1, `MissionsListScreen`), repris tels quels.
     private static let sessionAVerifierTitre = "Session à vérifier"
     private static let verifierMaSession = "Vérifier ma session"
 
     @StateObject private var model: ContratModel
     @ObservedObject private var session: SessionStore
-    private let snapshot: SessionSnapshot
+    private let cadre: Cadre
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
     @State private var lecteur = LecteurContratReference()
     @State private var hauteurLecteur = ContratReaderView.hauteurMinimale
@@ -47,9 +68,20 @@ struct ContratScreen: View {
 
     init(session: SessionStore, snapshot: SessionSnapshot, contratId: String) {
         self.session = session
-        self.snapshot = snapshot
+        self.cadre = .soignant(snapshot)
         _model = StateObject(wrappedValue: ContratModel(controller: session.controller, snapshot: snapshot, contratId: contratId))
     }
+
+    /// Contrat vu par l'établissement (lot 5, T10) ; un refus de droit relit le périmètre de l'établissement.
+    init(session: SessionStore, etablissement snapshot: EtablissementSessionSnapshot, contratId: String) {
+        self.session = session
+        self.cadre = .etablissement(snapshot)
+        _model = StateObject(wrappedValue: ContratModel(
+            controller: session.controller, etablissement: snapshot, contratId: contratId,
+            relirePerimetre: { [weak session] in await session?.refreshEtablissementScope() }))
+    }
+
+    private var estEtablissement: Bool { model.partie == .etablissement }
 
     var body: some View {
         ScrollView {
@@ -83,7 +115,7 @@ struct ContratScreen: View {
         .background(JoleneColor.lavender.ignoresSafeArea())
         .navigationTitle(LibellesWeb.Contrat.titrePrefixe)
         .navigationBarTitleDisplayMode(.inline)
-        .accessibilityIdentifier("contrat-screen")
+        .accessibilityIdentifier(estEtablissement ? "contrat-detail" : "contrat-screen")
         // Premier chargement seulement : revenir de la page du certificat ne relit pas le contrat (tirer pour
         // actualiser le relit) ; un chargement interrompu par la navigation reprend au retour.
         .task { if model.contrat == nil { await model.charger() } }
@@ -106,14 +138,15 @@ struct ContratScreen: View {
 
     private func verifierSession() async {
         await session.start()
-        guard session.state.snapshot?.epoch == snapshot.epoch else { return }
+        let epoch = estEtablissement ? session.state.snapshotEtablissement?.epoch : session.state.snapshot?.epoch
+        guard epoch == cadre.epoch else { return }
         await model.charger()
     }
 
     // MARK: - Contenu
 
     @ViewBuilder private func contenu(_ contrat: ContratDetail) -> some View {
-        ForEach(Array(ContratRules.bandeaux(contrat).enumerated()), id: \.offset) { _, bandeau in
+        ForEach(Array(ContratRules.bandeaux(contrat, partie: model.partie).enumerated()), id: \.offset) { _, bandeau in
             bandeauVue(bandeau)
         }
         if ContratRules.afficheCompteARebours(contrat) {
@@ -124,7 +157,9 @@ struct ContratScreen: View {
             }
         }
         entete(contrat)
-        if ContratRules.cddSansOriginal(contrat) {
+        if model.preparationSurLeWeb {
+            preparationSurLeWeb(contrat)
+        } else if ContratRules.cddSansOriginal(contrat) {
             carte {
                 Text(TextesWeb.Contrat.cddAPreparer)
                     .font(JoleneFont.callout)
@@ -162,7 +197,7 @@ struct ContratScreen: View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             if let zone = model.zoneSignature(maintenant: model.horloge.now()) { zoneSignature(zone) }
         }
-        if ContratRules.dejaSigneParMoi(contrat) {
+        if ContratRules.dejaSigneParMoi(contrat, partie: model.partie) {
             Text(TextesWeb.Contrat.dejaSigne)
                 .font(JoleneFont.callout.weight(.semibold))
                 .foregroundStyle(JoleneColor.midnight)
@@ -336,14 +371,15 @@ struct ContratScreen: View {
             if let preparation = ContratPresentation.messagePreparation(motif: model.indisponibilite) {
                 InlineNotice(preparation, tone: .warning, identifier: "contrat-preparation")
             }
+            if let mode = model.modeSignatureOtp(maintenant: model.horloge.now()) { modeSignature(mode) }
             switch zone {
             case .otp(let presentation):
                 SignatureOtpView(model: model, presentation: presentation)
             case let .renvoiWeb(message, route):
                 VStack(alignment: .leading, spacing: JoleneSpacing.md) {
                     InlineNotice(message, tone: .info, identifier: "contrat-renvoi-web-message")
-                    if let presentateur = presentateurRenvoiWeb, let route {
-                        JoleneButton(LibellesWeb.Contrats.signerLeContrat) { presentateur.presenter(route) }
+                    if let presentateur = presentateurRenvoiWeb, let cible = renvoi(route) {
+                        JoleneButton(LibellesWeb.Contrats.signerLeContrat) { presentateur.presenter(cible) }
                             .accessibilityIdentifier("contrat-renvoi-web-action")
                     }
                 }
@@ -353,6 +389,44 @@ struct ContratScreen: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("contrat-zone-signature")
+    }
+
+    /// Renvoi web de la page du contrat : celui du lot 2 pour le soignant, la même page ouverte dans l'espace
+    /// établissement pour l'établissement.
+    private func renvoi(_ route: JoleneRoute?) -> JoleneRoute? {
+        guard estEtablissement else { return route }
+        return EtabContratsPresentation.urlContrat(id: model.contratId).map { .etablissement($0) }
+    }
+
+    /// Mode de signature du web (l.742-745), textes verbatim de `TextesWeb.Contrat` portés par le modèle.
+    private func modeSignature(_ mode: ModeSignatureOtp) -> some View {
+        VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
+            Text(mode.libelle)
+                .font(JoleneFont.callout.weight(.semibold))
+                .foregroundStyle(JoleneColor.midnight)
+                .accessibilityIdentifier("contrat-mode-otp-libelle")
+            Text(mode.description)
+                .font(JoleneFont.caption)
+                .foregroundStyle(JoleneColor.bubblegum)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("contrat-mode-otp-description")
+        }
+        .padding(JoleneSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: JoleneRadius.card).stroke(JoleneColor.rose700.opacity(0.4)))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("contrat-mode-otp")
+    }
+
+    /// CDD sans original vu par l'établissement : la préparation par l'employeur se fait sur jolene.app (non portée).
+    private func preparationSurLeWeb(_ contrat: ContratDetail) -> some View {
+        carte {
+            InlineNotice(EtabContratsPresentation.preparerSurJoleneMessage, tone: .info, identifier: "contrat-preparer-web-message")
+            if let presentateurRenvoiWeb, let url = EtabContratsPresentation.urlContrat(id: contrat.id) {
+                JoleneButton(EtabContratsPresentation.preparerSurJolene) { presentateurRenvoiWeb.presenter(.etablissement(url)) }
+                    .accessibilityIdentifier("contrat-preparer-web")
+            }
+        }
     }
 
     private func carte<Contenu: View>(@ViewBuilder _ contenu: () -> Contenu) -> some View {
