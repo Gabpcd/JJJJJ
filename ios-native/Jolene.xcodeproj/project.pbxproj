@@ -36,6 +36,7 @@
 		253239318315847936E397D2 /* LitigesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E86E9438181F8293405D902B /* LitigesScreen.swift */; };
 		278DC484404F971583F710E5 /* DemoCandidatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D98C035C65EC96DB0CDA69 /* DemoCandidatureTests.swift */; };
 		283F0B22011CA90851BB6903 /* AnnulationSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA8AFECC687127B6934C0D53 /* AnnulationSection.swift */; };
+		28738930A3B944E90FEFDA03 /* EtabCompteScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDD9BFEFDD9E220B61CFD9F /* EtabCompteScreen.swift */; };
 		289DFEBCA9517E61F75FA230 /* MissionDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC60681A6810F2F29BDDBCC0 /* MissionDetailScreen.swift */; };
 		28EB1640C695ECF557C9FEA5 /* MissionContactButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFF9E60D234A0A8CB552FDD4 /* MissionContactButton.swift */; };
 		2900EEBC88256867CF497EE5 /* MesMissionsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3024018B51CE11B9BA2F96 /* MesMissionsScreen.swift */; };
@@ -172,6 +173,7 @@
 		DA1C3DDBEDD68FE971327EF4 /* CompteSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 211FCF61D550AD7AA0184F99 /* CompteSections.swift */; };
 		DD5D9790C224E0A18AFCB9DC /* NetworkSentinel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D56D39EBAFFE526D3A0C538 /* NetworkSentinel.swift */; };
 		DEE7ADECA38AC3AA9890204D /* DemoFavorisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37C5390FA7A7B5926E52B589 /* DemoFavorisTests.swift */; };
+		DF02676BDC8BA8CBD4E23977 /* DemoEtabCompteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B87BA45522D600E7E71DE2BC /* DemoEtabCompteTests.swift */; };
 		DFBE1117A955925C07671E66 /* ThemePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9DEFB3A212A42DCE42A5ED /* ThemePreference.swift */; };
 		DFF6C9FACC54746ADA668042 /* MesMissionsLignes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 233AE2D81D70E2950C089B4F /* MesMissionsLignes.swift */; };
 		E07C1696049562DF1960083E /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D459BCCD9C6F8AA51AF0C4 /* CameraCaptureView.swift */; };
@@ -257,6 +259,7 @@
 		38091EDEE76289ABC8378DF1 /* IbanScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IbanScreen.swift; sourceTree = "<group>"; };
 		38120E9CD7A148CE94F22046 /* ServicesPointage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServicesPointage.swift; sourceTree = "<group>"; };
 		38258808A1C110F764DA2B97 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
+		3BDD9BFEFDD9E220B61CFD9F /* EtabCompteScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabCompteScreen.swift; sourceTree = "<group>"; };
 		3C5ADAD0DD19CF1383B8F7F5 /* AnnulationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnulationSheet.swift; sourceTree = "<group>"; };
 		3D3C475DF41A5DCAD4F25E96 /* DemoEtabCandidaturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabCandidaturesTests.swift; sourceTree = "<group>"; };
 		3F564268833C084BE055A9D3 /* ResumePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResumePolicy.swift; sourceTree = "<group>"; };
@@ -344,6 +347,7 @@
 		B43E8DC20E74CFD2FACC575F /* PushAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushAppDelegate.swift; sourceTree = "<group>"; };
 		B5BA9A6A615BF5E995AB8630 /* DemoPresencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPresencesTests.swift; sourceTree = "<group>"; };
 		B5C216B466C241777BFC4541 /* JoleneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoleneApp.swift; sourceTree = "<group>"; };
+		B87BA45522D600E7E71DE2BC /* DemoEtabCompteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoEtabCompteTests.swift; sourceTree = "<group>"; };
 		BB037B6DC9373563FA2BE58E /* EtabAccueilRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EtabAccueilRoot.swift; sourceTree = "<group>"; };
 		BB607B818EDB33896E655605 /* StripeConnectScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StripeConnectScreen.swift; sourceTree = "<group>"; };
 		BC02477F281FF67E5AB428C0 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
@@ -567,6 +571,7 @@
 			isa = PBXGroup;
 			children = (
 				1F3AF0E1A6798E4F0EA6BEE7 /* EtabCompteRoot.swift */,
+				3BDD9BFEFDD9E220B61CFD9F /* EtabCompteScreen.swift */,
 			);
 			path = Compte;
 			sourceTree = "<group>";
@@ -913,6 +918,7 @@
 				79F35431F3E15876E9570306 /* DemoDocumentsTests.swift */,
 				53752834705D94DFD957860D /* DemoEtabAccueilTests.swift */,
 				3D3C475DF41A5DCAD4F25E96 /* DemoEtabCandidaturesTests.swift */,
+				B87BA45522D600E7E71DE2BC /* DemoEtabCompteTests.swift */,
 				CC8EAC8C6EA29C51BFB9C6AF /* DemoEtabLiensTests.swift */,
 				B3379FE7666AFE7065F080C8 /* DemoEtabMissionsTests.swift */,
 				A197EBD87717F2D2E9D43964 /* DemoEtabPointageTests.swift */,
@@ -1112,6 +1118,7 @@
 				539F98A1CDDE1B4A50A5520A /* EtabAccueilRoot.swift in Sources */,
 				56B205A2BDCBD1414E3E22A2 /* EtabAccueilScreen.swift in Sources */,
 				02B61E0DD243CB739CE8AB51 /* EtabCompteRoot.swift in Sources */,
+				28738930A3B944E90FEFDA03 /* EtabCompteScreen.swift in Sources */,
 				EEAEB441327190A692E25825 /* EtabDestinations.swift in Sources */,
 				1A4A68BE9DE0383CA78CFEB1 /* EtabFeatureFlags.swift in Sources */,
 				7F958EDD144EBC242E60218B /* EtabMessagesRoot.swift in Sources */,
@@ -1220,6 +1227,7 @@
 				8F36BAC7C752737B387653F5 /* DemoDocumentsTests.swift in Sources */,
 				69C302538E906B38743E4734 /* DemoEtabAccueilTests.swift in Sources */,
 				3788DC65BCA0950F214BABAE /* DemoEtabCandidaturesTests.swift in Sources */,
+				DF02676BDC8BA8CBD4E23977 /* DemoEtabCompteTests.swift in Sources */,
 				06A46CBD8144AE2B0FC62F6D /* DemoEtabLiensTests.swift in Sources */,
 				F0230E95A2270B6409B41C68 /* DemoEtabMissionsTests.swift in Sources */,
 				F524B2B5A60CA2EE6C06AD3E /* DemoEtabPointageTests.swift in Sources */,

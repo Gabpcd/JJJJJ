@@ -8,8 +8,8 @@ import Foundation
 ///
 /// L'établissement démo est le premier établissement fictif du monde soignant (`demo-etab-1`), vu de
 /// l'autre côté : un seul nom par identifiant. Les arguments de lancement DEBUG
-/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`, `-JOLENE_POLL_INTERVAL`) sont analysés par l'app
-/// (T2) et traduits en `Configuration`.
+/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`, `-JOLENE_POLL_INTERVAL`,
+/// `-JOLENE_DEMO_SECTEUR_PUBLIC`) sont analysés par l'app (T2) et traduits en `Configuration`.
 public enum DemoEtablissementWorld {
     public static let userId = "demo-etablissement"
     public static let messageDemoSeulement = "Le mode démonstration utilise uniquement son établissement fictif."
@@ -26,11 +26,14 @@ public enum DemoEtablissementWorld {
         public var planningModifie: Bool
         /// Cadence de relecture du code de pointage (`-JOLENE_POLL_INTERVAL <s>`, T7) ; `nil` = cadence nominale (D23).
         public var cadencePointage: TimeInterval?
+        /// Établissement servi comme relevant du secteur public (`est_secteur_public`, `-JOLENE_DEMO_SECTEUR_PUBLIC 1`,
+        /// T12 : renvoi web de la configuration Chorus Pro).
+        public var secteurPublic: Bool
 
         public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false, planningModifie: Bool = false,
-                    cadencePointage: TimeInterval? = nil) {
+                    cadencePointage: TimeInterval? = nil, secteurPublic: Bool = false) {
             self.role = role; self.legacy = legacy; self.blocage = blocage; self.planningModifie = planningModifie
-            self.cadencePointage = cadencePointage
+            self.cadencePointage = cadencePointage; self.secteurPublic = secteurPublic
         }
 
         /// Rôle servi par le serveur : un compte legacy est toujours propriétaire

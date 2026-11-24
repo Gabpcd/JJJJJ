@@ -45,6 +45,13 @@ preuves des tranches).
   (aucune source serveur, correction 20 ; libellés neutres, le web affiche des compteurs) ; aucun graphique ni montant
   (D15). « Planning à confirmer » suit `CompletudePlanning` comme la liste des missions, et non le critère local du
   web (`DashboardEtablissement.tsx` l.354-363) : intégration de la vague C, `DECISIONS_LOT5.md`.
+- Compte (`/etablissement/mon-compte`, T12) : identité servie (nom, rôle d'équipe), emblème de bâtiment sans logo comme
+  le web, vingt-trois renvois web (table `RenvoisWebEtab`), déconnexion. Plus strict que le menu web : équipe sous
+  `gerer_equipe`, factures et prélèvement SEPA sous `lecture_paiement` ∨ `paiement`, litiges et évaluations sous
+  `missions`, Chorus Pro pour le seul secteur public servi. Non repris : type d'établissement, thème, « Contacter
+  Jolene » (modale), onglets « Facturation & contrat », « Opérations » et « Sécurité & RGPD » des paramètres (atteints
+  depuis « Mon établissement »). Réclamations, préférences de notifications et recherches sauvegardées n'ont pas
+  d'entrée (absentes du menu web) : `DECISIONS_LOT5.md`, T12.
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),
   mission `TOUS`/`LIBERAL` ou `MEDECIN` : « Accepter sur jolene.app » ; le refus reste natif.
 - Membre de plusieurs établissements : servi sur l'établissement choisi par `mon_etablissement_id()`, comme le web ;

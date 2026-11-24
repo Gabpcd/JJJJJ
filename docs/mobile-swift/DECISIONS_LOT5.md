@@ -407,6 +407,61 @@ juridique ; aucun texte juridique n'est ajouté.
    aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
    `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
+## Précisions relevées par la tranche T12 (compte minimal et renvois web, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés du menu web
+repris, deux libellés de navigation nommés au point 4).
+
+1. **Table dans `JoleneCore`** (`Etablissement/Compte/RenvoisWebEtab.swift`, et non sous `Jolene/Screens/` comme l'écrit
+   le blueprint) : la cible app n'a pas de tests unitaires (même motif que le registre de destinations, T2a point 1).
+   L'app ne porte que l'écran (`EtabCompteScreen.swift`, monté par `EtabCompteRoot`), sans aucune règle.
+2. **Vingt-trois clés**, celles du §3 T12 : `parametres` mène à `?tab=profil` sous le libellé du menu web « Mon
+   établissement » (l.63), `notifications` au centre de notifications (`/etablissement/notifications`, ligne de la
+   matrice), `api` à la redirection `/etablissement/api`. Cinq routes que la matrice confie à T12 n'ont pas d'entrée
+   dans le Compte, parce que le menu web ne les propose pas : `/etablissement/mes-reclamations`,
+   `/etablissement/reclamations`, `/etablissement/parametres/notifications`,
+   `/etablissement/parametres/recherches-sauvegardees` (atteintes depuis leur page parente) et `/etablissement/activer`
+   (action de l'Accueil, T4). `RenvoisWebEtabTests.testRoutesDeLaMatriceAttribueesAT12` prouve pour chacune des vingt et
+   une routes sa présence dans `App.tsx` et son renvoi web, et exige une entrée ou une absence motivée.
+3. **Entrées réservées** (§2.7, fail-closed ; booléens servis, aucune table rôle → permission) : équipe sous
+   `gerer_equipe` (blueprint) ; factures et prélèvement SEPA sous `lecture_paiement` ∨ `paiement` — le `canReadFinance`
+   du web, qui masque « Facturation » dans sa barre latérale (`BarreNavigation.tsx` l.217) ; plus strict que le menu web
+   du compte, qui montre « Mes factures » à tout membre — ; litiges et évaluations sous `missions` (même choix que
+   l'Accueil, T4 point 2) ; configuration Chorus Pro sous la condition des factures **et** `est_secteur_public` servi
+   vrai (le web ne propose ce lien qu'au secteur public, `FacturationEtablissement.tsx` l.1765 ; valeur absente :
+   masqué). Tout le reste, suppression du compte comprise (D17), est offert à tout membre, comme le menu web.
+4. **Libellés.** Dix-huit lignes du menu web (libellé et route sur la même ligne de `MonCompteEtablissement.tsx`, garde
+   `RenvoisWebEtabTests`), ses titres de section, « Configuration Chorus Pro » (titre de `ChorusConfig.tsx`), « API REST
+   Jolene » (titre de section d'`APIEtablissement.tsx`), « Notifications » (libellé du menu, page du centre). Deux
+   libellés ne viennent pas d'une ligne du menu ; `RenvoisWebEtab.libellesNatifs` les nomme : « Évaluer vos soignants »
+   (libellé neutre de l'Accueil, vague C point 2) et « Prélèvement SEPA » — libellé de navigation : le blueprint demande
+   un renvoi « SEPA » vers `/etablissement/facturation` que le menu web ne nomme pas ; le mot est celui du mode de
+   paiement sur le web (`DetailFacture.tsx` l.44). Non repris : les autres onglets de la page Paramètres (« Facturation &
+   contrat », « Opérations », « Sécurité & RGPD »), le thème, « Contacter Jolene » (modale sans page), le type
+   d'établissement en sous-titre.
+5. **Textes natifs ajoutés (non juridiques)** : « Les pages ci-dessous s'ouvrent sur jolene.app, où une nouvelle
+   connexion peut vous être demandée. » (D16, formule de l'Accueil et du détail d'une mission), « Application »,
+   « Version ».
+6. **Logo** : emblème de bâtiment, comme le web (`MonCompteEtablissement.tsx` l.97-102 lit `logo_url` sans l'afficher).
+   Aucune image distante n'est chargée (l'app n'a pas de chargeur d'image distante).
+7. **Ouverture** : chaque entrée rend sa route externe (`.etablissement(url)` sous l'AASA, `.safari(url)` pour une page
+   légale), présentée par le présentateur `.safari` du coordinateur des liens ; jamais `openURL`. Sans présentateur,
+   aucune entrée (règle du lot 3). L'URL est une constante de la table : ni jeton, ni identifiant, ni donnée de session
+   (`testUnRenvoiEstUnLienConstantSansJetonNiDonneePersonnelle`).
+8. **Sources web relues par les tests Swift** : `src/App.tsx`, `src/pages/MonCompteEtablissement.tsx`,
+   `src/pages/ChorusConfig.tsx` et `src/pages/APIEtablissement.tsx` entrent dans les filtres `pull_request` et `push` de
+   `ios-swift-ci.yml` (garde `check-sources-web-ios-ci`). Coût : une PR web qui touche `App.tsx` relance la CI iOS.
+9. **Monde démo** : `-JOLENE_DEMO_SECTEUR_PUBLIC 1` (`DemoEtablissementWorld.Configuration.secteurPublic`) sert le même
+   établissement fictif comme relevant du secteur public, pour prouver le renvoi Chorus Pro au niveau 2 ; la fixture
+   n'est pas modifiée.
+10. **Identifiants** : `etab-compte-screen` remplace `etab-compte-list` (pile non paresseuse : chaque entrée existe dans
+    l'arbre d'accessibilité, même hors écran) ; `DemoEtabSessionTests` migré. XCUITest `DemoEtabCompteTests` (deux tests)
+    dans l'éclat « lot5-etablissement » du job `ui-lot1`, jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté
+    localement (aucun simulateur) : preuve CI.
+11. **Point 9 de T2a** : le lien de suppression du compte (D17) est livré ; l'ouverture de l'espace hors démo reste
+    décidée par T13 (STAGING) et T14 (production). Compte coupé par son drapeau : comportement de T2a inchangé (renvoi
+    vers `/etablissement/mon-compte`, déconnexion offerte).
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

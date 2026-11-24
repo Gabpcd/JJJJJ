@@ -8,7 +8,7 @@ import XCTest
 /// « lot3-profil-photo » de `ios-swift-ci.yml` (revue B8 de #1147, m5 : hors du socle).
 ///
 /// Identifiants : `tab-etab-{accueil|missions|presences|messages|compte}`, `etab-accueil-screen` (T4), `placeholder-etab-*`,
-/// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-list`,
+/// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-screen`,
 /// `etab-compte-{nom|role|email}`, `logout-button`, `network-sentinel`. Les écrans provisoires
 /// (`placeholder-etab-*`) sont remplacés par la tranche de leur domaine, qui migre ces assertions (T5 : onglet
 /// Missions → `etab-missions-screen`).
@@ -96,7 +96,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         XCTAssertEqual(tabLabels, Self.ongletsEtablissement)
         ouvrirCompte()
         let deconnexion = element("logout-button")
-        if !visible(deconnexion) { scrollTo(deconnexion, in: element("etab-compte-list")) }
+        if !visible(deconnexion) { scrollTo(deconnexion, in: element("etab-compte-screen")) }
         tap("logout-button")
         require("La connexion est proposée après la déconnexion") { self.visible(self.element("login-scroll")) }
         XCTAssertFalse(tabBarExists, "plus aucun onglet établissement après la déconnexion")
@@ -118,7 +118,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
     private func ouvrirCompte() {
         tabButton("tab-etab-compte", label: "Compte").tap()
         require("Le compte de l'établissement est affiché") {
-            self.containerVisible(self.element("etab-compte-list")) && self.element("etab-compte-nom").exists
+            self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }
     }
 }
