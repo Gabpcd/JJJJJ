@@ -296,6 +296,36 @@ module IosReviewSubmissionTest
         gateway = IosReviewSubmission::Gateway.new(client: client, app_id: 'app')
         rejects(/other or unknown items/) { guard(gateway).prepare! {} }
         assert(client.patches.empty? && old.build.id == 'b23' && old.app_version_state == 'WAITING_FOR_REVIEW')
+      },
+      'submit_native runs only in the submission job, after its guards, with the exact phrase (review m8 of #1177)' => lambda {
+        contexte = {
+          'GITHUB_ACTIONS' => 'true', 'GITHUB_REPOSITORY' => 'Gabpcd/JJJJJ', 'GITHUB_EVENT_NAME' => 'workflow_dispatch',
+          'GITHUB_REF' => 'refs/heads/main', 'GITHUB_WORKFLOW_REF' => IosReviewSubmission::WORKFLOW_SOUMISSION,
+          'IOS_NATIVE_MODE' => 'soumettre', 'IOS_NATIVE_GARDES' => 'ok', 'GITHUB_RUN_ATTEMPT' => '1',
+          'IOS_NATIVE_GARDES_ATTEMPT' => '1', 'IOS_NATIVE_CONFIRMATION' => 'SOUMETTRE 2.0.0 (32)'
+        }
+        verifier = ->(env) { IosReviewSubmission.exiger_contexte_workflow!(env: env, marketing: '2.0.0', number: '32') }
+        assert(verifier.call(contexte) == true)
+        # A workstation with the App Store Connect key: no GitHub context at all.
+        rejects(/ne tourne que dans le job soumettre.*GITHUB_ACTIONS/) { verifier.call({ 'IOS_NATIVE_CONFIRMATION' => 'SOUMETTRE 2.0.0 (32)' }) }
+        {
+          'GITHUB_ACTIONS' => nil, 'GITHUB_REPOSITORY' => 'fork/JJJJJ', 'GITHUB_EVENT_NAME' => 'push',
+          'GITHUB_REF' => 'refs/heads/lot6/preparation',
+          'GITHUB_WORKFLOW_REF' => 'Gabpcd/JJJJJ/.github/workflows/mobile-delivery.yml@refs/heads/main',
+          'IOS_NATIVE_MODE' => 'verifier', 'IOS_NATIVE_GARDES' => nil
+        }.each do |cle, valeur|
+          rejects(/écart : #{cle}/) { verifier.call(contexte.merge(cle => valeur)) }
+        end
+        rejects(/Relance partielle/) { verifier.call(contexte.merge('GITHUB_RUN_ATTEMPT' => '2')) }
+        rejects(/Relance partielle/) { verifier.call(contexte.merge('GITHUB_RUN_ATTEMPT' => nil, 'IOS_NATIVE_GARDES_ATTEMPT' => nil)) }
+        ['', 'oui', 'SOUMETTRE 2.0.0 (33)', 'soumettre 2.0.0 (32)', 'SOUMETTRE 2.0.0 (32) '].each do |phrase|
+          rejects(/Confirmation absente ou inexacte/) { verifier.call(contexte.merge('IOS_NATIVE_CONFIRMATION' => phrase)) }
+        end
+        begin
+          verifier.call(contexte.merge('IOS_NATIVE_CONFIRMATION' => 'saisie-secrete'))
+        rescue IosReviewSubmission::Failure => error
+          assert(!error.message.include?('saisie-secrete'), 'the typed phrase is never echoed')
+        end
       }
     }
     cases.each { |name, test| test.call; puts "PASS: #{name}" }

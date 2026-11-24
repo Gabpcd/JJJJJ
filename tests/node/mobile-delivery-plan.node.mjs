@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { backendPaths, checkBackendDeployment } from '../../scripts/mobile/delivery-plan-backend.mjs';
+import {
+  COQUILLE_IOS_FIGEE, exigerOtaAndroidSeul, lireConfigLivraison, plateformeMobileDelivery, tagsLivraison,
+} from '../../scripts/mobile/release-config.mjs';
+import { verifierAlignement } from '../../scripts/check-mobile-build-alignment.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const planner = join(root, 'scripts/mobile/delivery-plan.mjs');
@@ -24,15 +28,25 @@ function plan(t, scenario = {}) {
   }
   git('-c', 'user.name=Recette', '-c', 'user.email=recette@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'baseline');
   const baseline = git('rev-parse', 'HEAD');
-  git('tag', 'mobile-native-22');
+  // Lot 6 : tags scindés par plateforme. Le runtime Android précédent porte `mobile-native-android-22`.
+  for (const tag of scenario.baselineTags ?? ['mobile-native-android-22']) git('tag', tag);
+  for (const [path, text] of Object.entries(scenario.files ?? {})) {
+    mkdirSync(dirname(join(cwd, path)), { recursive: true });
+    writeFileSync(join(cwd, path), text);
+  }
+  if (scenario.files) git('add', '-A');
   git('-c', 'user.name=Recette', '-c', 'user.email=recette@example.invalid', 'commit', '-q', '--allow-empty', '-m', 'candidate');
   const candidate = git('rev-parse', 'HEAD');
+  const build = scenario.build ?? 23;
   if (scenario.reserved) {
-    git('tag', 'mobile-native-source-23', baseline);
+    git('tag', `mobile-native-source-android-${build}`, baseline);
   }
   const checkedSha = scenario.reserved ? baseline : candidate;
   mkdirSync(join(cwd, 'config'));
-  writeFileSync(join(cwd, 'config/mobile-release.json'), JSON.stringify({ marketingVersion: '1.0.6', buildNumber: 23 }));
+  writeFileSync(join(cwd, 'config/mobile-release.json'), JSON.stringify(scenario.config ?? {
+    ios: { runtime: 'swift', marketingVersion: '2.0.0', minimumBuildNumber: 32 },
+    android: { runtime: 'capacitor', marketingVersion: '1.0.6', buildNumber: build },
+  }));
   const fixture = { ...scenario, candidate, baseline, checkedSha };
   writeFileSync(join(cwd, 'fixture.json'), JSON.stringify(fixture));
   writeFileSync(join(cwd, 'api.mjs'), `
@@ -73,6 +87,8 @@ function plan(t, scenario = {}) {
         return Response.json({ workflow_runs: runs });
       }
       if (path === 'commits/' + f.checkedSha + '/status') return Response.json({ statuses: [{ context: 'Vercel', state: f.vercelState || 'success' }] });
+      const pulls = path.match(/^commits\\/([a-f0-9]{40})\\/pulls$/);
+      if (pulls) return Response.json(f.otaReviewed ? [{ merged_at: '2026-11-24T09:00:00Z', merge_commit_sha: pulls[1], labels: [{ name: 'mobile:ota' }] }] : []);
       throw new Error('Unexpected API request: ' + path);
     };
   `);
@@ -98,16 +114,18 @@ function plan(t, scenario = {}) {
     env: { PATH: process.env.PATH, GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', MOBILE_DELIVERY_SHA: candidate,
       GITHUB_EVENT_NAME: scenario.event ?? 'workflow_dispatch', GITHUB_REF: scenario.ref ?? 'refs/heads/main',
       MOBILE_DELIVERY_MODE: scenario.mode ?? 'native',
+      ...(scenario.platform === undefined ? {} : { MOBILE_DELIVERY_PLATFORM: scenario.platform }),
       GITHUB_OUTPUT: outputFile, GITHUB_STEP_SUMMARY: summaryFile },
   });
-  return { ...result, candidate, baseline, output: readFileSync(outputFile, 'utf8'), summary: readFileSync(summaryFile, 'utf8') };
+  const requests = existsSync(join(cwd, 'requests.jsonl')) ? readFileSync(join(cwd, 'requests.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+  return { ...result, candidate, baseline, requests, output: readFileSync(outputFile, 'utf8'), summary: readFileSync(summaryFile, 'utf8') };
 }
 
 test('an explicit native dispatch with all gates on the exact main push selects the new native build', (t) => {
   const result = plan(t);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.output, `mode=native\nsha=${result.candidate}\n`);
-  assert.match(result.summary, /1\.0\.6 \(23\)/);
+  assert.match(result.summary, /Android 1\.0\.6 \(23\)/);
 });
 
 for (const [name, scenario] of Object.entries({
@@ -517,7 +535,7 @@ test('a shallow checkout is rejected rather than assuming no backend history', a
 test('workflow rechecks protect both publishing paths and retain read-only Actions permission', () => {
   const workflow = readFileSync(join(root, '.github/workflows/mobile-delivery.yml'), 'utf8');
   const ota = workflow.slice(workflow.indexOf('\n  ota:'), workflow.indexOf('\n  reserve-native:'));
-  const native = workflow.slice(workflow.indexOf('\n  native:'), workflow.indexOf('\n  record-native:'));
+  const native = workflow.slice(workflow.indexOf('\n  native:'));
   for (const [job, publish] of [[ota, 'Publish archive first and manifest last'], [native, 'Submit Android for review']]) {
     assert.match(job, /actions: read/);
     assert.match(job, /fetch-depth: 0/);
@@ -545,4 +563,297 @@ test('the backend comparison covers exactly the production workflow path trigger
   const triggers = [...paths.matchAll(/- '([^']+)'/g)].map(match => match[1].replace(/\/\*\*$/, ''));
   assert.deepEqual(backendPaths, triggers);
   for (const jobName of ['Apply SQL migrations', 'Deploy edge functions']) assert.ok(workflow.includes(`name: ${jobName}`));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Lot 6 : livraisons scindées par plateforme (docs/mobile-swift/DECISIONS_LOT6.md).
+// Android (coquille Capacitor) se livre seul, natif Play et OTA ; iOS (Swift) ne passe jamais par
+// ce planificateur, n'a pas d'OTA (Apple 2.5.2) et la coquille Capacitor iOS n'est plus construite.
+// ---------------------------------------------------------------------------------------------
+
+const SCINDEE = { ios: { runtime: 'swift', marketingVersion: '2.0.0', minimumBuildNumber: 32 },
+  android: { runtime: 'capacitor', marketingVersion: '1.0.8', buildNumber: 25 } };
+const scindee = (patch = {}) => JSON.stringify({ ios: { ...SCINDEE.ios, ...patch.ios }, android: { ...SCINDEE.android, ...patch.android }, ...patch.racine });
+
+test('la configuration du dépôt est scindée : iOS Swift 2.0.0 (build 32 minimum), Android Capacitor 1.0.x', () => {
+  const config = lireConfigLivraison(readFileSync(join(root, 'config/mobile-release.json'), 'utf8'));
+  assert.deepEqual(Object.keys(config).sort(), ['android', 'ios']);
+  assert.equal(config.ios.runtime, 'swift');
+  assert.equal(config.ios.marketingVersion, '2.0.0');
+  assert.ok(config.ios.minimumBuildNumber >= 32, 'TestFlight contient déjà 2.0.0 (25 à 31)');
+  assert.equal(config.android.runtime, 'capacitor');
+  assert.match(config.android.marketingVersion, /^1\.0\.\d+$/);
+  assert.ok(config.android.buildNumber >= COQUILLE_IOS_FIGEE.buildNumber);
+  assert.deepEqual(COQUILLE_IOS_FIGEE, { marketingVersion: '1.0.7', buildNumber: 24 });
+});
+
+for (const [nom, source, attendu] of [
+  ['l\'ancien format à plat', JSON.stringify({ marketingVersion: '1.0.7', buildNumber: 24 }), /scindée par plateforme/],
+  ['un reste de l\'ancien format', scindee({ racine: { buildNumber: 24 } }), /scindée par plateforme/],
+  ['une plateforme inconnue', scindee({ racine: { web: {} } }), /clé inconnue « web »/],
+  ['un iOS qui ne serait pas Swift', scindee({ ios: { runtime: 'capacitor' } }), /ios\.runtime doit valoir « swift »/],
+  ['un Android qui ne serait pas Capacitor', scindee({ android: { runtime: 'swift' } }), /android\.runtime doit valoir « capacitor »/],
+  ['une version iOS qui ne dépasse pas la coquille 1.0.7', scindee({ ios: { marketingVersion: '1.0.7' } }), /ios\.marketingVersion .* doit dépasser 1\.0\.7/],
+  ['un build iOS minimal qui ne dépasse pas 24', scindee({ ios: { minimumBuildNumber: 24 } }), /ios\.minimumBuildNumber .* doit dépasser 24/],
+  ['un numéro de build iOS figé', scindee({ ios: { buildNumber: 32 } }), /ios\.buildNumber n'existe pas/],
+  ['un versionCode Android invalide', scindee({ android: { buildNumber: '25' } }), /android\.buildNumber/],
+  ['une version Android invalide', scindee({ android: { marketingVersion: '1.0.x' } }), /android\.marketingVersion/],
+  ['un JSON illisible', '{', /illisible/],
+]) {
+  test(`la configuration de livraison refuse ${nom}`, () => {
+    assert.throws(() => lireConfigLivraison(source), (error) => {
+      assert.match(error.message, attendu);
+      assert.match(error.message, /docs\/mobile-swift\/DECISIONS_LOT6\.md/);
+      return true;
+    });
+  });
+}
+
+test('les tags sont scindés par plateforme et la plateforme de mobile-delivery est Android seul', () => {
+  assert.deepEqual(tagsLivraison('android', 25), { soumis: 'mobile-native-android-25', source: 'mobile-native-source-android-25' });
+  assert.deepEqual(tagsLivraison('ios', 32), { soumis: 'mobile-native-ios-32', source: null });
+  assert.throws(() => tagsLivraison('web', 1), /Plateforme inconnue/);
+  assert.throws(() => tagsLivraison('android', 0), /Numéro de build invalide/);
+  assert.equal(plateformeMobileDelivery(undefined), 'android');
+  assert.equal(plateformeMobileDelivery('android'), 'android');
+  assert.throws(() => plateformeMobileDelivery('ios'), /ios-native-testflight\.yml.*ios-native-app-store\.yml.*2\.5\.2/s);
+  assert.throws(() => plateformeMobileDelivery('all'), /Plateforme de livraison inconnue/);
+});
+
+test('une OTA n\'est possible que sur un runtime Android que la coquille iOS n\'a jamais porté', () => {
+  const config = lireConfigLivraison(scindee());
+  assert.deepEqual(exigerOtaAndroidSeul(config), { marketingVersion: '1.0.8', buildNumber: 25 });
+  const partage = lireConfigLivraison(scindee({ android: { marketingVersion: '1.0.7', buildNumber: 24 } }));
+  assert.throws(() => exigerOtaAndroidSeul(partage), /runtime 24 .* coquille Capacitor iOS 1\.0\.7 \(24\)/s);
+});
+
+test('Android se livre seul : aucun tag ni build iOS n\'est exigé, le résumé nomme la plateforme', (t) => {
+  const result = plan(t, { platform: 'android' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.output, `mode=native\nsha=${result.candidate}\n`);
+  assert.match(result.summary, /Google Play/);
+});
+
+for (const mode of ['native', 'ota', 'check']) {
+  test(`iOS natif ne passe jamais par ce planificateur (mode ${mode})`, (t) => {
+    const result = plan(t, { platform: 'ios', mode });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.output, '');
+    assert.match(result.stderr, /ios-native-app-store\.yml/);
+    assert.match(result.stderr, /2\.5\.2/);
+  });
+}
+
+test('l\'ancien format de configuration arrête le planificateur sans sortie de livraison', (t) => {
+  const result = plan(t, { config: { marketingVersion: '1.0.6', buildNumber: 23 } });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.output, '');
+  assert.match(result.stderr, /scindée par plateforme/);
+});
+
+for (const [nom, baselineTags] of Object.entries({
+  'un tag Android scindé': ['mobile-native-android-23'],
+  'un ancien tag commun': ['mobile-native-23'],
+  'un tag Android plus récent': ['mobile-native-android-22', 'mobile-native-android-30'],
+  'un ancien tag commun plus récent': ['mobile-native-30'],
+})) {
+  test(`le numéro de build Android doit dépasser ${nom}`, (t) => {
+    const result = plan(t, { baselineTags });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.output, '');
+    assert.match(result.stderr, /Native build number must increase|Build number already submitted/);
+  });
+}
+
+test('les tags iOS (coquille ou Swift) ne bloquent ni ne débloquent une livraison Android', (t) => {
+  const result = plan(t, { baselineTags: ['mobile-native-android-22', 'mobile-native-ios-22', 'mobile-native-ios-31', 'mobile-native-ios-40'] });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.output, `mode=native\nsha=${result.candidate}\n`);
+});
+
+const OTA = { mode: 'ota', build: 25, baselineTags: ['mobile-native-android-25'], otaReviewed: true, files: { 'src/App.tsx': 'correctif' } };
+
+test('une OTA Android part du tag mobile-native-android-N, sans tag commun ni tag iOS', (t) => {
+  const result = plan(t, OTA);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.output, `mode=ota\nsha=${result.candidate}\n`);
+});
+
+test('un ancien tag commun seul ne vaut pas runtime Android : pas d\'OTA', (t) => {
+  const result = plan(t, { ...OTA, baselineTags: ['mobile-native-25'] });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.output, /^mode=none\n/);
+  assert.match(result.summary, /OTA cannot start a native/);
+});
+
+test('une OTA sur le runtime 24, partagé avec la coquille iOS encore installée, est refusée', (t) => {
+  const result = plan(t, { ...OTA, build: 24, baselineTags: ['mobile-native-android-24', 'mobile-native-ios-24', 'mobile-native-24'] });
+  assert.notEqual(result.status, 0);
+  assert.equal(result.output, '');
+  assert.match(result.stderr, /coquille Capacitor iOS 1\.0\.7 \(24\)/);
+});
+
+for (const fichier of ['ios-native/Jolene/JoleneApp.swift', 'ios-native/Config/Base.xcconfig', 'ios/App/App/Info.plist', 'android/app/build.gradle']) {
+  test(`une OTA est refusée dès qu'un diff touche ${fichier.split('/')[0]}/ : build store exigé`, (t) => {
+    const result = plan(t, { ...OTA, files: { ...OTA.files, [fichier]: 'modifié' } });
+    assert.notEqual(result.status, 0);
+    assert.equal(result.output, '');
+    assert.match(result.stderr, new RegExp(`Native changes require a store build: ${fichier.replaceAll('.', '\\.')}`));
+  });
+}
+
+test('une OTA sans PR relue mobile:ota ne part pas', (t) => {
+  const result = plan(t, { ...OTA, otaReviewed: false });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.output, /^mode=none\n/);
+  assert.match(result.summary, /No reviewed mobile:ota PR/);
+});
+
+// --- release-state.mjs : tags scindés, jamais « les deux plateformes » -------------------------
+
+function etat(t, { args, tags = {}, env = {}, config = SCINDEE }) {
+  const cwd = mkdtempSync(join(tmpdir(), 'jolene-release-state-'));
+  t.after(() => rmSync(cwd, { recursive: true, force: true }));
+  mkdirSync(join(cwd, 'config'));
+  writeFileSync(join(cwd, 'config/mobile-release.json'), JSON.stringify(config));
+  writeFileSync(join(cwd, 'tags.json'), JSON.stringify(tags));
+  writeFileSync(join(cwd, 'api.mjs'), `
+    import { appendFileSync, readFileSync } from 'node:fs';
+    const tags = JSON.parse(readFileSync('tags.json', 'utf8'));
+    globalThis.fetch = async (url, init = {}) => {
+      const path = new URL(url).pathname.replace('/repos/Gabpcd/JJJJJ/', '');
+      const method = init.method || 'GET';
+      appendFileSync('requests.jsonl', JSON.stringify({ method, path, body: init.body ? JSON.parse(init.body) : null }) + '\\n');
+      if (method === 'GET' && path.startsWith('git/ref/tags/')) {
+        const sha = tags[path.slice('git/ref/tags/'.length)];
+        return sha ? Response.json({ object: { sha } }) : new Response('', { status: 404 });
+      }
+      if (method === 'POST' && path === 'git/refs') return Response.json({}, { status: 201 });
+      throw new Error('Unexpected API request: ' + method + ' ' + path);
+    };
+  `);
+  const outputFile = join(cwd, 'output');
+  writeFileSync(outputFile, '');
+  const result = spawnSync(process.execPath, ['--import', join(cwd, 'api.mjs'), join(root, 'scripts/mobile/release-state.mjs'), ...args], {
+    cwd, encoding: 'utf8',
+    env: { PATH: process.env.PATH, GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', RELEASE_SHA: 'a'.repeat(40), GITHUB_OUTPUT: outputFile, ...env },
+  });
+  const requests = existsSync(join(cwd, 'requests.jsonl')) ? readFileSync(join(cwd, 'requests.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
+  return { ...result, requests, created: requests.filter(r => r.method === 'POST').map(r => r.body), output: readFileSync(outputFile, 'utf8') };
+}
+
+const SHA = 'a'.repeat(40);
+const AUTRE = 'b'.repeat(40);
+
+test('Android réserve sa source puis consigne sa soumission sous des tags Android, sans tag commun', (t) => {
+  const reserve = etat(t, { args: ['reserve', 'android'] });
+  assert.equal(reserve.status, 0, reserve.stderr);
+  assert.deepEqual(reserve.created, [{ ref: 'refs/tags/mobile-native-source-android-25', sha: SHA }]);
+  const record = etat(t, { args: ['record', 'android'] });
+  assert.equal(record.status, 0, record.stderr);
+  assert.deepEqual(record.created, [{ ref: 'refs/tags/mobile-native-android-25', sha: SHA }]);
+  for (const { requests } of [reserve, record]) {
+    assert.ok(requests.every(r => !/mobile-native-ios-|mobile-native-\d+$|mobile-native-source-\d+$/.test(r.path + (r.body?.ref ?? ''))), 'aucune lecture ni écriture de tag iOS ou commun');
+  }
+});
+
+test('l\'état Android se lit sans l\'état iOS, et une reprise sur le même commit ne réécrit rien', (t) => {
+  const absent = etat(t, { args: ['check', 'android'] });
+  assert.equal(absent.status, 0, absent.stderr);
+  assert.equal(absent.output, 'submitted=false\n');
+  const present = etat(t, { args: ['check', 'android'], tags: { 'mobile-native-android-25': SHA } });
+  assert.equal(present.output, 'submitted=true\n');
+  const reprise = etat(t, { args: ['record', 'android'], tags: { 'mobile-native-android-25': SHA } });
+  assert.equal(reprise.status, 0, reprise.stderr);
+  assert.deepEqual(reprise.created, []);
+});
+
+test('un tag de plateforme appartenant à un autre commit arrête tout', (t) => {
+  for (const args of [['check', 'android'], ['record', 'android'], ['reserve', 'android']]) {
+    const tag = args[0] === 'reserve' ? 'mobile-native-source-android-25' : 'mobile-native-android-25';
+    const result = etat(t, { args, tags: { [tag]: AUTRE } });
+    assert.notEqual(result.status, 0, args.join(' '));
+    assert.deepEqual(result.created, []);
+  }
+});
+
+test('une soumission iOS Swift se consigne seule, avec le numéro du build TestFlight soumis', (t) => {
+  const record = etat(t, { args: ['record', 'ios'], env: { RELEASE_BUILD_NUMBER: '32' } });
+  assert.equal(record.status, 0, record.stderr);
+  assert.deepEqual(record.created, [{ ref: 'refs/tags/mobile-native-ios-32', sha: SHA }]);
+  assert.ok(record.requests.every(r => !/android/.test(r.path + (r.body?.ref ?? ''))), 'aucun tag Android lu ni écrit');
+  for (const numero of [undefined, '', '31', '24', 'abc', '32.5', '032']) {
+    const refus = etat(t, { args: ['record', 'ios'], env: numero === undefined ? {} : { RELEASE_BUILD_NUMBER: numero } });
+    assert.notEqual(refus.status, 0, `numéro ${numero}`);
+    assert.deepEqual(refus.created, []);
+    assert.match(refus.stderr, /RELEASE_BUILD_NUMBER/);
+  }
+});
+
+test('iOS ne réserve aucune source et l\'ancienne clôture commune est verrouillée', (t) => {
+  const reserve = etat(t, { args: ['reserve', 'ios'], env: { RELEASE_BUILD_NUMBER: '32' } });
+  assert.notEqual(reserve.status, 0);
+  assert.match(reserve.stderr, /TestFlight/);
+  for (const args of [['complete'], ['complete', 'android'], ['reserve'], ['record'], ['check'], ['record', 'web']]) {
+    const result = etat(t, { args });
+    assert.notEqual(result.status, 0, args.join(' '));
+    assert.deepEqual(result.created, [], args.join(' '));
+  }
+  assert.match(etat(t, { args: ['complete'] }).stderr, /DECISIONS_LOT6\.md/);
+});
+
+// --- Workflow, OTA et alignement des versions ---------------------------------------------------
+
+test('mobile-delivery.yml ne construit ni ne soumet plus rien pour iOS', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/mobile-delivery.yml'), 'utf8');
+  const actif = workflow.split('\n').filter(line => !/^\s*#/.test(line)).join('\n');
+  assert.doesNotMatch(actif, /xcodebuild|macos-|fastlane ios|ios\/App|ExportOptions|\bIOS_[A-Z_]+|\bASC_[A-Z_]+|security (?:create|import|unlock)-keychain|\.ipa\b/);
+  assert.doesNotMatch(actif, /matrix/);
+  assert.doesNotMatch(actif, /release-state\.mjs complete|record-native:/);
+  assert.match(actif, /MOBILE_DELIVERY_PLATFORM: android/);
+  for (const appel of ['release-state.mjs reserve android', 'release-state.mjs check android', 'release-state.mjs record android']) {
+    assert.ok(actif.includes(appel), appel);
+  }
+  assert.deepEqual([...actif.matchAll(/\bfastlane[^\S\n]+(\S+[^\S\n]+\S+)/g)].map(m => m[1]), ['android submit']);
+  const native = actif.slice(actif.indexOf('\n  native:'));
+  assert.ok(native.indexOf('fastlane android submit') < native.indexOf('release-state.mjs record android'), 'le tag ne se pose qu\'après la soumission');
+});
+
+test('la signature et la publication OTA lisent la configuration Android par la garde commune', () => {
+  for (const script of ['scripts/mobile/sign-update.mjs', 'scripts/mobile/publish-update.mjs']) {
+    const source = readFileSync(join(root, script), 'utf8');
+    assert.match(source, /exigerOtaAndroidSeul\(chargerConfigLivraison\(\)\)/, script);
+    assert.doesNotMatch(source, /JSON\.parse\(readFileSync\('config\/mobile-release\.json'/, script);
+  }
+});
+
+test('l\'app Swift n\'embarque aucun client de mise à jour à chaud (Apple 2.5.2)', () => {
+  const interdit = /capawesome|live[-_ ]?update|mobile-ota|codepush|hot[-_ ]?update/i;
+  const fichiers = execFileSync('git', ['ls-files', 'ios-native'], { cwd: root, encoding: 'utf8' }).trim().split('\n')
+    .filter(file => /\.(swift|yml|resolved|xcconfig|plist|pbxproj)$/.test(file));
+  assert.ok(fichiers.length > 100, 'sources Swift listées');
+  const fautifs = fichiers.filter(file => interdit.test(readFileSync(join(root, file), 'utf8')));
+  assert.deepEqual(fautifs, [], 'aucune OTA ne peut viser l\'app iOS native');
+});
+
+const gradle = (code, name) => `android {\n    defaultConfig {\n        versionCode ${code}\n        versionName "${name}"\n    }\n}\n`;
+const xcconfig = (version) => `MARKETING_VERSION = ${version}\nCURRENT_PROJECT_VERSION = 25\n`;
+const pbxproj = (version, build) => `CURRENT_PROJECT_VERSION = ${build};\nMARKETING_VERSION = ${version};\nCURRENT_PROJECT_VERSION = ${build};\nMARKETING_VERSION = ${version};\n`;
+
+test('l\'alignement des versions se vérifie par plateforme : Android, Swift, coquille iOS gelée', () => {
+  const config = lireConfigLivraison(scindee());
+  const ok = { config, androidGradle: gradle(25, '1.0.8'), baseXcconfig: xcconfig('2.0.0'), coquilleIos: pbxproj('1.0.7', 24) };
+  assert.deepEqual(verifierAlignement(ok), []);
+  assert.deepEqual(verifierAlignement({ ...ok, coquilleIos: null }), [], 'ios/ supprimé au lot 7 : plus rien à geler');
+  assert.match(verifierAlignement({ ...ok, androidGradle: gradle(24, '1.0.8') })[0], /Android versionCode=24, attendu 25/);
+  assert.match(verifierAlignement({ ...ok, androidGradle: gradle(25, '1.0.7') })[0], /Android versionName=1\.0\.7, attendu 1\.0\.8/);
+  assert.match(verifierAlignement({ ...ok, baseXcconfig: xcconfig('2.0.1') })[0], /iOS Swift MARKETING_VERSION=2\.0\.1, attendu 2\.0\.0/);
+  assert.match(verifierAlignement({ ...ok, baseXcconfig: '' })[0], /iOS Swift MARKETING_VERSION=absent/);
+  assert.match(verifierAlignement({ ...ok, coquilleIos: pbxproj('1.0.8', 26) }).join('\n'), /coquille Capacitor iOS .* gelée à 1\.0\.7 \(24\)/);
+});
+
+test('le dépôt actuel est aligné par plateforme', () => {
+  const result = spawnSync(process.execPath, [join(root, 'scripts/check-mobile-build-alignment.mjs')], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Android .* iOS Swift/s);
 });

@@ -17,8 +17,9 @@
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash, createPrivateKey, sign, X509Certificate } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { COQUILLE_IOS_FIGEE, lireConfigLivraison } from './release-config.mjs';
 
 export const DOC = 'docs/mobile-swift/TESTFLIGHT.md';
 export const APP = Object.freeze({
@@ -277,11 +278,15 @@ export function evaluateSources(files) {
     fail('identite', 'Production.xcconfig doit relayer CODE_SIGN_IDENTITY et PROVISIONING_PROFILE_SPECIFIER depuis JOLENE_CODE_SIGN_IDENTITY / JOLENE_PROVISIONING_PROFILE.');
   }
   const marketing = settings.MARKETING_VERSION;
-  const capacitor = files.mobileRelease ? JSON.parse(files.mobileRelease) : {};
+  // Lot 6 : config/mobile-release.json est scindé par plateforme ; la section « ios » décrit l'app Swift.
+  let livraison = null;
+  try { livraison = lireConfigLivraison(files.mobileRelease); } catch (error) { fail('identite', `${error.message}.`); }
   if (!isVersion(marketing) || compareVersions(marketing, APP.minimumMarketingVersion) < 0) {
     fail('identite', `MARKETING_VERSION ${marketing || 'absente'} : ${APP.minimumMarketingVersion} minimum (décision du plan, lot 6).`);
-  } else if (isVersion(capacitor.marketingVersion) && compareVersions(marketing, capacitor.marketingVersion) <= 0) {
-    fail('identite', `MARKETING_VERSION ${marketing} doit dépasser la coquille Capacitor ${capacitor.marketingVersion}.`);
+  } else if (compareVersions(marketing, COQUILLE_IOS_FIGEE.marketingVersion) <= 0) {
+    fail('identite', `MARKETING_VERSION ${marketing} doit dépasser la coquille Capacitor ${COQUILLE_IOS_FIGEE.marketingVersion}.`);
+  } else if (livraison && marketing !== livraison.ios.marketingVersion) {
+    fail('identite', `MARKETING_VERSION ${marketing} diffère de ios.marketingVersion ${livraison.ios.marketingVersion} (config/mobile-release.json).`);
   }
 
   const entitlements = parsePlist(files.entitlements);
@@ -341,7 +346,7 @@ function listSwift(dir, root, out = {}) {
     if (name === '.build' || name === 'Tests' || name === 'DerivedData') continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) listSwift(path, root, out);
-    else if (name.endsWith('.swift')) out[path.slice(root.length + 1)] = readFileSync(path, 'utf8');
+    else if (name.endsWith('.swift')) out[relative(root, path)] = readFileSync(path, 'utf8');
   }
   return out;
 }
@@ -373,10 +378,13 @@ export function loadSources(root) {
 // Numérotation
 // ---------------------------------------------------------------------------------------------
 
-/** Plancher : dernier build Capacitor publié (24) ou celui que config/mobile-release.json réserve. */
+/**
+ * Plancher (numéro refusé s'il est inférieur ou égal) : dernier build Capacitor publié (24), ou le
+ * numéro juste sous ios.minimumBuildNumber de config/mobile-release.json (configuration scindée, lot 6).
+ */
 export function buildFloor(mobileRelease) {
-  const capacitor = Number(mobileRelease?.buildNumber);
-  return Math.max(APP.buildFloor, Number.isSafeInteger(capacitor) ? capacitor : 0);
+  const minimum = Number(mobileRelease?.ios?.minimumBuildNumber);
+  return Math.max(APP.buildFloor, Number.isSafeInteger(minimum) ? minimum - 1 : 0);
 }
 
 /**
@@ -394,7 +402,7 @@ export function resolveBuildNumber({ requested, existing, floor }) {
   if (!raw) return latest + 1;
   if (!/^[1-9]\d{0,8}$/.test(raw)) throw new GuardFailure([`[numerotation] numéro de build « ${raw} » invalide : entier positif exigé (voir ${DOC}, garde « numerotation »)`]);
   const number = Number(raw);
-  if (number <= floor) throw new GuardFailure([`[numerotation] build ${number} refusé : il doit dépasser ${floor}, dernier build de la coquille Capacitor (voir ${DOC}, garde « numerotation »)`]);
+  if (number <= floor) throw new GuardFailure([`[numerotation] build ${number} refusé : il doit dépasser ${floor}, plancher de numérotation (le plus grand de ${APP.buildFloor}, dernier build de la coquille Capacitor, et de ios.minimumBuildNumber − 1 de config/mobile-release.json) (voir ${DOC}, garde « numerotation »)`]);
   if (number > latest + MARGE_BUILD) {
     throw new GuardFailure([`[numerotation] build ${number} refusé : au plus ${latest + MARGE_BUILD} (dernier build ${latest} + ${MARGE_BUILD}). Un numéro trop haut relèverait définitivement le plancher de tous les builds suivants (voir ${DOC}, garde « numerotation »)`]);
   }
@@ -615,7 +623,7 @@ async function main(command, args) {
     case 'build-number': {
       const get = ascFromEnv();
       const builds = await listBuilds(get);
-      const floor = buildFloor(JSON.parse(readFileSync(join(ROOT, 'config/mobile-release.json'), 'utf8')));
+      const floor = buildFloor(lireConfigLivraison(readFileSync(join(ROOT, 'config/mobile-release.json'), 'utf8')));
       const number = resolveBuildNumber({ requested: process.env.JOLENE_BUILD_INPUT, existing: builds.map((b) => b.attributes?.version), floor });
       output({ build_number: number });
       summary(`✓ Build ${number} (${process.env.JOLENE_BUILD_INPUT?.trim() ? 'saisi' : 'calculé'} ; ${builds.length} build(s) déjà dans App Store Connect, plancher ${floor}).`);
@@ -624,7 +632,7 @@ async function main(command, args) {
     case 'verify-free': {
       const number = args[0];
       const builds = await listBuilds(ascFromEnv());
-      const floor = buildFloor(JSON.parse(readFileSync(join(ROOT, 'config/mobile-release.json'), 'utf8')));
+      const floor = buildFloor(lireConfigLivraison(readFileSync(join(ROOT, 'config/mobile-release.json'), 'utf8')));
       resolveBuildNumber({ requested: number, existing: builds.map((b) => b.attributes?.version), floor });
       summary(`✓ Build ${number} toujours libre dans App Store Connect juste avant l'envoi.`);
       return;

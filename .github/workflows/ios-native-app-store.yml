@@ -1,0 +1,202 @@
+name: iOS Swift — soumission App Store
+
+# Soumet à la revue Apple un build de l'app Swift (ios-native/) DÉJÀ envoyé sur TestFlight et déjà VALID.
+# Aucun binaire n'est construit ni envoyé ici : l'envoi reste ios-native-testflight.yml.
+# Geste manuel uniquement (décision du 24/11/2026, docs/mobile-swift/DECISIONS_LOT6.md) : déclenchement à la
+# main depuis main, avec une phrase de confirmation qui nomme la version et le build. Jamais sur un push, une
+# PR, un merge ou la fin d'un autre workflow.
+# Mode « verifier » (défaut) : toutes les gardes, en lecture seule, puis arrêt avant la lane et le tag.
+# Mode « soumettre » : les mêmes gardes, puis la lane et le tag, si la phrase de confirmation est exacte.
+# Mode d'emploi, gardes et ce qui reste à saisir dans App Store Connect : docs/mobile-swift/APP_STORE.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'verifier (défaut) : gardes seulement, rien n''est soumis ; soumettre : gardes puis soumission à la revue, phrase de confirmation exigée.'
+        type: choice
+        options: [verifier, soumettre]
+        default: verifier
+      build_number:
+        description: 'Numéro du build TestFlight à soumettre (déjà traité et VALID), par exemple 32.'
+        type: string
+        required: true
+      confirmation:
+        description: 'Mode soumettre seulement : écrire exactement SOUMETTRE 2.0.0 (N), N étant le numéro du build.'
+        type: string
+        required: false
+      publication:
+        description: 'Après approbation : automatique (mise en vente dès approbation) ou manuelle (bouton dans App Store Connect). Progressive sur 7 jours dans les deux cas.'
+        type: choice
+        options: [automatique, manuelle]
+        default: automatique
+
+permissions:
+  contents: read
+  actions: read
+
+# Une seule soumission à la fois ; un second déclenchement attend la fin du premier.
+concurrency:
+  group: ios-native-app-store
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gardes:
+    name: Gardes avant soumission (lecture seule)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      mode: ${{ steps.entrees.outputs.mode }}
+      build_number: ${{ steps.entrees.outputs.build_number }}
+      marketing_version: ${{ steps.entrees.outputs.marketing_version }}
+      automatic_release: ${{ steps.entrees.outputs.automatic_release }}
+      run_attempt: ${{ steps.entrees.outputs.run_attempt }}
+      source_sha: ${{ steps.provenance.outputs.source_sha }}
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    steps:
+      - name: Refuser toute exécution hors d'un déclenchement manuel sur main
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::La soumission App Store ne part que d'un déclenchement manuel sur main (reçu : $GITHUB_EVENT_NAME sur $GITHUB_REF). Voir docs/mobile-swift/APP_STORE.md."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          # Historique complet : provenance du build et garde du backend déployé.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Entrées, mode, confirmation explicite et notes de version
+        id: entrees
+        env:
+          JOLENE_MODE: ${{ inputs.mode }}
+          JOLENE_BUILD_INPUT: ${{ inputs.build_number }}
+          JOLENE_CONFIRMATION: ${{ inputs.confirmation }}
+          JOLENE_PUBLICATION: ${{ inputs.publication }}
+        run: node scripts/mobile/ios-native-app-store.mjs entrees
+      - name: Gardes du dépôt (production, chiffrement, confidentialité, icône, entitlements)
+        run: node scripts/mobile/ios-native-testflight.mjs depot
+      - name: Provenance du build (envoi TestFlight réussi depuis main)
+        id: provenance
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BUILD_NUMBER: ${{ steps.entrees.outputs.build_number }}
+        run: node scripts/mobile/ios-native-app-store.mjs provenance "$BUILD_NUMBER"
+      - name: CI iOS verte sur le commit source du build (ios-swift-ci.yml, lecture seule)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.provenance.outputs.source_sha }}
+        run: node scripts/mobile/ios-native-app-store.mjs ci "$SOURCE_SHA"
+      - name: Extraire la source dont le build est issu
+        env:
+          SOURCE_SHA: ${{ steps.provenance.outputs.source_sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Commit source du build illisible."; exit 1; }
+          mkdir -p "$RUNNER_TEMP/source-build"
+          git archive "$SOURCE_SHA" ios-native | tar -x -C "$RUNNER_TEMP/source-build"
+      - name: Gardes de la source du build (lots 1 à 5 clos, Apple 4.2, aucune mise à jour à chaud)
+        run: node scripts/mobile/ios-native-app-store.mjs source "$RUNNER_TEMP/source-build"
+      - name: Backend de production déployé pour main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MOBILE_DELIVERY_SHA: ${{ github.sha }}
+        run: node scripts/mobile/delivery-plan-backend.mjs
+      - name: Build dans App Store Connect (lecture seule)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          BUILD_NUMBER: ${{ steps.entrees.outputs.build_number }}
+        run: node scripts/mobile/ios-native-app-store.mjs build "$BUILD_NUMBER"
+      - name: Verdict des gardes (atteint seulement si toutes ont réussi)
+        id: verdict
+        env:
+          MODE: ${{ steps.entrees.outputs.mode }}
+        run: |
+          echo "verdict=ok" >> "$GITHUB_OUTPUT"
+          if [ "$MODE" != soumettre ]; then
+            echo "✓ Mode verifier : toutes les gardes passent. Rien n'a été soumis ni consigné." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  soumettre:
+    name: Soumission à la revue Apple (publication progressive)
+    needs: gardes
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.gardes.outputs.mode == 'soumettre' && needs.gardes.outputs.verdict == 'ok'
+    # Même runner que la dernière soumission réussie (coquille 1.0.7, 5 octobre 2026).
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      IOS_NATIVE_MODE: ${{ needs.gardes.outputs.mode }}
+      IOS_NATIVE_GARDES: ${{ needs.gardes.outputs.verdict }}
+      IOS_NATIVE_GARDES_ATTEMPT: ${{ needs.gardes.outputs.run_attempt }}
+      IOS_NATIVE_BUILD_NUMBER: ${{ needs.gardes.outputs.build_number }}
+      IOS_NATIVE_AUTOMATIC_RELEASE: ${{ needs.gardes.outputs.automatic_release }}
+    steps:
+      - name: Refuser une relance partielle (gardes d'une autre tentative)
+        run: |
+          if [ "$IOS_NATIVE_GARDES_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]; then
+            echo "::error::Relance partielle refusée : les gardes sont celles de la tentative $IOS_NATIVE_GARDES_ATTEMPT, pas de la tentative $GITHUB_RUN_ATTEMPT. Relancer le workflow entier (« Re-run all jobs »). Voir docs/mobile-swift/APP_STORE.md."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Soumettre le build à la revue (fiche inchangée, hors « Nouveautés »)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          IOS_NATIVE_CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          [[ "$IOS_NATIVE_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Numéro de build absent ou invalide."; exit 1; }
+          [[ "$IOS_NATIVE_AUTOMATIC_RELEASE" =~ ^(true|false)$ ]] || { echo "::error::Mode de publication absent ou invalide."; exit 1; }
+          bundle exec fastlane ios submit_native
+      - name: Supprimer la clé App Store Connect écrite par fastlane
+        if: always()
+        run: rm -rf "$HOME/.appstoreconnect/private_keys"
+
+  consigner:
+    name: Consigner la soumission (tag mobile-native-ios-N)
+    needs: [gardes, soumettre]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.gardes.outputs.mode == 'soumettre' && needs.gardes.outputs.verdict == 'ok'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Refuser une relance partielle (gardes d'une autre tentative)
+        env:
+          GARDES_ATTEMPT: ${{ needs.gardes.outputs.run_attempt }}
+        run: |
+          if [ "$GARDES_ATTEMPT" != "$GITHUB_RUN_ATTEMPT" ]; then
+            echo "::error::Relance partielle refusée : relancer le workflow entier (« Re-run all jobs »). Voir docs/mobile-swift/APP_STORE.md."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Poser le tag de soumission sur le commit source du build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.gardes.outputs.source_sha }}
+          RELEASE_BUILD_NUMBER: ${{ needs.gardes.outputs.build_number }}
+        run: node scripts/mobile/release-state.mjs record ios

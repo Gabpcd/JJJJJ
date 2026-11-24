@@ -2,9 +2,12 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash, createPrivateKey, createPublicKey, sign } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { chargerConfigLivraison, exigerOtaAndroidSeul } from './release-config.mjs';
 
+// An OTA targets the Android Capacitor runtime only: never iOS (Apple 2.5.2), never a build the
+// iOS Capacitor shell also carried (docs/mobile-swift/DECISIONS_LOT6.md).
 // The private key is supplied by CI, never included in the application bundle.
-const release = JSON.parse(readFileSync('config/mobile-release.json', 'utf8'));
+const release = exigerOtaAndroidSeul(chargerConfigLivraison());
 const id = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const key = createPrivateKey(readFileSync(process.env.MOBILE_UPDATE_KEY_FILE));
 const expected = createPublicKey(readFileSync('config/mobile-update-public.pem')).export({ type: 'spki', format: 'der' });
@@ -22,4 +25,4 @@ const payload = JSON.stringify({
   signature: sign('sha256', bytes, key).toString('base64'),
 });
 writeFileSync(path.join(output, 'manifest.json'), JSON.stringify({ payload, signature: sign('sha256', Buffer.from(payload), key).toString('base64') }));
-console.log(`Signed update ${id} for ${release.marketingVersion} (${release.buildNumber})`);
+console.log(`Signed update ${id} for Android ${release.marketingVersion} (${release.buildNumber})`);

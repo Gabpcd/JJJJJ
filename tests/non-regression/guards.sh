@@ -182,7 +182,7 @@ else
   FAIL=1
 fi
 
-echo "── Garde-fou 15 : iOS et Android partagent exactement la même version"
+echo "── Garde-fou 15 : versions mobiles alignées par plateforme (Android, iOS Swift, coquille iOS gelée)"
 if node scripts/check-mobile-build-alignment.mjs; then
   echo "   OK"
 else

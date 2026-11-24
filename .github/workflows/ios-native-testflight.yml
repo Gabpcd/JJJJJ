@@ -2,14 +2,15 @@ name: iOS Swift — TestFlight interne
 
 # Livraison TestFlight de l'app Swift (ios-native/), testeurs internes uniquement.
 # Jamais de soumission à la revue Apple, jamais de testeurs externes, jamais de mise en vente.
-# La coquille Capacitor (ios/, 1.0.x) reste livrée par mobile-delivery.yml, inchangé.
+# La soumission à la revue d'un build envoyé ici passe par ios-native-app-store.yml (lot 6) ;
+# la coquille Capacitor iOS (ios/, 1.0.7) est gelée et mobile-delivery.yml ne livre plus qu'Android.
 # Mode d'emploi, numérotation et gardes : docs/mobile-swift/TESTFLIGHT.md.
 
 on:
   workflow_dispatch:
     inputs:
       build_number:
-        description: 'Numéro de build (facultatif). Vide : max(dernier build App Store Connect, 24) + 1.'
+        description: 'Numéro de build (facultatif). Vide : max(dernier build App Store Connect, plancher) + 1 ; plancher = ios.minimumBuildNumber - 1 (31).'
         type: string
         required: false
         default: ''
@@ -49,11 +50,11 @@ jobs:
             echo "::error::La livraison TestFlight ne part que d'un déclenchement manuel sur main (reçu : $GITHUB_EVENT_NAME sur $GITHUB_REF). Voir docs/mobile-swift/TESTFLIGHT.md."
             exit 1
           fi
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
       - name: Gardes du dépôt (production, chiffrement, confidentialité, icône, entitlements)
@@ -76,7 +77,7 @@ jobs:
     env:
       BUILD_NUMBER: ${{ needs.preparer.outputs.build_number }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
@@ -88,10 +89,10 @@ jobs:
           echo "$version"
           [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
           echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
-      - uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: '3.3'
           bundler-cache: true
@@ -211,7 +212,7 @@ jobs:
         run: bundle exec fastlane ios testflight_native
       - name: Conserver l'IPA et les journaux
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ios-native-testflight-${{ needs.preparer.outputs.build_number }}-${{ github.sha }}
           path: |
@@ -234,11 +235,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 70
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
       - name: Attendre l'état VALID du build envoyé

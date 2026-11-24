@@ -6,6 +6,38 @@ require 'rubygems/version'
 module IosReviewSubmission
   class Failure < StandardError; end
 
+  # Lot 6, revue m8 de #1177 : la lane `ios submit_native` ne tourne que dans le job `soumettre` de
+  # ios-native-app-store.yml, après le job `gardes` de la même tentative, en mode « soumettre », avec la
+  # phrase exacte. Ce sont des contrôles de contexte : ils arrêtent une lane lancée à la main depuis un
+  # poste ou par un autre workflow, pas quelqu'un qui détient la clé App Store Connect et appelle l'API
+  # directement (garde des secrets : docs/mobile-swift/APP_STORE.md, « Secrets et droits »).
+  WORKFLOW_SOUMISSION = 'Gabpcd/JJJJJ/.github/workflows/ios-native-app-store.yml@refs/heads/main'
+
+  def self.exiger_contexte_workflow!(env:, marketing:, number:)
+    attendu = {
+      'GITHUB_ACTIONS' => 'true',
+      'GITHUB_REPOSITORY' => 'Gabpcd/JJJJJ',
+      'GITHUB_EVENT_NAME' => 'workflow_dispatch',
+      'GITHUB_REF' => 'refs/heads/main',
+      'GITHUB_WORKFLOW_REF' => WORKFLOW_SOUMISSION,
+      'IOS_NATIVE_MODE' => 'soumettre',
+      'IOS_NATIVE_GARDES' => 'ok'
+    }
+    ecarts = attendu.reject { |cle, valeur| env[cle] == valeur }.keys
+    unless ecarts.empty?
+      raise Failure, "submit_native ne tourne que dans le job soumettre de ios-native-app-store.yml, après ses gardes (écart : #{ecarts.join(', ')}) ; voir docs/mobile-swift/APP_STORE.md"
+    end
+    tentative = env['GITHUB_RUN_ATTEMPT'].to_s
+    unless tentative.match?(/\A[1-9]\d*\z/) && env['IOS_NATIVE_GARDES_ATTEMPT'] == tentative
+      raise Failure, 'Relance partielle refusée : les gardes ne sont pas celles de cette tentative ; relancer le workflow entier (docs/mobile-swift/APP_STORE.md)'
+    end
+    # La saisie n'est jamais réaffichée.
+    unless env['IOS_NATIVE_CONFIRMATION'] == "SOUMETTRE #{marketing} (#{number})"
+      raise Failure, "Confirmation absente ou inexacte : SOUMETTRE #{marketing} (#{number}) exigé (docs/mobile-swift/APP_STORE.md)"
+    end
+    true
+  end
+
   # Use the current reviewSubmissions API and read every page, including items:
   # the items embedded in a submission response can be truncated.
   class Gateway
