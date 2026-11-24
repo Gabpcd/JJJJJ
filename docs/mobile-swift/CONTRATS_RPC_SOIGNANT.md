@@ -2551,8 +2551,8 @@ concernée à jour **dans la même PR**.
 | `fn_signaler_utilisateur` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_user_id_pour_etablissement` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
 | `fn_obtenir_conversation` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
-| `fn_lister_copies_bulletins` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
-| `fn_signaler_copie_bulletin` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
+| `fn_lister_copies_bulletins` | consommée lot 4 (T10) | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
+| `fn_signaler_copie_bulletin` | consommée lot 4 (T10) | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
 | `fn_pool_urgence_missions_pour_soignant` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_pool_urgence` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_toggle_pool_urgence_sms` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
@@ -3223,7 +3223,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 
 ## fn_lister_copies_bulletins
 
-- **Statut natif** : à venir (lot 4, T10).
+- **Statut natif** : consommée (lot 4, T10) par `JoleneSupabase/Bulletins/SupabaseBulletinsGateway.swift`, appelée par `BulletinsModel` (JoleneCore : liste, relecture après un signalement ou un 410 `COPIE_RETIREE`).
 - **Usage prévu** : Liste des copies officielles déposées par l'employeur (Revenus › Bulletins, composant monté `CopiesBulletinsListe.tsx`), appelée sans paramètre ; filtre employeur côté app quand plusieurs établissements (l.25-27). Les simulations de paie restent un renvoi web (D12).
 - **Signature SQL** (`supabase/schema/public.sql` l.39838) :
 
@@ -3241,7 +3241,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissemen
 
 ## fn_signaler_copie_bulletin
 
-- **Statut natif** : à venir (lot 4, T10).
+- **Statut natif** : consommée (lot 4, T10) par `JoleneSupabase/Bulletins/SupabaseBulletinsGateway.swift`, appelée par `BulletinsModel` (JoleneCore : feuille de signalement, succès annoncé après relecture).
 - **Usage prévu** : Signalement d'une copie, feuille « Quelle erreur souhaitez-vous signaler ? » aux trois motifs du web (`DESTINATAIRE`, `CONTENU`, `AUTRE` ; `copiesBulletins.ts` l.10, `CopiesBulletinsListe.tsx` l.15, l.87-90).
 - **Signature SQL** (`supabase/schema/public.sql` l.56182) :
 

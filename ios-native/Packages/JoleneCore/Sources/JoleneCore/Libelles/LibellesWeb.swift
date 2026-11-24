@@ -1377,6 +1377,9 @@ public enum LibellesWeb {
 
         // source: src/lib/copiesBulletinsPartageNatif.ts:84
         public static let titrePartage = "Copie du bulletin de paie"
+
+        // source: src/pages/BulletinsPaie.tsx:53
+        public static let simulations = "Mes simulations de paie"
     }
 
     /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
@@ -1742,5 +1745,6 @@ public enum LibellesWeb {
         .init(cle: "CopiesBulletins.pdfIndisponible", texte: CopiesBulletins.pdfIndisponible),
         .init(cle: "CopiesBulletins.integriteNonConfirmee", texte: CopiesBulletins.integriteNonConfirmee),
         .init(cle: "CopiesBulletins.titrePartage", texte: CopiesBulletins.titrePartage),
+        .init(cle: "CopiesBulletins.simulations", texte: CopiesBulletins.simulations),
     ]
 }

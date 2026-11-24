@@ -60,10 +60,23 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
     /// quelle, sinon `.safari(canonique)`.
     public var destination: JoleneRoute {
         guard route.isNative, !Self.ecranNatifLivre(route) else { return route }
+        // Lot 4 (L4-T10) : la route de Revenus des bulletins (`?tab=bulletins`, alias `bulletins-paie`) a pour destination
+        // l'écran des copies officielles une fois livré, copie visée (`?copie=`) comprise ; la table de `LinkRouter`
+        // n'est pas touchée.
+        if case .revenus(section: .bulletins) = route {
+            let ecran = EcranSecondaire.bulletins(copieId: Self.copieVisee(canonique))
+            if Self.ecranNatifLivre(.secondaire(ecran)) { return .secondaire(ecran) }
+        }
         // Lot 4 (L4-T1) : swipe et score gardent l'écran natif qu'ils ouvraient avant d'avoir leur route
         // (Explorer, hub du compte) jusqu'à la livraison de leur tranche.
         if case .secondaire(let ecran) = route, let repli = ecran.repliAvantLivraison { return repli }
         return .safari(canonique)
+    }
+
+    /// `?copie=` du lien des bulletins (identifiant jamais journalisé), nil s'il est absent ou vide.
+    static func copieVisee(_ canonique: URL) -> String? {
+        let valeur = URLComponents(url: canonique, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "copie" }?.value
+        return (valeur ?? "").isEmpty ? nil : valeur
     }
 
     /// Destination dans l'app pour une route native (`false` pour une route externe) : `true` veut
@@ -129,7 +142,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .secondaire(.score):
             return false                                 // T9 — mon score (repli `.monCompte` jusque-là)
         case .secondaire(.bulletins):
-            return false                                 // T10 — copies officielles (avec la destination de `.revenus(.bulletins)`)
+            return true                                  // T10 — `BulletinsScreen` (copies officielles), destination de `.revenus(.bulletins)`
         case .secondaire(.poolUrgence):
             return false                                 // T11 — pool urgence
         case .secondaire(.exclusions):

@@ -83,7 +83,6 @@ final class DeepLinkIntentTests: XCTestCase {
     func testRoutesSansEcranOuExternesSontDesRenvoisWebCanoniques() throws {
         let safari = [
             "https://jolene.app/soignant/mes-gains?tab=factures",                     // lot 4 (D4)
-            "https://jolene.app/soignant/mes-gains?tab=bulletins&annee=2026",          // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
             "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
@@ -263,12 +262,12 @@ final class DeepLinkIntentTests: XCTestCase {
     }
 
     /// Sections de Revenus lues dans `?tab=` (comparaison exacte, `MesGains.tsx` l.899-900) : l'aperçu ouvre l'onglet
-    /// natif ; « Paiements à confirmer » ouvre l'onglet sur sa section (T13) ; factures, bulletins et avances restent des
-    /// renvois web (D4).
+    /// natif ; « Paiements à confirmer » ouvre l'onglet sur sa section (T13) ; bulletins : copies officielles natives
+    /// (L4-T10) ; factures et avances restent des renvois web (D4).
     func testSectionsDeRevenusDepuisTab() throws {
         let cas: [(String, SectionRevenus, Bool)] = [
             ("tab=apercu", .apercu, true), ("", .apercu, true), ("tab=APERCU", .apercu, true), ("tab=inconnu", .apercu, true),
-            ("tab=factures", .factures, false), ("tab=bulletins", .bulletins, false), ("tab=avances", .avances, false),
+            ("tab=factures", .factures, false), ("tab=bulletins", .bulletins, true), ("tab=avances", .avances, false),
             ("tab=paiements", .paiementsAConfirmer, true),
         ]
         for (query, section, natif) in cas {
@@ -278,7 +277,8 @@ final class DeepLinkIntentTests: XCTestCase {
             switch try intention(lien) {
             case .espace(let d):
                 XCTAssertTrue(natif, lien)
-                XCTAssertEqual(CibleNotification(d), .revenus(section: section), lien)
+                XCTAssertEqual(CibleNotification(d), section == .bulletins ? .secondaire(.bulletins(copieId: nil))
+                                   : .revenus(section: section), lien)
             case .renvoiWeb(let d):
                 XCTAssertFalse(natif, lien)
                 XCTAssertEqual(d.destination, .safari(url(lien)), lien)

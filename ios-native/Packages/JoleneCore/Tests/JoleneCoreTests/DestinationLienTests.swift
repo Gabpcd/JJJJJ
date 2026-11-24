@@ -47,21 +47,36 @@ final class DestinationLienTests: XCTestCase {
         }
     }
 
-    /// Factures, bulletins et avances : renvoi web assumé jusqu'au lot 4 (`PARITE_SOIGNANT.md`,
+    /// Factures et avances : renvoi web assumé jusqu'au lot 4 (`PARITE_SOIGNANT.md`,
     /// D4), alias compris ; l'URL canonique est celle du lien reçu (le web applique sa redirection).
-    func testFacturesBulletinsAvancesToujoursEnRenvoiWeb() throws {
+    func testFacturesAvancesToujoursEnRenvoiWeb() throws {
         let cas: [(String, SectionRevenus)] = [
             ("/soignant/mes-gains?tab=factures", .factures),
-            ("/soignant/mes-gains?tab=bulletins&annee=2026", .bulletins),
             ("/soignant/mes-gains?tab=avances", .avances),
             ("/soignant/mes-factures-honoraires", .factures),
-            ("/soignant/bulletins-paie", .bulletins),
             ("/soignant/mes-avances#haut", .avances),
         ]
         for (chemin, section) in cas {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
             XCTAssertEqual(d.route, .revenus(section: section), chemin)
             XCTAssertEqual(d.destination, .safari(url("https://jolene.app" + chemin)), chemin)
+        }
+    }
+
+    /// Bulletins (L4-T10) : la route de Revenus est gardée, sa destination est l'écran natif des copies officielles,
+    /// copie visée (`?copie=`) comprise ; alias `bulletins-paie` compris.
+    func testBulletinsVersLesCopiesOfficielles() throws {
+        let cas: [(String, String?)] = [
+            ("/soignant/mes-gains?tab=bulletins&annee=2026", nil),
+            ("/soignant/mes-gains?tab=bulletins&copie=c%201", "c 1"),
+            ("/soignant/mes-gains?tab=bulletins&copie=", nil),
+            ("/soignant/bulletins-paie", nil),
+        ]
+        for (chemin, copie) in cas {
+            let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
+            XCTAssertEqual(d.route, .revenus(section: .bulletins), chemin)
+            XCTAssertEqual(d.destination, .secondaire(.bulletins(copieId: copie)), chemin)
+            XCTAssertFalse(d.description.contains("c 1") || d.description.contains("c%201"), "identifiant jamais journalisé")
         }
     }
 
@@ -472,7 +487,7 @@ final class DestinationLienTests: XCTestCase {
             (.stripeConnect(retour: nil), true, "T14a : StripeConnectScreen, empilé sur le Profil"),
             (.stripeConnect(retour: .succes), true, "T14a : retour de Stripe, statut relu avec force=true"),
             (.revenus(section: .factures), false, "lot 4"),
-            (.revenus(section: .bulletins), false, "lot 4"),
+            (.revenus(section: .bulletins), false, "route gardée : destination `.secondaire(.bulletins)` (L4-T10)"),
             (.revenus(section: .avances), false, "lot 4"),
             (.presences(onglet: nil, filtre: nil), true, "L2-T10 : PresencesScreen (T4a)"),
             (.presences(onglet: "historique", filtre: "a_valider"), true, "L2-T10 : PresencesScreen, onglet et filtre du lien"),

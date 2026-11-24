@@ -163,8 +163,8 @@ export const RPC_SUIVIES = [
   { name: 'fn_user_id_pour_etablissement', statut: 'a_venir', lot: 4 },
   { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 4 },
   // T10 — copies officielles des bulletins
-  { name: 'fn_lister_copies_bulletins', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_copie_bulletin', statut: 'a_venir', lot: 4 },
+  { name: 'fn_lister_copies_bulletins', statut: 'consommee', lot: 4 }, // L4-T10 : SupabaseBulletinsGateway
+  { name: 'fn_signaler_copie_bulletin', statut: 'consommee', lot: 4 }, // L4-T10 : SupabaseBulletinsGateway
   // T11 — pool urgence et exclusions
   { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'a_venir', lot: 4 },
   { name: 'fn_toggle_pool_urgence', statut: 'a_venir', lot: 4 },

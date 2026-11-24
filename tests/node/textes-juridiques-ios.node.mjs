@@ -116,7 +116,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   // Lot 4, tranche T10 (LOT4_PLAN §3 T10) : copies officielles des bulletins — mention de l'employeur et avertissement
   // de retrait (HARD STOP), libellés de la liste, messages de la bibliothèque, titre du partage.
   const lot4 = ['src/components/CopiesBulletins.tsx', 'src/components/CopiesBulletinsListe.tsx',
-    'src/lib/copiesBulletins.ts', 'src/lib/copiesBulletinsPartageNatif.ts'];
+    'src/lib/copiesBulletins.ts', 'src/lib/copiesBulletinsPartageNatif.ts', 'src/pages/BulletinsPaie.tsx'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
