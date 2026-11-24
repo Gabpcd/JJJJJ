@@ -1,0 +1,365 @@
+name: iOS Swift — lot 5 STAGING (espace établissement)
+
+# Preuve STAGING de l'espace établissement de l'app iOS native (lot 5, tranche T13 ;
+# docs/mobile-swift/LOT5_PLAN.md §3 T13, docs/mobile-swift/DECISIONS_LOT5.md section T13) :
+# les gateways établissement contre un vrai serveur de test, jamais la production.
+#
+# Pas à pas (job « parcours ») :
+#   1. clé publishable du STAGING relue par la Management API (scripts/mobile/staging-lot5-fixture.mjs acces) ;
+#   2. build-for-testing du scheme Jolene-Staging (URL et clé surchargées en ligne de commande, rien dans le dépôt) ;
+#   3. cohorte D5 préparée (E1 propriétaire legacy, S1, M1 + candidature, M2 contrat SIGNE_COMPLET et code actif) ;
+#   4. XCUITest phase 1 (StagingEtabParcoursTests) : connexion, missions, acceptation, contrat signé, code de pointage ;
+#   5. scans d'arrivée puis de départ de M2 sous le JWT de S1, attente de la fin du créneau planifié ;
+#   6. XCUITest phase 2 : validation notée de la présence ;
+#   7. relectures en base (candidature ACCEPTEE, présence validée, aucune ligne d'escrow) ;
+#   8. nettoyage de la cohorte, même en cas d'échec, compte final des objets marqués exigé à 0 ;
+#   9. résumé : tests échoués nommés, bilan de chaque phase, artefact xcresult (seulement si le nettoyage a réussi :
+#      les comptes du run, dont le mot de passe saisi par le test, sont alors supprimés).
+#
+# Garde-fous : dispatch manuel sur main seulement, SHA relu égal au SHA dispatché ; environnement native-staging-auth ;
+# concurrence partagée jolene-supabase-staging-writes (une écriture STAGING à la fois) ; le script refuse la production
+# (flripxtsyegjshnhzjkz) avant tout appel réseau. Aucun SMS (contrat inséré signé, aucun téléphone), aucun e-mail
+# (comptes TEST, transports de notification fermés). Les secrets STAGING ne sont donnés qu'aux étapes du script, jamais
+# à xcodebuild ; la clé service_role n'est jamais écrite dans GITHUB_ENV.
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_sha:
+        description: SHA complet de main déjà relu (doit être celui du dispatch)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CI: '1'
+  JOLENE_XCODE_APP: /Applications/Xcode_26.4.1.app
+  JOLENE_XCODE_VERSION_ATTENDUE: 'Xcode 26.4.1'
+  JOLENE_XCODE_BUILD_ATTENDU: '17E202'
+  JOLENE_STAGING_REF: mejpriaetwgtcstbgfid
+  JOLENE_STAGING_URL: https://mejpriaetwgtcstbgfid.supabase.co
+
+jobs:
+  politique:
+    name: Politique — main, SHA relu, verrou de la cohorte
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Le SHA relu est celui du dispatch et du workflow
+        env:
+          REQUESTED_SHA: ${{ inputs.reviewed_sha }}
+        run: |
+          node -e 'const e=process.env;if(!/^[a-f0-9]{40}$/.test(e.REQUESTED_SHA)||![e.GITHUB_SHA,e.GITHUB_WORKFLOW_SHA].every(s=>s===e.REQUESTED_SHA)){console.error("::error::SHA demandé, dispatché et du workflow doivent être identiques (main).");process.exit(1)}'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Verrou de projet et cycle de la cohorte (transport simulé, aucun réseau)
+        run: node --test tests/node/staging-lot5-fixture.node.mjs
+      - name: Le XCUITest du parcours doit exister
+        run: |
+          grep -qE "final class StagingEtabParcoursTests\s*:\s*JoleneUITestCase" ios-native/JoleneUITests/StagingEtabParcoursTests.swift || {
+            echo "::error::StagingEtabParcoursTests absent : ce workflow refuse de tourner à vide."; exit 1; }
+
+  parcours:
+    name: Parcours établissement STAGING — iPhone (XCUITest)
+    if: github.ref == 'refs/heads/main'
+    needs: politique
+    environment: native-staging-auth
+    runs-on: macos-26
+    timeout-minutes: 150
+    concurrency:
+      group: jolene-supabase-staging-writes
+      queue: max
+      cancel-in-progress: false
+    env:
+      JOLENE_UI_FORMAT: iphone
+      JOLENE_UI_OUTPUT: ${{ github.workspace }}/ios-native/test-results/lot5-staging
+      LOT5_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Fichiers privés du run (manifeste de la cohorte, entrée du XCUITest), hors de l'espace de travail
+        run: |
+          mkdir -p "$RUNNER_TEMP/lot5-prive" && chmod 700 "$RUNNER_TEMP/lot5-prive"
+          { echo "LOT5_MANIFEST=$RUNNER_TEMP/lot5-prive/manifeste.json"; echo "LOT5_XCUITEST_JSON=$RUNNER_TEMP/lot5-prive/entree.json"; } >> "$GITHUB_ENV"
+      - name: Clé publishable STAGING (Management API, masquée)
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          # Repli facultatif si la Management API ne sert pas de clé publishable.
+          JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY: ${{ vars.JOLENE_NATIVE_STAGING_PUBLISHABLE_KEY }}
+        run: node scripts/mobile/staging-lot5-fixture.mjs acces
+      - name: Sélectionner Xcode 26.4.1 sans repli
+        run: |
+          sudo xcode-select -s "$JOLENE_XCODE_APP/Contents/Developer"
+          version="$(xcodebuild -version)"
+          echo "$version"
+          [ "$(echo "$version" | sed -n 1p)" = "$JOLENE_XCODE_VERSION_ATTENDUE" ] || { echo "::error::Xcode attendu : $JOLENE_XCODE_VERSION_ATTENDUE"; exit 1; }
+          echo "$version" | grep -q "$JOLENE_XCODE_BUILD_ATTENDU" || { echo "::error::Build Xcode attendu : $JOLENE_XCODE_BUILD_ATTENDU"; exit 1; }
+      - name: Choisir le simulateur iPhone
+        id: simulateur
+        run: |
+          runtimes="$(xcrun simctl list runtimes --json)"
+          devices="$(xcrun simctl list devices available --json)"
+          udid="$(RUNTIMES="$runtimes" DEVICES="$devices" node --input-type=module -e '
+            import { selectIosCiSimulator } from "./mobile-native/scripts/ios-ci-toolchain.mjs";
+            const { device } = selectIosCiSimulator(JSON.parse(process.env.RUNTIMES).runtimes, JSON.parse(process.env.DEVICES).devices, "iphone");
+            process.stdout.write(device.udid);
+          ')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl shutdown all || true
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+      - name: Cache des paquets SPM clonés par xcodebuild
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/spm-cloned
+          key: spm-xcodebuild-${{ runner.os }}-xcode26.4.1-${{ hashFiles('ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'ios-native/Packages/*/Package.swift') }}
+          restore-keys: |
+            spm-xcodebuild-${{ runner.os }}-xcode26.4.1-
+      - name: build-for-testing Jolene-Staging (URL et clé surchargées en ligne de commande)
+        id: build
+        timeout-minutes: 40
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+        run: |
+          mkdir -p "$JOLENE_UI_OUTPUT"
+          set +e
+          xcodebuild build-for-testing \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene-Staging \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            JOLENE_ENVIRONMENT=staging \
+            "JOLENE_SUPABASE_URL=$JOLENE_STAGING_URL" \
+            "JOLENE_SUPABASE_PUBLISHABLE_KEY=$JOLENE_STAGING_PUBLISHABLE_KEY" \
+            > "$JOLENE_UI_OUTPUT/build-for-testing.log" 2>&1
+          code=$?
+          set -e
+          grep -E "error: |\*\* TEST BUILD" "$JOLENE_UI_OUTPUT/build-for-testing.log" | tail -n 40 || true
+          grep -q "TEST BUILD SUCCEEDED" "$JOLENE_UI_OUTPUT/build-for-testing.log" || { echo "::error::build-for-testing Jolene-Staging a échoué (code $code)."; exit 1; }
+      # La cohorte est préparée APRÈS la compilation : le créneau de M2 commence 12 minutes plus tard, le code est
+      # affichable aussitôt (fenêtre de 15 minutes) et la présence validable à la fin du créneau.
+      - name: Préparer la cohorte D5 (E1, S1, M1 + candidature, M2 contrat signé et code)
+        id: preparer
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOT5_STAGING_ECRITURE: COHORTE_D5
+        run: node scripts/mobile/staging-lot5-fixture.mjs preparer
+      - name: XCUITest phase 1 — connexion, missions, candidature, contrat signé, code de pointage
+        id: phase1
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          PHASE: lot5-phase1
+          TEST: JoleneUITests/StagingEtabParcoursTests/testPhase1ConnexionCandidatureAccepteeContratSigneEtCodeDePointage
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$PHASE.xcresult"
+          echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          [ -f "$LOT5_XCUITEST_JSON" ] || { echo "::error::Entrée privée de la cohorte absente."; echo "code=1" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Masque l'email et le mot de passe d'E1 avant toute sortie (déjà masqués par l'étape de préparation).
+          node -e 'const c=JSON.parse(require("fs").readFileSync(process.env.LOT5_XCUITEST_JSON,"utf8"));for(const v of [c.etablissement.email,c.etablissement.password])console.log("::add-mask::"+v)'
+          cohorte="$(cat "$LOT5_XCUITEST_JSON")"
+          set +e
+          # Préfixe TEST_RUNNER_ : xcodebuild le retire et l'expose au runner XCUITest, jamais à l'app.
+          TEST_RUNNER_JOLENE_MODE=staging \
+          TEST_RUNNER_JOLENE_UI_FORMAT="$JOLENE_UI_FORMAT" \
+          TEST_RUNNER_JOLENE_LOT5_STAGING_JSON="$cohorte" \
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene-Staging \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:"$TEST" \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 1500 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            JOLENE_ENVIRONMENT=staging \
+            "JOLENE_SUPABASE_URL=$JOLENE_STAGING_URL" \
+            "JOLENE_SUPABASE_PUBLISHABLE_KEY=$JOLENE_STAGING_PUBLISHABLE_KEY" \
+            > "$RUNNER_TEMP/$PHASE.private.log" 2>&1
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Journal publié seulement après rédaction (email et mot de passe d'E1 remplacés) ; le brut reste privé.
+          # shellcheck disable=SC2016
+          node -e '
+            const fs = require("fs"), e = process.env;
+            const c = JSON.parse(fs.readFileSync(e.LOT5_XCUITEST_JSON, "utf8"));
+            let texte = fs.readFileSync(`${e.RUNNER_TEMP}/${e.PHASE}.private.log`, "utf8");
+            for (const v of [c.etablissement.password, c.etablissement.email]) if (v) texte = texte.split(v).join("[PRIVATE]");
+            fs.writeFileSync(`${e.JOLENE_UI_OUTPUT}/test-without-building-${e.PHASE}.log`, texte);
+            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: /.test(l)).slice(-60).join("\n"));
+          ' || true
+          rm -f "$RUNNER_TEMP/$PHASE.private.log"
+          echo "xcodebuild test-without-building ($PHASE) : code $code"
+      - name: Scans d'arrivée et de départ de M2 sous le JWT de S1, puis fin du créneau
+        id: scanner
+        if: steps.phase1.outputs.code == '0'
+        timeout-minutes: 35
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOT5_STAGING_ECRITURE: COHORTE_D5
+        run: node scripts/mobile/staging-lot5-fixture.mjs scanner
+      - name: XCUITest phase 2 — validation notée de la présence
+        id: phase2
+        if: steps.scanner.outcome == 'success'
+        timeout-minutes: 20
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          PHASE: lot5-phase2
+          TEST: JoleneUITests/StagingEtabParcoursTests/testPhase2ValidationDeLaPresenceApresLesScansDuSoignant
+        run: |
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$PHASE.xcresult"
+          echo "xcresult=$resultat" >> "$GITHUB_OUTPUT"
+          [ -f "$LOT5_XCUITEST_JSON" ] || { echo "::error::Entrée privée de la cohorte absente."; echo "code=1" >> "$GITHUB_OUTPUT"; exit 0; }
+          # Masque l'email et le mot de passe d'E1 avant toute sortie (déjà masqués par l'étape de préparation).
+          node -e 'const c=JSON.parse(require("fs").readFileSync(process.env.LOT5_XCUITEST_JSON,"utf8"));for(const v of [c.etablissement.email,c.etablissement.password])console.log("::add-mask::"+v)'
+          cohorte="$(cat "$LOT5_XCUITEST_JSON")"
+          set +e
+          # Préfixe TEST_RUNNER_ : xcodebuild le retire et l'expose au runner XCUITest, jamais à l'app.
+          TEST_RUNNER_JOLENE_MODE=staging \
+          TEST_RUNNER_JOLENE_UI_FORMAT="$JOLENE_UI_FORMAT" \
+          TEST_RUNNER_JOLENE_LOT5_STAGING_JSON="$cohorte" \
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene-Staging \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:"$TEST" \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            JOLENE_ENVIRONMENT=staging \
+            "JOLENE_SUPABASE_URL=$JOLENE_STAGING_URL" \
+            "JOLENE_SUPABASE_PUBLISHABLE_KEY=$JOLENE_STAGING_PUBLISHABLE_KEY" \
+            > "$RUNNER_TEMP/$PHASE.private.log" 2>&1
+          code=$?
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Journal publié seulement après rédaction (email et mot de passe d'E1 remplacés) ; le brut reste privé.
+          # shellcheck disable=SC2016
+          node -e '
+            const fs = require("fs"), e = process.env;
+            const c = JSON.parse(fs.readFileSync(e.LOT5_XCUITEST_JSON, "utf8"));
+            let texte = fs.readFileSync(`${e.RUNNER_TEMP}/${e.PHASE}.private.log`, "utf8");
+            for (const v of [c.etablissement.password, c.etablissement.email]) if (v) texte = texte.split(v).join("[PRIVATE]");
+            fs.writeFileSync(`${e.JOLENE_UI_OUTPUT}/test-without-building-${e.PHASE}.log`, texte);
+            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: /.test(l)).slice(-60).join("\n"));
+          ' || true
+          rm -f "$RUNNER_TEMP/$PHASE.private.log"
+          echo "xcodebuild test-without-building ($PHASE) : code $code"
+      - name: Relectures en base (candidature ACCEPTEE, présence validée, aucune ligne d'escrow)
+        id: verifier
+        if: steps.phase2.outputs.code == '0'
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/mobile/staging-lot5-fixture.mjs verifier
+      - name: Nettoyer la cohorte (même en cas d'échec) et prouver 0 objet marqué
+        id: nettoyer
+        if: always()
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOT5_STAGING_ECRITURE: COHORTE_D5
+        run: node scripts/mobile/staging-lot5-fixture.mjs nettoyer
+      - name: Résumé — tests échoués nommés, bilan de chaque phase (aucun succès fabriqué)
+        if: always()
+        env:
+          CODE_PHASE1: ${{ steps.phase1.outputs.code }}
+          CODE_PHASE2: ${{ steps.phase2.outputs.code }}
+          ISSUE_SCANNER: ${{ steps.scanner.outcome }}
+          ISSUE_VERIFIER: ${{ steps.verifier.outcome }}
+          ISSUE_NETTOYER: ${{ steps.nettoyer.outcome }}
+        run: |
+          # Nom, durée et premier message de chaque test échoué (outil commun des jobs UI) ; ne décide jamais du statut.
+          node scripts/mobile/ios-ci-resume-tests.mjs lot5-phase1 lot5-phase2 || true
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import { existsSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+            import { execFileSync } from "node:child_process";
+            const e = process.env, lignes = ["### Lot 5 — parcours établissement STAGING (iPhone)", ""];
+            let ok = true;
+            for (const [phase, code, attendus] of [["lot5-phase1", e.CODE_PHASE1, 1], ["lot5-phase2", e.CODE_PHASE2, 1]]) {
+              const bundle = `${e.RUNNER_TEMP}/ui-${e.JOLENE_UI_FORMAT}-${phase}.xcresult`;
+              if (!existsSync(bundle)) { lignes.push(`- ${phase} : non exécutée (xcodebuild ${code || "—"})`); ok = false; continue; }
+              const s = JSON.parse(execFileSync("xcrun", ["xcresulttool", "get", "test-results", "summary", "--path", bundle], { encoding: "utf8" }));
+              writeFileSync(`${e.JOLENE_UI_OUTPUT}/xctest-summary-${phase}.json`, JSON.stringify(s, null, 2));
+              const total = s.totalTestCount ?? 0, passed = s.passedTests ?? 0, failed = s.failedTests ?? 0, skipped = s.skippedTests ?? 0;
+              const echoues = (s.testFailures ?? []).map(f => f.testName).filter(Boolean);
+              lignes.push(`- ${phase} : xcodebuild ${code}, ${s.result} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total)`
+                + (echoues.length ? ` — échoués : ${[...new Set(echoues)].join(", ")}` : ""));
+              if (!(code === "0" && s.result === "Passed" && total === attendus && passed === total && failed === 0 && skipped === 0)) ok = false;
+            }
+            lignes.push(`- scans de S1 : ${e.ISSUE_SCANNER || "—"} ; relectures en base : ${e.ISSUE_VERIFIER || "—"} ; nettoyage (0 objet marqué) : ${e.ISSUE_NETTOYER || "—"}`);
+            if (e.ISSUE_SCANNER !== "success" || e.ISSUE_VERIFIER !== "success" || e.ISSUE_NETTOYER !== "success") ok = false;
+            lignes.push("- périmètre : rien en production ; aucun SMS ni e-mail ; preuves = assertions XCUITest et relectures SQL, aucune capture");
+            appendFileSync(e.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");
+            console.log(lignes.join("\n"));
+            if (!ok) { console.error("::error::Parcours établissement STAGING non concluant (voir le résumé)."); process.exit(1); }
+          '
+      - name: Exporter le résumé, les extraits rédigés et les relevés
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-lot5-staging-resume-${{ inputs.reviewed_sha }}
+          path: |
+            ios-native/test-results/lot5-staging/xctest-summary-*.json
+            ios-native/test-results/lot5-staging/xctest-tests-*.json
+            ios-native/test-results/lot5-staging/test-without-building-lot5-phase*.log
+          retention-days: 7
+          if-no-files-found: warn
+      # Le bundle xcresult (journaux d'activité, capture d'échec) contient la saisie du mot de passe d'E1 et l'écran du
+      # code : il n'est exporté que si le nettoyage a supprimé les comptes et la mission du run.
+      - name: Exporter les xcresult (comptes du run supprimés)
+        if: always() && steps.nettoyer.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-lot5-staging-xcresult-${{ inputs.reviewed_sha }}
+          path: |
+            ${{ runner.temp }}/ui-iphone-lot5-phase1.xcresult
+            ${{ runner.temp }}/ui-iphone-lot5-phase2.xcresult
+          retention-days: 3
+          if-no-files-found: warn
+      - name: Effacer les entrées privées et éteindre le simulateur
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/lot5-prive" "$RUNNER_TEMP"/lot5-phase*.private.log "$RUNNER_TEMP"/ui-*-lot5-phase*.xcresult
+          xcrun simctl shutdown all || true
