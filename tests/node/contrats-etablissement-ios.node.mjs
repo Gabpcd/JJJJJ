@@ -556,7 +556,7 @@ function swiftSous(relatif) {
   });
 }
 
-test('AppContainer câble l ouverture de l espace établissement sur le mode de lancement (m3)', () => {
+test('AppContainer câble l ouverture de l espace établissement sur le mode de lancement (m3) ; production fermée (T13)', () => {
   // La cible app n'a pas de tests unitaires et les XCUITest tournent en démo (espace ouvert) : un `.ouvert` posé dans le
   // chemin staging/production passerait toute la CI. Le câblage est donc lu dans le source.
   const app = read('ios-native/Jolene/Composition/AppContainer.swift');
@@ -569,14 +569,32 @@ test('AppContainer câble l ouverture de l espace établissement sur le mode de 
   assert.ok(coordinateur.includes('espaceEtablissement: .pour(mode: environment.mode)'),
     'DeepLinkCoordinator(espaceEtablissement:) : .pour(mode: environment.mode)');
   assert.ok(!/\.ouvert\b/.test(sansCommentaires), 'aucune ouverture forcée de l espace établissement dans AppContainer');
-  // La table elle-même : fermé hors démo, défaut fermé du contrôleur et de l'aiguillage.
+  // La table elle-même : ouverte en démo et (T13, 24/11/2026) en staging, la production reste FERMÉE jusqu'à T14 ;
+  // défaut fermé du contrôleur et de l'aiguillage. Ouvrir la production est l'objet de T14, jamais d'une autre tranche.
   const espace = read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EspaceResolution.swift');
-  assert.ok(espace.includes('case .demo: return .ouvert') && espace.includes('case .staging, .production: return .ferme'),
-    'OuvertureEspaceEtablissement.pour(mode:) : ouvert en démo seulement');
+  const table = /public static func pour\(mode: JoleneMode\) -> OuvertureEspaceEtablissement \{([\s\S]*?)\n {4}\}/.exec(espace)?.[1] ?? '';
+  const cas = [...table.replace(/\/\/.*$/gm, '').matchAll(/case ([^:]+): return \.(ouvert|ferme)\b/g)]
+    .flatMap(m => m[1].split(',').map(c => [c.trim(), m[2]]));
+  assert.deepEqual(Object.fromEntries(cas), { '.demo': 'ouvert', '.staging': 'ouvert', '.production': 'ferme' },
+    'OuvertureEspaceEtablissement.pour(mode:) : démo et staging ouverts (T13), production fermée jusqu à T14');
+  assert.equal(cas.length, 3, `trois cas exactement, sans default : ${JSON.stringify(cas)}`);
+  assert.doesNotMatch(table, /\bdefault\b/, 'aucun default : un mode ajouté doit être décidé explicitement');
   assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionController.swift'),
     /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'contrôleur fermé par défaut');
   assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Links/DeepLinkIntent.swift'),
     /espaceEtablissement: OuvertureEspaceEtablissement = \.ferme\)/, 'aiguillage fermé par défaut');
+});
+
+test('T13, m1 de la revue B8 de #1147 : un refus de session rend le lien établissement mémorisé (RootView → coordinateur)', () => {
+  // La cible app n'a pas de tests unitaires : la décision est prouvée dans JoleneCore (`DeepLinkCoordinatorTests`), le
+  // câblage est lu dans le source. Sans lui, un lien natif mémorisé serait perdu sur `.blocked` (STAGING ouvert depuis T13).
+  const sansCommentaires = chemin => read(chemin).split('\n').map(l => l.replace(/\/\/.*$/, '')).join('\n');
+  const racine = sansCommentaires('ios-native/Jolene/Screens/RootView.swift');
+  const surChangement = /\.onChange\(of: session\.state\) \{ etat in([\s\S]*?)\n {8}\}/.exec(racine)?.[1] ?? '';
+  assert.match(surChangement, /if case \.blocked = etat \{ container\.liens\.sessionRefusee\(\) \}/,
+    'RootView signale chaque passage à .blocked au coordinateur des liens');
+  assert.match(sansCommentaires('ios-native/Jolene/Composition/DeepLinkCoordinator.swift'),
+    /func sessionRefusee\(\) \{\s*executer\(aiguillage\.sessionRefusee\(\)\)\s*\}/, 'le coordinateur exécute l action de l aiguillage');
 });
 
 test('T7 : la veille de l écran du code de pointage est libérée explicitement (disparition, scène inactive)', () => {

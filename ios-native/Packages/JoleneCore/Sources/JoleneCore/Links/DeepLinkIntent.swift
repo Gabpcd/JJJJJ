@@ -145,7 +145,9 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
 /// `LinkRouter.etablissementDestination` — onglet ou écran livré de cet espace, sinon renvoi web ; un lien soignant y
 /// est un renvoi web, jamais un écran soignant ; `/contrat/{id}` y est le contrat de l'espace établissement. Dans l'espace
 /// soignant, un lien établissement reste un renvoi web (inchangé). Sans espace, un lien établissement n'est mémorisé que
-/// si l'espace établissement est ouvrable dans ce lancement (`OuvertureEspaceEtablissement`, démo jusqu'à T14).
+/// si l'espace établissement est ouvrable dans ce lancement (`OuvertureEspaceEtablissement` : démo et staging, production
+/// à T14) ; si la session s'arrête ensuite sur un refus (`.blocked`), ce lien redevient le renvoi web d'avant le lot 5
+/// (`sessionRefusee()`, point m1 de la revue B8 de #1147, corrigé par T13).
 ///
 /// Écart consigné (comme les taps, revue L3-T5 m12) : un lien reçu sur l'écran de connexion après une déconnexion
 /// est rejoué pour l'identité qui se connecte ensuite, comme le web ; la destination est relue sous sa RLS.
@@ -283,6 +285,21 @@ public final class AiguillageLiens {
         guard let lien = lienEnAttente else { return nil }
         lienEnAttente = nil
         return actionEtablissement(pour: lien, dans: snapshot)
+    }
+
+    /// Session arrêtée sur un refus (`SessionState.blocked` : rôle non servi, email non confirmé, compte inactif, périmètre
+    /// établissement divergent, onboarding) sans espace ouvert. Un lien **établissement** mémorisé faute d'espace (route
+    /// native, espace établissement ouvrable) n'a plus d'espace qui le rejouera : il redevient le renvoi web que l'app
+    /// présentait aussitôt avant le lot 5, une seule fois, puis il est oublié (point m1 de la revue B8 de #1147, corrigé
+    /// par T13). Un lien de l'espace soignant garde la règle du lot 3 (il attend la prochaine identité ouverte) ; le
+    /// renvoi déjà affiché n'est pas redemandé (anti-boucle). Sans effet si un espace est ouvert ou si rien n'attend.
+    public func sessionRefusee() -> Action? {
+        guard espace == nil, espaceEtablissement == nil, let lien = lienEnAttente, case .etablissement = lien.route else {
+            return nil
+        }
+        lienEnAttente = nil
+        if let affiche = renvoiAffiche, affiche == lien.destination.externalURL { return nil }
+        return .renvoiWeb(lien.destination)
     }
 
     /// Disparition de l'espace de cet epoch ; sans effet si un autre espace s'est déjà ouvert.

@@ -265,7 +265,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
                        file: file, line: line)
     }
 
-    /// Défaut du contrôleur (staging, production) : restauration.
+    /// Défaut du contrôleur (fail-closed, configuration de production jusqu'à T14) : restauration.
     func testEspaceFermeParDefautRendLeRefusDAvantLeLot5SansAppelEtablissement() async {
         let fixture = EtabFixture()
         let state = await SessionController(gateways: fixture.gateways()).start()
@@ -329,10 +329,26 @@ final class SessionControllerEtablissementTests: XCTestCase {
         XCTAssertNil(store.ecransEtablissement.epochCharge)
     }
 
+    /// T13 (24/11/2026) : staging ouvert pour la recette contre le serveur de test ; la production reste fermée
+    /// jusqu'à T14 (`DECISIONS_LOT5.md`, section T13).
     func testOuvertureParModeDeLancement() {
         XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .demo), .ouvert)
-        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .staging), .ferme)
-        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .production), .ferme)
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .staging), .ouvert, "T13 : recette STAGING")
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .production), .ferme, "production fermée jusqu'à T14")
+    }
+
+    /// T13 : avec l'ouverture de STAGING (`pour(mode: .staging)`), un compte établissement confirmé par le serveur reçoit
+    /// l'espace établissement ; avec celle de la production (`pour(mode: .production)`), le même compte reçoit le refus
+    /// d'avant le lot 5, sans aucun appel établissement.
+    func testStagingOuvreLEspaceEtLaProductionLeRefuse() async {
+        let staging = EtabFixture()
+        let ouvert = await SessionController(gateways: staging.gateways(),
+                                             espaceEtablissement: .pour(mode: .staging)).start()
+        guard case .readyEtablissement = ouvert else { return XCTFail("staging : espace établissement attendu, reçu \(ouvert)") }
+        let production = EtabFixture()
+        let ferme = await SessionController(gateways: production.gateways(),
+                                            espaceEtablissement: .pour(mode: .production)).start()
+        await Self.verifierRefusDAvantLeLot5(ferme, log: production.log)
     }
 
     func testPortSessionNonCableNOuvreJamaisLEspace() async {

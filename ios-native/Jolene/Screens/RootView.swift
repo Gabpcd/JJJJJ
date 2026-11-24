@@ -135,6 +135,9 @@ private struct SessionRootView: View {
         // Intégration du lot 3 : un lien reçu au lancement (restauration en cours) attend l'issue de la session.
         .onChange(of: session.state) { etat in
             consommer(liens.inscription)
+            // Lot 5, T13 (m1 de la revue B8 de #1147) : un lien établissement mémorisé faute d'espace n'est jamais perdu
+            // sur un refus ; il redevient le renvoi web d'avant le lot 5 (`AiguillageLiens.sessionRefusee`).
+            if case .blocked = etat { container.liens.sessionRefusee() }
             // T8 : le message de la déconnexion locale ne vaut que pour l'écran de connexion qui la suit.
             if case .signedOut = etat {} else { messageConnexion = nil }
         }

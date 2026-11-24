@@ -11,7 +11,8 @@ import XCTest
 /// - espace établissement : un onglet est présenté dans la coquille (epoch de l'espace), un écran non livré et tout lien
 ///   soignant sont des renvois web, `/contrat/{id}` n'ouvre jamais l'écran soignant ;
 /// - lien reçu sans espace : mémorisé puis rejoué une fois dans l'espace qui s'ouvre si l'espace établissement est
-///   ouvrable (démo) ; sinon (staging, production avant T14) renvoi web présenté aussitôt, comme avant le lot 5 ;
+///   ouvrable (démo, staging depuis T13) ; sinon (production avant T14) renvoi web présenté aussitôt, comme avant le
+///   lot 5 ; mémorisé puis session refusée (`.blocked`) : le même renvoi web, une fois (m1 de la revue B8 de #1147) ;
 /// - anti-boucle du renvoi affiché, fermeture de l'espace par son epoch.
 @MainActor
 final class DeepLinkCoordinatorTests: XCTestCase {
@@ -150,7 +151,7 @@ final class DeepLinkCoordinatorTests: XCTestCase {
     }
 
     func testEspaceEtablissementFermeLienEtablissementResteUnRenvoiImmediat() {
-        let aiguillage = AiguillageLiens(taps: BoiteTapsPush()) // défaut : fermé (staging, production avant T14)
+        let aiguillage = AiguillageLiens(taps: BoiteTapsPush()) // défaut : fermé (production avant T14)
         let lien = url("https://jolene.app/etablissement/missions/m-1")
         XCTAssertEqual(aiguillage.recevoir(url: lien), .renvoiWeb(.etablissement(lien)), "comportement d'avant le lot 5")
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
@@ -166,6 +167,44 @@ final class DeepLinkCoordinatorTests: XCTestCase {
             XCTAssertEqual(aiguillage.recevoir(url: lien), .renvoiWeb(.etablissement(lien)), chemin)
             XCTAssertFalse(aiguillage.aUnLienEnAttente, "\(chemin) : jamais mémorisé")
         }
+    }
+
+    // MARK: - Session refusée (m1 de la revue B8 de #1147, corrigé par T13)
+
+    /// Un lien établissement à route native mémorisé sans espace n'est plus perdu quand la session s'arrête sur un refus :
+    /// il redevient le renvoi web d'avant le lot 5, présenté une seule fois.
+    func testLienEtablissementMemoriseRedevientUnRenvoiQuandLaSessionEstRefusee() {
+        let aiguillage = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        let lien = url("https://jolene.app/etablissement/missions/m-1")
+        XCTAssertNil(aiguillage.recevoir(url: lien), "mémorisé : l'espace établissement est ouvrable")
+        XCTAssertTrue(aiguillage.aUnLienEnAttente)
+        XCTAssertEqual(aiguillage.sessionRefusee(), .renvoiWeb(.etablissement(lien)), "renvoi web d'avant le lot 5")
+        XCTAssertFalse(aiguillage.aUnLienEnAttente, "le lien n'attend plus d'espace")
+        XCTAssertNil(aiguillage.sessionRefusee(), "présenté une seule fois")
+        XCTAssertNil(aiguillage.ouvrirEspaceEtablissement(etablissement(epoch: 2)), "jamais rejoué ensuite")
+    }
+
+    /// Un lien de l'espace soignant garde la règle du lot 3 (il attend la prochaine identité ouverte) ; sans lien en
+    /// attente, ou avec un espace ouvert, un refus est sans effet ; le renvoi déjà affiché n'est pas redemandé.
+    func testSessionRefuseeSansEffetHorsLienEtablissementMemorise() {
+        let vide = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        XCTAssertNil(vide.sessionRefusee(), "rien n'attend")
+
+        let soignant = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        XCTAssertNil(soignant.recevoir(url: url("https://jolene.app/soignant/mes-gains")))
+        XCTAssertNil(soignant.sessionRefusee(), "lien soignant : règle du lot 3")
+        XCTAssertTrue(soignant.aUnLienEnAttente, "il attend toujours la prochaine identité ouverte")
+
+        let ouvert = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        _ = ouvert.ouvrirEspaceEtablissement(etablissement(epoch: 3))
+        XCTAssertNil(ouvert.sessionRefusee(), "un espace est ouvert : sans effet")
+
+        let affiche = AiguillageLiens(taps: BoiteTapsPush(), espaceEtablissement: .ouvert)
+        let lien = url("https://jolene.app/etablissement/messagerie")
+        XCTAssertNil(affiche.recevoir(url: lien))
+        affiche.renvoiWebPresente(.etablissement(lien))
+        XCTAssertNil(affiche.sessionRefusee(), "renvoi déjà affiché : pas de second renvoi (anti-boucle)")
+        XCTAssertFalse(affiche.aUnLienEnAttente, "le lien est tout de même oublié")
     }
 
     /// Revue B8 de #1147, m3 : espace fermé dans ce lancement, une ouverture d'espace établissement n'est pas suivie.
