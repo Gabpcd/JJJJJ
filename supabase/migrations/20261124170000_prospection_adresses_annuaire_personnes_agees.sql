@@ -19,16 +19,16 @@
 --           ceux « contenant des données personnelles » ; le site demande aussi
 --           d'être contacté par qui réutilise ses contenus.
 -- Le fichier porte 10 901 lignes. Le script reproductible
--- scripts/acquisition/extraire-annuaire-personnes-agees.mjs en importe 5143 :
+-- scripts/acquisition/extraire-annuaire-personnes-agees.mjs en importe 5138 :
 -- un FINESS à neuf chiffres et une adresse qui porte un mot de fonction ou de
 -- type d'établissement (contact, direction, accueil, ehpad…), et dont tout le
 -- reste de l'identifiant s'explique par le nom de l'établissement ou de sa
 -- commune (le champ « gestionnaire » n'est pas lu, ce peut être une personne
--- physique). Ne sont PAS importées : 1 611 adresses au seul nom de la
+-- physique). Ne sont PAS importées : 1 610 adresses au seul nom de la
 -- structure (classe S : un établissement peut porter le nom d'une personne,
 -- et rien dans le fichier ne le distingue), 3 509 adresses qui peuvent
 -- nommer une personne (« prenom.nom@ », initiale isolée, mot inexpliqué, prénom
--- sans mot de fonction, « mr.nom@ »), 16 dont le domaine est à une faute de
+-- sans mot de fonction, « mr.nom@ »), 22 dont le domaine est à une faute de
 -- frappe d'un domaine courant, 568 lignes sans adresse, 16 adresses mal
 -- formées, 38 établissements de Corse dont ce script ne lit pas le FINESS
 -- (2A, 2B). Aucune adresse n'est devinée, aucune n'est en messagerie de santé
@@ -61,8 +61,8 @@
 --      prospection_mention_opposition_annuaire_pa ; aucune écriture dans
 --      growth_config. Une origine que ce code ne connaît pas n'a pas de mention :
 --      aucun brouillon n'est préparé, et l'agent le compte (verrou explicite).
---      C'est le cas d'une adresse saisie à la main (provenance SAISIE_MANUELLE,
---      posée par l'écran Sales) et de toute adresse d'un établissement dont le
+--      C'est le cas d'une provenance SAISIE_MANUELLE (code prévu pour les
+--      adresses saisies à la main ; aucun écran ne le pose encore) et de toute adresse d'un établissement dont le
 --      prospect porte une provenance qui décrit une AUTRE adresse (adresse du
 --      prospect changée depuis l'import, fiche CRM corrigée à la main). La
 --      mention historique reste celle des établissements sans provenance.
@@ -151,7 +151,7 @@ ALTER TABLE public.prospects_etablissements
   );
 
 COMMENT ON COLUMN public.prospects_etablissements.email_provenance IS
-  'Origine de l''adresse de contact quand elle vient d''un annuaire public ouvert : email (l''adresse décrite), source_code, source_url, source_publie_le, source_maj_le, releve_le, classe (FONCTION ou STRUCTURE), remplace (ancienne adresse en messagerie fermée). Ne vaut que si email est encore l''adresse du prospect (private.fn_growth_email_source). source_code SAISIE_MANUELLE : adresse saisie dans l''écran Sales, sans page source. NULL : adresse historique (FINESS, Annuaire Santé).';
+  'Origine de l''adresse de contact quand elle vient d''un annuaire public ouvert : email (l''adresse décrite), source_code, source_url, source_publie_le, source_maj_le, releve_le, classe (FONCTION), remplace (ancienne adresse en messagerie fermée). Ne vaut que si email est encore l''adresse du prospect (private.fn_growth_email_source). source_code SAISIE_MANUELLE : code prévu pour une adresse saisie à la main, sans page source ; aucun écran ne le pose encore. NULL : adresse historique (FINESS, Annuaire Santé) ou saisie à la main.';
 
 -- ---------------------------------------------------------------------------
 -- 2. Import des adresses retenues par le script reproductible
@@ -160,7 +160,7 @@ COMMENT ON COLUMN public.prospects_etablissements.email_provenance IS
 -- seule classe importée) ; date de mise à jour de la fiche dans le jeu.
 -- Bloc produit par :
 --   node scripts/acquisition/extraire-annuaire-personnes-agees.mjs base-etablissements.csv --sql bloc
--- 5143 lignes, md5 2ed7ae621a09465c31aa47b7a0bc8b4f (contrôlé ci-dessous et par la garde Node).
+-- 5138 lignes, md5 6dc0d75a074214ed5ac3e390b0ae1d50 (contrôlé ci-dessous et par la garde Node).
 DO $adresses_publiques_import$
 DECLARE
   v_donnees text := $adresses_publiques_donnees$
@@ -392,7 +392,6 @@ DECLARE
 060792082;direction@ehpad-escapade.fr;F;2020-10-04
 060792231;info-residencehelena@wanadoo.fr;F;2020-10-04
 060792322;contact@chateaudelabrague.com;F;2020-10-04
-060792413;foyerlogement@ccas-cagnes.fr;F;2020-10-04
 060792694;contact@ehpad-feuillantines.fr;F;2020-10-04
 060792728;hopital.saintmaur@gmail.com;F;2020-10-04
 060792868;residence.pasteur@ccas-antibes.fr;F;2020-10-04
@@ -438,7 +437,6 @@ DECLARE
 070784277;charnivet.secretariat@orange.fr;F;2020-10-04
 070784400;residencelegrandpre@orange.fr;F;2020-10-09
 070784426;ehpad.laclairiere@annonay-agglo.fr;F;2020-10-04
-070784442;admissions@ehpad.ruomsfr;F;2020-10-04
 070784467;direction@ch-tournon.fr;F;2020-10-04
 070784483;direction@ch-annonay.fr;F;2020-10-04
 070784517;direction@ch-privas.fr;F;2020-10-04
@@ -1049,7 +1047,6 @@ DECLARE
 220004097;foyer.logement.lanvallay@wanadoo.fr;F;2020-10-04
 220004113;ehpadploeuc@orange.fr;F;2020-10-04
 220004139;direction@montbareil.fr;F;2020-10-04
-220004147;direction@maisonssaintjoseph.fr;F;2020-10-04
 220004154;mdr-le-cosquer@orange.fr;F;2020-10-04
 220004352;accueil@ccasplancoet.fr;F;2020-10-04
 220004378;direction@presuzun.fr;F;2020-10-04
@@ -3401,7 +3398,6 @@ DECLARE
 610787111;mairieletheil61@wanadoo.fr;F;2020-10-04
 610787137;ccas.saintescolasse@orange.fr;F;2020-10-04
 610787319;direction@ch-laigle.fr;F;2020-10-04
-610787350;hopital@ch-sees.fr;F;2020-10-04
 610787376;admissions1@ch-mortagne.fr;F;2020-10-04
 610787749;direction@ch-vimoutiers.fr;F;2020-10-04
 610787814;direction@ch-laigle.fr;F;2020-10-04
@@ -3615,7 +3611,6 @@ DECLARE
 640781803;ehpad@osteys.org;F;2020-10-04
 640781969;accueil@ehpadgarlin.com;F;2020-10-04
 640781985;secretariat@ehpad-monein.fr;F;2020-10-04
-640782124;administratif-pau@association-saint-jospeh.fr;F;2020-10-04
 640785382;secretariat.direction@ch-orthez.fr;F;2020-10-04
 640785416;ch.oloron@ch-oloron.fr;F;2020-10-04
 640785465;ccas@mairie-morlaas.fr;F;2020-10-04
@@ -5318,7 +5313,7 @@ $adresses_publiques_donnees$;
   v_ouvertes_avant text;
 BEGIN
   v_bloc := btrim(v_donnees, E'\n');
-  IF pg_catalog.md5(v_bloc) <> '2ed7ae621a09465c31aa47b7a0bc8b4f' THEN
+  IF pg_catalog.md5(v_bloc) <> '6dc0d75a074214ed5ac3e390b0ae1d50' THEN
     RAISE EXCEPTION 'ADRESSES_PUBLIQUES_DONNEES_ALTEREES : le bloc de données ne correspond plus à son empreinte (md5 %).', pg_catalog.md5(v_bloc);
   END IF;
 
@@ -5331,9 +5326,9 @@ BEGIN
   FROM d
   WHERE d.ligne ~ '^[0-9]{9};[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,};F;[0-9]{4}-[0-9]{2}-[0-9]{2}$'
     AND NOT private.fn_growth_email_mssante(d.email);
-  IF v_lignes <> 5143
-     OR (SELECT count(DISTINCT split_part(l, ';', 1)) FROM regexp_split_to_table(v_bloc, E'\n') AS l) <> 5143 THEN
-    RAISE EXCEPTION 'ADRESSES_PUBLIQUES_DONNEES_INVALIDES : % ligne(s) conforme(s) sur 5143 attendues (format, messagerie fermée ou FINESS en double).', v_lignes;
+  IF v_lignes <> 5138
+     OR (SELECT count(DISTINCT split_part(l, ';', 1)) FROM regexp_split_to_table(v_bloc, E'\n') AS l) <> 5138 THEN
+    RAISE EXCEPTION 'ADRESSES_PUBLIQUES_DONNEES_INVALIDES : % ligne(s) conforme(s) sur 5138 attendues (format, messagerie fermée ou FINESS en double).', v_lignes;
   END IF;
 
   -- Photographie des adresses ouvertes des établissements du bloc, avant l'écriture.
@@ -5439,8 +5434,8 @@ $body$;
 --     provenance du prospect (adresse changée depuis l'import, fiche CRM
 --     corrigée à la main). Ajouter une source = ajouter sa mention ici, avec
 --     ses sources dans la PR (CLAUDE.md, HARD STOP n°4).
--- Limite connue, antérieure à ce lot : une adresse saisie à la main AVANT ce
--- lot, ou portée par une fiche CRM créée à la main, n'a pas de provenance et
+-- Limite connue, antérieure à ce lot : une adresse saisie à la main dans
+-- Sales, ou portée par une fiche CRM créée à la main, n'a pas de provenance et
 -- reçoit la mention historique (docs/AGENTS_CROISSANCE.md §4 ter).
 CREATE OR REPLACE FUNCTION private.fn_growth_mention_opposition(p_finess text, p_email text)
 RETURNS text

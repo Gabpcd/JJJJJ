@@ -202,13 +202,15 @@ const EXTENSIONS_FAUTIVES = ['cm', 'om', 'con', 'cmo', 'comm', 'ft', 'fe', 'frr'
 
 /**
  * Domaine probablement fautif : à une lettre d'un domaine grand public ou d'un domaine très présent
- * dans le fichier (`frequents` : domaines portés par au moins cinq lignes), une extension fautive
- * (« .cm »), ou un domaine grand public suivi d'une extension de trop (« gmail.com.fr »).
+ * dans le fichier (`frequents` : domaines portés par au moins trois lignes), une extension fautive
+ * (« .cm », « …ruomsfr »), ou un domaine grand public suivi d'une extension de trop (« gmail.com.fr »).
  */
 export function domaineDouteux(domaine, frequents = []) {
   const d = String(domaine ?? '').toLowerCase();
   if (DOMAINES_COURANTS.includes(d) || frequents.includes(d)) return false;
-  if (EXTENSIONS_FAUTIVES.includes(d.slice(d.lastIndexOf('.') + 1))) return true;
+  const extension = d.slice(d.lastIndexOf('.') + 1);
+  // Extension fautive, ou point manquant devant l'extension (« …ruomsfr », « …orangecom »).
+  if (EXTENSIONS_FAUTIVES.includes(extension) || (extension.length > 4 && /(fr|com|net|org)$/.test(extension))) return true;
   if (DOMAINES_COURANTS.some(r => distance(d, r) === 1 || d.startsWith(`${r}.`))) return true;
   // Repères du fichier : ni les noms courts (« ch-ca.fr »), ni les domaines qui ne diffèrent que
   // par un chiffre (« fede43.admr.org », « fede44.admr.org ») ne sont des fautes de frappe.
@@ -239,13 +241,13 @@ export function extraire(texteCsv) {
   const comptes = { lignes: 0, finess_invalide: 0, ABSENTE: 0, MAL_FORMEE: 0, MESSAGERIE_FERMEE: 0, A_VERIFIER: 0, DOMAINE_DOUTEUX: 0, FONCTION: 0, STRUCTURE: 0, doublon_finess: 0 };
   const parFiness = new Map();
   const lignes = lireCsv(texteCsv);
-  // Domaines portés par au moins cinq lignes du fichier : repères pour les fautes de frappe.
+  // Domaines portés par au moins trois lignes du fichier : repères pour les fautes de frappe.
   const parDomaine = new Map();
   for (const l of lignes) {
     const e = String(l['coordinates.emailContact'] ?? '').trim().toLowerCase();
     if (BIEN_FORMEE.test(e)) { const d = e.slice(e.lastIndexOf('@') + 1); parDomaine.set(d, (parDomaine.get(d) ?? 0) + 1); }
   }
-  const frequents = [...parDomaine].filter(([, n]) => n >= 5).map(([d]) => d);
+  const frequents = [...parDomaine].filter(([, n]) => n >= 3).map(([d]) => d);
   for (const l of lignes) {
     comptes.lignes += 1;
     const finess = String(l.noFinesset ?? '').replace(/\D/g, '');

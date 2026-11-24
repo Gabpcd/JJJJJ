@@ -175,8 +175,12 @@ test('adresse absente, mal formée ou en messagerie de santé fermée', () => {
 });
 
 test('domaine à une faute de frappe d’un domaine courant', () => {
-  for (const d of ['orane.fr', 'ornge.fr', 'wandoo.fr', 'xanadoo.fr', 'gmail.com.fr', 'hotmai.fr']) assert.equal(domaineDouteux(d), true, d);
+  for (const d of ['orane.fr', 'ornge.fr', 'wandoo.fr', 'xanadoo.fr', 'gmail.com.fr', 'hotmai.fr', 'hotmial.fr', 'exemple.cm', 'ehpad.villefr']) assert.equal(domaineDouteux(d), true, d);
   for (const d of ['orange.fr', 'wanadoo.fr', 'gmail.com', 'ymail.com', 'ehpad-mimosas.example', 'ch-exemple.example']) assert.equal(domaineDouteux(d), false, d);
+  // Un repère du fichier au nom court, ou qui ne diffère que par un chiffre, ne fait pas une faute.
+  assert.equal(domaineDouteux('ch-ca.example', ['ch-cb.example']), false);
+  assert.equal(domaineDouteux('fede43.exemple.org', ['fede44.exemple.org']), false);
+  assert.equal(domaineDouteux('association-exmeple.org', ['association-exemple.org']), true);
   // Un domaine très présent dans le fichier sert aussi de repère.
   assert.equal(domaineDouteux('goupe-exemple.example', ['groupe-exemple.example']), true);
   assert.equal(domaineDouteux('groupe-exemple.example', ['groupe-exemple.example']), false);

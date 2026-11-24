@@ -325,10 +325,10 @@ adresse n'est devinée. Sont écartées :
 
 | | Lignes |
 |---|---|
-| **Importées** : un mot de fonction ou de type d'établissement (classe « fonction »), une par FINESS | **5 143**, soit 4 464 adresses distinctes |
-| Non importées : le seul nom de la structure ou de la commune (classe « structure ») | 1 611 |
+| **Importées** : un mot de fonction ou de type d'établissement (classe « fonction »), une par FINESS | **5 138**, soit 4 459 adresses distinctes |
+| Non importées : le seul nom de la structure ou de la commune (classe « structure ») | 1 610 |
 | Écartées : peuvent nommer une personne | 3 509 |
-| Écartées : domaine à une faute de frappe d'un domaine courant | 16 |
+| Écartées : domaine probablement fautif (quelques-uns sont sans doute justes) | 22 |
 | Écartées : pas d'adresse, adresse mal formée | 568, 16 |
 | Non lues : établissements de Corse (FINESS en 2A ou 2B, que le script ne lit pas) | 38 |
 
@@ -375,7 +375,7 @@ jamais contactés, aucun en opposition, aucun avec une adresse ouverte (80 ont u
 messagerie fermée, 87 n'en ont pas). **167 adresses attendues** (56 : 78, 75 : 28, 92 : 61), sur
 les 2 318 établissements ciblés, soit 7 %. Au rythme de 20 premiers contacts par jour, cela
 représente neuf passages, moins les adresses de groupe partagées. La classe « structure », non
-importée, en aurait ajouté 93 dans ces départements. Le nombre exact écrit en production est donné par la migration (message
+importée, en aurait ajouté 94 dans ces départements. Le nombre exact écrit en production est donné par la migration (message
 `ADRESSES_PUBLIQUES_IMPORT` du déploiement) et relu ensuite. Les autres familles ciblées (handicap,
 domicile, hôpitaux, centres de santé, écoles) ne sont pas dans cette source : elles restent sur la
 liste d'appels.
@@ -532,6 +532,6 @@ Garde-fous du code :
    dont le site demande à être contacté par qui réutilise ses contenus ; décider du texte de la
    mention d'opposition des adresses saisies à la main (aujourd'hui elles reçoivent la mention
    historique, fausse pour elles ; le verrou est prêt en base, l'écran Sales reste à brancher avec
-   sa recette) ; décider si les adresses au seul nom de la structure (1 611, dont 93 dans les
+   sa recette) ; décider si les adresses au seul nom de la structure (1 610, dont 94 dans les
    départements pilotes) sont à reprendre, après en avoir lu un échantillon : certaines sont le nom
    d'une personne qui a donné son nom à l'établissement.
