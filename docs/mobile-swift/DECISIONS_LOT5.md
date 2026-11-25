@@ -976,6 +976,16 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    « refus que l'app aurait aussi subi » et « contrôle plus strict que l'app » (m4) ; banc sous `SET ROLE authenticated`
    (m5) ; défaut de décodage nommé par sa clé (`JoleneError.detail`, hors égalité, jamais affiché ; diagnostic
    `permissions:contract:<clé>`) (m6).
+6. **Revue du delta de #1187 (r1, r2)** : r2, le refus en HTTP 200 (`{success:false, error}` ou `{error}`) n'est plus
+   classé sur une cause supposée : le pré-vol recopie, à côté de `HTTP 200`, le message `error` renvoyé par la fonction
+   (« sans message serveur » s'il n'y en a pas), et l'app le porte dans son diagnostic DEBUG
+   (`permissions:refus:<message>` pour un `success:false` ; `permissions:unknown:<message>` pour un `{error}` seul, déjà
+   recopié). Même règle des deux côtés (`messageServeur` du script, `DiagnosticServeur.masquer` de JoleneCore, sous
+   `#if DEBUG`) : jeton, clé, uuid et adresse masqués avant la troncature à 160 caractères, jamais un fragment
+   d'identifiant. Le message suit `PermissionsEtabResult.messageServeur`, hors égalité et hors encodage, jamais affiché ;
+   l'état de session est inchangé. r1, laissé tel quel : la clé fautive d'un défaut de décodage
+   (`JoleneError.detail`) est calculée aussi en Release, mais elle n'est lue que par le diagnostic, absent en Release ;
+   elle n'est donc jamais exposée.
 
 ## En attente de Gabrielle
 

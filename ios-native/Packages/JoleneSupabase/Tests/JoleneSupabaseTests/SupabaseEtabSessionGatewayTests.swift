@@ -72,6 +72,13 @@ final class SupabaseEtabSessionGatewayTests: XCTestCase {
         registry.add("POST", permissionsPath, respond: .json(200, #"{"success":false,"role":null,"permissions":{}}"#))
         let inactif = try await gateway().permissions(etablissementId: nil)
         XCTAssertEqual(inactif, PermissionsEtabResult(success: false, role: nil, etablissementId: nil, permissions: .aucune))
+        XCTAssertNil(inactif.messageServeur, "aucun message serveur : rien n'est supposé")
+        registry.reset()
+        // Revue de #1187, r2 : le message `error` d'un `success:false` suit le résultat (diagnostic DEBUG seulement).
+        registry.add("POST", permissionsPath, respond: .json(200, #"{"success":false,"error":"Compte inactif","role":null,"permissions":{}}"#))
+        let avecMessage = try await gateway().permissions(etablissementId: nil)
+        XCTAssertEqual(avecMessage.messageServeur, "Compte inactif")
+        XCTAssertFalse(avecMessage.success)
         registry.reset()
         registry.add("POST", permissionsPath, respond: .json(200, #"{"success":true,"role":null,"etablissement_id":null,"permissions":{}}"#))
         let revoque = try await gateway().permissions(etablissementId: nil)

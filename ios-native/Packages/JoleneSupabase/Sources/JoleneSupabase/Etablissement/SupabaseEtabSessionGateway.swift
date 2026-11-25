@@ -42,7 +42,10 @@ public struct SupabaseEtabSessionGateway: EtabSessionPort {
         guard reponse.raw.objectValue != nil, reponse.success != nil else {
             throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
         }
-        return try Self.decoder(PermissionsEtabResult.self, reponse)
+        var resultat = try Self.decoder(PermissionsEtabResult.self, reponse)
+        // Revue de #1187, r2 : le message d'un refus `success:false` suit le résultat pour le seul diagnostic DEBUG.
+        if !resultat.success { resultat.messageServeur = reponse.erreur }
+        return resultat
     }
 
     public func profil() async throws -> EtablissementProfil {

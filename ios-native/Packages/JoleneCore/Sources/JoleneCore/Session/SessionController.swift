@@ -40,7 +40,7 @@ public actor SessionController {
     /// publié en DEBUG seulement, comme valeur d'accessibilité de `login-error`, pour qu'un XCUITest STAGING dise
     /// quelle étape a échoué (second parcours STAGING du lot 5, 25/11/2026 : un même message couvre trois causes).
     /// Ne contient ni adresse, ni mot de passe, ni jeton : une étape, le type d'erreur et, pour un défaut de contrat, la
-    /// clé fautive (`JoleneError.detail`), sinon le message déjà mappé. DEBUG seulement : rien n'est calculé en Release.
+    /// clé fautive (`JoleneError.detail`), sinon le message mappé ou celui du serveur, masqué (`DiagnosticServeur`). DEBUG seulement : rien n'est calculé en Release.
     #if DEBUG
     public private(set) var diagnostic: String?
     #endif
@@ -48,7 +48,7 @@ public actor SessionController {
     private func noter(_ etape: String, _ error: Error) {
         #if DEBUG
         if let jolene = error as? JoleneError {
-            diagnostic = "\(etape):\(jolene.kind):\(jolene.detail ?? String(jolene.message.prefix(160)))"
+            diagnostic = "\(etape):\(jolene.kind):\(jolene.detail ?? DiagnosticServeur.masquer(jolene.message))"
         } else {
             diagnostic = "\(etape):\(type(of: error))"
         }
@@ -58,6 +58,18 @@ public actor SessionController {
     private func noter(_ texte: String?) {
         #if DEBUG
         diagnostic = texte
+        #endif
+    }
+
+    /// Périmètre refusé : un `success:false` porteur d'un message serveur le recopie, masqué et tronqué
+    /// (`permissions:refus:<message>`, revue de #1187, r2) ; sinon le périmètre seul. DEBUG seulement.
+    private func noterPerimetre(_ perimetre: PerimetreEtablissement, _ reponse: PermissionsEtabResult) {
+        #if DEBUG
+        if !reponse.success, let message = reponse.messageServeur {
+            diagnostic = "permissions:refus:\(DiagnosticServeur.masquer(message))"
+        } else {
+            diagnostic = "permissions:perimetre:\(perimetre)"
+        }
         #endif
     }
     /// Lot 3, T4 (revue B8) : nombre d'absences de session **confirmées** depuis la création du contrôleur —
@@ -404,7 +416,7 @@ public actor SessionController {
         guard currentEpoch == expected else { return nil }
         let perimetre = EspaceResolution.perimetre(candidat: role.etablissementId, permissions: reponse)
         guard case let .confirme(etablissementId, roleEtab, permissions) = perimetre else {
-            noter("permissions:perimetre:\(perimetre)")
+            noterPerimetre(perimetre, reponse)
             return Self.etat(pour: perimetre)
         }
 

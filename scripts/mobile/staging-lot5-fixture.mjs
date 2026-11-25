@@ -707,7 +707,28 @@ export function choisirCleApp(env, { publishable, anon }) {
   return { cle: anon, origine: "anon (l'app ne l'emploie pas : écart possible avec son geste)" };
 }
 
-const decrireEchec = (fonction, e) => `${fonction} : HTTP ${e.http}${e.code ? `, code ${e.code}` : ''} — ${e.message}`;
+/**
+ * Message renvoyé par le serveur, recopiable dans un message d'arrêt (revue de #1187, r2) : jeton, clé, uuid et adresse
+ * masqués AVANT la troncature (jamais un fragment d'identifiant), espaces réduits, 160 caractères au plus.
+ */
+export function messageServeur(texte, limite = 160) {
+  if (texte === undefined || texte === null) return '';
+  const masque = String(texte)
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g, '<jeton>')
+    .replace(/sb_(?:publishable|secret)_[A-Za-z0-9_-]+/g, '<clé>')
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<uuid>')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<adresse>')
+    .replace(/\s+/g, ' ').trim();
+  return masque.length > limite ? `${masque.slice(0, limite)}…` : masque;
+}
+
+const decrireEchec = (fonction, e) => `${fonction} : HTTP ${e.http}${e.code ? `, code ${e.code}` : ''} — ${messageServeur(e.message, 240)}`;
+/** Refus porté par un corps HTTP 200 (`{success:false, error}` ou `{error}`) : statut et message de NOTRE fonction. */
+const refusCorps = (corps) => {
+  const m = corps && typeof corps === 'object' && typeof corps.error === 'string' ? messageServeur(corps.error) : '';
+  return `HTTP 200${m ? `, message serveur « ${m} »` : ', sans message serveur'}`;
+};
+const porteErreur = (corps) => !!corps && typeof corps === 'object' && corps.error !== undefined && corps.error !== null;
 
 /**
  * Pré-vol de la session établissement, à la manière de `SessionController` (`RoleResolution`, `EspaceResolution`,
@@ -716,7 +737,8 @@ const decrireEchec = (fonction, e) => `${fonction} : HTTP ${e.http}${e.code ? `,
  *     rôle ou établissement absents, rôle d'équipe inconnu, établissement différent du candidat ou du profil ;
  *   - « contrôle plus strict que l'app » : rôle serveur différent d'ADMIN_ETABLISSEMENT/E1 (l'app se replie sur le
  *     rôle signé), permissions du parcours absentes, nom du profil différent du marqueur, échec de fn_get_my_role.
- * Lève un message qui nomme chaque écart (statut HTTP, code brut), sans jeton ni adresse. Entrées : `{ corps }` ou
+ * Lève un message qui nomme chaque écart (statut HTTP, code brut et, pour un refus en HTTP 200, le message renvoyé par
+ * la fonction, masqué et tronqué : `messageServeur`), sans jeton, clé, adresse ni identifiant. Entrées : `{ corps }` ou
  * `{ echec: { http, code, message } }` par RPC.
  */
 export function controlerSessionEtablissement(doc, { role, permissions, profil }, origineCle = 'non précisée') {
@@ -725,6 +747,7 @@ export function controlerSessionEtablissement(doc, { role, permissions, profil }
   // Rôles d'équipe que l'app sert (`RoleEtab`) ; tout autre est « non servi » (`EspaceResolution.perimetre`).
   const ROLES = ['PROPRIETAIRE', 'ADMIN_GROUPE', 'RH', 'POINTAGE_ONLY', 'LECTURE_SEULE'];
   if (role?.echec) stricts.push(`${decrireEchec('fn_get_my_role', role.echec)} (l'app se replie sur le rôle signé)`);
+  else if (porteErreur(role?.corps)) stricts.push(`fn_get_my_role : ${refusCorps(role.corps)} (l'app se replie sur le rôle signé)`);
   else if (role?.corps?.role !== 'ADMIN_ETABLISSEMENT' || role?.corps?.etablissement_id !== e1) {
     const r = role?.corps?.role;
     const lisible = ['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT'].includes(r);
@@ -733,7 +756,9 @@ export function controlerSessionEtablissement(doc, { role, permissions, profil }
   }
   const p = permissions?.corps;
   if (permissions?.echec) bloquants.push(decrireEchec('fn_mes_permissions_etab', permissions.echec));
-  else if (p?.success !== true) bloquants.push(`fn_mes_permissions_etab : success ${JSON.stringify(p?.success ?? null)} (compte inactif ou sans session)`);
+  else if (p?.success !== true) {
+    bloquants.push(`fn_mes_permissions_etab : success ${JSON.stringify(p?.success ?? null)}, ${refusCorps(p)} (compte inactif ou sans session)`);
+  }
   else if (!p?.role || !p?.etablissement_id) bloquants.push('fn_mes_permissions_etab : rôle ou établissement absent (aucun accès)');
   else if (!ROLES.includes(p.role)) bloquants.push(`fn_mes_permissions_etab : rôle d'équipe non servi ${JSON.stringify(p.role)}`);
   else if (p.etablissement_id !== e1) bloquants.push('fn_mes_permissions_etab : établissement différent de E1 (périmètre divergent)');
@@ -743,6 +768,7 @@ export function controlerSessionEtablissement(doc, { role, permissions, profil }
     if (manquantes.length) stricts.push(`fn_mes_permissions_etab : permissions absentes ${manquantes.join(', ')}`);
   }
   if (profil?.echec) bloquants.push(decrireEchec('fn_mon_etablissement_complet', profil.echec));
+  else if (porteErreur(profil?.corps)) bloquants.push(`fn_mon_etablissement_complet : ${refusCorps(profil.corps)}`);
   else if (profil?.corps?.id !== e1) bloquants.push('fn_mon_etablissement_complet : établissement différent de E1 (périmètre divergent)');
   else if (profil?.corps?.nom !== doc.marker) stricts.push('fn_mon_etablissement_complet : nom différent du marqueur du run');
   if (!bloquants.length && !stricts.length) return;

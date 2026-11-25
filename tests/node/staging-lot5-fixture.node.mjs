@@ -9,7 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
-  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp,
+  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -547,4 +547,37 @@ test('pré-vol : contrôles plus stricts que l app classés à part', () => {
     e => /contrôle plus strict/.test(e.message) && !/refus que l'app/.test(e.message));
   assert.throws(() => controlerSessionEtablissement(doc, { ...ok, permissions: { corps: { ...ok.permissions.corps, role: 'PLANNING' } } }), /rôle d'équipe non servi "PLANNING"/);
   assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { echec: { http: 500, code: '42883', message: 'y' } } }), /fn_mon_etablissement_complet : HTTP 500, code 42883/);
+});
+
+test('pré-vol (revue de #1187, r2) : un refus en HTTP 200 recopie le message de la fonction, masqué et tronqué', () => {
+  const doc = { etablissement: { id: 'e1' }, marker: 'M' };
+  const ok = { role: { corps: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'e1' } },
+    permissions: { corps: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1', permissions: { missions: true, candidatures: true, contrats: true, pointage: true, lecture: true } } },
+    profil: { corps: { id: 'e1', nom: 'M' } } };
+  const uuid = '3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c';
+  // Jeton et clé fabriqués à l'exécution : aucun littéral en forme de secret dans les sources (scanner de secrets).
+  const segment = (objet) => Buffer.from(JSON.stringify(objet)).toString('base64url');
+  const jwt = [segment({ alg: 'HS256' }), segment({ sub: 'x' }), Buffer.from('signature').toString('base64url')].join('.');
+  const cle = ['sb', 'publishable', 'abcdefghijklmnop0123'].join('_');
+  const brut = `Compte inactif pour ${uuid} (membre-1@example.invalid) jeton ${jwt} clé ${cle}`;
+  const message = (corps) => { try { controlerSessionEtablissement(doc, { ...ok, permissions: { corps } }); } catch (e) { return e.message; } return ''; };
+  const m = message({ success: false, error: brut });
+  assert.match(m, /refus que l'app aurait aussi subi :\n- fn_mes_permissions_etab : success false, HTTP 200, message serveur « Compte inactif pour <uuid> \(<adresse>\) jeton <jeton> clé <clé> »/);
+  for (const secret of [uuid, 'example.invalid', jwt, jwt.slice(0, 3), cle, cle.slice(0, 15), '3f2b9c1e']) assert.ok(!m.includes(secret), `jamais ${secret}`);
+  // `{error}` seul (sans success) : même statut et même message ; un corps sans message le dit.
+  assert.match(message({ error: 'Etablissement introuvable' }), /success null, HTTP 200, message serveur « Etablissement introuvable »/);
+  assert.match(message({ success: false }), /success false, HTTP 200, sans message serveur/);
+  // Masquage avant troncature : 160 caractères au plus, jamais un fragment d'uuid.
+  const long = messageServeur(`${'a'.repeat(150)} ${uuid}`);
+  assert.equal(long, `${'a'.repeat(150)} <uuid>`);
+  assert.equal(messageServeur('b'.repeat(200)), `${'b'.repeat(160)}…`);
+  assert.equal(messageServeur(`${'c'.repeat(155)} ${uuid}`).includes('3f2b'), false);
+  // Profil et rôle en `{error}` HTTP 200 : nommés avec le message.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { corps: { error: `Etablissement ${uuid} introuvable` } } }),
+    /fn_mon_etablissement_complet : HTTP 200, message serveur « Etablissement <uuid> introuvable »/);
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, role: { corps: { error: 'Non authentifié' } } }),
+    e => /contrôle plus strict/.test(e.message) && /fn_get_my_role : HTTP 200, message serveur « Non authentifié »/.test(e.message));
+  // Un échec HTTP recopie aussi le message masqué.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { echec: { http: 400, code: 'P0001', message: `refus ${uuid}` } } }),
+    e => /HTTP 400, code P0001 — refus <uuid>/.test(e.message) && !e.message.includes(uuid));
 });
