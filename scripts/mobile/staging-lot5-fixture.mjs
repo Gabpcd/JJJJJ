@@ -109,6 +109,12 @@ export function destinationAdmise(url) {
 
 // MARK: - Manifeste
 
+/**
+ * Début exact de l'intitulé d'une mission du run : le marqueur suivi de son séparateur. Comparer le marqueur seul par
+ * préfixe ferait reconnaître au run `N-1` les missions de `N-10` (revue de #1183, tour 2, m-A).
+ */
+export const debutIntitule = marker => `${marker} · `;
+
 /** Adresses des deux comptes d'un run : dérivées de l'étiquette seule (reprise sans manifeste). */
 export const emailsDuRun = runId => ({
   etablissement: `recette-l5-e1-${runId.toLowerCase()}@example.invalid`,
@@ -138,9 +144,9 @@ export function manifeste(runId, maintenant) {
     etablissement: { id: randomUUID(), email: emailsDuRun(runId).etablissement },
     soignant: { id: randomUUID(), email: emailsDuRun(runId).soignant },
     documents: [randomUUID(), randomUUID()],
-    m1: { id: randomUUID(), creneauId: randomUUID(), intitule: `${marker} · M1 candidature`,
+    m1: { id: randomUUID(), creneauId: randomUUID(), intitule: `${debutIntitule(marker)}M1 candidature`,
       debut: jourM1.toISOString(), fin: new Date(jourM1.getTime() + 4 * 60 * minute).toISOString() },
-    m2: { id: randomUUID(), creneauId: randomUUID(), contratId: randomUUID(), intitule: `${marker} · M2 pointage`,
+    m2: { id: randomUUID(), creneauId: randomUUID(), contratId: randomUUID(), intitule: `${debutIntitule(marker)}M2 pointage`,
       numeroContrat: `${marker}-M2`, debut: m2Debut.toISOString(),
       fin: new Date(m2Debut.getTime() + M2_DUREE_MIN * minute).toISOString() },
     status: 'planned', auth: { etablissement: 'not-started', soignant: 'not-started' },
@@ -477,7 +483,7 @@ BEGIN
     RAISE EXCEPTION 'Profil hors du run L5 (marqueur ou compte TEST absent) : aucune suppression';
   END IF;
   v_missions := ${lesMissions};
-  IF EXISTS (SELECT 1 FROM public.missions WHERE id = ANY(v_missions) AND left(intitule, ${m.marker.length}) IS DISTINCT FROM ${q(m.marker)}) THEN
+  IF EXISTS (SELECT 1 FROM public.missions WHERE id = ANY(v_missions) AND left(intitule, ${debutIntitule(m.marker).length}) IS DISTINCT FROM ${q(debutIntitule(m.marker))}) THEN
     RAISE EXCEPTION 'Mission de E1 sans le marqueur du run L5 : aucune suppression';
   END IF;
 
@@ -528,7 +534,7 @@ SELECT true AS nettoye;`;
 export function sqlCompter(m) {
   const e = m.etablissement ?? {}, s = m.soignant ?? {};
   const lesMissions = `(SELECT coalesce(array_agg(id), '{}') FROM public.missions WHERE etablissement_id = ${u(e.id)}
-      OR id = ANY(${missions(m)}) OR left(intitule, ${m.marker.length}) = ${q(m.marker)})`;
+      OR id = ANY(${missions(m)}) OR left(intitule, ${debutIntitule(m.marker).length}) = ${q(debutIntitule(m.marker))})`;
   return `SELECT
   (SELECT count(*)::integer FROM auth.users WHERE id = ANY(${ids(m)}) OR raw_app_meta_data->>'load_fixture_run' = ${q(m.runId)}
      AND raw_app_meta_data->>'load_fixture_kind' = ${q(KIND)}) AS auth,

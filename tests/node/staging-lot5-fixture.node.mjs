@@ -9,6 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
+  debutIntitule,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -400,4 +401,18 @@ test('notifications des missions du run : comptées et supprimées quel que soit
   const m = manifeste('notif', new Date('2026-11-24T10:00:00.000Z'));
   assert.match(sqlNettoyer(m), /DELETE FROM public\.notifications WHERE destinataire_id = ANY\(v_ids\) OR id_ressource = ANY\(v_missions\)/);
   assert.match(sqlCompter(m), /FROM public\.notifications WHERE destinataire_id = ANY\([^)]*\]::uuid\[\]\) OR id_ressource = ANY\(/);
+});
+
+// MARK: - Tour 2 de la revue de #1183
+
+test('m-A : l étiquette est comparée exactement (le run N-1 ne reconnaît pas les missions de N-10)', () => {
+  const m = manifeste('N-1', new Date('2026-11-24T10:00:00.000Z'));
+  assert.equal(debutIntitule(m.marker), 'RECETTE-L5-N-1 · ');
+  assert.ok(m.m1.intitule.startsWith('RECETTE-L5-N-1 · ') && m.m2.intitule.startsWith('RECETTE-L5-N-1 · '));
+  assert.ok(!'RECETTE-L5-N-10 · M1 candidature'.startsWith(debutIntitule(m.marker)), 'N-10 exclu');
+  for (const sql of [sqlNettoyer(m), sqlCompter(m)]) {
+    assert.match(sql, /left\(intitule, 17\)/);
+    assert.ok(sql.includes("'RECETTE-L5-N-1 · '"));
+    assert.doesNotMatch(sql, /left\(intitule, 14\)/, 'plus de comparaison au seul marqueur');
+  }
 });
