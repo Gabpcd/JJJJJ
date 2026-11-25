@@ -89,9 +89,17 @@ public enum PublicationRules {
     public static let tauxMinimum: Double = Double(LibellesWeb.Publication.tauxMinimumHorsLiberal) ?? .infinity
 
     /// Taux lisible mais sous le plancher : l'écran l'explique sous le champ (`PublicationPresentation.tauxSousLeMinimum`).
-    public static func tauxSousLeMinimum(_ saisie: String) -> Bool {
+    /// `minimum` : plancher lu au serveur (`PublicationModel.tauxMinimum`), la constante à défaut.
+    public static func tauxSousLeMinimum(_ saisie: String, minimum: Double = tauxMinimum) -> Bool {
         guard let valeur = taux(saisie) else { return false }
-        return valeur < tauxMinimum
+        return valeur < minimum
+    }
+
+    /// Plancher rendu par le serveur (`fn_taux_horaire_minimum_salarie`) : retenu s'il est fini et strictement positif,
+    /// sinon la constante (même règle que `normaliserTauxMinimumSalarie` du web).
+    public static func tauxMinimum(serveur: Double?) -> Double {
+        guard let serveur, serveur.isFinite, serveur > 0 else { return tauxMinimum }
+        return serveur
     }
 
     /// Taux horaire saisi : chiffres, puis au plus deux décimales après une virgule ou un point (`step="0.01"` du web,
@@ -114,10 +122,10 @@ public enum PublicationRules {
         return valeur
     }
 
-    /// Champs obligatoires invalides d'une saisie, dans l'ordre du formulaire.
-    public static func champsInvalides(_ saisie: PublicationSaisie) -> [Champ] {
+    /// Champs obligatoires invalides d'une saisie, dans l'ordre du formulaire. `minimum` : plancher lu au serveur.
+    public static func champsInvalides(_ saisie: PublicationSaisie, minimum: Double = tauxMinimum) -> [Champ] {
         champsInvalides(intitule: saisie.intitule, profession: saisie.profession, taux: taux(saisie.taux),
-                        estUrgente: saisie.estUrgente, niveauUrgence: saisie.niveauUrgence)
+                        estUrgente: saisie.estUrgente, niveauUrgence: saisie.niveauUrgence, minimum: minimum)
     }
 
     /// Mêmes contrôles sur un brouillon prêt à l'envoi : la gateway les rejoue avant tout appel (fail-closed, D8 :
@@ -125,15 +133,15 @@ public enum PublicationRules {
     public static func champsInvalides(_ brouillon: PublicationMission) -> [Champ] {
         champsInvalides(intitule: brouillon.intitule, profession: brouillon.professionRequise,
                         taux: brouillon.tauxHoraireBase.isFinite && brouillon.tauxHoraireBase > 0 ? brouillon.tauxHoraireBase : nil,
-                        estUrgente: brouillon.estUrgente, niveauUrgence: brouillon.niveauUrgence)
+                        estUrgente: brouillon.estUrgente, niveauUrgence: brouillon.niveauUrgence, minimum: tauxMinimum)
     }
 
     private static func champsInvalides(intitule: String, profession: String, taux: Double?, estUrgente: Bool,
-                                        niveauUrgence: Int) -> [Champ] {
+                                        niveauUrgence: Int, minimum: Double) -> [Champ] {
         var champs: [Champ] = []
         if intitule.trimmingCharacters(in: .whitespacesAndNewlines).count < intituleMinimum { champs.append(.intitule) }
         if !professionPubliable(profession) { champs.append(.profession) }
-        if taux.map({ $0 < tauxMinimum }) ?? true { champs.append(.taux) }
+        if taux.map({ $0 < minimum }) ?? true { champs.append(.taux) }
         if estUrgente && !niveauxUrgence.contains(niveauUrgence) { champs.append(.niveauUrgence) }
         return champs
     }

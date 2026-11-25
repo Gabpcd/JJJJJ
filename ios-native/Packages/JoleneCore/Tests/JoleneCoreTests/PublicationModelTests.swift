@@ -19,10 +19,13 @@ final class PublicationModelTests: XCTestCase {
         private var enAttente: [CheckedContinuation<Void, Never>] = []
         private var libere = false
         private let retenir: Bool
+        private let minimumServeur: Double?
 
-        init(_ reponses: [Reponse] = [], retenir: Bool = false) {
-            self.reponses = reponses; self.retenir = retenir
+        init(_ reponses: [Reponse] = [], retenir: Bool = false, minimumServeur: Double? = nil) {
+            self.reponses = reponses; self.retenir = retenir; self.minimumServeur = minimumServeur
         }
+
+        func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? { minimumServeur }
 
         var brouillons: [PublicationMission] { lock.withLock { recus } }
 
@@ -85,6 +88,52 @@ final class PublicationModelTests: XCTestCase {
         remplirChamps(model)
         model.definirPeriode(debut: date, fin: date)
         model.basculerJour(date)
+    }
+
+    // MARK: - Plancher du taux horaire salarié (migration 20261125120000)
+
+    /// Plancher lu au serveur (paramètre relevé à 12,50) : il remplace la constante pour la validation et l'avis.
+    func testPlancherLuAuServeur() async throws {
+        let model = try await modele(Script(minimumServeur: 12.5))
+        XCTAssertEqual(model.tauxMinimum, PublicationRules.tauxMinimum, "constante avant lecture")
+        await model.chargerTauxMinimum()
+        XCTAssertEqual(model.tauxMinimum, 12.5)
+        remplirChamps(model)
+        model.definirTaux("12,40")
+        XCTAssertEqual(model.champsInvalides, [.taux])
+        XCTAssertEqual(model.avisTauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,50 €/h.")
+        model.definirTaux("12,50")
+        XCTAssertEqual(model.champsInvalides, [])
+        XCTAssertNil(model.avisTauxSousLeMinimum)
+    }
+
+    /// Paramètre absent, illisible ou port sans lecture : la constante reste le plancher.
+    func testPlancherAbsentGardeLaConstante() async throws {
+        for serveur in [nil, 0, -1, Double.nan, Double.infinity] as [Double?] {
+            let model = try await modele(Script(minimumServeur: serveur))
+            await model.chargerTauxMinimum()
+            XCTAssertEqual(model.tauxMinimum, PublicationRules.tauxMinimum, "\(String(describing: serveur))")
+            remplirChamps(model)
+            model.definirTaux("12.30")
+            XCTAssertEqual(model.avisTauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,31 €/h.")
+            model.definirTaux("")
+            XCTAssertNil(model.avisTauxSousLeMinimum, "saisie vide : champ obligatoire, pas un avis de plancher")
+        }
+    }
+
+    /// Refus du verrou serveur (app restée à un plancher plus bas que le paramètre) : message serveur mot pour mot.
+    func testRefusDuVerrouServeurMotPourMot() async throws {
+        let message = "Le taux horaire doit être d'au moins 12,50 €/h."
+        let script = Script([.issue(.refusee(code: "REFUS_METIER", message: message))])
+        let model = try await modele(script)
+        remplirUnJour(model)
+        model.definirTaux("12.40")
+        model.ouvrirRecapitulatif()
+        XCTAssertNotNil(model.recap, "12,40 passe le plancher local de l'app (12,31)")
+        await model.confirmerPublication()
+        XCTAssertEqual(model.annonce, .erreur(message))
+        XCTAssertEqual(model.etat, .saisie)
+        XCTAssertEqual(script.brouillons.count, 1)
     }
 
     // MARK: - Période → jours → créneaux

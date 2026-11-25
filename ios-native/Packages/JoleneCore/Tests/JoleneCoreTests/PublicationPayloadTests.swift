@@ -183,6 +183,16 @@ final class PublicationPayloadTests: XCTestCase {
         XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,31 €/h.",
                        "nombre à la française, formaté depuis la constante (fr_FR)")
         XCTAssertEqual(PublicationPresentation.montantFrancais(1234.5), "1234,50")
+        // Plancher lu au serveur (migration 20261125120000) : même texte, montant du paramètre ; repli sur la constante.
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.")
+        XCTAssertEqual(PublicationRules.tauxMinimum(serveur: 12.5), 12.5)
+        for illisible in [nil, 0, -3, Double.nan, Double.infinity] as [Double?] {
+            XCTAssertEqual(PublicationRules.tauxMinimum(serveur: illisible), PublicationRules.tauxMinimum)
+        }
+        XCTAssertTrue(PublicationRules.tauxSousLeMinimum("12,40", minimum: 12.5))
+        XCTAssertFalse(PublicationRules.tauxSousLeMinimum("12,50", minimum: 12.5))
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: 4), [], "plancher plus bas : 5 € passe")
+        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: 12.4)), [], "la gateway rejoue la constante")
     }
 
     func testChampsInvalides() {

@@ -62,6 +62,8 @@ public final class PublicationModel: ObservableObject {
     /// ne repart plus depuis cet écran (revue B8 sécurité de la vague D, m3, risque de doublon) ; « Voir mes missions »
     /// (liste relue) reste la seule suite, l'avertissement restant affiché. Jamais levé par une modification de saisie.
     @Published public private(set) var relectureRequise = false
+    /// Plancher du taux horaire salarié : lu au serveur par `chargerTauxMinimum()`, la constante à défaut.
+    @Published public private(set) var tauxMinimum: Double = PublicationRules.tauxMinimum
 
     private let controller: SessionController
     private let snapshot: EtablissementSessionSnapshot
@@ -78,7 +80,23 @@ public final class PublicationModel: ObservableObject {
     // MARK: - État dérivé
 
     /// Champs obligatoires manquants ou invalides, dans l'ordre du formulaire.
-    public var champsInvalides: [PublicationRules.Champ] { PublicationRules.champsInvalides(saisie) }
+    public var champsInvalides: [PublicationRules.Champ] { PublicationRules.champsInvalides(saisie, minimum: tauxMinimum) }
+
+    /// Avis sous le champ du taux quand un taux lisible est sous le plancher (texte validé, montant du plancher retenu).
+    public var avisTauxSousLeMinimum: String? {
+        PublicationRules.tauxSousLeMinimum(saisie.taux, minimum: tauxMinimum)
+            ? PublicationPresentation.tauxSousLeMinimum(tauxMinimum) : nil
+    }
+
+    /// Lit le plancher au serveur pour l'epoch de la session (borné comme l'envoi). Toute absence garde la constante.
+    public func chargerTauxMinimum() async {
+        guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
+        let port = gateways.etablissement.publication
+        let context = snapshot.context
+        let lu = try? await bounded(timeout: controller.resolutionTimeout) { await port.tauxMinimumSalarie(context: context) }
+        guard await epochValide() else { return }
+        tauxMinimum = PublicationRules.tauxMinimum(serveur: lu ?? nil)
+    }
 
     /// Erreurs structurelles du planning (`FormulaireRecurrence.tsx` l.180-218) ; une date illisible vaut une période
     /// invalide (fail-closed).
