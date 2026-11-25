@@ -352,7 +352,9 @@ export function moteurPsql({ spawn, env = process.env }) {
     const derniere = instructions.pop() ?? '';
     const lisible = /^(SELECT|WITH)\b/i.test(derniere.trim());
     const script = `\\o /dev/null\n${instructions.join('\n')}\n\\o\n`
-      + (lisible ? `SELECT coalesce(json_agg(r), '[]') FROM (${derniere.replace(/;\s*$/, '')}) r;\n` : `${derniere}\n`);
+      // Alias de ligne réservé : un alias court (`r`) serait masqué par une colonne du même nom (« … AS r »), et
+      // json_agg agrégerait alors la colonne au lieu de la ligne (job PostgreSQL 17 de #1187, 25/11/2026).
+      + (lisible ? `SELECT coalesce(json_agg(l5_banc_ligne), '[]') FROM (${derniere.replace(/;\s*$/, '')}) l5_banc_ligne;\n` : `${derniere}\n`);
     const r = lancer(script);
     if (r.status !== 0) throw new Error((r.stderr || r.error?.message || 'psql en échec').trim().split('\n').filter(l => /ERROR|ERREUR/.test(l)).join(' ') || r.stderr);
     return lisible ? JSON.parse(r.stdout.trim().split('\n').at(-1) || '[]') : [];
