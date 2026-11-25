@@ -7,9 +7,6 @@ const DEPLOY_WORKFLOW_NAME = 'Deploy Supabase (migrations + edge functions)';
 const DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 15 * 1000;
 const NULL_SHA = /^0+$/;
-// API compare de GitHub : 100 fichiers au plus par page, 3 000 au plus en tout (au-delà, la liste est tronquée).
-export const COMPARE_PAGE_SIZE = 100;
-export const COMPARE_MAX_PAGES = 30;
 
 function requiredEnv(env, name) {
   const value = env[name]?.trim();
@@ -51,37 +48,6 @@ export function deployPathWasChanged(files) {
   ));
 }
 
-/**
- * Liste complète des fichiers d'un push, page par page (`per_page=100&page=N`) jusqu'à une page incomplète.
- * Une erreur de la première page est levée (comportement inchangé) ; une erreur sur une page suivante, ou le plafond
- * de l'API atteint, rend la liste inconnaissable : `complete` vaut alors false et `cause` dit pourquoi.
- */
-export async function listChangedFiles({ fetchImpl, apiUrl, repository, beforeSha, headSha, token }) {
-  const files = [];
-  for (let page = 1; page <= COMPARE_MAX_PAGES; page += 1) {
-    let comparison;
-    try {
-      comparison = await githubJson(
-        fetchImpl,
-        `${apiUrl}/repos/${repository}/compare/${beforeSha}...${headSha}?per_page=${COMPARE_PAGE_SIZE}&page=${page}`,
-        token,
-      );
-    } catch (error) {
-      if (page === 1) throw error;
-      const message = error instanceof Error ? error.message : String(error);
-      return { files, complete: false, cause: `erreur de l'API compare en page ${page} (${message.slice(0, 200)})` };
-    }
-    const pageFiles = Array.isArray(comparison.files) ? comparison.files : [];
-    files.push(...pageFiles);
-    if (pageFiles.length < COMPARE_PAGE_SIZE) return { files, complete: true, cause: '' };
-  }
-  return {
-    files,
-    complete: false,
-    cause: `plafond de l'API compare atteint (${COMPARE_MAX_PAGES} pages de ${COMPARE_PAGE_SIZE} fichiers)`,
-  };
-}
-
 export async function waitForSupabaseDeploy({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -111,19 +77,16 @@ export async function waitForSupabaseDeploy({
 
   // deploy-supabase.yml est déclenché par paths. Un push purement frontend ne
   // crée donc volontairement aucun run du même SHA et n'a rien à attendre.
-  // La liste des fichiers est lue en entier (pagination de l'API compare) ; on
-  // n'attend par prudence que si elle reste inconnaissable (plafond, erreur).
+  // Si GitHub tronque la liste à 300 fichiers, on attend par prudence.
   let requiresDeploy = NULL_SHA.test(beforeSha);
-  let prudence = '';
   if (!requiresDeploy) {
-    const { files, complete, cause } = await listChangedFiles({
-      fetchImpl, apiUrl, repository, beforeSha, headSha, token,
-    });
-    if (!complete) {
-      prudence = cause;
-      log.log(`Liste des fichiers de ${headSha} inconnaissable : ${cause} ; attente par prudence du déploiement Supabase.`);
-    }
-    requiresDeploy = !complete || deployPathWasChanged(files);
+    const comparison = await githubJson(
+      fetchImpl,
+      `${apiUrl}/repos/${repository}/compare/${beforeSha}...${headSha}`,
+      token,
+    );
+    const files = Array.isArray(comparison.files) ? comparison.files : [];
+    requiresDeploy = files.length >= 300 || deployPathWasChanged(files);
   }
 
   if (!requiresDeploy) {
@@ -176,8 +139,7 @@ export async function waitForSupabaseDeploy({
     const elapsed = now() - startedAt;
     if (elapsed >= maxWaitMs) {
       throw new Error(
-        `Aucun déploiement Supabase réussi pour le SHA ${headSha} après ${Math.round(elapsed / 1000)} s (${status}).`
-          + (prudence ? ` Attente par prudence seulement : liste des fichiers inconnaissable (${prudence}).` : ''),
+        `Aucun déploiement Supabase réussi pour le SHA ${headSha} après ${Math.round(elapsed / 1000)} s (${status}).`,
       );
     }
     await sleep(Math.min(pollIntervalMs, maxWaitMs - elapsed));
