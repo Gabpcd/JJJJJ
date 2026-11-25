@@ -61090,6 +61090,21 @@ $$;
 ALTER FUNCTION "public"."fn_sync_mission_creneaux"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_taux_horaire_minimum_salarie"() RETURNS numeric
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  SELECT p.valeur FROM public.parametres_systeme p WHERE p.cle = 'taux_horaire_minimum_salarie';
+$$;
+
+
+ALTER FUNCTION "public"."fn_taux_horaire_minimum_salarie"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_taux_horaire_minimum_salarie"() IS 'Taux horaire minimal (€/h brut) d''une mission SALARIE ou TOUS, paramètre taux_horaire_minimum_salarie ; NULL si absent.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_terminer_generation_honoraires"("p_facture_id" "uuid", "p_token" "uuid", "p_documents" "jsonb" DEFAULT NULL::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -77017,6 +77032,14 @@ CREATE OR REPLACE TRIGGER "trg_zz_invalider_provenance_rib_etablissement" BEFORE
 
 
 
+CREATE CONSTRAINT TRIGGER "trg_zz_taux_minimum_salarie_creation" AFTER INSERT ON "public"."missions" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION "private"."fn_trg_verifier_taux_minimum_salarie"();
+
+
+
+CREATE CONSTRAINT TRIGGER "trg_zz_taux_minimum_salarie_modification" AFTER UPDATE ON "public"."missions" DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN ((("old"."taux_horaire_base" IS DISTINCT FROM "new"."taux_horaire_base") OR ("old"."type_contrat_recherche" IS DISTINCT FROM "new"."type_contrat_recherche"))) EXECUTE FUNCTION "private"."fn_trg_verifier_taux_minimum_salarie"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_zzz_corriger_strategie_facturation" BEFORE UPDATE OF "statut" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "public"."fn_corriger_strategie_facturation_assignation"();
 
 
@@ -85633,6 +85656,12 @@ GRANT ALL ON FUNCTION "public"."fn_swan_webhook_reclamer"("p_event_id" "text", "
 
 REVOKE ALL ON FUNCTION "public"."fn_sync_mission_creneaux"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_sync_mission_creneaux"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_taux_horaire_minimum_salarie"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_taux_horaire_minimum_salarie"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_taux_horaire_minimum_salarie"() TO "authenticated";
 
 
 
