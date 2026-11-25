@@ -3,7 +3,7 @@ import Foundation
 /// Coordonnées bancaires du soignant (lot 3, T14b, B9 ; D20, TJ6, TJ8), port de `SectionIbanPrime`
 /// (`src/components/profil-soignant/SectionPaiements.tsx` l.212-376). L'IBAN confirmé est celui du RIB vérifié
 /// (règle serveur : `fn_enregistrer_mon_iban`, puis `fn_lier_iban_verifie_document`, dump `supabase/schema/public.sql`
-/// l.32692-32751 et l.39856-39975) ; le contrôle local ne fait qu'éviter un envoi voué à l'échec.
+/// l.32780-32839 et l.39944-40063) ; le contrôle local ne fait qu'éviter un envoi voué à l'échec.
 ///
 /// L'IBAN saisi n'est jamais journalisé ni persisté : il ne vit que dans le champ, vidé dès l'envoi (`IbanModel`).
 public enum IbanRules {

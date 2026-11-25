@@ -1731,8 +1731,8 @@ sont reportés dans les puces ci-dessus. Les autres :
   d'apps ni les captures d'écran), clavier ASCII en majuscules sans autocorrection ni suggestion (`JoleneInputKind.iban`). `CrashScrubber` (T15) masque déjà les IBAN (compacts, groupés, espaces
   insécables, tirets) et les clés `iban` / `p_iban` : aucun motif à ajouter.
 - **Définition live.** Contrat relu sur le dump `supabase/schema/public.sql` (re-baseline #1121) : `fn_consulter_mon_iban`
-  l.25923-25969, `fn_enregistrer_mon_iban` l.32772-32829, `fn_lier_iban_verifie_document` l.39936-40053, GRANT
-  `authenticated` l.82619 et l.83050. **Définition live relue le 18/11/2026** par la revue fraîche B8 n°1 de #1142
+  l.26019-26067, `fn_enregistrer_mon_iban` l.32780-32839, `fn_lier_iban_verifie_document` l.39944-40063, GRANT
+  `authenticated` l.82722 et l.83153. **Définition live relue le 18/11/2026** par la revue fraîche B8 n°1 de #1142
   (production, lecture seule : `pg_get_functiondef`, `prosrc`, `proacl` ; aucune écriture, aucun appel depuis la
   tranche) : corps identiques au dump pour `fn_consulter_mon_iban`, `fn_enregistrer_mon_iban`,
   `fn_lier_iban_verifie_document` et `fn_iban_est_valide` (`md5(prosrc)` `a3434f6e…`, `11c12178…`, `f6d6f787…`,

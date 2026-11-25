@@ -25,7 +25,7 @@ extension DemoFixtures {
 /// doublon) et `fn_retirer_exclusion` (introuvable) ; chaque mutation rend les exclusions envoyées relues. Noms des
 /// établissements de la démo par `demo-etablissements.json`, puis `noms` de la fixture.
 public actor DemoExclusionsGateway: ExclusionsPort {
-    /// Textes serveur repris à l'identique (`supabase/schema/public.sql` l.36006-36050, l.55341-55375).
+    /// Textes serveur repris à l'identique (`supabase/schema/public.sql` l.36094-36138, l.55429-55463).
     public enum Textes {
         public static let soiMeme = "Impossible de s'exclure soi-même"
         public static let dejaExistante = "Exclusion déjà existante"

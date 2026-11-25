@@ -57,23 +57,25 @@ public enum EspaceResolution {
     }
 }
 
-/// Ouverture de l'espace établissement natif tant que le lot 5 n'est pas clos (report sur main du
-/// 18/11/2026). Les drapeaux `ios_natif_etab_*_actif` (D14, migration D-FLAGS) valent 1 et sont lus
-/// fail-open : ils coupent un écran, jamais l'espace entier. Sans ce verrou, un compte établissement
-/// réel ouvrirait en staging ou en production une coquille d'onglets provisoires. Fermé, l'espace rend
-/// exactement le refus d'avant le lot 5 (`MobileAccess.validate` : `.unsupportedRole(<rôle>)`, écran
-/// « Espace non disponible », renvoi jolene.app), sans aucun appel établissement.
+/// Ouverture de l'espace établissement natif par mode de lancement (report sur main du 18/11/2026, puis T13 du
+/// 24/11/2026). Les drapeaux `ios_natif_etab_*_actif` (D14, migration D-FLAGS) valent 1 et sont lus fail-open : ils
+/// coupent un écran, jamais l'espace entier. Sans ce verrou, un compte établissement réel ouvrirait en production une
+/// coquille dont aucun écran n'a encore été recetté contre un vrai serveur. Fermé, l'espace rend exactement le refus
+/// d'avant le lot 5 (`MobileAccess.validate` : `.unsupportedRole(<rôle>)`, écran « Espace non disponible », renvoi
+/// jolene.app), sans aucun appel établissement.
 public enum OuvertureEspaceEtablissement: Equatable, Sendable {
     case ouvert
     case ferme
 
-    /// Démo : ouvert (recette XCUITest `-JOLENE_DEMO_ESPACE etablissement`). Staging et production :
-    /// fermé jusqu'à la tranche qui l'ouvre (T13 pour la recette STAGING, T14 pour la production),
-    /// changement consigné dans `DECISIONS_LOT5.md`.
+    /// Démo : ouvert (recette XCUITest `-JOLENE_DEMO_ESPACE etablissement`). Staging : ouvert depuis T13, pour la
+    /// recette contre le serveur de test (`StagingEtabParcoursTests`, workflow `ios-swift-lot5-staging.yml`).
+    /// Production : fermé jusqu'à T14, qui l'ouvre après la preuve STAGING ; chaque ouverture est une ligne de cette
+    /// table et un test, consignés dans `DECISIONS_LOT5.md`.
     public static func pour(mode: JoleneMode) -> OuvertureEspaceEtablissement {
         switch mode {
         case .demo: return .ouvert
-        case .staging, .production: return .ferme
+        case .staging: return .ouvert
+        case .production: return .ferme
         }
     }
 }

@@ -5,8 +5,8 @@ import Supabase
 /// `FavorisPort` (lot 1, T4b), port de `BoutonSauvegarderMission.tsx` et de `MesFavorisSoignant.tsx`.
 ///
 /// Missions : PostgREST direct sur `missions_sauvegardees` sous RLS (`soignant_id = auth.uid()` en
-/// lecture, insertion et suppression, `public.sql` l.78583-78591 ; politique restrictive « compte actif »
-/// l.79193), avec la jointure `missions(...)` du web. L'insertion ne relit rien (`return=minimal`) :
+/// lecture, insertion et suppression, `public.sql` l.78686-78694 ; politique restrictive « compte actif »
+/// l.79296), avec la jointure `missions(...)` du web. L'insertion ne relit rien (`return=minimal`) :
 /// la liste est relue juste après ; un conflit UNIQUE (`23505`, mission déjà sauvegardée) est un état à
 /// relire, pas une erreur.
 ///

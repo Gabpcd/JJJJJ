@@ -4,7 +4,8 @@ name: iOS Swift — socle natif
 # Trois niveaux : cœur (vecteurs golden, fixtures démo, contrats RPC), packages
 # (swift test macOS, concurrence stricte, 0 avertissement), interface (XCUITest démo plus
 # JoleneCoreTests et JoleneDesignTests exécutés sur le simulateur iOS : iPhone, iPad
-# portrait, iPad paysage ; StagingConnexionTests est réservé à ios-swift-staging.yml).
+# portrait, iPad paysage ; StagingConnexionTests est réservé à ios-swift-staging.yml et
+# StagingEtabParcoursTests, lot 5 T13, à ios-swift-lot5-staging.yml).
 # Aucune clé, aucun secret, aucune livraison : tout tourne en mode démo.
 
 on:
@@ -764,6 +765,7 @@ jobs:
             -only-testing:JoleneCoreTests \
             -only-testing:JoleneDesignTests \
             -skip-testing:JoleneUITests/StagingConnexionTests \
+            -skip-testing:JoleneUITests/StagingEtabParcoursTests \
             -skip-testing:JoleneUITests/DemoPresencesTests \
             -skip-testing:JoleneUITests/DemoPointageEtatsTests \
             -skip-testing:JoleneUITests/DemoPointageTests \
@@ -1332,7 +1334,7 @@ jobs:
               if (!(e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0)) eclatsKo.push(e.nom);
             }
             lignes.push(`- résultat xcresult : ${eclatsKo.length ? "Failed" : "Passed"} (${passed} réussis, ${failed} échoués, ${skipped} ignorés, ${total} au total, éclats ${eclats.map(e => e.nom).join(" + ")})`,
-              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors StagingConnexionTests), JoleneCoreTests, JoleneDesignTests`);
+              `- cibles exécutées sur le simulateur (destination ${process.env.JOLENE_UI_FORMAT}) : JoleneUITests (hors classes STAGING), JoleneCoreTests, JoleneDesignTests`);
             // Chaque cible doit avoir tourné : un plan qui en oublie une n est pas une preuve.
             const attendus = ["JoleneUITests", "JoleneCoreTests", "JoleneDesignTests"];
             const manquantes = attendus.filter(cible => !bundles.includes(cible) && !new RegExp(`Test Suite \x27${cible}[^\x27]*\x27 (started|passed)`).test(log));

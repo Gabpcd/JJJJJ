@@ -340,11 +340,34 @@ test('revue B8 vague 5, M1 : le Package.resolved de l app est celui d Xcode 26.4
     'format d Xcode : deux espaces, « " : », saut de ligne final');
 });
 
+/** Classes XCUITest STAGING, exclues de la CI démo par nom, et le seul workflow qui les lance. */
+const CLASSES_STAGING = {
+  StagingConnexionTests: '.github/workflows/ios-swift-staging.yml',
+  StagingEtabParcoursTests: '.github/workflows/ios-swift-lot5-staging.yml',
+};
+
+test('lot 5, T13 : chaque classe STAGING est lancée par son workflow manuel et par lui seul', () => {
+  for (const [classe, workflow] of Object.entries(CLASSES_STAGING)) {
+    assert.ok(classes.includes(classe), `${classe} n existe pas dans ${DOSSIER_UI}`);
+    assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sautée par le socle de ios-swift-ci.yml`);
+    assert.doesNotMatch(yml, new RegExp(`-only-testing:"?JoleneUITests/${classe}`), `${classe} : jamais lancée par ios-swift-ci.yml`);
+    const source = read(workflow);
+    assert.match(source, /^on:\n {2}workflow_dispatch:/m, `${workflow} : déclenchement manuel seulement`);
+    assert.ok(source.includes(classe), `${workflow} : lance ${classe}`);
+    assert.match(source, /environment: native-staging-auth/, `${workflow} : environnement protégé native-staging-auth`);
+  }
+  const lot5 = read(CLASSES_STAGING.StagingEtabParcoursTests);
+  assert.match(lot5, /group: jolene-supabase-staging-writes/, 'une écriture STAGING à la fois');
+  assert.match(lot5, /if: github\.ref == 'refs\/heads\/main'/, 'main seulement');
+});
+
 test('décision 22 : chaque XCUITest tourne dans un seul éclat, les classes STAGING jamais', () => {
   assert.ok(socle, 'éclat socle absent');
   assert.deepEqual(socle.seulement.sort(), ['JoleneCoreTests', 'JoleneDesignTests', 'JoleneUITests']);
   const staging = classes.filter(c => c.startsWith('Staging'));
-  assert.ok(staging.includes('StagingConnexionTests'), 'StagingConnexionTests attendue');
+  // Exclusions nommées (lot 5, T13) : chaque classe STAGING est hors de la CI démo PAR DÉCISION, jamais par oubli ;
+  // une nouvelle classe STAGING doit être ajoutée ici avec le workflow qui la lance.
+  assert.deepEqual([...staging].sort(), Object.keys(CLASSES_STAGING).sort(), 'classes STAGING : liste nommée CLASSES_STAGING');
   const vues = new Map();
   // Vague B du lot 1 : les éclats du job `ui-lot1` comptent aussi (une classe ne tourne qu'une fois dans tout le workflow).
   const resumes = [...parResume, ...parResumeLot1];

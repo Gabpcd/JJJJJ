@@ -162,6 +162,12 @@ final class DeepLinkCoordinator: ObservableObject, PresentateurRenvoiWeb, FinIde
         executer(aiguillage.ouvrirEspaceEtablissement(snapshot))
     }
 
+    /// Lot 5, T13 (point m1 de la revue B8 de #1147) : session arrêtée sur un refus (`.blocked`, observé par `RootView`).
+    /// Un lien établissement mémorisé faute d'espace redevient le renvoi web d'avant le lot 5, présenté une fois.
+    func sessionRefusee() {
+        executer(aiguillage.sessionRefusee())
+    }
+
     /// Disparition de l'espace de cet epoch : une demande non exécutée est abandonnée.
     func espaceFerme(epoch: Int) {
         aiguillage.fermerEspace(epoch: epoch)

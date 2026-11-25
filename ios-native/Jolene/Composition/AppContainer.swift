@@ -218,7 +218,7 @@ final class AppContainer: ObservableObject {
             mediaDemo = DemoMediaPicker(source: .png)
             #endif
             clock = gateways.clock
-            // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
+            // Lot 5 : espace établissement ouvert en démo (`OuvertureEspaceEtablissement`).
             let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
             parrainage.controleur = controller // lot 4, T1c
             parrainage.horloge = gateways.clock // lot 4, T6 : fenêtre de 30 jours sur l'horloge des gateways
@@ -242,7 +242,8 @@ final class AppContainer: ObservableObject {
             do {
                 let gateways = try SupabaseGateways.make(environment: environment)
                 clock = gateways.clock
-                // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
+                // Lot 5 : espace établissement ouvert en staging (T13), fermé en production jusqu'à T14
+                // (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 parrainage.controleur = controller // lot 4, T1c
                 parrainage.horloge = gateways.clock // lot 4, T6

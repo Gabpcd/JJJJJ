@@ -20,6 +20,7 @@
 		0B6CAED2A3EDB7292D47CA75 /* AnnulationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C5ADAD0DD19CF1383B8F7F5 /* AnnulationSheet.swift */; };
 		0D698398E212FA5FBDD89C50 /* JoleneCore in Frameworks */ = {isa = PBXBuildFile; productRef = 321C808452B052BEA85F8CB7 /* JoleneCore */; };
 		0DE9F0C03902D7A6131E0A65 /* CandidaturesEtabScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5084919A5E2505E3E0D5BD /* CandidaturesEtabScreen.swift */; };
+		0EFCB86CD42CAD8DCA87C21E /* StagingEtabParcoursTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73EC1FDF4548205E4DF9D473 /* StagingEtabParcoursTests.swift */; };
 		0F720926585C007C60BB9C81 /* DemoMesMissionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F481797B7FD9F7359F788249 /* DemoMesMissionsTests.swift */; };
 		108A5A026DD80CDCFA098BE8 /* NotificationCenterDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77D89390B0B48A7470C7E56 /* NotificationCenterDelegate.swift */; };
 		10970FA992CD848C851A8EC7 /* DisponibilitesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517DABCE171BF33582E20B72 /* DisponibilitesScreen.swift */; };
@@ -343,6 +344,7 @@
 		70EB2E65EA45ACA03AFE4DE7 /* ProfilEditionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilEditionScreen.swift; sourceTree = "<group>"; };
 		71858F13CA71857DE1D5A7A3 /* CompletionProfilScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionProfilScreen.swift; sourceTree = "<group>"; };
 		73A63EBDC43EE3281621B298 /* RecherchesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecherchesScreen.swift; sourceTree = "<group>"; };
+		73EC1FDF4548205E4DF9D473 /* StagingEtabParcoursTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingEtabParcoursTests.swift; sourceTree = "<group>"; };
 		7467C13956527741B132313A /* JoleneCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JoleneCore; path = Packages/JoleneCore; sourceTree = SOURCE_ROOT; };
 		746924A5216E2BAEEAD574FA /* MonEspaceRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonEspaceRoute.swift; sourceTree = "<group>"; };
 		75863F7AF6F7B4939160AE90 /* QuickLookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookView.swift; sourceTree = "<group>"; };
@@ -1074,6 +1076,7 @@
 				93102A0DE4E91874C7B756C9 /* PasDeDefilement.swift */,
 				E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */,
 				6C29986DF59AD33D85314C37 /* StagingConnexionTests.swift */,
+				73EC1FDF4548205E4DF9D473 /* StagingEtabParcoursTests.swift */,
 				23E960FB56B5063137621FDF /* UITestSupport.swift */,
 			);
 			path = JoleneUITests;
@@ -1438,6 +1441,7 @@
 				C9174C1A83636B1168C76334 /* PasDeDefilement.swift in Sources */,
 				532D43C9A52E76371B8A4F41 /* RequireWait.swift in Sources */,
 				5E0893D0CB68B03799F6D7D9 /* StagingConnexionTests.swift in Sources */,
+				0EFCB86CD42CAD8DCA87C21E /* StagingEtabParcoursTests.swift in Sources */,
 				C4E13AFC9C0C982BCDCF06D0 /* UITestSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

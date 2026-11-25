@@ -200,7 +200,8 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
 4. **Revue B8 de #1147 (CLÔTURABLE), mineurs traités** :
    - m1 : sans espace, seul un lien établissement à route **native** est mémorisé ; `/etab/invitation/{token}` et les
      routes en renvoi web assumé restent présentés aussitôt (règle du lot 3). Limite consignée : un lien natif mémorisé
-     est perdu si la session s'arrête sur `.blocked` (même règle que les liens soignant) ; à revoir avant T13 ;
+     est perdu si la session s'arrête sur `.blocked` (même règle que les liens soignant) ; corrigé par T13 (section T13,
+     point 3) pour les liens établissement ;
    - m2 : fixtures de test fermées par défaut (configuration de production), assertions de `main` rétablies ; espace
      fermé prouvé pour la restauration, `signIn`, la revalidation silencieuse, `.session(autre)` et le legacy (refus
      exact, aucun appel établissement), et `SessionStore` ne lit aucun drapeau `ios_natif_etab_*` ;
@@ -818,6 +819,126 @@ Revue fraîche du tour 2 « CLÔTURABLE », cinq mineurs ; aucun texte affiché 
   première tolérance (l.185-191, flux par conversation qui garde le dernier état) reste légitime. Suivi : rétablir
   l'égalité `[.connexion, .rejoint]` sur le flux global, ou documenter un cas réel observé.
 
+## Tranche T13 — espace établissement ouvert en STAGING et preuves contre le serveur de test (24/11/2026)
+
+Fondement : délégation de la fondatrice du 24/11/2026 (« je t'autorise a tout, finis sans t'interrompre »). Les
+décisions ci-dessous sont prises sur ce fondement et consignées sans être rediscutées. Branche `lot5/l5-t13-staging`,
+partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAGING dans la tranche (voir point 9).
+
+1. **Ouverture par mode** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` en démo et en staging,
+   `.ferme` en production. La production reste fermée jusqu'à T14, qui l'ouvrira après la preuve STAGING. Tests :
+   `SessionControllerEtablissementTests.testOuvertureParModeDeLancement` et
+   `testStagingOuvreLEspaceEtLaProductionLeRefuse` (même compte établissement : espace ouvert avec la table de
+   staging, refus d'avant le lot 5 sans appel établissement avec celle de production). La garde Node
+   (`tests/node/contrats-etablissement-ios.node.mjs`) lit la table : démo et staging ouverts, production fermée, trois
+   cas exactement, aucun `default` ; elle échoue si la production est ouverte (vérifié en mutant la ligne). Le verrou
+   de la mention de contrat (`PublicationPresentationTests.testMentionContratExigeeAvantToutEspaceOuvertHorsDemo`,
+   section T9) reste en vigueur : sans la mention, ce test échouerait désormais, puisque STAGING est ouvert.
+2. **Aucun texte nouveau affiché.** Un compte établissement en STAGING voit les écrans déjà livrés (T4 à T12) au lieu
+   de l'écran « Espace non disponible » ; un compte soignant n'est pas concerné.
+3. **Point m1 de la revue B8 de #1147, corrigé** : un lien établissement à route native, mémorisé faute d'espace
+   ouvert, était perdu si la session s'arrêtait sur `.blocked` (rôle non servi, email non confirmé, compte inactif,
+   périmètre divergent, onboarding). Ouvrir STAGING rendait le cas réel. `AiguillageLiens.sessionRefusee()` rend
+   alors ce lien en renvoi web, comme avant le lot 5, une seule fois ; `RootView` l'appelle à chaque passage à
+   `.blocked` (`DeepLinkCoordinator.sessionRefusee`). Un lien de l'espace soignant garde la règle du lot 3 (il attend
+   la prochaine identité ouverte) ; le renvoi déjà affiché n'est pas redemandé. Tests :
+   `DeepLinkCoordinatorTests.testLienEtablissementMemoriseRedevientUnRenvoiQuandLaSessionEstRefusee` et
+   `testSessionRefuseeSansEffetHorsLienEtablissementMemorise` ; câblage de l'app lu par la garde Node (la cible app
+   n'a pas de tests unitaires).
+4. **Cohorte D5** (`scripts/mobile/staging-lot5-fixture.mjs`, tests `tests/node/staging-lot5-fixture.node.mjs` sur
+   transport simulé, ajoutés à l'étape « Garde de livraison mobile » de validate-pr) : E1 propriétaire legacy (rôle
+   `ETABLISSEMENT`, sans `etablissement_id`, sans ligne `membres_etablissement`), vérifié, commission en
+   `FACTURE_MENSUELLE` sans mandat ; S1 aide-soignant salarié avec deux justificatifs `VERIFIE` ; M1 `SALARIE` en
+   candidature à J+3 et la candidature `EN_ATTENTE` de S1 déposée par `fn_postuler_mission` sous son JWT ; M2
+   `SALARIE` assignée à S1 par `fn_test_update_mission`, créneau de 6 minutes qui commence 12 minutes après la
+   préparation, code de pointage actif, contrat `SIGNE_COMPLET` inséré côté service. Marqueur `RECETTE-L5-<run>`,
+   adresses `@example.invalid`, `est_compte_test` partout, transports de notification fermés, aucun téléphone : aucun
+   SMS, aucun OTP. **Verrou** : toute action refuse, avant le moindre appel réseau, la référence de production
+   (`flripxtsyegjshnhzjkz`, nommée dans le message) et toute référence qui n'est pas explicitement celle du STAGING
+   (`mejpriaetwgtcstbgfid`) ; chaque requête est ensuite bornée à la Management API du STAGING et au projet STAGING ;
+   les actions qui écrivent exigent `LOT5_STAGING_ECRITURE=COHORTE_D5`, posé par le workflow seulement.
+5. **XCUITest** `StagingEtabParcoursTests` en deux phases séparées par les scans du job : (a) connexion d'E1, nom
+   affiché égal au marqueur ; (b) M1 et M2 listées ; (c) candidature de S1 acceptée, relue « Acceptée » ; (d) contrat
+   de M2 lu « Statut : ✅ Signé » ; (e) code de pointage affiché, son empreinte SHA-256 égale à celle du code relu côté
+   service à la préparation, QR décodé égal au code affiché ; puis, après les scans d'arrivée et de départ de S1 et la
+   fin du créneau planifié, présence validée avec une note de 4 et relue « Validée ». Assertions sur texte et
+   identifiants ; le code n'apparaît jamais en clair dans un message. Exclu de l'éclat socle de `ios-swift-ci.yml`.
+6. **Relectures et nettoyage** : candidature `ACCEPTEE` et `traite_le`, M1 `ASSIGNEE` à S1, contrat créé pour M1,
+   contrat de M2 `SIGNE_COMPLET`, `presences.valide_par_etablissement` et `valide_le`, une note
+   `ETAB_VERS_SOIGNANT`, aucune ligne `paiements_escrow` ni `escrow_release_queue` pour M1 et M2, aucune notification
+   de M1 ou M2 hors de la cohorte, aucune ligne `email_queue` pour la cohorte, transports fermés. Le nettoyage est une
+   transaction : appartenance au run contrôlée, enfants connus supprimés, toute autre dépendance (clé étrangère
+   restrictive vers une ligne de la cohorte) refusée nommément avant la suppression des parents, puis comptes Auth
+   supprimés et compte final des objets marqués exigé à 0 ; il tourne même si le parcours échoue. `journaux_audit` est
+   conservé (immuable).
+7. **Workflow** `.github/workflows/ios-swift-lot5-staging.yml` : dispatch manuel sur `main`, SHA relu égal au SHA
+   dispatché, environnement `native-staging-auth`, concurrence `jolene-supabase-staging-writes`, Xcode 26.4.1 épinglé,
+   actions épinglées par SHA. Il n'utilise que des secrets existants (`STAGING_SUPABASE_ACCESS_TOKEN`,
+   `STAGING_SUPABASE_PROJECT_REF`) : la clé publishable, la clé anon et la clé service_role sont relues par la
+   Management API à chaque étape du script ; la clé service_role n'est jamais écrite dans `GITHUB_ENV` ni donnée à
+   xcodebuild. L'xcresult n'est exporté que si le nettoyage a réussi (il contient la saisie du mot de passe du compte
+   du run, alors supprimé). **Constat** : l'environnement `native-staging-auth` n'exige aujourd'hui aucune approbation
+   (règle de branche `main` seulement) ; le « go B9 » de T13 est donc le geste de lancer le workflow, pas une
+   approbation imposée par GitHub. Ajouter un relecteur obligatoire à l'environnement est recommandé.
+8. **Reports et abandons** (décisions prises, non rediscutées) : l'étape (f) du blueprint (membre E2
+   `POINTAGE_ONLY`) est reportée après la soumission aux stores ; les critères « 14 jours de bêta » et « crash-free »
+   sont abandonnés (D1 de `DECISIONS_LOT6.md`, sur `main`).
+9. **Ce qui n'est pas prouvé par la tranche** : rien n'a tourné contre le STAGING (aucun workflow lancé, aucune
+   écriture en base depuis un poste). Le SQL de la cohorte n'a été exécuté sur aucune base ; il suit le dump
+   `supabase/schema/public.sql` et sera confronté au serveur au premier run. Écarts assumés au blueprint : un seul
+   script sous `scripts/mobile/` au lieu de `staging-lot5-fixture.mjs` + `scripts/ci/etablissement-fixture-sql.mjs`,
+   sans empreinte md5 du catalogue (`catalogueD5`) ; l'empreinte du code est donnée au test au lieu d'être jointe à
+   l'xcresult ; la publication native d'une mission (étape (e) du blueprint) n'est pas jouée ; les assertions relatives
+   sur `journaux_audit` (`PRESENCE_VALIDATION`, `MISSION_CREATION`) et la notification `PRESENCE_VALIDEE` ne sont pas
+   relues. Chacun est un ajout possible à la tranche, sans changer son verrou.
+10. **Corrections de la revue fraîche de #1183 (25/11/2026)** :
+    - M1 (nettoyage non reprenable en CI) : le manifeste disparaît avec le runner hébergé et les identifiants de la
+      cohorte sont aléatoires ; « manifeste conservé pour reprise » était faux. Reprise par étiquette :
+      `staging-lot5-fixture.mjs nettoyer_run` (`LOT5_NETTOYER_RUN`), exposé par l'entrée `nettoyer_run` du workflow
+      (job « reprise », mêmes garde-fous : main, SHA relu, `native-staging-auth`, concurrence partagée). La cohorte est
+      retrouvée par le nom exact `RECETTE-L5-<run>` de l'établissement, par les adresses
+      `recette-l5-{e1,s1}-<run>@example.invalid` et par les métadonnées Auth du run ; refus avant tout appel réseau si
+      l'étiquette n'a pas la forme attendue, refus sans suppression si plus d'un établissement ou d'un soignant
+      correspond, si une ligne n'est pas un compte TEST, si une identité Auth est d'un autre run, d'un autre rôle ou
+      d'une autre adresse, ou si un profil diverge de son compte Auth. Aucun secret publié : l'étiquette (identifiant et
+      tentative du run GitHub) est affichée par le résumé et par l'erreur, qui disent désormais « reprise : relancer
+      ios-swift-lot5-staging.yml avec l'entrée nettoyer_run=<run> ».
+    - m2 (tables enfants) : la liste écrite à la main est remplacée par `GRAPHE_NETTOYAGE`, fermeture des clés
+      étrangères du dump vers `missions`, `etablissements` et `soignants` (83 tables, enfants `CASCADE` compris pour
+      leurs propres enfants restrictifs, hors `SET NULL`/`SET DEFAULT` et auto-références). Le nettoyage collecte les
+      identifiants des parents vers les enfants puis supprime des enfants vers les parents. Le test Node recalcule la
+      fermeture depuis `supabase/schema/public.sql` et échoue à la moindre différence (régénération hors réseau :
+      `node scripts/mobile/staging-lot5-fixture.mjs graphe`) ; il vérifie aussi, indépendamment, chaque FK restrictive
+      et l'ordre des suppressions. Le contrôle des dépendances inconnues reste en place (dérive du STAGING vers le dump).
+    - m3 (notifications) : les notifications des missions du run sont comptées et supprimées quel que soit leur
+      destinataire (`id_ressource`), en plus de celles de la cohorte.
+    - m1 (QR) : le QR est décodé en plein écran, comme `DemoEtabPointageTests` ; le code du plein écran est comparé à la
+      même empreinte serveur.
+    - m4 (aucune approbation imposée par `native-staging-auth`) : constat consigné au point 7, inchangé.
+    - m5 (textes en attente visibles en STAGING) : voir « En attente », point 4, précisé ce jour.
+11. **Tour 2 de la revue de #1183 (25/11/2026)** :
+    - B1 : la pagination de `scripts/ci/wait-for-supabase-deploy.mjs` est retirée (revert). L'API compare ne sert les
+      fichiers qu'en page 1, 300 au plus ; `page`/`per_page` ne paginent que les commits, et le correctif aurait laissé
+      passer une migration au-delà du 300ᵉ fichier. Le faux rouge des pushes de 300 fichiers et plus reste un défaut
+      connu, suivi dans une PR dédiée.
+    - m-A : les intitulés des missions du run sont comparés sur leur début exact `RECETTE-L5-<run> · ` : le run `N-1` ne
+      reconnaît plus les missions de `N-10`.
+    - m-B : six tables du graphe ne sont pas supprimables dans le contexte du nettoyage (`NON_SUPPRIMABLES` :
+      `bulletins_paie`, `factures` liées à un avoir, `factures_honoraires_documents`,
+      `factures_honoraires_rectifications`, `invoice_audit_log`, `mandats_facturation_signatures`). Leurs lignes de la
+      cohorte sont comptées avant toute suppression et jamais supprimées ; le reste est nettoyé, et un parent encore
+      référencé est conservé. Le message nomme le résidu et ses identifiants, sans proposer de relance. Aucun
+      déclencheur n'est contourné. **Lecture du dump** : le parcours lui-même n'écrit dans aucune de ces tables
+      (acceptation salariée : candidature, mission, contrat, notifications ; scans : présence, créneaux effectifs,
+      scans ; validation : présence, note). Une seule voie y mène : le cron `auto-transitions-missions`
+      (`fn_auto_transitions_missions`, toutes les 10 min en production) passe M2 `EN_COURS` à `TERMINEE` quinze minutes
+      après la fin de son créneau, et `trg_auto_creer_bulletin_paie` crée alors un bulletin de paie (mission salariée).
+      Si ce cron est actif en STAGING et que la phase 2, les relectures et le nettoyage dépassent ces quinze minutes,
+      un bulletin de test restera, nommé par le message.
+    - m-C : la suppression descend de la cohorte. Elle emporte aussi les lignes d'autres comptes qui pointent vers elle
+      (parrainage dont E1 est filleul, favoris, conversations, scores de matching de S1) ; avec des identifiants neufs à
+      chaque run, aucune n'est attendue.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
@@ -825,21 +946,33 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
 1. **Go B9 de T8** (validation, lot, contestation, clôture rétroactive : libération ou blocage d'escrow) au moment du
    merge, après revue fraîche CLÔTURABLE.
 2. **Go B9 de T13** : secrets STAGING (Management API, service_role) exposés à `native-staging-auth`, création et
-   suppression des données de la cohorte D5 ; dispatch manuel sur `main`.
+   suppression des données de la cohorte D5 ; dispatch manuel sur `main`. Workflow prêt (`ios-swift-lot5-staging.yml`, section T13) ;
+   l'environnement n'impose aucune approbation (section T13, point 7).
 3. **B5b** (facultative, B9 SECURITY DEFINER) : accord ou refus explicite (visibilité du code de pointage, des
    finances et des identifiants Stripe par permission ; refus d'une heure de fin future ; refus de contester une
    présence validée).
-4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR), hors textes de la liste validée :
-   absence de case « cadre étudiant » et renvoi web (T6) ; publication native limitée au salariat (T9, restriction
-   d'un mode d'exercice) ; absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25) ;
-   libellé du taux repris du web (« Taux horaire brut * (€/h) », `FormulaireMission.tsx` l.917, affiché) ; tout texte
-   ajouté après la liste.
+4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR), hors textes de la liste validée.
+   Précisé le 25/11/2026 (revue de #1183, m5) : la validation du 24/11 porte sur des **textes** ; elle ne tranche ni les
+   choix de périmètre ci-dessous, ni le seul texte affiché qui n'y figure pas. Restent donc, à soumettre à la fondatrice
+   avant l'ouverture en production (T14), visibles en STAGING depuis T13 :
+   - **choix sans texte nouveau** (règles exposées à l'utilisateur) : publication native limitée au salariat (T9,
+     restriction d'un mode d'exercice ; les autres types passent par le renvoi « Autres options » / « Cette option se
+     configure sur jolene.app. », textes du groupe E) ; absence de la case « cadre étudiant » et renvoi web neutre de
+     l'acceptation (T6, « Accepter sur jolene.app ») ; absence native de l'alerte de requalification en CDI (D27) et
+     des statuts d'internat (D10, D25) ;
+   - **un texte affiché hors de la liste validée** : « Taux horaire brut * (€/h) »
+     (`ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement/Publication/PublicationPresentation.swift`
+     l.44, source `src/components/FormulaireMission.tsx` l.917), libellé du champ de rémunération de l'écran de
+     publication (salarié : « brut » qualifie la rémunération du contrat de travail) ; repris mot pour mot du web,
+     mais absent des groupes A à E ;
+   - tout texte ajouté après la liste.
    **Textes validés le 24/11/2026** (plus en attente) : la liste de la revue B8 du tour 2 (section 6, groupes A à E),
    validée explicitement par la fondatrice (« Oui, je valide », point 1 de l'intégration de la vague D) : statut et
    rappel DPAE de l'écran contrat, avis du plancher du taux, renvoi « Contester cette présence », mention de signature
    OTP art. 1366-1367 (T10), les trois blocs du point 1 et les titres de renvoi web de T9 (dont « libéral / tous
    contrats », précision T9 n°13). Hors validation : les promesses du groupe D toujours affichées par le site (suivi
-   web à part) et l'ouverture de l'espace établissement hors démo (PR dédiée).
+   web à part) et l'ouverture de l'espace établissement hors démo (PR dédiée : STAGING ouvert par T13, production
+   par T14).
 5. **STAGING** : numéro de recette SMS pour `etablissements.telephone_contact` (preuve OTP établissement facultative
    de T10) ; confirmation qu'aucun abonnement SMS/e-mail réel n'existe sur les comptes de recette ; valeur de
    `parametres_systeme.inscriptions_publiques_actives`.
