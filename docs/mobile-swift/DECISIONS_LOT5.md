@@ -939,6 +939,31 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
       (parrainage dont E1 est filleul, favoris, conversations, scores de matching de S1) ; avec des identifiants neufs à
       chaque run, aucune n'est attendue.
 
+## Second parcours STAGING, refus à la connexion (run 45575772791, 25/11/2026)
+
+1. **Constat prouvé** (pièces de l'xcresult de la phase 1) : à l'échec, l'app affiche l'écran de connexion avec
+   `login-error` « Impossible de vérifier votre accès. Vérifiez votre connexion puis réessayez. »
+   (`SessionController.sessionCheckFailedMessage`) et le bouton « Se connecter » désactivé. L'enregistrement d'écran
+   montre « Chargement de votre espace » pendant environ 3 s après l'envoi, puis ce message : l'identifiant et le mot de
+   passe sont acceptés (sinon le message générique de connexion), le refus vient de la résolution de l'espace, pas d'un
+   délai (15 s par appel). Dans `SessionController`, ce texte n'a que trois origines : échec de `fn_get_my_role` sans
+   rôle signé (exclu : `app_metadata.role = ETABLISSEMENT` donne un rôle provisoire), erreur levée par
+   `fn_mes_permissions_etab`, ou réponse `success:false` de celle-ci (compte inactif ou sans session). Le profil, lu
+   ensuite, aurait donné « Impossible de charger votre profil… ».
+2. **Ce qui est écarté** : sur le schéma du dépôt (banc SQL local), sous le JWT d'E1, les trois lectures de la session
+   rendent ce que l'app attend (rôle `ADMIN_ETABLISSEMENT` et E1, `PROPRIETAIRE` et E1 avec toutes les permissions, profil
+   d'E1) ; le décodage de cette forme est couvert par `SupabaseEtabSessionGatewayTests`. Drapeaux distants : lus après
+   l'ouverture et fail-open, hors cause. Aucun écran intermédiaire n'a été montré.
+3. **Ce qui n'est pas prouvé** : laquelle des deux causes restantes (erreur levée ou `success:false`) a eu lieu sur le
+   STAGING, et pourquoi. L'app native n'avait jamais été connectée au PostgREST du STAGING (`PORTE_LOT0.md` 1.1 : jamais
+   exécuté). Aucun journal de l'app n'est joint à l'xcresult.
+4. **Correctif en avant** : (a) pré-vol dans `staging-lot5-fixture.mjs preparer` : les trois lectures de la session
+   établissement sous le JWT d'E1, avec la clé publishable de l'app et le même corps ; un écart arrête la préparation avec
+   la cause serveur, avant le XCUITest ; (b) diagnostic DEBUG : `SessionController.diagnostic` (étape, nature, message
+   déjà mappé, jamais d'adresse ni de secret) publié par `SessionStore.diagnosticConnexion` comme valeur d'accessibilité
+   de `login-error`, jamais affiché ; le XCUITest s'arrête aussitôt sur un refus et le nomme ; (c) banc SQL : pré-vol et
+   acceptation de la candidature par E1 exécutés sur le schéma du dépôt.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
