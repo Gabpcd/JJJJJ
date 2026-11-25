@@ -32,6 +32,8 @@ on:
       - 'src/lib/planning-derive.ts'
       - 'src/pages/ContratMission.tsx'
       - 'src/components/FormulaireMission.tsx'
+      # Plancher du taux horaire salarié (migration 20261125120000) : repli du web relu par PublicationPayloadTests.
+      - 'src/lib/tauxHoraireMinimumSalarie.ts'
       - 'src/components/PanneauContestation.tsx'
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
@@ -212,6 +214,8 @@ on:
       - 'src/lib/planning-derive.ts'
       - 'src/pages/ContratMission.tsx'
       - 'src/components/FormulaireMission.tsx'
+      # Plancher du taux horaire salarié (migration 20261125120000) : repli du web relu par PublicationPayloadTests.
+      - 'src/lib/tauxHoraireMinimumSalarie.ts'
       - 'src/components/PanneauContestation.tsx'
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'

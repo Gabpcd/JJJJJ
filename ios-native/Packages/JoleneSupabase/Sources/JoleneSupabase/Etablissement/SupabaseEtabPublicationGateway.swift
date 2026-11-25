@@ -18,7 +18,7 @@ import Supabase
 ///   `.nonConfirmee`, jamais un succès. Une réponse sans `mission_id` exploitable est un refus de contrat.
 public struct SupabaseEtabPublicationGateway: EtabPublicationPort {
     public static let rpc = "fn_creer_mission_multi_jours_v4"
-    /// Repli du web quand le serveur ne rend aucun texte (`FormulaireMission.tsx` l.451).
+    /// Repli du web quand le serveur ne rend aucun texte (`FormulaireMission.tsx` l.457).
     public static let fallback = "Erreur lors de la création de la mission."
 
     private let client: SupabaseClient

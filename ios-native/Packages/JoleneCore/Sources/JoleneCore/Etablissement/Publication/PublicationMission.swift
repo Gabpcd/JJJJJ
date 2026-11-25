@@ -12,7 +12,7 @@ import Foundation
 
 /// Mode de sélection d'une mission publiée (`p_mode_attribution`) : les deux valeurs que le serveur accepte
 /// (`fn_creer_mission_multi_jours`, `supabase/schema/public.sql` l.27432), dans l'ordre du web
-/// (`FormulaireMission.tsx` l.969-984).
+/// (`FormulaireMission.tsx` l.977-992).
 public enum ModeAttributionPublication: String, CaseIterable, Sendable {
     case premierArrive = "PREMIER_ARRIVE"
     case candidature = "CANDIDATURE"
@@ -28,7 +28,7 @@ public struct PublicationSaisie: Equatable, Sendable {
     public var service = ""
     /// Taux horaire tel que saisi (virgule ou point).
     public var taux = ""
-    /// État initial du web (`FormulaireMission.tsx` l.115).
+    /// État initial du web (`FormulaireMission.tsx` l.117).
     public var modeAttribution: ModeAttributionPublication = .premierArrive
     public var estUrgente = false
     /// État initial du web (l.114) ; n'est envoyé que si la mission est urgente.
@@ -48,13 +48,13 @@ public enum PublicationRules {
     public static let professionRenvoyeeAuWeb = CandidaturesEtabRules.professionRenvoyeeAuWeb
     /// `length(btrim(p_intitule)) < 3` est refusé par le serveur (l.27418).
     public static let intituleMinimum = 3
-    /// Longueur maximale de l'intitulé du web (`FormulaireMission.tsx` l.680, `slice(0, 120)`).
+    /// Longueur maximale de l'intitulé du web (`FormulaireMission.tsx` l.687, `slice(0, 120)`).
     public static let intituleMaximum = 120
     /// Niveaux d'urgence du web (l.959-961) ; le serveur borne aussi à 1…3 (l.27412).
     public static let niveauxUrgence: ClosedRange<Int> = 1...3
 
     /// Libellés de service suggérés, dans l'ordre du web ; la saisie reste libre.
-    // source: src/components/FormulaireMission.tsx:740
+    // source: src/components/FormulaireMission.tsx:747
     public static let services = [
         "Urgences", "Réanimation", "Soins intensifs", "Soins continus", "Médecine polyvalente",
         "Chirurgie", "Bloc opératoire", "Gériatrie", "Pédiatrie", "Cardiologie", "Maternité",
@@ -80,10 +80,12 @@ public enum PublicationRules {
         String(saisie.prefix(intituleMaximum))
     }
 
-    /// Plancher du taux horaire (revue B8 des textes de la vague D, M4) : `min` du champ du web hors libéral
-    /// (`FormulaireMission.tsx` l.921), repris par `LibellesWeb.Publication.tauxMinimumHorsLiberal` ; la publication
-    /// native est salariée (D8, `PublicationPayload.typeContratRecherche`). Parité provisoire : le serveur ne refuse
-    /// qu'un taux ≤ 0. Valeur illisible : rien n'est publiable (fermé par défaut).
+    /// Plancher du taux horaire d'une mission salariée (revue B8 des textes de la vague D, M4) : valeur de repli du web
+    /// (`src/lib/tauxHoraireMinimumSalarie.ts`), reprise par `LibellesWeb.Publication.tauxMinimumHorsLiberal` ; la
+    /// publication native est salariée (D8, `PublicationPayload.typeContratRecherche`). Le serveur refuse lui-même un taux
+    /// sous le paramètre `taux_horaire_minimum_salarie` (migration `20261125120000`) ; l'app ne lit pas ce paramètre (aucun
+    /// port numérique, seul `fn_param_bool` est raccordé) et garde la constante. Valeur illisible : rien n'est publiable
+    /// (fermé par défaut).
     public static let tauxMinimum: Double = Double(LibellesWeb.Publication.tauxMinimumHorsLiberal) ?? .infinity
 
     /// Taux lisible mais sous le plancher : l'écran l'explique sous le champ (`PublicationPresentation.tauxSousLeMinimum`).

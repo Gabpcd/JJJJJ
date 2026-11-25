@@ -2,7 +2,7 @@ import Foundation
 
 /// Charge de `fn_creer_mission_multi_jours_v4` (lot 5, T9 ; `supabase/schema/public.sql` l.27774 ; fiche
 /// `docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md`) : **exactement** les seize paramètres de la signature SQL, aucun
-/// de plus, comme l'appel du web (`FormulaireMission.tsx` l.423-440). Le périmètre natif (D8) fixe sept d'entre eux :
+/// de plus, comme l'appel du web (`FormulaireMission.tsx` l.429-446). Le périmètre natif (D8) fixe sept d'entre eux :
 /// type de contrat recherché et mode de rémunération constants, rétrocession, nature de TVA et spécialité médicale
 /// nulles, accueil d'internes faux. Aucun mode d'exercice n'est choisi ni calculé ici ; le serveur valide la mission et
 /// son refus est affiché mot pour mot.

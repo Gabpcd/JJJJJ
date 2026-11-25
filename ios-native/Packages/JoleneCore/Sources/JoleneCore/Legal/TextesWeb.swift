@@ -775,12 +775,12 @@ public enum TextesWeb {
     }
 
     /// Récapitulatif de publication (T9, D8) : seule l'option « Salarié » est publiée en natif ;
-    /// sa description est celle du web (`FormulaireMission.tsx` l.766).
+    /// sa description est celle du web (`FormulaireMission.tsx` l.773).
     public enum PublicationEtablissement {
-        // source: src/components/FormulaireMission.tsx:766 [libellé]
+        // source: src/components/FormulaireMission.tsx:773 [libellé]
         public static let optionSalarieLibelle = "Salarié"
 
-        // source: src/components/FormulaireMission.tsx:766 [juridique]
+        // source: src/components/FormulaireMission.tsx:773 [juridique]
         public static let optionSalarieDescription = "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
     }
 

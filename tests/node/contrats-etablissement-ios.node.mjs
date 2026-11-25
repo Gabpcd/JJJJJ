@@ -505,8 +505,8 @@ test('TextesWeb.swift : textes du lot 5 annotés à leur source web, mention art
     'BlocageEtablissement.publicationSuspendue': 'src/components/BandeauBlocageAuto.tsx:61',
     'BlocageEtablissement.verificationEnCoursTitre': 'src/pages/DashboardEtablissement.tsx:564',
     'BlocageEtablissement.verificationEnCoursDetail': 'src/pages/DashboardEtablissement.tsx:565',
-    'PublicationEtablissement.optionSalarieLibelle': 'src/components/FormulaireMission.tsx:766',
-    'PublicationEtablissement.optionSalarieDescription': 'src/components/FormulaireMission.tsx:766',
+    'PublicationEtablissement.optionSalarieLibelle': 'src/components/FormulaireMission.tsx:773',
+    'PublicationEtablissement.optionSalarieDescription': 'src/components/FormulaireMission.tsx:773',
   };
   const lireWeb = lecteurWeb(f => read(f));
   for (const [nom, source] of Object.entries(attendues)) {

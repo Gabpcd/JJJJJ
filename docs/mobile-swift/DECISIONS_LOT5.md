@@ -754,6 +754,12 @@ CORRIGER ». Un commit par constat ou petit groupe ; les réponses constat par c
   texte natif neutre, sans référence légale, valeur tirée de la constante (« Le taux horaire doit être d'au moins
   11,65 €/h. », nombre formaté en `fr_FR` depuis la constante), validé explicitement par la fondatrice le 24/11/2026
   (point 1 de l'intégration de la vague D, groupes A et E).
+  **Suivi du 25/11/2026 (PR `fix/taux-minimal-salarie-smic`, HARD STOP n°4, en attente de validation)** : 11,65 €/h était
+  sous le SMIC horaire brut en vigueur (12,31 € depuis le 1er juin 2026, arrêté du 22 mai 2026). Le plancher devient le
+  paramètre serveur `taux_horaire_minimum_salarie` (migration `20261125120000`, verrou différé sur `missions`, SALARIE et
+  TOUS, libéral exclu) ; le web le lit (`fn_taux_horaire_minimum_salarie`, repli `src/lib/tauxHoraireMinimumSalarie.ts`),
+  l'app garde la constante (12.31, aucun port numérique de paramètres) ; la garde `tests/node/taux-horaire-minimum-salarie.node.mjs`
+  lie les trois valeurs. Même texte partout : « Le taux horaire doit être d'au moins 12,31 €/h. ».
 - M5 : une présence validée propose « Contester cette présence » (libellé du web, `PanneauContestation.tsx` l.365) en
   renvoi web vers `/etablissement/presences` ; aucune RPC, aucun texte de délai ; le serveur juge la fenêtre.
 - M6 : l'écran contrat de l'établissement affiche le statut (`DPAEStatus.tsx`) et le rappel (`BandeauRappelDPAE.tsx`)
