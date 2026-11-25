@@ -73,10 +73,14 @@ test('taux horaire minimal d\'une mission salariée : verrou différé sur publi
       has_function_privilege('authenticated', 'public.fn_taux_horaire_minimum_salarie()', 'EXECUTE') AS auth,
       has_function_privilege('anon', 'public.fn_taux_horaire_minimum_salarie()', 'EXECUTE') AS anon,
       (SELECT count(*)::int FROM pg_trigger WHERE tgrelid = 'public.missions'::regclass AND tgdeferrable
-         AND tgname LIKE 'trg_zz_taux_minimum_salarie_%') AS declencheurs
+         AND tgname LIKE 'trg_zz_taux_minimum_salarie_%') AS declencheurs,
+      (SELECT count(*)::int FROM private.security_definer_inventory i JOIN pg_proc f
+         ON f.oid = to_regprocedure(CASE WHEN i.signature LIKE 'private.%' THEN i.signature ELSE 'public.' || i.signature END)
+        WHERE i.signature IN ('fn_taux_horaire_minimum_salarie()', 'private.fn_trg_verifier_taux_minimum_salarie()')
+          AND i.definition_md5 = md5(f.prosrc)) AS inventaire
       FROM public.parametres_systeme WHERE cle = 'taux_horaire_minimum_salarie';`);
     assert.deepEqual(param, { valeur: '12.31', val_min: '12.31', categorie: 'FINANCE', cablee: true, lu: '12.31',
-      auth: true, anon: false, declencheurs: 2 });
+      auth: true, anon: false, declencheurs: 2, inventaire: 2 });
     // Rejeu idempotent (ON CONFLICT DO NOTHING, déclencheurs non dupliqués).
     await executer(readFileSync(join(RACINE, MIGRATION), 'utf8'));
 

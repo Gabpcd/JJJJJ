@@ -39,7 +39,14 @@
 --
 -- Garde de parité : tests/node/taux-horaire-minimum-salarie.node.mjs (valeur de cette migration =
 -- repli du site = constante de l'app). Test du verrou : tests/postgres/taux-horaire-minimum-salarie.pg17.mjs.
--- HARD STOP n°4 : règle juridique exposée à l'utilisateur, en attente de validation avant merge.
+-- HARD STOP n°4 : règle juridique exposée à l'utilisateur (points 1 à 3 validés le 25/11/2026) ; B9 : go humain.
+--
+-- Verrous : la création des déclencheurs prend un verrou SHARE ROW EXCLUSIVE sur public.missions. lock_timeout
+-- borne l'attente à 5 s (même pratique que 20261124123500) : si le délai expire, la migration échoue en entier
+-- (aucun objet créé, la transaction de la CLI est annulée) et le workflow deploy-supabase est à relancer ; les
+-- écritures sur missions ne restent jamais bloquées derrière elle.
+-- Aucun BEGIN/COMMIT : la CLI ou le banc appelant possède la transaction.
+SET LOCAL lock_timeout = '5s';
 
 INSERT INTO public.parametres_systeme(cle,valeur,label,description,unite,val_min,val_max,categorie,avertissement,cablee)
 VALUES('taux_horaire_minimum_salarie',12.31,'Taux horaire minimal d''une mission salariée (€/h brut)',
@@ -139,3 +146,28 @@ BEGIN
   END IF;
 END;
 $body$;
+
+-- Inventaire des fonctions SECURITY DEFINER (comme 20261118152150 et 20261124123500).
+INSERT INTO private.security_definer_inventory (signature, categorie, definition_md5, justification, recense_le)
+SELECT 'fn_taux_horaire_minimum_salarie()', 'RPC_UTILISATEUR_AUTH_INTERNE', pg_catalog.md5(p.prosrc),
+       'Lecture seule de parametres_systeme.taux_horaire_minimum_salarie (une valeur numérique, aucune donnée personnelle) ; EXECUTE authenticated et service_role, REVOKE PUBLIC et anon. Source : 20261125120000_taux_horaire_minimum_salarie.sql',
+       pg_catalog.now()
+FROM pg_catalog.pg_proc p
+WHERE p.oid = 'public.fn_taux_horaire_minimum_salarie()'::pg_catalog.regprocedure
+ON CONFLICT (signature) DO UPDATE
+SET categorie = EXCLUDED.categorie,
+    definition_md5 = EXCLUDED.definition_md5,
+    justification = EXCLUDED.justification,
+    recense_le = EXCLUDED.recense_le;
+
+INSERT INTO private.security_definer_inventory (signature, categorie, definition_md5, justification, recense_le)
+SELECT 'private.fn_trg_verifier_taux_minimum_salarie()', 'SERVICE_ONLY_REVOQUE', pg_catalog.md5(p.prosrc),
+       'Fonction de déclencheur différé sur public.missions (création, modification du taux ou du type) : relit la ligne et le paramètre, lève une exception ; aucune écriture. REVOKE PUBLIC, anon et authenticated. Source : 20261125120000_taux_horaire_minimum_salarie.sql',
+       pg_catalog.now()
+FROM pg_catalog.pg_proc p
+WHERE p.oid = 'private.fn_trg_verifier_taux_minimum_salarie()'::pg_catalog.regprocedure
+ON CONFLICT (signature) DO UPDATE
+SET categorie = EXCLUDED.categorie,
+    definition_md5 = EXCLUDED.definition_md5,
+    justification = EXCLUDED.justification,
+    recense_le = EXCLUDED.recense_le;
