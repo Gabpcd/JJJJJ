@@ -34,17 +34,20 @@ struct ConversationScreen: View {
     /// Défilement vers la fin du fil en attente (un seul à la fois : le plus récent remplace le précédent).
     @State private var defilementFin: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduireAnimations
-    /// Fin du fil visible (repère de fin dans la zone), hauteur visible de la zone, dernier envoi de l'utilisateur :
-    /// décident du suivi de la fin quand la hauteur change (`SuiviFinDuFil`).
-    @State private var finVisible = true
-    @State private var hauteurVisible: CGFloat = 0
-    @State private var dernierEnvoi: Date?
+    /// Position du repère de fin, hauteur visible et dernier envoi : décident du suivi de la fin quand la hauteur change
+    /// (`SuiviFinDuFil`, JoleneCore). Le dernier envoi est daté sur l'horloge d'interface, jamais sur l'horloge métier
+    /// (figée en démo).
+    /// Boîte non observée : la position du repère change à chaque image d'un défilement, sans rendre l'écran.
+    @State private var boiteSuivi = BoiteSuiviFinDuFil()
+    private let horlogeInterface: HorlogeInterface
     /// Dernier type détecté : la feuille garde son texte pendant sa fermeture.
     @State private var typeAntiFuite: DetectedType?
     private let moderation: ModerationConversation
 
-    init(conversation: ConversationAffichee, contexte: ContexteEcranMessagerie, cycle: CycleRealtime, surIndisponible: @escaping () -> Void) {
+    init(conversation: ConversationAffichee, contexte: ContexteEcranMessagerie, cycle: CycleRealtime,
+         horlogeInterface: HorlogeInterface = .systeme, surIndisponible: @escaping () -> Void) {
         self.conversation = conversation
+        self.horlogeInterface = horlogeInterface
         self.contexte = contexte
         self.cycle = cycle
         self.surIndisponible = surIndisponible
@@ -221,8 +224,8 @@ struct ConversationScreen: View {
                         .accessibilityHidden(true)
                         .background(GeometryReader { repere in
                             Color.clear
-                                .onAppear { noterFin(repere.frame(in: .named(Self.finDuFil)).minY) }
-                                .onChange(of: repere.frame(in: .named(Self.finDuFil)).minY) { haut in noterFin(haut) }
+                                .onAppear { boiteSuivi.etat.repere(Double(repere.frame(in: .named(Self.finDuFil)).minY)) }
+                                .onChange(of: repere.frame(in: .named(Self.finDuFil)).minY) { haut in boiteSuivi.etat.repere(Double(haut)) }
                         })
                 }
             }
@@ -240,12 +243,11 @@ struct ConversationScreen: View {
             .onChange(of: Self.signature(fil.messages)) { _ in defilerEnBas(proxy, apres: Self.delaiApresMessage) }
             .background(GeometryReader { zone in
                 Color.clear
-                    .onAppear { hauteurVisible = zone.size.height }
+                    .onAppear { boiteSuivi.etat.hauteurMesuree(Double(zone.size.height)) }
                     .onChange(of: zone.size.height) { hauteur in
-                        let suivre = SuiviFinDuFil.suivreApresChangementDeHauteur(finVisibleAvant: finVisible,
-                                                                                  dernierEnvoi: dernierEnvoi, maintenant: maintenant)
-                        hauteurVisible = hauteur
-                        if suivre { defilerEnBas(proxy, apres: Self.delaiApresClavier) }
+                        if boiteSuivi.etat.hauteurChangee(Double(hauteur), a: horlogeInterface.maintenant()) {
+                            defilerEnBas(proxy, apres: Self.delaiApresClavier)
+                        }
                     }
             })
             // Ouverture : sans animation, au tour suivant de la boucle principale (mise en page faite). Un `scrollTo`
@@ -255,11 +257,6 @@ struct ConversationScreen: View {
         }
     }
 
-    /// Visibilité de la fin du fil, relue à chaque déplacement du repère de fin dans la zone de défilement.
-    private func noterFin(_ haut: CGFloat) {
-        let visible = SuiviFinDuFil.finVisible(hautDuRepere: Double(haut), hauteurVisible: Double(hauteurVisible))
-        if visible != finVisible { finVisible = visible }
-    }
 
     /// Nombre de messages et dernier identifiant : change à toute insertion, en fin de fil ou avant le dernier.
     private static func signature(_ messages: [MessageChat]) -> String {
@@ -332,7 +329,7 @@ struct ConversationScreen: View {
     /// et relu, sinon le texte saisi reste.
     private func envoyer() {
         envoiLocal = true
-        dernierEnvoi = maintenant
+        boiteSuivi.etat.envoi(a: horlogeInterface.maintenant())
         let contenu = MessageComposer.trimmed(texte)
         Task {
             let confirme = await fil.envoyer(contenu)
@@ -354,3 +351,11 @@ struct ConversationScreen: View {
         }
     }
 }
+
+/// État du suivi de la fin du fil (`SuiviFinDuFil`) tenu par référence : ses mises à jour (à chaque image d'un
+/// défilement) ne provoquent aucun rendu ; seules les décisions de défilement agissent.
+@MainActor
+private final class BoiteSuiviFinDuFil {
+    var etat = SuiviFinDuFil()
+}
+

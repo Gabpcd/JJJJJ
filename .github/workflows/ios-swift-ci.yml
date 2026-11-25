@@ -1757,9 +1757,9 @@ jobs:
       # « lot4-score-litiges » — DemoEvaluationsScoreTests (T9, 2), DemoLitigesTests (T8, 3), DemoReclamationsTests (T8, 3) :
       # 8 méthodes, environ 14 min (les trois tests les plus longs de l'ancien éclat, 2,5 à 3,1 min, en font partie) ;
       # « lot4-swipe » — DemoSwipeTests (T3b, 7) : environ 14 min (2,0 à 2,6 min pour ses trois tests les plus longs) ;
-      # « lot4-messagerie » — DemoPoolUrgenceTests (T11, 2), DemoParrainageTests (T6, 3), DemoMessagerieTests (T7b, 3),
+      # « lot4-messagerie » — DemoPoolUrgenceTests (T11, 2), DemoParrainageTests (T6, 3), DemoMessagerieTests (T7b, 4),
       # DemoEtabMessagerieTests (L5-T11, 2, la messagerie en contexte établissement, avec l'écran qu'elle réemploie) :
-      # 10 méthodes, environ 16 min.
+      # 11 méthodes, environ 17 min.
       - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — filtres, disponibilités, séries, bulletins) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.

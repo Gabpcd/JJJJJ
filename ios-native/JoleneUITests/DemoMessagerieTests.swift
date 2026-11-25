@@ -170,7 +170,63 @@ final class DemoMessagerieTests: JoleneUITestCase {
         verifierAucuneRequete()
     }
 
+    /// Suivi de la fin du fil (`SuiviFinDuFil`, revue du delta de la PR #1185, majeurs 1 et 2). Probant en iPad paysage, où
+    /// le clavier ne laisse que 72 à 84 pt au fil ; sur les autres formats le fil tient dans la zone et le test passe sans
+    /// rien distinguer.
+    /// - fil court, clavier ouvert SANS envoi : les derniers messages restent dans la zone (branche « fin visible », aucun
+    ///   envoi ; `8651dbe9` les suivait, `8e0b2b8e` non) ;
+    /// - envoi : le message et la réponse sont dans la zone ;
+    /// - l'utilisateur remonte au premier message, la fenêtre de l'envoi passée (horloge d'interface, jamais l'horloge
+    ///   démo figée) : un changement de hauteur (composeur qui grandit) ne le ramène pas en bas.
+    func testSuiviDeLaFinDuFilClavierEnvoiEtHistoireRelue() throws {
+        launchDemo()
+        connexionDemo()
+        let bouton = element("nav-messages")
+        require("L'onglet Messages est affiché", timeout: 30) { bouton.exists }
+        bouton.tap()
+        let liste = ouvrirListe()
+        let ecran = ouvrirFil(Attendus.etablissement, dans: liste)
+        let dernier = "chat-message-demo-message-003"
+        require("Le dernier message est dans la zone du fil") { self.dansLaZone(dernier) }
+
+        // Fil court, clavier ouvert sans envoi : la zone rétrécit, la fin était visible, elle suit.
+        let saisie = element("chat-input")
+        focus(saisie, in: ecran)
+        require("Clavier ouvert sans envoi : le dernier message reste dans la zone", timeout: 10) { self.dansLaZone(dernier) }
+        record("\(proofPrefix)-messagerie-fin-clavier-sans-envoi")
+
+        // Envoi : message et réponse dans la zone.
+        saisie.typeText("Bonjour, je confirme ma disponibilité.")
+        tap("chat-envoyer")
+        require("Le message envoyé et la réponse sont dans la zone", timeout: 30) {
+            self.dansLaZone("chat-message-demo-message-reponse-1") && self.element("chat-message-demo-message-envoi-1").exists
+        }
+
+        // Fenêtre de l'envoi passée (2 s, horloge d'interface), l'utilisateur remonte au premier message.
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "fenêtre de l'envoi passée")], timeout: 3)
+        let premier = "chat-message-demo-message-001"
+        let zone = element("chat-messages")
+        for _ in 0..<6 where !dansLaZone(premier) { zone.swipeDown() }
+        require("L'utilisateur relit le premier message", timeout: 10) { self.dansLaZone(premier) }
+        // Changement de hauteur : le composeur grandit (texte long, non envoyé).
+        saisie.typeText(String(repeating: "Je relis le fil avant de répondre. ", count: 8))
+        requireAbsence("Historique relu après un envoi : un changement de hauteur ne ramène pas le fil en bas", pendant: 3) {
+            !self.dansLaZone(premier)
+        }
+        record("\(proofPrefix)-messagerie-historique-relu")
+        verifierAucuneRequete()
+    }
+
     // MARK: Étapes
+
+    /// L'élément `id` est dans la zone visible du fil (`chat-messages`), sur au moins 20 pt (ou toute sa hauteur).
+    private func dansLaZone(_ id: String) -> Bool {
+        let cible = element(id)
+        let zone = element("chat-messages")
+        guard cible.exists, zone.exists else { return false }
+        let part = zone.frame.intersection(cible.frame)
+        return !part.isNull && part.height >= min(20, cible.frame.height)
+    }
 
     private func ouvrirListe() -> XCUIElement {
         let liste = defilement("messagerie-screen")

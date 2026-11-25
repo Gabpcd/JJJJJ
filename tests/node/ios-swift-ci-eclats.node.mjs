@@ -530,7 +530,7 @@ const DUREES_UI_LOT1 = {
   DemoSwipeTests: [820, 830], // mesuré 639 / 752 avec deux ou trois tests en échec ou coupés, majoré
   DemoPoolUrgenceTests: [184, 153],
   DemoParrainageTests: [330, 206], // paysage : un test en échec (95 s), majoré
-  DemoMessagerieTests: [254, 240],
+  DemoMessagerieTests: [310, 295], // + estimation du quatrième test (suivi de la fin du fil, PR #1185), 55 s
   DemoEtabMessagerieTests: [199, 156],
   DemoEtabLiensTests: [205, 149],
   DemoEtabMissionsTests: [128, 110],
