@@ -85,3 +85,48 @@ test('Taux salarié : 12,30 refusé avec le message exact, après recharge aussi
     }, null, 2), contentType: 'application/json' });
   }
 });
+
+test('Taux salarié lu au serveur (paramètre annoncé, 12,50) : 12,40 refusé, 12,50 accepté jusqu’au récapitulatif', async ({ page }, info) => {
+  const { etat, parcours } = await simulerEtablissement(page);
+  Object.assign(parcours.donnees, { brouillonMission: true, missionFormulaire: {
+    intitule: 'AS — plancher relevé', profession: 'AS', service: 'Soins',
+    description: 'Brouillon fictif repris par le vrai formulaire.', tauxHoraire: '12.40',
+    estUrgente: false, modeAttribution: 'CANDIDATURE', contratPreference: 'SALARIE',
+    creneaux: [{ debut, fin }],
+  } });
+  const annonces: unknown[] = [];
+  let lectures = 0;
+  await page.clock.setFixedTime(new Date(maintenant));
+  // Seule la clé du plancher est annoncée ; tous les autres drapeaux restent fermés comme dans le harnais.
+  await page.route('**/rest/v1/rpc/fn_param_bool', async route => {
+    const corps = route.request().postDataJSON();
+    annonces.push(corps);
+    return route.fulfill({ json: corps?.p_cle === 'taux_horaire_minimum_salarie' });
+  });
+  await page.route('**/rest/v1/rpc/fn_taux_horaire_minimum_salarie', route => { lectures += 1; return route.fulfill({ json: 12.5 }); });
+  await page.route('**/rest/v1/rpc/fn_calculer_remuneration_mission', route => route.fulfill({ json: {
+    total_brut: 100, montant_base: 100, net_a_payer: 100, montant_ifm: 0, montant_icp: 0 } }));
+  const message = "Le taux horaire doit être d'au moins 12,50 €/h.";
+  try {
+    await entrer(page, 'connexion');
+    await allerA(page, '/etablissement/missions/creer');
+    await expect(page.getByLabel('Intitulé *', { exact: true })).toHaveValue('AS — plancher relevé');
+    await expect(champTaux(page)).toHaveAttribute('min', '12.5');
+    await expect(page.locator('#mission-taux-minimum')).toHaveText(message);
+    await expect(publier(page)).toBeDisabled();
+    await preuve(page, 'taux-minimal-serveur-1240-refuse', info);
+    await champTaux(page).fill('12.50');
+    await expect(page.locator('#mission-taux-minimum')).toHaveCount(0);
+    await expect(publier(page)).toBeEnabled();
+    await activer(publier(page), info);
+    await expect(page.getByRole('dialog')).toContainText('12.50 €/h');
+    await preuve(page, 'taux-minimal-serveur-1250-recapitulatif', info);
+    expect(lectures).toBeGreaterThan(0);
+    expect(annonces).toContainEqual({ p_cle: 'taux_horaire_minimum_salarie', p_defaut: false });
+    expect(etat.inconnues).toEqual([]); expect(etat.erreurs).toEqual([]); expect(etat.ecritures).toEqual([]);
+  } finally {
+    await info.attach('taux-minimal-serveur-reponses-fictives', { body: JSON.stringify({
+      simulation: true, backendVerified: false, published: false, minimumServi: 12.5, annonces, lectures,
+    }, null, 2), contentType: 'application/json' });
+  }
+});
