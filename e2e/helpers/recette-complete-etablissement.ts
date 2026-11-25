@@ -120,6 +120,7 @@ export async function simulerEtablissement(page:Page, modeInitial:ModeCompte = '
    else if(nom==='notifications'&&req.method()==='PATCH')data=null;
    else if(nom==='fn_bfa_info')data={eligible:false};
    else if(nom==='fn_param_bool')data=false;
+   else if(nom==='fn_taux_horaire_minimum_salarie')data=12.31;
    else if(nom==='fn_mes_reclamations')data={success:true,reclamations:[]};
    else if(nom==='fn_lister_api_keys')data={success:true,keys:[]};
    else if(nom==='fn_lister_mes_filtres_sauvegardes')data=recherches.filter(r=>r.audience===req.postDataJSON().p_audience);

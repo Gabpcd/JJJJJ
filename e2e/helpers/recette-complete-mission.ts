@@ -152,6 +152,7 @@ export function creerMissionSimulee() {
           case 'fn_note_moyenne': return json({moyenne:null,total:0});
           case 'fn_mode_exercice': return json({niveau:'AUTORISE',categorie:'prive',source_libelle:'Matrice simulée pour médecin en clinique',source_force:'CONFORMITE_JOLENE',source_url:null});
           case 'fn_param_bool': return json(false);
+          case 'fn_taux_horaire_minimum_salarie': return json(12.31);
           case 'fn_ecrire_audit_safe': return json(null);
           case 'fn_onboarding_soignant_statut': return json(null);
           case 'fn_litige_pour_mission': return json({exists:false});

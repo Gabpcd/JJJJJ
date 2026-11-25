@@ -1,4 +1,6 @@
 import { tauxCommissionEtablissement } from '@/lib/tauxCommissionEtablissement';
+import { messageTauxSousMinimum, minimumSalarieApplicable, tauxSousMinimumSalarie } from '@/lib/tauxHoraireMinimumSalarie';
+import { useTauxHoraireMinimumSalarie } from '@/hooks/useTauxHoraireMinimumSalarie';
 import { ChoixInternesMission } from '@/components/internat/ChoixInternesMission';
 import { erreurChoixInternes } from '@/lib/internat-presentation';
 import { IntroductionMission } from '@/components/mission/IntroductionMission';
@@ -380,6 +382,10 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
 
   const taux = parseFloat(tauxHoraire) || 0;
   const tauxCreation = taux;
+  const tauxMinimumSalarie = useTauxHoraireMinimumSalarie();
+  const tauxSousMinimum = tauxSousMinimumSalarie(taux, contratPreference, tauxMinimumSalarie, modeEdition && missionSource
+    ? { taux: Number(missionSource.taux_horaire_base), contrat: (missionSource.type_contrat_recherche as ContratPreference) || extraireContratPreference(missionSource.description) }
+    : null);
 
   const { dureeEstimee, heuresNuitEstimees } = useMemo(() => {
     const duree = creneaux.reduce((somme, creneau) => somme + creneau.dureeHeures, 0);
@@ -484,6 +490,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (tauxSousMinimum) { afficherNotification({ type: 'erreur', message: messageTauxSousMinimum(tauxMinimumSalarie) }); return; }
     if (parcours) {
       setLoading(true);
       try {
@@ -558,7 +565,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
   };
 
   const officineNonProposee = etablissementType === 'PHARMACIE_OFFICINE';
-  const canSubmit = parcours ? !loading : !officineNonProposee
+  const canSubmit = parcours ? !loading && !tauxSousMinimum : !officineNonProposee
     && !siretInvalide
     && contratNonValide === false
     && !blocageVerification
@@ -566,7 +573,7 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
     && !erreurInternes
     && !!intitule
     && !!profession
-    && tauxCreation > 0
+    && tauxCreation > 0 && !tauxSousMinimum
     && (contratPreference === 'SALARIE' || !!natureTvaPrestation)
     && !republicationBloquee
     && !!recurrenceValide
@@ -918,12 +925,13 @@ export function FormulaireMission({ missionSource, modeEdition }: FormulaireMiss
                 : 'Taux horaire proposé * (brut salarié ou honoraires HT)'}
           </label>
           <div className="relative">
-            <input id="mission-taux-horaire" type="number" step="0.01" min={contratPreference === 'LIBERAL' ? '0.01' : '11.65'} value={tauxHoraire}
-              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required
+            <input id="mission-taux-horaire" type="number" step="0.01" min={minimumSalarieApplicable(contratPreference) ? String(tauxMinimumSalarie) : '0.01'} value={tauxHoraire}
+              onChange={(e) => setTauxHoraire(e.target.value)} placeholder="25.00" required aria-invalid={tauxSousMinimum || undefined} aria-describedby={tauxSousMinimum ? 'mission-taux-minimum' : undefined}
               readOnly={modeEdition && missionSource?.statut !== 'OUVERTE'}
               className={`input-base pr-12 ${modeEdition && missionSource?.statut !== 'OUVERTE' ? 'bg-muted cursor-not-allowed' : ''}`} />
             <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€/h</span>
           </div>
+          {tauxSousMinimum && <p id="mission-taux-minimum" role="alert" className="text-xs text-destructive mt-1">{messageTauxSousMinimum(tauxMinimumSalarie)}</p>}
           {/* Session F (F5) — Taux conseillé indicatif par profession (n'impose rien) */}
           {profession && (
             <p className="text-xs text-muted-foreground mt-1">
