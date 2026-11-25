@@ -999,7 +999,7 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    échoue en 53,6 s avec le diagnostic `permissions:unauthorized:Votre session a expiré. Reconnectez-vous.` : Auth
    accepte les identifiants, puis `fn_mes_permissions_etab` est refusée. Le schéma n'est pas en cause : c'est la
    requête de l'app qui diffère de celle de la fixture.
-2. **Cause, établie par la lecture du code et une sonde locale** :
+2. **Cause PROBABLE (revue de #1191, M1) : établie dans le code, pas sur le runner** :
    - (a) les workflows STAGING construisent l'app de simulateur avec `CODE_SIGNING_ALLOWED=NO`
      (`ios-swift-lot5-staging.yml`, `ios-swift-staging.yml`) : seule la signature ad hoc de l'éditeur de liens, sans
      entitlement ni `application-identifier` ;
@@ -1018,6 +1018,24 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    - (g) `fn_get_my_role` échoue de la même façon, mais l'échec est masqué par le repli sur le rôle signé.
    La fixture passe parce qu'elle envoie explicitement le JWT d'E1. Le mécanisme (c)→(e) est reproduit par
    `StockageSessionRefuseTests.testSansSessionStockeeLeSDKEnvoieLaClePublishable`.
+
+   **Prouvé** :
+   - le mécanisme du SDK (c)→(e), lu dans les sources 2.55.5 et reproduit par le vrai client sur un double du
+     trousseau qui refuse l'écriture ;
+   - les builds de recette sont construits avec `CODE_SIGNING_ALLOWED=NO` ;
+   - le symptôme est cohérent avec une requête partie sous `anon`.
+
+   **Non prouvé** : le refus effectif du trousseau sur le runner (Xcode 26.4.1, simulateur iOS 26, app lancée par
+   XCUITest). La sonde locale portait sur un simulateur iOS 18.6, avec un binaire nu lancé par `simctl spawn`, et sa
+   contre-épreuve (un binaire porteur d'un `application-identifier`) n'a pas pu être lancée.
+
+   **Historique CI** :
+   - `ios-swift-staging.yml` n'a jamais été exécuté ;
+   - `native-auth-staging.yml` a été exécuté une fois et s'est arrêté avant les tests UI ;
+   - aucun parcours XCUITest authentifié n'a encore réussi en CI.
+
+   La cause n'est donc ni contredite ni confirmée par la CI. Le parcours n° 4 tranchera grâce à la ligne de stockage
+   (point 5).
 3. **Production** : une app TestFlight ou App Store est signée avec son profil, qui porte l'`application-identifier`,
    et le trousseau accepte la session. C'est le cas des builds 25 à 31, où des soignants se connectent et lisent leurs
    données. Un compte établissement passe par le même client, le même stockage et le même transport. La cause (a) est
@@ -1036,6 +1054,30 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    - pré-vol : témoin non bloquant, la lecture de `fn_mes_permissions_etab` rejouée avec les en-têtes de l'app sans
      session (clé publishable en `apikey` et en `Authorization`). Un refus confirme le mécanisme côté STAGING, une
      acceptation le dément. Les autres en-têtes (`X-Client-Info`, en-têtes du SDK) ne changent pas le rôle PostgREST.
+5. **Revue fraîche de #1191** :
+   - **M1, traité** : le choix du stockage est observable en DEBUG.
+     - Forme : `stockage=memoire;sonde=<OSStatus>` (staging, trousseau refusé), `stockage=trousseau;sonde=ok`
+       (staging, trousseau accepté) ou `stockage=trousseau;sonde=non-lancee` (autres modes, aucune écriture témoin).
+     - Journal DEBUG au démarrage du client : `Jolene diagnostic stockage-session : <forme>`.
+     - Diagnostic de session : la forme suit chaque diagnostic d'échec, après « | ».
+     - Écran de connexion : valeur d'accessibilité de `login-scroll`. Le XCUITest STAGING la relit avant la connexion
+       et l'écrit en une ligne au même préfixe, publiée par le filtre du journal du job (`ios-swift-lot5-staging.yml`),
+       que la connexion réussisse ou échoue.
+     - Rien en Release. Garde Node : même préfixe dans l'app, le XCUITest et les deux filtres du workflow.
+   - **m2, traité** : `codeBrut` garde le message serveur, masqué (`DiagnosticServeur`), à côté du code
+     (`;message=…`, placé en dernier par `DiagnosticTransport`). Toutes les erreurs RPC passent par le même point :
+     limiter `codeBrut` aux lectures de session aurait demandé de dupliquer `executer`. Garder le message rend aux
+     autres diagnostics DEBUG ce qu'ils montraient avant.
+   - **m3, traité** : le témoin lit le corps d'une réponse 2xx. Il n'est « ACCEPTÉE » que si le corps ouvre un
+     périmètre, comme l'app le lirait. Une erreur sans statut HTTP (réseau, délai) est dite sans conclusion, jamais
+     « refus attendu du rôle anon ».
+   - **Suivis ouverts, hors périmètre, aucun texte affiché modifié** :
+     - m1 : les autres entrées de session (`verifyOTP`, `setSession` et `exchangeCodeForSession` de
+       `SupabaseInscriptionGateway`, ré-authentification de `SupabaseMotDePasseGateway`, rafraîchissement) gardent la
+       dégradation silencieuse vers `anon` si l'écriture du trousseau échoue. Elles sont à verrouiller comme `signIn`
+       (principe « un gap connu reste verrouillé ») ;
+     - m4 : le refus « Impossible d'enregistrer votre session sur cet appareil. Réessayez. » n'offre que « Réessayez »,
+       sans renvoi vers le support ni vers jolene.app. L'issue est à décider avec le texte.
 
 ## En attente de Gabrielle
 

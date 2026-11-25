@@ -64,6 +64,32 @@ final class StockageSessionRefuseTests: XCTestCase {
         XCTAssertEqual(user.id, TestClient.userId)
     }
 
+    /// Revue de #1191, M1 : le stockage retenu et la sonde sont décrits, sans secret, pour le journal et le diagnostic.
+    func testChoixDuStockageEstDecrit() {
+        let refuse = SupabaseGateways.choixStockage(mode: .staging, sonde: { errSecMissingEntitlement })
+        XCTAssertTrue(refuse.stockage is StockageMemoire)
+        XCTAssertEqual(refuse.diagnostic, "stockage=memoire;sonde=-34018")
+        let accepte = SupabaseGateways.choixStockage(mode: .staging, sonde: { errSecSuccess })
+        XCTAssertTrue(accepte.stockage is KeychainSessionStorage)
+        XCTAssertEqual(accepte.diagnostic, "stockage=trousseau;sonde=ok")
+        var sondee = false
+        let production = SupabaseGateways.choixStockage(mode: .production, sonde: { sondee = true; return errSecSuccess })
+        XCTAssertEqual(production.diagnostic, "stockage=trousseau;sonde=non-lancee")
+        XCTAssertFalse(sondee, "aucune écriture témoin hors staging")
+        XCTAssertEqual(SupabaseGateways.prefixeJournalStockage, "Jolene diagnostic stockage-session :")
+    }
+
+    /// Revue de #1191, m2 : le message serveur suit le code brut, masqué ; un `detail` déjà posé est gardé.
+    func testCodeBrutGardeLeMessageServeurMasque() {
+        let uuid = "3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c"
+        let erreur = RPCResponse.codeBrut(JoleneError(.unknown, "Réessayez."), "postgrest=P0001", messageServeur: "Mission \(uuid) close")
+        XCTAssertEqual(erreur.detail, "postgrest=P0001;message=Mission <uuid> close")
+        XCTAssertEqual(RPCResponse.codeBrut(JoleneError(.unknown, "x"), "http=500").detail, "http=500")
+        XCTAssertEqual(RPCResponse.codeBrut(JoleneError(.contract, "x", detail: "id"), "postgrest=1").detail, "id")
+        XCTAssertEqual(DiagnosticTransport.decrire(code: "postgrest=42501;message=refus", jeton: nil, hoteREST: nil, maintenant: Date()),
+                       "postgrest=42501;jwt=non;exp=-;hote=-;message=refus", "le message est placé en dernier")
+    }
+
     /// DEBUG + staging + trousseau refusé → mémoire du processus ; partout ailleurs, le Keychain.
     func testStockageDeSession() {
         XCTAssertTrue(SupabaseGateways.stockageSession(mode: .staging, sonde: { errSecMissingEntitlement }) is StockageMemoire)
@@ -129,7 +155,8 @@ final class StockageSessionRefuseTests: XCTestCase {
         } catch let erreur as JoleneError {
             XCTAssertEqual(erreur.kind, .unauthorized)
             XCTAssertEqual(erreur.message, SupabaseErrorMapping.unauthorizedMessage, "message montré inchangé")
-            XCTAssertEqual(erreur.detail, "postgrest=42501;jwt=non;exp=-;hote=-")
+            XCTAssertEqual(erreur.detail,
+                           "postgrest=42501;jwt=non;exp=-;hote=-;message=permission denied for function fn_mes_permissions_etab")
         } catch {
             XCTFail("erreur inattendue \(type(of: error))")
         }

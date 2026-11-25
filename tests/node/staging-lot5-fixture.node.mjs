@@ -523,10 +523,32 @@ test('pré-vol : les trois lectures, sous le JWT d E1, avec la clé que reçoit 
   assert.match(choisirCleApp({ JOLENE_STAGING_PUBLISHABLE_KEY: 'pas-une-cle' }, { anon: 'a' }).origine, /anon/);
 });
 
-test('témoin sans session : acceptation = mécanisme démenti ; refus = statut et code bruts, sans valeur', () => {
-  assert.match(decrireTemoinSansSession({ accepte: true }), /ACCEPTÉE — le mécanisme supposé est démenti\.$/);
+test('témoin sans session (revue de #1191, m3) : 2xx lu dans le corps ; réseau sans conclusion ; refus avec son code', () => {
+  assert.match(decrireTemoinSansSession({ corps: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1' } }), /ACCEPTÉE avec un périmètre — le mécanisme supposé est démenti\.$/);
+  assert.match(decrireTemoinSansSession({ corps: { success: false, error: 'Non authentifié' } }),
+    /HTTP 2xx sans périmètre \(success false, HTTP 200, message serveur « Non authentifié »\) — refus porté par le corps/);
+  assert.match(decrireTemoinSansSession({ corps: null }), /HTTP 2xx sans périmètre \(success null\)/);
   assert.match(decrireTemoinSansSession({ echec: { http: 401, code: 'PGRST301' } }), /refusée, HTTP 401, code PGRST301 \(refus attendu du rôle anon\)\.$/);
-  assert.match(decrireTemoinSansSession({}), /refusée, HTTP 0 \(refus attendu/);
+  for (const echec of [{ http: 0 }, {}]) {
+    const m = decrireTemoinSansSession({ echec });
+    assert.match(m, /échec réseau ou délai dépassé, sans statut HTTP — aucune conclusion sur le rôle anon\.$/);
+    assert.doesNotMatch(m, /refus attendu/);
+  }
+});
+
+test('journal du stockage de session (revue de #1191, M1) : même préfixe dans l app, le XCUITest et le filtre du workflow', () => {
+  const prefixe = 'Jolene diagnostic stockage-session :';
+  const lire = f => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8');
+  assert.ok(lire('ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/SupabaseGateways.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
+  assert.ok(lire('ios-native/JoleneUITests/StagingEtabParcoursTests.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
+  const workflow = lire('.github/workflows/ios-swift-lot5-staging.yml');
+  const filtres = [...workflow.matchAll(/filter\(l => (\/.*?\/)\.test\(l\)\)/g)].map(m => m[1]);
+  assert.equal(filtres.length, 2, 'un filtre par phase XCUITest');
+  for (const f of filtres) {
+    const re = new RegExp(f.slice(1, -1));
+    assert.ok(re.test(`${prefixe} stockage=memoire;sonde=-34018`), `ligne publiée par le filtre ${f}`);
+    assert.ok(re.test(`${prefixe} stockage=trousseau;sonde=ok`));
+  }
 });
 
 test('pré-vol : un refus arrête la préparation, nomme l écart, son statut HTTP et son code brut', async t => {

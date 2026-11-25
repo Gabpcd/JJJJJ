@@ -5,7 +5,7 @@ import Supabase
 /// Diagnostic DEBUG du transport d'une lecture de session refusée en « non autorisé » (troisième parcours STAGING du
 /// lot 5, 25/11/2026) : ce que supabase-swift a pu envoyer, sans jamais recopier le jeton ni l'adresse.
 ///   - code brut (`postgrest=<code>` ou `http=<statut>`, posé par `RPCResponse.codeBrut` ; `http=200` pour un refus
-///     porté par le corps) ;
+///     porté par le corps), puis, en dernier, le message serveur masqué (`;message=…`) s'il y en a un ;
 ///   - `jwt=oui|non` : une session est relue du stockage et son jeton a la forme d'un JWT. Sans session relue, le SDK
 ///     garde la clé publishable en `Authorization` (rôle `anon`) : `jwt=non` ;
 ///   - `exp=<secondes>` restantes avant l'expiration du jeton (négatif s'il est périmé), `-` sans jeton ;
@@ -20,9 +20,16 @@ enum DiagnosticTransport {
     }
 
     static func decrire(code: String?, jeton: String?, hoteREST: String?, maintenant: Date) -> String {
-        var parties = [code ?? "http=200"]
+        // Le message serveur masqué (`;message=…`, `RPCResponse.codeBrut`) est replacé en dernier : il peut être long.
+        let brut = code ?? "http=200"
+        let (codeSeul, message): (String, String?) = {
+            guard let r = brut.range(of: ";message=") else { return (brut, nil) }
+            return (String(brut[..<r.lowerBound]), String(brut[r.lowerBound...]))
+        }()
+        let fin = message ?? ""
+        var parties = [codeSeul]
         guard let jeton, let charge = charge(jeton) else {
-            return (parties + ["jwt=non", "exp=-", "hote=-"]).joined(separator: ";")
+            return (parties + ["jwt=non", "exp=-", "hote=-"]).joined(separator: ";") + fin
         }
         parties.append("jwt=oui")
         if let exp = (charge["exp"] as? NSNumber)?.doubleValue {
@@ -35,7 +42,7 @@ enum DiagnosticTransport {
         } else {
             parties.append("hote=-")
         }
-        return parties.joined(separator: ";")
+        return parties.joined(separator: ";") + fin
     }
 
     /// Charge utile d'un jeton en forme de JWT (trois segments base64url, en-tête et charge en JSON objet), nil sinon.

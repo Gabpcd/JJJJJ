@@ -63,6 +63,11 @@ public final class SessionStore: ObservableObject {
     /// (`SessionController.diagnostic`), lu par la valeur d'accessibilité de `login-error` pour les XCUITest STAGING.
     /// Jamais affiché, jamais journalisé ; ni adresse, ni mot de passe, ni jeton.
     @Published public private(set) var diagnosticConnexion: String?
+    #if DEBUG
+    /// DEBUG seulement : stockage de session retenu (`SessionController.diagnosticStockage`), valeur d'accessibilité de
+    /// `login-scroll` pour que le XCUITest STAGING l'écrive dans le journal du job (revue de #1191, M1).
+    public var diagnosticStockage: String? { controller.diagnosticStockage }
+    #endif
     public let controller: SessionController
     /// Lot 3, T4 : coordinateur push (nil sans push, doubles de test du lot 1).
     public let push: PushCoordinator?

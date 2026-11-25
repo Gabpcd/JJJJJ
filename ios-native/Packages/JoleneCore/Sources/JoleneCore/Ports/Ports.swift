@@ -90,6 +90,11 @@ public struct Gateways: Sendable {
     // (`Ports/Lot1Ports.swift`) : il refuse explicitement tant que sa tranche ne l'a pas livré.
     // L'init du lot 0 ci-dessous est conservé tel quel ; `unwiredPorts` nomme les ports encore
     // stubs pour que chaque monde (démo, Supabase) prouve son câblage par test.
+    #if DEBUG
+    /// DEBUG seulement : stockage de session retenu par la fabrique Supabase et résultat de la sonde du trousseau
+    /// (`stockage=memoire|trousseau;sonde=ok|<OSStatus>|non-lancee`), sans secret ; nil ailleurs (revue de #1191, M1).
+    public var diagnosticStockage: String?
+    #endif
     public var dashboard: DashboardPort = UnwiredDashboardPort()
     public var candidature: CandidaturePort = UnwiredCandidaturePort()
     public var presence: PresencePort = UnwiredPresencePort()
