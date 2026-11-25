@@ -621,31 +621,56 @@ class JoleneUITestCase: XCTestCase {
         }
     }
 
-    /// Amène un curseur à pas entiers (`Slider(step: 1)`) sur la valeur `cible`, lue dans sa valeur d'accessibilité
-    /// (premier nombre de « 15 km ») : un `adjust(toNormalizedSliderPosition:)` vise la position de `cible`, puis, si la
-    /// valeur lue diffère, le geste est rejoué en décalant la position visée de l'écart observé (`(cible - lue) / plage`),
-    /// six gestes au plus, chaque reprise consignée (`consignerRejeu`). XCUITest n'offre pas `increment` sur iOS. Le geste
-    /// seul ne suffit pas : run 45527404765, UI lot 1 sur les trois formats,
-    /// `DemoPoolUrgenceTests.testActiverRayonPuisAccepterEtChoixDeContrat`, `adjust` à 0,222 (15 km sur 5-50 km, environ
-    /// 14,6 pt par km sur 656 pt) a posé « 14 km », alors que le même code tombait sur 15 km au run précédent. La valeur
-    /// atteinte et sa relecture restent prouvées par l'appelant ; rien n'est forcé si la valeur n'est pas lisible.
-    func reglerCurseur(_ slider: XCUIElement, sur cible: Int, minimum: Int, maximum: Int,
-                       file: StaticString = #filePath, line: UInt = #line) {
+    /// Amène un curseur à pas entiers (`Slider(step: 1)`) DANS la plage `cible`, et rend la valeur réellement atteinte,
+    /// une fois stabilisée. Une valeur exacte n'est jamais visée : sous iOS 26.2, `adjust(toNormalizedSliderPosition:)`
+    /// n'est pas fidèle à la position demandée. Run 45626727902 (main `be5b0d49`, UI lot 1),
+    /// `DemoPoolUrgenceTests.testActiverRayonPuisAccepterEtChoixDeContrat`, visée 15 km sur 5-50 km :
+    /// - iPhone : positions 0,222 → 0,289 → 0,133 → 0,267 → 0,156 → 0,311, valeurs lues 12 → 22 → 9 → 20 → 8 ;
+    /// - iPad portrait : 17 → 12 → 18 → 11 → 14.
+    /// Une position plus basse a donné une valeur plus haute, et la correction de l'écart a oscillé sans converger. Aucun
+    /// réglage de position ne peut donc garantir une valeur exacte.
+    ///
+    /// Ici, le premier geste vise le centre de la plage. Si la valeur lue en sort, au plus trois reprises suivent, avec
+    /// une correction amortie (moitié de l'écart au centre), chacune consignée (`consignerRejeu`). XCUITest n'offre pas
+    /// `increment` pour un curseur sur iOS.
+    ///
+    /// La valeur rendue est lue après stabilisation : trois lectures identiques à 0,5 s d'intervalle, curseur actif. Le
+    /// curseur est désactivé pendant l'envoi (`PoolUrgenceScreen`) et la relecture de l'état peut le recaler. L'appelant
+    /// exige la plage, puis la relecture EXACTE de la valeur rendue.
+    func reglerCurseur(_ slider: XCUIElement, dansLaPlage cible: ClosedRange<Int>, minimum: Int, maximum: Int,
+                       file: StaticString = #filePath, line: UInt = #line) -> Int? {
         require("Le curseur est atteignable", file: file, line: line) { self.visible(slider) && slider.isEnabled }
         let plage = CGFloat(maximum - minimum)
-        var position = CGFloat(cible - minimum) / plage
-        let attente = "Le curseur \(slider.identifier) est à \(cible)"
-        for geste in 1...6 {
+        let centre = CGFloat(cible.lowerBound + cible.upperBound) / 2
+        var position = (centre - CGFloat(minimum)) / plage
+        let attente = "Le curseur \(slider.identifier) est entre \(cible.lowerBound) et \(cible.upperBound)"
+        for geste in 1...4 {
             slider.adjust(toNormalizedSliderPosition: min(1, max(0, position)))
-            guard let lue = valeurEntiere(slider), lue != cible, geste < 6 else { return }
-            position += CGFloat(cible - lue) / plage
-            consignerRejeu(attente, issue: "valeur lue \(lue) après le geste \(geste)/6 : position visée corrigée à "
-                           + String(format: "%.3f", position), file: file, line: line)
+            guard let lue = valeurStable(slider), !cible.contains(lue), geste < 4 else { break }
+            position += (centre - CGFloat(lue)) / plage / 2
+            consignerRejeu(attente, issue: "valeur lue \(lue) après le geste \(geste)/4 : position visée corrigée à "
+                           + String(format: "%.3f", position) + " (demi-écart au centre)", file: file, line: line)
         }
+        return valeurStable(slider)
+    }
+
+    /// Valeur entière du curseur une fois stable : trois lectures identiques à 0,5 s d'intervalle, curseur actif, 10 s au
+    /// plus ; sinon la dernière lecture (nil si illisible).
+    private func valeurStable(_ slider: XCUIElement) -> Int? {
+        var derniere = valeurEntiere(slider)
+        var identiques = 1
+        let limite = Date().addingTimeInterval(10)
+        while identiques < 3 && Date() < limite {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "lecture du curseur")], timeout: 0.5)
+            let lue = valeurEntiere(slider)
+            identiques = (lue == derniere && slider.isEnabled) ? identiques + 1 : 1
+            derniere = lue
+        }
+        return derniere
     }
 
     /// Premier nombre entier de la valeur d'accessibilité d'un élément (« 14 km » → 14), nil s'il n'y en a pas.
-    private func valeurEntiere(_ element: XCUIElement) -> Int? {
+    func valeurEntiere(_ element: XCUIElement) -> Int? {
         guard let texte = element.value as? String else { return nil }
         let chiffres = texte.drop(while: { !$0.isNumber }).prefix(while: \.isNumber)
         return Int(chiffres)
