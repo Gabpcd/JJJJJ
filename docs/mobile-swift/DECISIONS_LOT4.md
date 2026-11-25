@@ -367,8 +367,8 @@ les règles générales.
      - 15 (précision 20, « Passer en libéral » et « Attestation d'heures » masqués pour tous) : l'éligibilité devrait
        être servie par le serveur ; choix prudent maintenu.
 
-22. **Paquet de swipe : « Voir le détail » des cartes de fond encore exposé (écart OUVERT, 25/11/2026 ; revue fraîche du
-   delta de la vague D, M1).**
+22. **Paquet de swipe : « Voir le détail » des cartes de fond encore exposé (écart ouvert le 25/11/2026, FERMÉ le
+   25/11/2026 par la PR de suivi iOS `fix/ios-ui-suivi-vague-d` ; revue fraîche du delta de la vague D, M1).**
    - **Observé** : en local, sur simulateur iOS 18.6 (iPad paysage), par le relevé de l'arbre XCUITest de
      `DemoSwipeTests.testLienVersLeSwipePuisDetailDUneCarte` (commits `22fa810f` et `5916d63e`), XCUITest voit encore le
      bouton « Voir le détail » (`swipe-detail`) des cartes de fond du paquet, malgré les deux
@@ -385,6 +385,17 @@ les règles générales.
      redevient alors superflu.
    - **Échéance** : avant le build soumis à l'App Store, dans la prochaine PR iOS, avec un relevé d'accessibilité sur
      simulateur (arbre XCUITest et passage VoiceOver) joint à la PR. Aucune correction de code dans la PR #1179.
+   - **Fermeture (25/11/2026)** : `SwipeCardStack` passe son rang à chaque carte (`rangedCard:`) ;
+     `SwipeCarteView(dessus:)` ne construit le bouton que sur la carte du dessus, et une carte de fond prend une
+     représentation d'accessibilité vide (`accessibilityRepresentation`) : le masquage seul laissait aussi ses textes dans
+     l'arbre. Dessin inchangé, aucun texte modifié. Relevés de l'arbre XCUITest du paquet, même test
+     (`DemoSwipeTests.testBasculeQuizAuPremierContactPuisPlusJamais`, attachement `swipe-paquet`), iPad paysage :
+     **avant** (run 45527404765, `9295b776`, CI) trois `swipe-detail`, dont deux de cartes de fond ; **après** (simulateur
+     iOS 18.6, en local) la seule carte du dessus `swipe-card-demo-mission-015` et un seul `swipe-detail`.
+     `DemoSwipeTests.toucherDetail` échoue désormais si plus d'un `swipe-detail` ou d'un libellé « Voir le détail » est
+     exposé ; garde source dans `SwipeSourcesAppTests`. `DemoSwipeTests` 7/7 en local.
+   - **Reste non vérifié** : le passage réel sous VoiceOver (relevé fait sur l'arbre XCUITest, pas avec VoiceOver), à
+     faire à la recette sur appareil (`RECETTE_DEVICE_LOT4.md`).
 
 ## Critères du plan amendés (`docs/PLAN_APP_NATIVE_SWIFT.md` §5 « Lot 4 », l.202-210)
 
