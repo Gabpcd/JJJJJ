@@ -29,8 +29,8 @@ private struct CohorteLot5Staging: Sendable {
 /// - phase 1 : (a) connexion d'E1 → espace établissement, nom affiché égal au marqueur du run ; (b) M1 et M2 listées ;
 ///   (c) candidature de S1 sur M1 acceptée par le récapitulatif, relue « Acceptée » ; (d) contrat de M2 lu
 ///   « Statut : ✅ Signé » ; (e) code de pointage de M2 affiché, son empreinte SHA-256 égale à celle du code relu côté
-///   service à la préparation, et le QR décodé (`CIDetector`) égal au code affiché — jamais le code en clair dans un
-///   message ou une pièce jointe ;
+///   service à la préparation, et le QR du plein écran décodé (`CIDetector`) égal au code affiché — jamais le code
+///   en clair dans un message ou une pièce jointe ;
 /// - phase 2 (après les deux scans et la fin du créneau planifié) : présence de S1 sur M2 validée avec une note de 4,
 ///   annoncée après relecture puis relue « Validée ».
 /// Les relectures en base (candidature ACCEPTEE, `presences.valide_par_etablissement`, aucune ligne d'escrow) et le
@@ -144,11 +144,20 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
         XCTAssertEqual(chiffres.count, 6, "code à six chiffres")
         XCTAssertEqual(Self.empreinte(chiffres), cohorte.codeSha256,
                        "code affiché = code_pointage_actif relu côté service à la préparation (empreintes comparées)")
-        let qr = element("etab-pointage-qr")
-        require("Le QR du code est rendu") { qr.exists }
-        let lu = decoderQR(qr)
-        XCTAssertNotNil(lu, "QR lisible")
-        XCTAssertTrue(lu == chiffres, "le QR encode la valeur affichée (D4) ; valeurs jamais recopiées")
+        XCTAssertTrue(element("etab-pointage-qr").exists, "QR du code rendu")
+
+        // QR décodé en plein écran, comme `DemoEtabPointageTests` (le QR en ligne peut être rogné sous la barre d'onglets).
+        scrollTo(element("etab-pointage-plein-ecran"), in: defilementPointage)
+        tap("etab-pointage-plein-ecran")
+        let vue = element("etab-pointage-plein-ecran-vue")
+        require("Le code est présenté en plein écran") { vue.exists && self.element("etab-pointage-plein-ecran-qr").exists }
+        let affichePleinEcran = element("etab-pointage-plein-ecran-code").label.filter(\.isNumber)
+        XCTAssertEqual(Self.empreinte(affichePleinEcran), cohorte.codeSha256, "plein écran : même code relu au serveur")
+        let lu = decoderQR(element("etab-pointage-plein-ecran-qr"))
+        XCTAssertNotNil(lu, "QR du plein écran lisible")
+        XCTAssertTrue(lu == affichePleinEcran, "le QR encode la valeur affichée (D4) ; valeurs jamais recopiées")
+        tap("etab-pointage-fermer")
+        require("Le plein écran est fermé") { !vue.exists && self.element("etab-pointage-code").exists }
     }
 
     func testPhase2ValidationDeLaPresenceApresLesScansDuSoignant() throws {
@@ -240,6 +249,11 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
             retour.tap()
         }
         require("La liste des missions est affichée") { self.containerVisible(self.element("etab-missions-screen")) }
+    }
+
+    /// Défilement de l'écran du code (même règle que `DemoEtabPointageTests` : SwiftUI peut fondre les deux identifiants).
+    private var defilementPointage: XCUIElement {
+        app.scrollViews.matching(NSPredicate(format: "identifier IN %@", ["etab-pointage-scroll", "etab-pointage-screen"])).firstMatch
     }
 
     /// Défilement des présences (même règle que `DemoEtabPresencesTests`).
