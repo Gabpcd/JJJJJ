@@ -458,6 +458,9 @@ final class DemoSwipeTests: JoleneUITestCase {
         let exposes = app.descendants(matching: .any).matching(identifier: "swipe-detail").count
         XCTAssertEqual(exposes, 1, "un seul « Voir le détail » exposé (carte du dessus) ; \(exposes) trouvés : bouton d'une carte "
                        + "de fond exposé à l'accessibilité", file: file, line: line)
+        let libelles = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Voir le détail")).count
+        XCTAssertEqual(libelles, 1, "« Voir le détail » d'une carte de fond exposé (\(libelles) libellés) : le contenu des cartes "
+                       + "de fond doit rester hors de l'arbre d'accessibilité", file: file, line: line)
         bouton.tap()
     }
 

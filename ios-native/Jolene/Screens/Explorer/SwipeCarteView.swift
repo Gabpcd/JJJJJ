@@ -26,6 +26,18 @@ struct SwipeCarteView: View {
     private static let rayon: CGFloat = 24
 
     var body: some View {
+        if dessus {
+            rendu
+        } else {
+            // Carte de fond : aucune représentation d'accessibilité. `accessibilityHidden` (posé par `SwipeCardStack`) ne
+            // retirait ni ses textes ni son bouton de l'arbre (relevé XCUITest, simulateur iOS 18.6, iPad paysage) ; la
+            // représentation vide les retire, sans changer le dessin.
+            rendu.accessibilityRepresentation { Color.clear.accessibilityHidden(true) }
+        }
+    }
+
+    /// Dessin de la carte, commun au dessus et au fond.
+    private var rendu: some View {
         ViewThatFits(in: .vertical) {
             contenu(complet: true)
             contenu(complet: false)
