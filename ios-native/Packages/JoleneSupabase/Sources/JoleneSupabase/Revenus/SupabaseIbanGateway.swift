@@ -4,8 +4,8 @@ import Supabase
 
 /// `IbanPort` sur Supabase (lot 3, T14b, B9 ; D20, TJ6), port de `SectionIbanPrime` (`SectionPaiements.tsx`
 /// l.241-272). Contrats : fiches `fn_consulter_mon_iban` et `fn_enregistrer_mon_iban` de
-/// `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md` (dump `supabase/schema/public.sql` l.25923-25969 et l.32684-32741 ;
-/// GRANT EXECUTE `authenticated` l.82619 et l.83050). `fn_lier_iban_verifie_document` (service_role seul) n'est jamais
+/// `docs/mobile-swift/CONTRATS_RPC_SOIGNANT.md` (dump `supabase/schema/public.sql` l.26019-26067 et l.32780-32839 ;
+/// GRANT EXECUTE `authenticated` l.82722 et l.83153). `fn_lier_iban_verifie_document` (service_role seul) n'est jamais
 /// appelée : `fn_enregistrer_mon_iban` la délègue côté serveur. Aucune migration.
 ///
 /// - Consulter : `{error}` → « Non authentifié » = session expirée, sinon message serveur ; `iban_renseigne` et

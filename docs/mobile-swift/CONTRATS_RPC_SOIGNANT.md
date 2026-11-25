@@ -192,7 +192,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_get_my_role"() RETURNS "jsonb"
 
 - **Statut natif** : consommée dès le lot 0.
 - **Usage prévu** : Projection sûre des établissements affichés sur les cartes mission (liste Explorer, détail). Appelée avec les `etablissement_id` des missions chargées, jamais pour tout le référentiel.
-- **Mes missions (lot 1, T5, `SupabaseMesMissionsGateway`)** : seule source du nom sur les trois onglets. Les lectures PostgREST de `MissionsSoignant.tsx` (`candidatures` avec `missions(...)` embarquée, `missions` à venir et passées) sont reprises **sans** l'embed `etablissements(...)` du web (`pol_etab_select`) ; la RPC rend la ligne d'une mission assignée au soignant (tout statut, donc les passées) ou OUVERTE de l'établissement (les candidatures en attente), même cohorte (l.35565-35618). En échec, repli « Établissement » comme `fetchEtablissementsSafe` du web, qui ignore l'erreur ; une session expirée est propagée.
+- **Mes missions (lot 1, T5, `SupabaseMesMissionsGateway`)** : seule source du nom sur les trois onglets. Les lectures PostgREST de `MissionsSoignant.tsx` (`candidatures` avec `missions(...)` embarquée, `missions` à venir et passées) sont reprises **sans** l'embed `etablissements(...)` du web (`pol_etab_select`) ; la RPC rend la ligne d'une mission assignée au soignant (tout statut, donc les passées) ou OUVERTE de l'établissement (les candidatures en attente), même cohorte (l.35573-35630). En échec, repli « Établissement » comme `fetchEtablissementsSafe` du web, qui ignore l'erreur ; une session expirée est propagée.
 - **Signature SQL** (`supabase/schema/public.sql` l.35044) :
 
 ```sql
@@ -1424,7 +1424,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   « Confirmation impossible. » (refus sans message et erreur d'envoi seulement, jamais après un succès serveur). Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
   (décision 9, `LOT1_PLAN.md` §3 T6c).
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
-  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30445/30367) ; aucune assertion d'écran ne le cherche.
+  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30453/30463) ; aucune assertion d'écran ne le cherche.
 
 ## fn_desactiver_mon_token_push
 

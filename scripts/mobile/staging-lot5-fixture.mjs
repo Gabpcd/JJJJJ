@@ -56,7 +56,7 @@ export const MANAGEMENT_URL = `https://api.supabase.com/v1/projects/${STAGING_RE
 export const KIND = 'LOT5_D5';
 export const PURPOSE = 'lot5-staging-etab-v1';
 export const ECRITURE_APPROUVEE = 'COHORTE_D5';
-/** Anti-rejeu de `fn_scanner_code_pointage` : deux scans séparés d'au moins 2 min (l.55661), marge de 5 s. */
+/** Anti-rejeu de `fn_scanner_code_pointage` : deux scans séparés d'au moins 2 min (`public.sql` l.56215-56219), marge de 5 s. */
 export const ECART_SCANS_MS = 125_000;
 /** Début du créneau de M2 après la préparation : la phase 1 du XCUITest voit le code (fenêtre de 15 min avant). */
 export const M2_DEBUT_APRES_MIN = 12;

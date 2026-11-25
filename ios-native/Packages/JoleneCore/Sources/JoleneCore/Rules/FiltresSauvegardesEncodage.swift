@@ -14,7 +14,7 @@ import Foundation
 ///   (« un gap connu reste verrouillé »).
 /// - Lecture : `[{id, nom, audience, filtres, alerte_active, frequence_alerte, dernier_check_le,
 ///   nb_resultats_dernier_check, cree_le, mis_a_jour_le}]` trié par `mis_a_jour_le` décroissant (`public.sql`
-///   l.40393-40419) ; ordre serveur conservé.
+///   l.40489-40517) ; ordre serveur conservé.
 /// - Application : port de l'effet « filtres pré-stockés » de `RechercheMissions.tsx` (l.137-158) — une clé du bon type
 ///   remplace le critère courant, toute autre clé le laisse tel quel ; le filtre établissement est retiré (le web
 ///   rouvre `/soignant/recherche-missions` sans `?etablissement=`).

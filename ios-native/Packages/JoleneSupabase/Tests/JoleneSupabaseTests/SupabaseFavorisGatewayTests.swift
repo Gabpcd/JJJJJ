@@ -5,7 +5,7 @@ import XCTest
 @testable import JoleneSupabase
 
 /// Favoris du lot 1 (T4b) : missions sauvegardées par PostgREST direct sur `missions_sauvegardees`
-/// (RLS `soignant_id = auth.uid()`, `public.sql` l.78583-78591), établissements par
+/// (RLS `soignant_id = auth.uid()`, `public.sql` l.78686-78694), établissements par
 /// `fn_mes_favoris_etablissements` (tableau, ou `{error}` en HTTP 200) et retrait par
 /// `fn_toggle_favori_etablissement(p_actif := false)` — jamais l'ajout (décision 8). Chaque mutation
 /// rend la liste relue ; le conflit UNIQUE est un état à relire, pas une erreur ; `{error}` n'est
