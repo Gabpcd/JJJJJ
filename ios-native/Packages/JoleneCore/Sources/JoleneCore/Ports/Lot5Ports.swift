@@ -80,6 +80,15 @@ public protocol EtabPresencesPort: Sendable {
 /// Publication d'une mission simple ou urgente, salariée (D8) — T9.
 public protocol EtabPublicationPort: Sendable {
     func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome
+    /// Taux horaire minimal d'une mission salariée lu au serveur (`fn_taux_horaire_minimum_salarie`, annoncé par
+    /// `fn_param_bool`, migration 20261125120000). Ne lève pas : `nil` (paramètre absent, erreur, port non câblé)
+    /// laisse la constante `PublicationRules.tauxMinimum`. Le refus qui fait foi reste celui du serveur.
+    func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double?
+}
+
+public extension EtabPublicationPort {
+    /// Par défaut, aucune lecture : la constante s'applique.
+    func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? { nil }
 }
 
 /// Audit de consultation `DONNEES_PERSO_CONSULTATION` (D19) — câblé en T1, consommé par T4.

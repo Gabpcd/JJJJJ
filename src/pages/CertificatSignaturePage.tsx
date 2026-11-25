@@ -146,7 +146,7 @@ export default function CertificatSignaturePage() {
       doc.setFontSize(8);
       doc.setTextColor(100);
       const footerLines = [
-        'Signature électronique sécurisée Jolene — conforme aux art. 1366-1367 du Code civil.',
+        'Signature électronique simple Jolene (art. 1366-1367 Code civil).',
         'Renforcée par OTP SMS + horodatage + adresse IP + hash SHA-256 du document.',
         'Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié.',
         `Document généré le ${format(new Date(), "dd/MM/yyyy 'à' HH:mm:ss", { locale: fr })}`,
@@ -211,7 +211,7 @@ export default function CertificatSignaturePage() {
         )}
 
         <p className="text-[10px] text-muted-foreground/70 italic text-center mt-6">
-          Conforme art. 1366-1367 Code civil — Signature électronique sécurisée Jolene renforcée par OTP SMS + horodatage + IP + hash SHA-256.
+          Signature électronique simple Jolene (art. 1366-1367 Code civil), renforcée par OTP SMS + horodatage + IP + hash SHA-256.
           Audit trail complet disponible sur demande pour les admins plateforme.
         </p>
       </div>

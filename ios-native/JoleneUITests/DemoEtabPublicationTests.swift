@@ -63,7 +63,7 @@ final class DemoEtabPublicationTests: JoleneUITestCase {
         XCTAssertTrue(element("publier-recap-creneau-1").label.contains("lundi 2 novembre 2026 · 07:00 → lundi 2 novembre 2026 · 19:00"),
                       element("publier-recap-creneau-1").label)
         XCTAssertFalse(element("publier-recap-creneau-2").exists)
-        // Décision c de l'intégration de la vague D : mention du web (`FormulaireMission.tsx` l.766), mot pour mot.
+        // Décision c de l'intégration de la vague D : mention du web (`FormulaireMission.tsx` l.773), mot pour mot.
         let contrat = element("publier-recap-contrat")
         XCTAssertTrue(contrat.exists, "mention du type de contrat affichée dans le récapitulatif")
         XCTAssertTrue(contrat.label.contains("Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"),

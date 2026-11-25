@@ -242,7 +242,7 @@ function SessionSignatureOtp({ contratId, hashDocument, documentPret, actionsSus
           <p className="text-sm font-semibold text-foreground">Signature électronique sécurisée</p>
           <p className="text-xs text-muted-foreground mt-0.5">
             Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer.
-            La signature inclut horodatage, IP et hash SHA-256 du document (preuve juridique art. 1366 Code civil).
+            La signature inclut horodatage, IP et hash SHA-256 du document (art. 1366 Code civil).
           </p>
         </div>
       </div>

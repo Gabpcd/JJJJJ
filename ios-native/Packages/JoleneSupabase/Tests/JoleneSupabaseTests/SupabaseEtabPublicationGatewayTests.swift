@@ -246,6 +246,39 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
         }
     }
 
+    /// Verrou différé du taux horaire minimal (migration 20261125120000) : exception `P0001` levée au COMMIT, hors des
+    /// exceptions extraites du dump pour la RPC ; rendue mot pour mot, quel que soit le montant du paramètre.
+    func testRefusDuVerrouTauxMinimumMotPourMot() async throws {
+        for montant in ["12,31", "12,50"] {
+            registry.reset()
+            let message = "Le taux horaire doit être d'au moins \(montant) €/h."
+            registry.add("POST", rpc, respond: .json(400, exception("P0001", message)))
+            let issue = try await gateway().publier(brouillon(), context: contexte())
+            XCTAssertEqual(issue, .refusee(code: RPCInterception.codeRefusMetier, message: message))
+            XCTAssertTrue(registry.requests(to: "/rest/v1/missions").isEmpty, "aucune relecture d'un refus")
+        }
+        // Un autre P0001 n'est pas repris par cette interception (message générique de la gateway, jamais verbatim).
+        registry.reset()
+        registry.add("POST", rpc, respond: .json(400, exception("P0001", "Détail interne inattendu")))
+        do {
+            let issue = try await gateway().publier(brouillon(), context: contexte())
+            XCTAssertNotEqual(issue, .refusee(code: RPCInterception.codeRefusMetier, message: "Détail interne inattendu"))
+        } catch {
+            XCTAssertFalse((error as? JoleneError)?.message == "Détail interne inattendu")
+        }
+        XCTAssertEqual(SupabaseEtabPublicationGateway.exceptionTauxMinimum.message, "Le taux horaire doit être d'au moins % €/h.")
+        XCTAssertNil(ListesBlanchesEtablissement.parRPC[SupabaseEtabPublicationGateway.rpc]?
+            .first { $0.message == SupabaseEtabPublicationGateway.exceptionTauxMinimum.message },
+            "la liste blanche extraite du dump reste inchangée")
+    }
+
+    /// Lecture du plancher non câblée tant que le dump ne porte pas la RPC : aucune requête, la constante s'applique.
+    func testTauxMinimumNonLuAvantLaReBaseline() async {
+        let lu = await gateway().tauxMinimumSalarie(context: contexte())
+        XCTAssertNil(lu)
+        XCTAssertTrue(registry.requests(to: "/rest/v1/rpc/fn_param_bool").isEmpty)
+    }
+
     func testNonAuthentifieSessionJamaisUnRefusMetier() async throws {
         registry.add("POST", rpc, respond: .json(400, exception("28000", "Non authentifié")))
         let exceptionLevee = await echec { _ = try await self.gateway().publier(self.brouillon(), context: self.contexte()) }

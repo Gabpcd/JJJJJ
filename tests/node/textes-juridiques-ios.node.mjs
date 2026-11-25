@@ -112,7 +112,9 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   const fichiers = new Set(constantes.map(c => c.source.fichier));
   // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
   const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
-    'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
+    'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx',
+    // Plancher du taux horaire salarié (migration 20261125120000) : repli du web repris par LibellesWeb.Publication.
+    'src/lib/tauxHoraireMinimumSalarie.ts'];
   // Lot 4, tranche T10 (LOT4_PLAN §3 T10) : copies officielles des bulletins — mention de l'employeur et avertissement
   // de retrait (HARD STOP), libellés de la liste, messages de la bibliothèque, titre du partage.
   const lot4 = ['src/components/CopiesBulletins.tsx', 'src/components/CopiesBulletinsListe.tsx',

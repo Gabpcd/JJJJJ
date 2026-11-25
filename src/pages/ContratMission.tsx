@@ -742,7 +742,7 @@ export default function ContratMission() {
                           <span className="text-sm font-medium text-foreground">📱 Signature électronique OTP SMS</span>
                           <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">RECOMMANDÉE</span>
                         </div>
-                        <p className="text-xs text-muted-foreground">Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.</p>
+                        <p className="text-xs text-muted-foreground">Code SMS à 6 chiffres + horodatage + hash document. Signature électronique simple (art. 1366-1367 Code civil).</p>
                       </div>
                     </label>}
                     <label className="flex items-center gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors">

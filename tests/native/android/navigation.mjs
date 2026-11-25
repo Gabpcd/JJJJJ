@@ -272,6 +272,17 @@ try {
       await closeKeyboard();
       await expect(title).toHaveValue('Préparation native — simulation');
       metric('keyboard-back-preserves-draft', { role });
+      // Plancher du taux salarié lu au serveur simulé (annoncé par fn_param_bool, valeur 12,50) : refus et levée.
+      const taux = page.getByLabel(/^Taux horaire/);
+      await expect(taux).toHaveAttribute('min', '12.5');
+      await taux.click();
+      await keyboardVisible();
+      await taux.fill('12.40');
+      await expect(page.locator('#mission-taux-minimum')).toHaveText("Le taux horaire doit être d'au moins 12,50 €/h.");
+      await taux.fill('12.50');
+      await expect(page.locator('#mission-taux-minimum')).toHaveCount(0);
+      await closeKeyboard();
+      metric('taux-minimum-serveur', { role, minimum: 12.5 });
       await nav('Messages');
       await nav('Menu');
       await nativeShell('input keyevent KEYCODE_BACK');

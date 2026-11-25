@@ -353,7 +353,7 @@ public enum TextesWeb {
         public static let otpLibelle = "📱 Signature électronique OTP SMS"
 
         // source: src/pages/ContratMission.tsx:745 [juridique]
-        public static let otpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil."
+        public static let otpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Signature électronique simple (art. 1366-1367 Code civil)."
 
         // source: src/pages/ContratMission.tsx:824 [juridique]
         public static let dejaSigne = "✅ Vous avez déjà signé ce contrat"
@@ -472,7 +472,7 @@ public enum TextesWeb {
         public static let titre = "Signature électronique sécurisée"
 
         // source: src/components/SignerContratOtp.tsx:244-245 [juridique]
-        public static let explication = "Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer. La signature inclut horodatage, IP et hash SHA-256 du document (preuve juridique art. 1366 Code civil)."
+        public static let explication = "Recevez un code à 6 chiffres par SMS et saisissez-le ci-dessous pour signer. La signature inclut horodatage, IP et hash SHA-256 du document (art. 1366 Code civil)."
 
         /// Case à cocher : le consentement vaut pour la révision affichée (clé contrat + empreinte, l.62-63).
         // source: src/components/SignerContratOtp.tsx:276 [consentement]
@@ -640,7 +640,7 @@ public enum TextesWeb {
         public static let pscNon = "—"
 
         // source: src/components/CertificatSignature.tsx:172-175 [juridique]
-        public static let mention = "Signature électronique sécurisée Jolene — conforme art. 1366-1367 Code civil (signature électronique simple/avancée renforcée par OTP SMS + horodatage + IP). Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié."
+        public static let mention = "Signature électronique simple Jolene (art. 1366-1367 Code civil), renforcée par OTP SMS + horodatage + IP. Pour une signature qualifiée eIDAS, contactez un Prestataire de Services de Confiance qualifié."
 
         // source: src/pages/CertificatSignaturePage.tsx:185 [juridique]
         public static let titrePage = "Certificat de signature"
@@ -660,7 +660,7 @@ public enum TextesWeb {
         public static let empreinteExplicationFin = "), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature."
 
         // source: src/pages/CertificatSignaturePage.tsx:214-215 [juridique]
-        public static let mentionPage = "Conforme art. 1366-1367 Code civil — Signature électronique sécurisée Jolene renforcée par OTP SMS + horodatage + IP + hash SHA-256. Audit trail complet disponible sur demande pour les admins plateforme."
+        public static let mentionPage = "Signature électronique simple Jolene (art. 1366-1367 Code civil), renforcée par OTP SMS + horodatage + IP + hash SHA-256. Audit trail complet disponible sur demande pour les admins plateforme."
 
         /// Statut d'une signature (l.121) : « ✅ Signé » quand `statut_signature` vaut `signe`
         /// (`estSigne`), sinon la valeur brute du serveur.
@@ -691,7 +691,7 @@ public enum TextesWeb {
     // Repris verbatim du web pour les écrans T4, T6 et T9 ; textes validés explicitement par la
     // fondatrice le 24/11/2026 (HARD STOP n°4, `DECISIONS_LOT5.md`, intégration de la vague D,
     // point 1) ; tout texte ajouté après cette liste repasse par une validation. La mention de l'écran de signature OTP
-    // établissement (« Conforme art. 1366-1367 Code civil », T10) est `Contrat.otpDescription`.
+    // établissement (« Signature électronique simple (art. 1366-1367 Code civil) », T10) est `Contrat.otpDescription`.
 
     /// DPAE côté employeur (revue B8 des textes de l'intégration de la vague D, M6) : statut (`DPAEStatus.tsx`) et rappel
     /// (`BandeauRappelDPAE.tsx`) montés par `ContratMission.tsx` (l.644-655, l.826-829) pour un contrat salarié non
@@ -710,7 +710,7 @@ public enum TextesWeb {
         public static let aVerifierDetail = "L’employeur vérifie les formalités applicables à cet engagement. Si une DPAE est requise, effectuez-la avant la prise de poste et renseignez son numéro ici."
 
         // source: src/components/DPAEStatus.tsx:127 [juridique]
-        public static let obligatoireDetail = "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail)."
+        public static let obligatoireDetail = "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. L1221-10 Code du travail)."
 
         // source: src/components/BandeauRappelDPAE.tsx:25 [juridique]
         public static let effectuee = "✅ DPAE déclarée comme effectuée par l'établissement"
@@ -775,12 +775,12 @@ public enum TextesWeb {
     }
 
     /// Récapitulatif de publication (T9, D8) : seule l'option « Salarié » est publiée en natif ;
-    /// sa description est celle du web (`FormulaireMission.tsx` l.766).
+    /// sa description est celle du web (`FormulaireMission.tsx` l.773).
     public enum PublicationEtablissement {
-        // source: src/components/FormulaireMission.tsx:766 [libellé]
+        // source: src/components/FormulaireMission.tsx:773 [libellé]
         public static let optionSalarieLibelle = "Salarié"
 
-        // source: src/components/FormulaireMission.tsx:766 [juridique]
+        // source: src/components/FormulaireMission.tsx:773 [juridique]
         public static let optionSalarieDescription = "Vous êtes l’employeur : CDD, bulletin de paie, plafond légal 48 h/semaine"
     }
 

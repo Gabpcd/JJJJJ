@@ -82,7 +82,7 @@ for (const type of ['CDDU', 'VACATION'] as const) {
       await expect(blocDpae).toHaveAttribute('data-etat', 'a-declarer');
       await expect(blocDpae.getByText(BLOC_DPAE, { exact: true })).toBeVisible();
       await expect(rappelDpae(page)).toHaveCount(0);
-      await expect(blocDpae).toContainText("La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail).");
+      await expect(blocDpae).toContainText("La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. L1221-10 Code du travail).");
       await expect(page.getByRole('button', { name: BOUTON_PREPARER, exact: true })).toBeVisible();
       await expect(page.getByText(RAPPEL_DPAE, { exact: true })).toHaveCount(0);
       await verifierPiedDePage(page, MENTION_SALARIEE, MENTION_LIBERALE);

@@ -505,8 +505,8 @@ test('TextesWeb.swift : textes du lot 5 annotés à leur source web, mention art
     'BlocageEtablissement.publicationSuspendue': 'src/components/BandeauBlocageAuto.tsx:61',
     'BlocageEtablissement.verificationEnCoursTitre': 'src/pages/DashboardEtablissement.tsx:564',
     'BlocageEtablissement.verificationEnCoursDetail': 'src/pages/DashboardEtablissement.tsx:565',
-    'PublicationEtablissement.optionSalarieLibelle': 'src/components/FormulaireMission.tsx:766',
-    'PublicationEtablissement.optionSalarieDescription': 'src/components/FormulaireMission.tsx:766',
+    'PublicationEtablissement.optionSalarieLibelle': 'src/components/FormulaireMission.tsx:773',
+    'PublicationEtablissement.optionSalarieDescription': 'src/components/FormulaireMission.tsx:773',
   };
   const lireWeb = lecteurWeb(f => read(f));
   for (const [nom, source] of Object.entries(attendues)) {
@@ -519,7 +519,7 @@ test('TextesWeb.swift : textes du lot 5 annotés à leur source web, mention art
   // La mention OTP art. 1366-1367 de ContratMission.tsx est celle du lot 2 : jamais dupliquée
   // (repérée par son texte, la ligne web bouge avec les PR du lot 2).
   const otp = lu.constantes.filter(c => c.source.fichier === 'src/pages/ContratMission.tsx'
-    && c.valeur.includes('Conforme art. 1366-1367 Code civil'));
+    && c.valeur.includes('Signature électronique simple (art. 1366-1367 Code civil)'));
   assert.deepEqual(otp.map(c => c.nom), ['Contrat.otpDescription']);
 });
 

@@ -73,7 +73,9 @@ class Mock(BaseHTTPRequestHandler):
    elif name=='fn_obtenir_missions_swipe':data={'missions':[]}
    elif name=='fn_dashboard_soignant_complet':data=None
    elif name=='fn_messages_non_lus':data=0
+   elif name=='fn_param_bool' and body.get('p_cle')=='taux_horaire_minimum_salarie':data=True
    elif name in ('fn_param_bool','fn_est_bloque','fn_capacite_alertes_recherches'):data=False
+   elif name=='fn_taux_horaire_minimum_salarie':data=12.5
    elif name=='fn_obtenir_mes_parrainages':data={'filleuls':[]}
    elif name=='fn_note_moyenne':data={'moyenne':None,'total':0}
    elif name=='fn_types_exercice_autorises':data=['SALARIE','LIBERAL','MIXTE']

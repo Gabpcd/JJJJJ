@@ -192,7 +192,7 @@ final class ContratModelEtablissementTests: XCTestCase {
         await model.charger()
         let mode = try XCTUnwrap(model.modeSignatureOtp(maintenant: model.horloge.now()))
         XCTAssertEqual(mode.libelle, "📱 Signature électronique OTP SMS")
-        XCTAssertEqual(mode.description, "Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil.")
+        XCTAssertEqual(mode.description, "Code SMS à 6 chiffres + horodatage + hash document. Signature électronique simple (art. 1366-1367 Code civil).")
         XCTAssertEqual(mode.libelle, TextesWeb.Contrat.otpLibelle, "texte du web, jamais réécrit")
         XCTAssertEqual(mode.description, TextesWeb.Contrat.otpDescription)
     }

@@ -50,6 +50,7 @@ struct PublicationScreen: View {
         .accessibilityIdentifier("publier-screen")
         .navigationTitle(P.titreEcran)
         .navigationBarTitleDisplayMode(.inline)
+        .task { await model.chargerTauxMinimum() }
         .sheet(isPresented: recapPresente) {
             if let recap = model.recap {
                 RecapPublicationSheet(recap: recap, enCours: model.enCours,
@@ -102,8 +103,8 @@ struct PublicationScreen: View {
         JoleneTextField(P.taux, text: Binding(get: { model.saisie.taux }, set: { model.definirTaux($0) }), kind: .montant,
                         placeholder: P.tauxExemple, identifier: "publier-taux")
         // Revue B8 des textes de la vague D (M4) : plancher du web (`min` du champ), le bouton restant désactivé dessous.
-        if PublicationRules.tauxSousLeMinimum(model.saisie.taux) {
-            InlineNotice(P.tauxSousLeMinimum, tone: .warning, identifier: "publier-taux-minimum")
+        if let avis = model.avisTauxSousLeMinimum {
+            InlineNotice(avis, tone: .warning, identifier: "publier-taux-minimum")
         }
         urgence
         mode

@@ -124,7 +124,7 @@ export function DPAEStatus({ contratId, typeContrat, dpaeNumero, cadreDeclarePar
           <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
             {cadreDeclareParEmployeur
               ? 'L’employeur vérifie les formalités applicables à cet engagement. Si une DPAE est requise, effectuez-la avant la prise de poste et renseignez son numéro ici.'
-              : "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail)."}
+              : "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. L1221-10 Code du travail)."}
           </p>
         </div>
       </div>

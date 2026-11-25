@@ -156,14 +156,16 @@ final class PublicationPayloadTests: XCTestCase {
         }
     }
 
-    /// Revue B8 des textes de la vague D (M4) : plancher du taux horaire du web (`min` du champ hors libéral,
-    /// `FormulaireMission.tsx` l.921), repris par `LibellesWeb.Publication.tauxMinimumHorsLiberal` et épinglé à sa ligne ;
-    /// aucun nombre recopié dans la logique. Parité provisoire : le serveur ne refuse qu'un taux ≤ 0 (`public.sql`).
+    /// Revue B8 des textes de la vague D (M4) : plancher du taux horaire d'une mission salariée, valeur de repli du web
+    /// (`src/lib/tauxHoraireMinimumSalarie.ts` l.15), repris par `LibellesWeb.Publication.tauxMinimumHorsLiberal` et
+    /// épinglé à sa ligne ; aucun nombre recopié dans la logique. Le serveur contrôle le même plancher (paramètre
+    /// `taux_horaire_minimum_salarie`, migration `20261125120000`, garde `tests/node/taux-horaire-minimum-salarie.node.mjs`).
     func testPlancherDuTauxHoraireReprisDuWebASaLigne() throws {
-        let lignes = try CompteVerbatimTests.lignes("src/components/FormulaireMission.tsx")
-        let ligne = lignes[921 - 1]
-        XCTAssertTrue(ligne.contains("min={contratPreference === 'LIBERAL' ? '0.01' : '\(LibellesWeb.Publication.tauxMinimumHorsLiberal)'}"),
-                      "plancher du web déplacé ou modifié : \(ligne)")
+        let lignes = try CompteVerbatimTests.lignes("src/lib/tauxHoraireMinimumSalarie.ts")
+        let ligne = lignes[15 - 1]
+        XCTAssertEqual(ligne, "export const TAUX_HORAIRE_MINIMUM_SALARIE_REPLI = Number('\(LibellesWeb.Publication.tauxMinimumHorsLiberal)');",
+                       "plancher du web déplacé ou modifié : \(ligne)")
+        XCTAssertEqual(LibellesWeb.Publication.tauxMinimumHorsLiberal, "12.31", "SMIC horaire brut au 1er juin 2026")
         XCTAssertEqual(PublicationPayload.typeContratRecherche, "SALARIE", "publication native salariée : plancher hors libéral")
         XCTAssertEqual(PublicationRules.tauxMinimum, Double(LibellesWeb.Publication.tauxMinimumHorsLiberal))
         let minimum = LibellesWeb.Publication.tauxMinimumHorsLiberal
@@ -178,9 +180,19 @@ final class PublicationPayloadTests: XCTestCase {
         XCTAssertTrue(PublicationRules.tauxSousLeMinimum(saisie.taux))
         XCTAssertFalse(PublicationRules.tauxSousLeMinimum(minimum))
         XCTAssertFalse(PublicationRules.tauxSousLeMinimum(""), "saisie vide : champ obligatoire, pas un taux sous le plancher")
-        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum, "Le taux horaire doit être d'au moins 11,65 €/h.",
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,31 €/h.",
                        "nombre à la française, formaté depuis la constante (fr_FR)")
         XCTAssertEqual(PublicationPresentation.montantFrancais(1234.5), "1234,50")
+        // Plancher lu au serveur (migration 20261125120000) : même texte, montant du paramètre ; repli sur la constante.
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.")
+        XCTAssertEqual(PublicationRules.tauxMinimum(serveur: 12.5), 12.5)
+        for illisible in [nil, 0, -3, Double.nan, Double.infinity] as [Double?] {
+            XCTAssertEqual(PublicationRules.tauxMinimum(serveur: illisible), PublicationRules.tauxMinimum)
+        }
+        XCTAssertTrue(PublicationRules.tauxSousLeMinimum("12,40", minimum: 12.5))
+        XCTAssertFalse(PublicationRules.tauxSousLeMinimum("12,50", minimum: 12.5))
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: 4), [], "plancher plus bas : 5 € passe")
+        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: 12.4)), [], "la gateway rejoue la constante")
     }
 
     func testChampsInvalides() {

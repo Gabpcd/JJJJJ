@@ -1196,12 +1196,13 @@ public enum LibellesWeb {
     }
 
     /// Publication d'une mission (lot 5, T9 ; revue B8 des textes de l'intégration de la vague D, M4) : plancher du taux
-    /// horaire du web, attribut `min` du champ hors `LIBERAL` (le navigateur refuse l'envoi en dessous). Valeur reprise
-    /// telle quelle, jamais recopiée dans la logique (`PublicationRules.tauxMinimum`). Parité provisoire tant que le
-    /// serveur ne contrôle pas ce plancher (`DECISIONS_LOT5.md`).
+    /// horaire d'une mission salariée, valeur de repli du web (`TAUX_HORAIRE_MINIMUM_SALARIE_REPLI`, SMIC horaire brut au
+    /// 1er juin 2026). Valeur reprise telle quelle, jamais recopiée dans la logique (`PublicationRules.tauxMinimum`). Le
+    /// serveur contrôle ce plancher (paramètre `taux_horaire_minimum_salarie`, migration `20261125120000`) ; la garde
+    /// `tests/node/taux-horaire-minimum-salarie.node.mjs` lie cette valeur, celle du web et celle de la migration.
     public enum Publication {
-        // source: src/components/FormulaireMission.tsx:921
-        public static let tauxMinimumHorsLiberal = "11.65"
+        // source: src/lib/tauxHoraireMinimumSalarie.ts:15
+        public static let tauxMinimumHorsLiberal = "12.31"
     }
 
     /// DPAE côté employeur (revue B8 des textes de la vague D, M6) : libellés non juridiques de `DPAEStatus.tsx` et

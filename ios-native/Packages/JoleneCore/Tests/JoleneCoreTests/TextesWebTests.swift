@@ -280,7 +280,7 @@ final class TextesWebTests: XCTestCase {
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: "contrats/2026/c-001.html"), "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : contrats/2026/c-001.html), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature.")
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: nil), "SHA-256 du contrat figé au moment de la signature. Si vous recalculez le hash du contenu HTML stocké (storage_path : —), vous devez retrouver cette empreinte — c'est la preuve que le document n'a pas été modifié depuis la signature.")
         XCTAssertEqual(certificat.explicationEmpreinte(storagePath: ""), certificat.explicationEmpreinte(storagePath: nil))
-        XCTAssertTrue(certificat.mentionPage.hasPrefix("Conforme art. 1366-1367 Code civil — "))
+        XCTAssertTrue(certificat.mentionPage.hasPrefix("Signature électronique simple Jolene (art. 1366-1367 Code civil), "))
     }
 
     /// Lot 5 (T0, D10) : mention CGV art. 8 de la revue des candidatures (`ListeCandidatures.tsx`

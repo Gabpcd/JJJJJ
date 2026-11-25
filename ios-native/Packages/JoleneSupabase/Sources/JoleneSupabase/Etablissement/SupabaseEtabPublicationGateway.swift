@@ -15,10 +15,24 @@ import Supabase
 /// - `{success:true, mission_id}` ne vaut pas confirmation : la mission est relue (`missions` : statut, nombre de
 ///   créneaux, bornes, type de contrat, sans aucun montant ; `mission_creneaux` PREVISIONNEL hors pause par le pager
 ///   exact de T5) et comparée à l'envoi par `PublicationRelecture.confirme` ; relecture impossible ou différente →
-///   `.nonConfirmee`, jamais un succès. Une réponse sans `mission_id` exploitable est un refus de contrat.
+///   `.nonConfirmee`, jamais un succès. Une réponse sans `mission_id` exploitable est un refus de contrat ;
+/// - refus du verrou différé du taux horaire minimal (`P0001`, migration 20261125120000, levé à la validation de la
+///   transaction, donc hors des exceptions extraites du dump pour la RPC) → `.refusee`, texte serveur mot pour mot ;
+/// - plancher lu au serveur : pas encore câblé ici (`tauxMinimumSalarie` par défaut du port, `nil` : la constante
+///   s'applique). La garde `check-rpc-contracts` exige qu'une RPC appelée par le Swift ait sa définition dans le dump
+///   (« le contrat n'est jamais tenu par types.ts seul ») : `fn_taux_horaire_minimum_salarie` y entrera à la
+///   re-baseline qui suit le merge de la migration 20261125120000, et la lecture sera câblée à ce moment-là.
 public struct SupabaseEtabPublicationGateway: EtabPublicationPort {
     public static let rpc = "fn_creer_mission_multi_jours_v4"
-    /// Repli du web quand le serveur ne rend aucun texte (`FormulaireMission.tsx` l.451).
+    /// Exception du verrou différé (`private.fn_trg_verifier_taux_minimum_salarie`), `%` = montant du paramètre.
+    /// Hors de `ListesBlanchesEtablissement.parRPC`, qui reste égale aux exceptions extraites du dump : ce refus est
+    /// levé au COMMIT par un déclencheur de contrainte, pas par le corps de la RPC.
+    public static let exceptionTauxMinimum = ExceptionServeur("P0001", "Le taux horaire doit être d'au moins % €/h.")
+    static var interceptions: [RPCInterception] {
+        ListesBlanchesEtablissement.interceptions(rpc: rpc)
+            + [.refusMetier(sqlstate: exceptionTauxMinimum.sqlstate, messagesExacts: [exceptionTauxMinimum.message])]
+    }
+    /// Repli du web quand le serveur ne rend aucun texte (`FormulaireMission.tsx` l.457).
     public static let fallback = "Erreur lors de la création de la mission."
 
     private let client: SupabaseClient
@@ -38,7 +52,7 @@ public struct SupabaseEtabPublicationGateway: EtabPublicationPort {
         }
         let params: JSONObject = charge.valeurs.mapValues(SupabaseFiltresGateway.json)
         let reponse = try await RPCResponse.appeler(client, Self.rpc, params: params, fallback: Self.fallback,
-                                                    interceptions: ListesBlanchesEtablissement.interceptions(rpc: Self.rpc))
+                                                    interceptions: Self.interceptions)
         if let blocage = reponse.blocagePublication {
             return .blocageEtablissement(code: blocage.code, message: blocage.message)
         }

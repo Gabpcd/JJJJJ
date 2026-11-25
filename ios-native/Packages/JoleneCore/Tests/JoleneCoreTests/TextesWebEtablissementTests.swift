@@ -37,7 +37,7 @@ final class TextesWebEtablissementTests: XCTestCase {
         XCTAssertEqual(TextesWeb.CandidaturesEtablissement.cgvCheminLien, "/cgv#art8")
     }
 
-    /// La mention OTP « Conforme art. 1366-1367 Code civil » de l'écran de signature est celle du
+    /// La mention OTP « Signature électronique simple (art. 1366-1367 Code civil) » de l'écran de signature est celle du
     /// lot 2 (`Contrat.otpDescription`) : le lot 5 ne la duplique pas.
     func testMentionSignatureOtpHeriteeDuLot2() {
         let textes = TextesWeb.catalogue.filter { $0.texte == TextesWeb.Contrat.otpDescription }

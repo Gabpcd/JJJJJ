@@ -6,7 +6,7 @@ import Foundation
 /// Les refus du serveur (planning, blocage de publication) ne sont jamais écrits ici : ils viennent mot pour mot de
 /// l'issue de la gateway.
 ///
-/// **HARD STOP n°4, affiché.** La description de l'option du web publiée en natif (`FormulaireMission.tsx` l.766 :
+/// **HARD STOP n°4, affiché.** La description de l'option du web publiée en natif (`FormulaireMission.tsx` l.773 :
 /// `TextesWeb.PublicationEtablissement.optionSalarieLibelle` et `.optionSalarieDescription`), déjà affichée telle quelle
 /// sur le web, est rendue mot pour mot par `mentionContrat` dans le récapitulatif (décision c de l'intégration de la
 /// vague D, `DECISIONS_LOT5.md`, précisions de l'intégration de la vague D, 1 ; `PublicationEtablissement` est dans
@@ -19,51 +19,51 @@ public enum PublicationPresentation {
 
     // source: src/pages/CreerMission.tsx:12
     public static let titreEcran = "Publier une mission"
-    // source: src/components/FormulaireMission.tsx:679
+    // source: src/components/FormulaireMission.tsx:686
     public static let intitule = "Intitulé *"
-    // source: src/components/FormulaireMission.tsx:681
+    // source: src/components/FormulaireMission.tsx:688
     public static let intituleExemple = "Ex: IDE de nuit — Service Urgences"
-    // source: src/components/FormulaireMission.tsx:687
-    public static let description = "Description"
-    // source: src/components/FormulaireMission.tsx:689
-    public static let descriptionExemple = "Informations complémentaires pour le soignant..."
     // source: src/components/FormulaireMission.tsx:694
+    public static let description = "Description"
+    // source: src/components/FormulaireMission.tsx:696
+    public static let descriptionExemple = "Informations complémentaires pour le soignant..."
+    // source: src/components/FormulaireMission.tsx:701
     public static let profession = "Profession requise *"
-    // source: src/components/FormulaireMission.tsx:699
+    // source: src/components/FormulaireMission.tsx:706
     public static let professionAChoisir = "Sélectionnez la profession recherchée"
-    // source: src/components/FormulaireMission.tsx:735
+    // source: src/components/FormulaireMission.tsx:742
     public static let service = "Service"
-    // source: src/components/FormulaireMission.tsx:738
+    // source: src/components/FormulaireMission.tsx:745
     public static let serviceExemple = "Choisissez ou saisissez le service"
-    // source: src/components/FormulaireMission.tsx:893
+    // source: src/components/FormulaireMission.tsx:900
     public static let planningTitre = "Planning exact de la mission"
-    // source: src/components/FormulaireMission.tsx:895
+    // source: src/components/FormulaireMission.tsx:902
     public static let planningAide = "Vérifiez chaque date travaillée et chaque horaire. Les jours de repos et les gardes de nuit sont enregistrés tels qu’affichés."
     /// Libellé du taux quand l'option publiée en natif est choisie sur le web (D8) ; relu avec les textes de T9.
-    // source: src/components/FormulaireMission.tsx:917
+    // source: src/components/FormulaireMission.tsx:924
     public static let taux = "Taux horaire brut * (€/h)"
-    // source: src/components/FormulaireMission.tsx:922
+    // source: src/components/FormulaireMission.tsx:929
     public static let tauxExemple = "25.00"
-    // source: src/components/FormulaireMission.tsx:948
+    // source: src/components/FormulaireMission.tsx:956
     public static let urgente = "Mission urgente ?"
-    // source: src/components/FormulaireMission.tsx:949
+    // source: src/components/FormulaireMission.tsx:957
     public static let urgenteAide = "Mise en avant dans les recherches + notification immédiate aux soignants disponibles à proximité."
-    // source: src/components/FormulaireMission.tsx:958
+    // source: src/components/FormulaireMission.tsx:966
     public static let niveauUrgence = "Niveau d'urgence"
-    // source: src/components/FormulaireMission.tsx:967
+    // source: src/components/FormulaireMission.tsx:975
     public static let modeSelection = "Mode de sélection"
-    // source: src/components/FormulaireMission.tsx:973
-    public static let modePremierArrive = "Premier arrivé"
-    // source: src/components/FormulaireMission.tsx:974
-    public static let modePremierArriveAide = "Le premier soignant qui accepte remporte la mission."
     // source: src/components/FormulaireMission.tsx:981
-    public static let modeCandidature = "Je choisis"
+    public static let modePremierArrive = "Premier arrivé"
     // source: src/components/FormulaireMission.tsx:982
+    public static let modePremierArriveAide = "Le premier soignant qui accepte remporte la mission."
+    // source: src/components/FormulaireMission.tsx:989
+    public static let modeCandidature = "Je choisis"
+    // source: src/components/FormulaireMission.tsx:990
     public static let modeCandidatureAide = "Les soignants postulent, vous consultez les profils et choisissez."
-    // source: src/components/FormulaireMission.tsx:1058
+    // source: src/components/FormulaireMission.tsx:1066
     public static let publicationEnCours = "Publication de la mission…"
     /// Succès du web sans son émoji ; affiché seulement après relecture de la mission créée.
-    // source: src/components/FormulaireMission.tsx:472
+    // source: src/components/FormulaireMission.tsx:478
     public static let succes = "Mission publiée ! Les soignants à proximité sont prévenus"
 
     // source: src/components/FormulaireRecurrence.tsx:296
@@ -105,7 +105,7 @@ public enum PublicationPresentation {
     public static let recapUrgence = "Urgence"
     // source: src/components/mission/ModalRecapMission.tsx:194
     public static let recapModeCandidature = "Sur candidature"
-    // source: src/components/FormulaireMission.tsx:1001
+    // source: src/components/FormulaireMission.tsx:1009
     public static let recapTaux = "Taux de base"
     /// « ← Modifier » du web, sans la flèche.
     // source: src/components/mission/ModalRecapMission.tsx:455
@@ -117,7 +117,7 @@ public enum PublicationPresentation {
     /// Niveaux d'urgence : premier mot des options du web (« Modéré — besoin sous … », l.959-961). Le délai qui suit
     /// n'est pas repris : sa forme est refusée hors de `Legal/TextesWeb.swift` par la garde des textes (marque d'un
     /// plafond d'heures, `check-textes-juridiques-ios.mjs`).
-    // source: src/components/FormulaireMission.tsx:959
+    // source: src/components/FormulaireMission.tsx:967
     public static let niveaux: [(niveau: Int, libelle: String)] = [(1, "Modéré"), (2, "Élevé"), (3, "Critique")]
 
     public static func libelleNiveau(_ niveau: Int) -> String {
@@ -137,7 +137,7 @@ public enum PublicationPresentation {
         mode == .premierArrive ? modePremierArrive : recapModeCandidature
     }
 
-    /// « Publier la mission », « Publier la mission (3 créneaux) » (`FormulaireMission.tsx` l.1044).
+    /// « Publier la mission », « Publier la mission (3 créneaux) » (`FormulaireMission.tsx` l.1052).
     public static func boutonPublier(creneaux: Int) -> String {
         "Publier la mission" + (creneaux > 1 ? " (\(creneaux) créneaux)" : "")
     }
@@ -171,11 +171,14 @@ public enum PublicationPresentation {
 
     // MARK: - Textes natifs (navigation, non juridiques)
 
-    /// Taux sous le plancher (revue B8 des textes de la vague D, M4). Le web n'a pas de texte propre : il s'en remet au
-    /// refus du navigateur (`min` du champ). Texte natif neutre, sans référence légale, valeur tirée de la constante
-    /// reprise du web (`PublicationRules.tauxMinimum`), écrite à la française (`fr_FR`, virgule décimale : « 11,65 €/h »).
-    public static var tauxSousLeMinimum: String {
-        "Le taux horaire doit être d'au moins \(montantFrancais(PublicationRules.tauxMinimum)) €/h."
+    /// Taux sous le plancher (revue B8 des textes de la vague D, M4). Même texte que le web (`messageTauxSousMinimum`,
+    /// `src/lib/tauxHoraireMinimumSalarie.ts`) et que le refus du serveur : neutre, sans référence légale, valeur tirée de
+    /// la constante reprise du web (`PublicationRules.tauxMinimum`), écrite à la française (`fr_FR` : « 12,31 €/h »).
+    public static var tauxSousLeMinimum: String { tauxSousLeMinimum(PublicationRules.tauxMinimum) }
+
+    /// Même texte, au plancher lu au serveur (`PublicationModel.tauxMinimum`).
+    public static func tauxSousLeMinimum(_ minimum: Double) -> String {
+        "Le taux horaire doit être d'au moins \(montantFrancais(minimum)) €/h."
     }
 
     /// Nombre à deux décimales, locale `fr_FR` (virgule décimale), sans séparateur de milliers.
@@ -213,7 +216,7 @@ public enum PublicationPresentation {
     }
 
     /// Options de publication qui restent sur le web (D8). Le titre nomme l'option avec les libellés du web
-    /// (`FormulaireMission.tsx` l.694, l.751, l.765, l.767 ; `FormulaireRecurrence.tsx` l.328, l.331-332), le message est
+    /// (`FormulaireMission.tsx` l.701, l.758, l.772, l.774 ; `FormulaireRecurrence.tsx` l.328, l.331-332), le message est
     /// le texte neutre commun ; aucune explication de la raison du renvoi.
     public enum RenvoiWeb: String, CaseIterable, Sendable, Identifiable {
         case liberal, medecin, recurrence, dupliquer
@@ -241,7 +244,7 @@ public enum PublicationPresentation {
 
     // MARK: - URL des renvois (Safari, D16)
 
-    /// Codes de `fn_blocage_publication_etab` dont le web renvoie vers la facturation (`FormulaireMission.tsx` l.658) ;
+    /// Codes de `fn_blocage_publication_etab` dont le web renvoie vers la facturation (`FormulaireMission.tsx` l.665) ;
     /// les autres blocages mènent à l'activation de l'établissement (l.620, l.629).
     static let codesBlocageFacturation: Set<String> = ["PUBLICATION_SUSPENDUE", "FACTURES_IMPAYEES"]
 
@@ -311,7 +314,7 @@ public enum PublicationPresentation {
         return "\(entieres)h" + String(format: "%02d", minutes)
     }
 
-    /// « 25.00 €/h » (`taux.toFixed(2)`, `FormulaireMission.tsx` l.1002) : le taux saisi, seul montant affiché (D15).
+    /// « 25.00 €/h » (`taux.toFixed(2)`, `FormulaireMission.tsx` l.1010) : le taux saisi, seul montant affiché (D15).
     public static func tauxAffiche(_ valeur: Double) -> String {
         String(format: "%.2f €/h", locale: Locale(identifier: "en_US_POSIX"), valeur)
     }

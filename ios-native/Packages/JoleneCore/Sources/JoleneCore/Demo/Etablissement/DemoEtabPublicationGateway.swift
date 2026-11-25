@@ -80,6 +80,12 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
         self.horloge = horloge
     }
 
+    /// Plancher du monde démo : la constante (aucun réseau), après le même contrôle de contexte que l'envoi.
+    public func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? {
+        guard (try? DemoEtablissementWorld.verifier(context)) != nil else { return nil }
+        return PublicationRules.tauxMinimum
+    }
+
     public func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome {
         try DemoEtablissementWorld.verifier(context)
         guard PublicationRules.champsInvalides(brouillon).isEmpty else {
