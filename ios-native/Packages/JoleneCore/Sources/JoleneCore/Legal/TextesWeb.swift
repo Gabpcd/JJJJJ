@@ -710,7 +710,7 @@ public enum TextesWeb {
         public static let aVerifierDetail = "L’employeur vérifie les formalités applicables à cet engagement. Si une DPAE est requise, effectuez-la avant la prise de poste et renseignez son numéro ici."
 
         // source: src/components/DPAEStatus.tsx:127 [juridique]
-        public static let obligatoireDetail = "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail)."
+        public static let obligatoireDetail = "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. L1221-10 Code du travail)."
 
         // source: src/components/BandeauRappelDPAE.tsx:25 [juridique]
         public static let effectuee = "✅ DPAE déclarée comme effectuée par l'établissement"
