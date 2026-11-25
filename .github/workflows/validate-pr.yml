@@ -78,7 +78,9 @@ jobs:
         # parité des routes établissement, textes du lot 5 dans TextesWeb.swift.
         # staging-lot5-fixture.node.mjs (lot 5, T13) : verrou de projet de la cohorte STAGING de l'espace
         # établissement (production refusée avant tout appel réseau), cycle et SQL sur transport simulé.
-        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs tests/node/check-rpc-contracts-lot4.node.mjs tests/node/ios-native-testflight.node.mjs tests/node/sources-web-ios-ci.node.mjs tests/node/contrats-etablissement-ios.node.mjs tests/node/staging-lot5-fixture.node.mjs
+        # staging-lot5-banc-sql.node.mjs (25/11/2026) : découpage et moteur du banc SQL ; le banc lui-même tourne
+        # sur PostgreSQL 17 dans le job « Paiements — verrous PostgreSQL 17 éphémère ».
+        run: node --test tests/node/mobile-delivery-plan.node.mjs tests/node/check-rpc-contracts.node.mjs tests/node/textes-juridiques-ios.node.mjs tests/node/lecture-notes-ios.node.mjs tests/node/check-rpc-contracts-lot3.node.mjs tests/node/check-rpc-contracts-lot4.node.mjs tests/node/ios-native-testflight.node.mjs tests/node/sources-web-ios-ci.node.mjs tests/node/contrats-etablissement-ios.node.mjs tests/node/staging-lot5-fixture.node.mjs tests/node/staging-lot5-banc-sql.node.mjs
 
       - name: Gardes de la soumission App Store
         # Lot 6 (docs/mobile-swift/APP_STORE.md) : entrées, mode à blanc et confirmation, provenance du build,
@@ -979,7 +981,7 @@ jobs:
   paiements-concurrence:
     name: Paiements — verrous PostgreSQL 17 éphémère
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     permissions:
       contents: read
     services:
@@ -1009,6 +1011,12 @@ jobs:
         run: python3 scripts/ci/paiements-concurrence-pg17.py
       - name: Catalogue F1 — cast du type interne et états des triggers
         run: node --test tests/postgres/f1-cloud-catalogue-cast.pg17.mjs
+      - name: Cohorte STAGING du lot 5 — tout le SQL du script sur le schéma du dépôt (base dédiée)
+        # Premier run STAGING du 25/11/2026 : deux défauts que seule une vraie base voit (type, déclencheur). Base
+        # créée pour cette étape seule ; aucun réseau, aucune donnée hors du dépôt.
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE staging_lot5_banc'
+          PGDATABASE=staging_lot5_banc node --test tests/postgres/staging-lot5-fixture.pg17.mjs
       - name: Alignement staging — résolution des alias du catalogue
         run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
       - name: Factures — émission atomique et reprise email PostgreSQL 17 isolé
