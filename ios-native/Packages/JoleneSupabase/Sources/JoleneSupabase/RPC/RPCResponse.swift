@@ -241,10 +241,24 @@ public struct RPCResponse: Equatable, Sendable {
             switch RPCInterception.appliquer(interceptions, code: postgrest.code, message: postgrest.message) {
             case let .reponse(reponse)?: return reponse
             case let .erreur(erreur)?: throw erreur
-            case nil: throw SupabaseErrorMapping.map(postgrest, fallback: fallback)
+            case nil: throw codeBrut(SupabaseErrorMapping.map(postgrest, fallback: fallback), "postgrest=\(postgrest.code ?? "-")")
             }
+        } catch let http as HTTPError {
+            throw codeBrut(SupabaseErrorMapping.map(http, fallback: fallback), "http=\(http.response.statusCode)")
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: fallback)
         }
+    }
+
+    /// DEBUG seulement : code brut de l'échec (code PostgREST ou Postgres, sinon statut HTTP) en `detail`, jamais
+    /// affiché ni comparé, pour le diagnostic de session (troisième parcours STAGING du lot 5). Un `detail` déjà posé
+    /// est gardé. Le SDK n'expose pas le statut HTTP d'une erreur PostgREST décodée : son code brut en tient lieu.
+    static func codeBrut(_ erreur: JoleneError, _ code: String) -> JoleneError {
+        #if DEBUG
+        guard erreur.detail == nil else { return erreur }
+        return JoleneError(erreur.kind, erreur.message, detail: code)
+        #else
+        return erreur
+        #endif
     }
 }

@@ -778,6 +778,22 @@ export function controlerSessionEtablissement(doc, { role, permissions, profil }
   throw new Error(parties.join('\n'));
 }
 
+/**
+ * Témoin du troisième parcours STAGING (25/11/2026) : la lecture de `fn_mes_permissions_etab` rejouée avec les en-têtes
+ * que l'app envoie quand son trousseau refuse la session (supabase-swift garde alors la clé publishable en `apikey` ET en
+ * `Authorization`, rôle `anon`). Non bloquant : un refus confirme le mécanisme côté serveur, une acceptation le dément.
+ * Entrée : `{ accepte: true }` ou `{ echec: { http, code } }` ; aucune valeur de clé ni de jeton.
+ */
+export function decrireTemoinSansSession(resultat) {
+  if (resultat?.accepte) {
+    return "Témoin sans session (clé publishable en Authorization, comme l'app quand le trousseau refuse) : "
+      + 'fn_mes_permissions_etab ACCEPTÉE — le mécanisme supposé est démenti.';
+  }
+  const e = resultat?.echec ?? {};
+  return "Témoin sans session (clé publishable en Authorization, comme l'app quand le trousseau refuse) : "
+    + `fn_mes_permissions_etab refusée, HTTP ${Number(e.http) || 0}${e.code ? `, code ${e.code}` : ''} (refus attendu du rôle anon).`;
+}
+
 /** Total des objets marqués ; une colonne absente ou non entière n'est jamais un zéro. */
 export function totalMarques(ligne) {
   let total = 0;
@@ -1020,6 +1036,13 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
       permissions: await lire('fn_mes_permissions_etab', { p_etablissement_id: null }),
       profil: await lire('fn_mon_etablissement_complet', {}),
     }, cleApp.origine);
+    // Témoin non bloquant (troisième parcours STAGING) : mêmes en-têtes que l'app sans session enregistrée.
+    try {
+      await rpc('fn_mes_permissions_etab', { p_etablissement_id: null }, cleApp.cle, cleApp.cle);
+      log(decrireTemoinSansSession({ accepte: true }));
+    } catch (e) {
+      log(decrireTemoinSansSession({ echec: { http: e?.http ?? 0, code: e?.code ?? '' } }));
+    }
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);

@@ -16,6 +16,10 @@ public struct JoleneError: Error, Equatable, Sendable, LocalizedError {
     }
     public var errorDescription: String? { message }
 
+    /// `detail` d'une session acceptée par Auth mais que le stockage n'a pas gardée (trousseau refusé) : la connexion
+    /// est refusée avec son propre message, jamais confondue avec des identifiants faux (troisième parcours STAGING).
+    public static let detailSessionNonEnregistree = "session-non-enregistree"
+
     /// Égalité sur ce qui est montré (nature et message) ; `detail` n'en fait pas partie.
     public static func == (gauche: JoleneError, droite: JoleneError) -> Bool {
         gauche.kind == droite.kind && gauche.message == droite.message

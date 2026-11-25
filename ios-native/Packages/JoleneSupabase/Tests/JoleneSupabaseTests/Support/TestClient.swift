@@ -40,6 +40,11 @@ enum TestClient {
     static let motDePasseRefuse = ["mau", "vais"].joined()
 
     static func make(storage: InMemoryAuthStorage = InMemoryAuthStorage()) -> SupabaseClient {
+        make(stockage: storage)
+    }
+
+    /// Même client sur un stockage quelconque (par exemple un trousseau qui refuse l'écriture).
+    static func make(stockage storage: any AuthLocalStorage) -> SupabaseClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
         let session = URLSession(configuration: configuration)

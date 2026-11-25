@@ -21,7 +21,7 @@ public enum SupabaseGateways {
         guard let url = environment.supabaseURL, let key = environment.publishableKey else {
             throw JoleneError(.environment, "Configuration Supabase incomplète.")
         }
-        let client = makeClient(url: url, publishableKey: key, storage: KeychainSessionStorage())
+        let client = makeClient(url: url, publishableKey: key, storage: stockageSession(mode: environment.mode))
         // Reste de L1-T10 : récupération du mot de passe sur un client d'authentification isolé (quarantaine).
         return make(client: client, clock: clock, enrich: enrich,
                     recovery: SupabaseRecoveryGateway.fabrique(url: url, publishableKey: key))
@@ -95,6 +95,21 @@ public enum SupabaseGateways {
         gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
         gateways.iban = SupabaseIbanGateway(client: client)                // T14b
         gateways.stripeConnect = SupabaseStripeConnectGateway(client: client) // T14a
+    }
+
+    /// Stockage de la session du client. Toujours le Keychain (`KeychainSessionStorage`, plan §4.3), sauf dans un
+    /// build DEBUG en mode `staging` dont le trousseau refuse l'écriture (`statutSonde` ≠ `errSecSuccess`) : mémoire du
+    /// processus, rien ne survit à l'arrêt de l'app. Cause du troisième parcours STAGING du lot 5 (25/11/2026) : l'app
+    /// de simulateur des workflows STAGING est construite avec `CODE_SIGNING_ALLOWED=NO`, sans `application-identifier`,
+    /// le trousseau répond -34018, supabase-swift journalise l'échec sans le lever et chaque requête PostgREST part avec
+    /// la clé publishable en `Authorization` (rôle `anon`). En Release, jamais de mémoire : un trousseau qui refuse
+    /// est détecté à la connexion (`SupabaseAuthGateway.signIn`, `JoleneError.detailSessionNonEnregistree`).
+    static func stockageSession(mode: JoleneMode,
+                                sonde: () -> OSStatus = { KeychainSessionStorage.statutSonde() }) -> any AuthLocalStorage {
+        #if DEBUG
+        if mode == .staging, sonde() != errSecSuccess { return StockageMemoire() }
+        #endif
+        return KeychainSessionStorage()
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

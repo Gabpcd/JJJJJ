@@ -993,6 +993,50 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    (`JoleneError.detail`) est calculée aussi en Release, mais elle n'est lue que par le diagnostic, absent en Release ;
    elle n'est donc jamais exposée.
 
+## Troisième parcours STAGING, « session expirée » sur la première lecture (run 45677331174, 25/11/2026)
+
+1. **Constat** : le pré-vol passe (les trois lectures de session sous le JWT d'E1, avec la clé de l'app). L'app, elle,
+   échoue en 53,6 s avec le diagnostic `permissions:unauthorized:Votre session a expiré. Reconnectez-vous.` : Auth
+   accepte les identifiants, puis `fn_mes_permissions_etab` est refusée. Le schéma n'est pas en cause : c'est la
+   requête de l'app qui diffère de celle de la fixture.
+2. **Cause, établie par la lecture du code et une sonde locale** :
+   - (a) les workflows STAGING construisent l'app de simulateur avec `CODE_SIGNING_ALLOWED=NO`
+     (`ios-swift-lot5-staging.yml`, `ios-swift-staging.yml`) : seule la signature ad hoc de l'éditeur de liens, sans
+     entitlement ni `application-identifier` ;
+   - (b) dans ce cas, le trousseau du simulateur refuse l'écriture. Sonde du 25/11 : `SecItemAdd` rend -34018
+     (`errSecMissingEntitlement`) pour un binaire signé ad hoc sans entitlement, sur le simulateur iOS 18.6 ;
+   - (c) `KeychainSessionStorage.store` lève l'erreur, mais supabase-swift 2.55.5 se contente de la journaliser
+     (`Sources/Auth/Internal/SessionStorage.swift`, `store`) et le SDK ne garde la session nulle part ailleurs : `session()`
+     et `currentSession` relisent le stockage ;
+   - (d) `SupabaseAuthGateway.signIn` renvoyait l'utilisateur de la réponse sans vérifier que la session avait été
+     enregistrée ;
+   - (e) à chaque requête, `adaptRequest` (`Sources/Supabase/SupabaseClient.swift`) fait `try?` sur `auth.session`.
+     Faute de session, il garde l'en-tête par défaut `Authorization: Bearer <clé publishable>` : PostgREST exécute
+     alors la requête sous le rôle `anon` ;
+   - (f) les fonctions de session ne sont pas exécutables par `anon` (lecture de production du 25/11 ; le STAGING
+     provient du même dump). Le refus 42501 ou 401 est traduit en `.unauthorized` (`SupabaseErrorMapping`) ;
+   - (g) `fn_get_my_role` échoue de la même façon, mais l'échec est masqué par le repli sur le rôle signé.
+   La fixture passe parce qu'elle envoie explicitement le JWT d'E1. Le mécanisme (c)→(e) est reproduit par
+   `StockageSessionRefuseTests.testSansSessionStockeeLeSDKEnvoieLaClePublishable`.
+3. **Production** : une app TestFlight ou App Store est signée avec son profil, qui porte l'`application-identifier`,
+   et le trousseau accepte la session. C'est le cas des builds 25 à 31, où des soignants se connectent et lisent leurs
+   données. Un compte établissement passe par le même client, le même stockage et le même transport. La cause (a) est
+   donc propre aux builds de simulateur non signés. En production subsiste un risque résiduel : tout refus d'écriture
+   du trousseau produirait le même faux « session expirée ». Il est désormais refusé dès la connexion (point 4).
+4. **Correctifs** :
+   - connexion refusée nommément quand la session n'est pas relue après `signIn` (message propre, `detail`
+     `session-non-enregistree`, diagnostic `connexion:unknown:session-non-enregistree`), en DEBUG comme en Release ;
+   - en build DEBUG et en mode `staging` seulement, si la sonde du trousseau échoue, session gardée en mémoire du
+     processus (`SupabaseGateways.stockageSession`). Rien ne survit à l'arrêt de l'app ; jamais en Release ni en
+     production. Conséquence : le critère « restauration après arrêt » de `StagingConnexionTests` (PORTE_LOT0 1.1) ne
+     peut pas être prouvé par un build non signé. Il demande un build de simulateur signé, ce qui reste à décider ;
+   - diagnostic DEBUG d'un refus « non autorisé » des lectures de session : code brut (`postgrest=<code>` ou
+     `http=<statut>` ; le SDK n'expose pas le statut d'une erreur PostgREST décodée), `jwt=oui|non`, secondes avant
+     `exp`, hôte émetteur du jeton égal à l'hôte REST. Ni jeton ni adresse ;
+   - pré-vol : témoin non bloquant, la lecture de `fn_mes_permissions_etab` rejouée avec les en-têtes de l'app sans
+     session (clé publishable en `apikey` et en `Authorization`). Un refus confirme le mécanisme côté STAGING, une
+     acceptation le dément. Les autres en-têtes (`X-Client-Info`, en-têtes du SDK) ne changent pas le rôle PostgREST.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

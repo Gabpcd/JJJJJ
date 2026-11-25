@@ -455,6 +455,7 @@ public actor SessionController {
         if let jolene = error as? JoleneError {
             switch jolene.kind {
             case .network: return "Connexion impossible pour le moment. Vérifiez votre réseau puis réessayez."
+            case .unknown where jolene.detail == JoleneError.detailSessionNonEnregistree: return jolene.message
             case .invalidCredentials, .unauthorized: return genericSignInMessage
             default: return genericSignInMessage
             }
