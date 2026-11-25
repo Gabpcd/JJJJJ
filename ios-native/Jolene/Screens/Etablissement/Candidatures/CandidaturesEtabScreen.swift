@@ -4,10 +4,11 @@ import JoleneDesign
 
 /// Candidatures d'une mission de l'établissement (lot 5, T6) : vue de `CandidaturesEtabModel`, port de
 /// `ListeCandidatures.tsx` (rendue par `DetailMission.tsx`) sur la lecture habilitée. Sections : annonce (succès relu,
-/// refus serveur verbatim, paiement, renvoi web), en attente (bandeau de planning bloquant, lien neutre vers les CGV,
+/// refus serveur verbatim, paiement, renvoi web), en attente (bandeau de planning bloquant, mention CGV art. 8 et son lien,
 /// cartes avec « Accepter » / « Refuser », ou « Accepter sur jolene.app » hors périmètre natif, D10 et D25), traitées.
 /// « Accepter » ouvre le récapitulatif (`RecapAcceptationSheet`). Aucun montant, aucune note, aucun statut d'internat,
-/// aucune case juridique ; la mention CGV art. 8 verbatim attend la validation HARD STOP n°4 (lien neutre d'ici là).
+/// aucune case juridique ; la mention CGV art. 8 est celle du web, mot pour mot (HARD STOP n°4, décision c de
+/// l'intégration de la vague D, `DECISIONS_LOT5.md`).
 ///
 /// Identifiants : `etab-candidatures-screen`, `-loading`, `-error` (+ `-retry`), `-acces-refuse`, `-introuvable`,
 /// `-empty`, `-titre`, `-en-attente`, `-planning-bloquant`, `-cgv-lien`, `-traitees`, `-succes`, `-erreur`, `-renvoi`
@@ -139,20 +140,38 @@ struct CandidaturesEtabScreen: View {
                                  title: PlanningExactEtab.titreBandeauAConfirmer, tone: .warning,
                                  identifier: "etab-candidatures-planning-bloquant")
                 }
+                // Mention CGV art. 8 du web (`ListeCandidatures.tsx` l.390-398), mot pour mot ; le lien est son texte
+                // souligné, la mention entière ouvre la page des CGV.
                 if let presentateurRenvoiWeb {
-                    Button { presentateurRenvoiWeb.presenter(.etablissement(P.urlCgv)) } label: {
-                        Label(P.cgvLienNeutre, systemImage: "safari")
-                            .font(JoleneFont.caption)
-                            .foregroundStyle(JoleneColor.rose700)
-                            .frame(minHeight: 44, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("etab-candidatures-cgv-lien")
-                    .accessibilityValue(P.urlCgv.absoluteString)
+                    Button { presentateurRenvoiWeb.presenter(.etablissement(P.urlCgv)) } label: { mentionCgv }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(TextesWeb.CandidaturesEtablissement.cgvMention)
+                        .accessibilityIdentifier("etab-candidatures-cgv-lien")
+                        .accessibilityValue(P.urlCgv.absoluteString)
+                } else {
+                    mentionCgv
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(TextesWeb.CandidaturesEtablissement.cgvMention)
+                        .accessibilityIdentifier("etab-candidatures-cgv")
                 }
                 ForEach(candidatures) { candidature in carte(candidature) }
             }
         }
+    }
+
+    /// Texte, espace, lien souligné, suite collée au lien : le rendu React de la mention (`cgvMention`).
+    private var mentionCgv: some View {
+        HStack(alignment: .firstTextBaseline, spacing: JoleneSpacing.xs) {
+            Image(systemName: "scale.3d").accessibilityHidden(true)
+            (Text(TextesWeb.CandidaturesEtablissement.cgvAvantLien + " ")
+                + Text(TextesWeb.CandidaturesEtablissement.cgvLien).underline().foregroundColor(JoleneColor.rose700)
+                + Text(TextesWeb.CandidaturesEtablissement.cgvApresLien))
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+        }
+        .font(JoleneFont.caption)
+        .foregroundStyle(JoleneColor.bubblegum)
+        .frame(minHeight: 44, alignment: .leading)
     }
 
     private func carte(_ candidature: CandidatureHabilitee) -> some View {

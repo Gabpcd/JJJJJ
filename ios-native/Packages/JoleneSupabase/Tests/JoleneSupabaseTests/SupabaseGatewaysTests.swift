@@ -85,15 +85,16 @@ final class SupabaseGatewaysTests: XCTestCase {
         XCTAssertTrue(gateways.geocodage is ApiAdresseGeocodage)
     }
 
-    /// L4-T1c, verrou m6 (revue B8 de #1146) : état attendu **écrit en dur** du monde Supabase avant T6 et T7a (revue B8
-    /// de #1159, m5 : plus de comparaison de deux calculs de `is UnwiredPort`). T7a, qui câble `SupabaseLot4.realtime`,
-    /// et T6, qui livre `ParrainageCapture` et `SupabaseLot4.parrainage`, inversent chacune leurs deux attentes ici.
+    /// L4-T1c, verrou m6 (revue B8 de #1146) : état attendu **écrit en dur** du monde Supabase avant T6 (revue B8
+    /// de #1159, m5 : plus de comparaison de deux calculs de `is UnwiredPort`). T7a a câblé `SupabaseLot4.realtime` et
+    /// inversé ses deux attentes ; T6, qui livre `ParrainageCapture` et `SupabaseLot4.parrainage`, inversera les siennes.
     func testAbonnementRealtimeVerrouilleAvantT7a() {
         let gateways = SupabaseGateways.make(client: TestClient.make())
-        XCTAssertTrue(gateways.realtime is UnwiredRealtimePort, "avant T7a : port Realtime Supabase non câblé")
-        XCTAssertFalse(VerrousLot4.abonnementRealtimePermis(gateways.realtime), "avant T7a : aucun abonnement Realtime")
-        XCTAssertTrue(gateways.parrainage is UnwiredParrainagePort, "avant T6 : port parrainage Supabase non câblé")
-        XCTAssertFalse(VerrousLot4.parrainageBranche, "avant T6 : aucune capture ni application du code de parrainage")
+        XCTAssertTrue(gateways.realtime is SupabaseRealtimeGateway, "T7a : port Realtime Supabase câblé")
+        XCTAssertTrue(VerrousLot4.abonnementRealtimePermis(gateways.realtime), "T7a : abonnement Realtime permis")
+        // L4-T6 livrée : port parrainage câblé et capture branchée, ensemble.
+        XCTAssertTrue(gateways.parrainage is SupabaseParrainageGateway, "T6 : port parrainage Supabase câblé")
+        XCTAssertTrue(VerrousLot4.parrainageBranche, "T6 : capture et application du code de parrainage branchées")
     }
 
     /// Lot 2 (T1) : `câblerLot2(_:client:)` est le seul point d'assignation des cinq ports du lot 2 du

@@ -1,0 +1,25 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "reclamations": [
+    {
+      "id": "demo-reclamation-001",
+      "categorie": "TECHNIQUE",
+      "sujet": "Démonstration · Notification reçue en double",
+      "details": "Démonstration · La même notification est arrivée deux fois sur mon téléphone.",
+      "statut": "EN_ATTENTE",
+      "reponse_admin": null,
+      "cree_le": "2026-10-31T18:00:00.000Z",
+      "traite_le": null
+    },
+    {
+      "id": "demo-reclamation-002",
+      "categorie": "MISSION",
+      "sujet": "Démonstration · Horaire affiché différent du planning",
+      "details": "Démonstration · L’horaire de la mission ne correspondait pas au planning reçu.",
+      "statut": "RESOLUE",
+      "reponse_admin": "Démonstration · L’horaire a été corrigé, merci de votre signalement.",
+      "cree_le": "2026-10-21T00:00:00.000Z",
+      "traite_le": "2026-10-23T00:00:00.000Z"
+    }
+  ]
+}

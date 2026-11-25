@@ -333,14 +333,18 @@ final class CentreNotificationsTests: XCTestCase {
     }
 
     func testRenvoiWebSeulementAvecLePresentateur() async throws {
-        let port = PortScripte([.success([ligne("n1", lien: "/soignant/litiges", lue: true)])])
+        // L4-T8 : `/soignant/litiges` est natif ; le renvoi web témoin est la page Conformité (lot 4, renvoi web assumé).
+        let port = PortScripte([.success([ligne("n1", lien: "/soignant/conformite", lue: true),
+                                          ligne("n2", lien: "/soignant/litiges#l1", lue: true)])])
         let (controller, snapshot) = try await pret(port)
         let model = CentreNotificationsModel(controller: controller, snapshot: snapshot)
         await model.charger()
         let sans = await model.ouvrir(model.notifications[0], renvoiWebDisponible: false)
         XCTAssertNil(sans, "sans présentateur `.safari` (L1-T10), rien n'est ouvert")
         let avec = await model.ouvrir(model.notifications[0], renvoiWebDisponible: true)
-        XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/litiges")!)))
+        XCTAssertEqual(avec, .web(.safari(URL(string: "https://jolene.app/soignant/conformite")!)))
+        let litige = await model.ouvrir(model.notifications[1], renvoiWebDisponible: false)
+        XCTAssertEqual(litige, .secondaire(.litiges(onglet: nil, litigeId: "l1")), "litiges natifs (L4-T8) : litige visé, sans présentateur")
     }
 
     /// Revue B8 de T3b, m2 : le centre ne contourne pas l'option B (décision 7 du lot 1). Une ligne dont le lien est un
@@ -351,8 +355,8 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertFalse(CentreNotificationsModel.afficheVoir(lue, renvoiWebDisponible: true))
         XCTAssertFalse(CentreNotificationsModel.estActionnable(lue, renvoiWebDisponible: true))
         let tokenHash = ligne("r2", lien: "/reset-password?token_hash=h&type=recovery", lue: true)
-        XCTAssertTrue(CentreNotificationsModel.afficheVoir(tokenHash, renvoiWebDisponible: true),
-                      "`token_hash` : la page web canonique sait le vérifier")
+        XCTAssertFalse(CentreNotificationsModel.afficheVoir(tokenHash, renvoiWebDisponible: true),
+                       "reste de L1-T10 : `token_hash` présenté hors de l'espace par lien universel, jamais depuis le centre")
 
         let port = PortScripte([.success([ligne("r3", lien: "/reset-password?code=c")])])
         let (controller, snapshot) = try await pret(port)
@@ -369,7 +373,7 @@ final class CentreNotificationsTests: XCTestCase {
 
     func testVoirEtLigneActionnable() {
         let mission = ligne("a", lien: "/soignant/missions/m-1", lue: true)
-        let web = ligne("b", lien: "/soignant/litiges", lue: true)
+        let web = ligne("b", lien: "/soignant/conformite", lue: true) // `/soignant/litiges` est natif depuis L4-T8
         let invalide = ligne("c", lien: "https://evil.example/x", lue: true)
         let sansLien = ligne("d", lue: true)
         let nonLueSansLien = ligne("e")
@@ -441,9 +445,9 @@ final class CentreNotificationsTests: XCTestCase {
         XCTAssertEqual(try cible("/etablissement/missions/abc"),
                        .web(.etablissement(URL(string: "https://jolene.app/etablissement/missions/abc")!)))
         XCTAssertEqual(try cible("/connexion"), .aucune, "connexion depuis un espace prêt : coordinateur de L1-T10")
-        // L3-T3b : écran de réinitialisation natif non livré, la page web canonique (`token_hash` conservé) est servie.
-        XCTAssertEqual(try cible("/reset-password?token_hash=h&type=recovery"),
-                       .web(.safari(URL(string: "https://jolene.app/reset-password?token_hash=h&type=recovery")!)))
+        // Reste de L1-T10 : écran de réinitialisation natif livré, présenté hors de l'espace (lien universel) ; depuis le
+        // centre, rien n'est présenté (comme la confirmation d'inscription), jamais la page web avec le jeton.
+        XCTAssertEqual(try cible("/reset-password?token_hash=h&type=recovery"), .aucune)
         // Revue B8 de T3b, m2 : option B (décision 7 du lot 1) — un lien `?code=` n'est jamais servi par Safari, depuis le
         // centre comme depuis un lien universel ou un tap (`DeepLinkIntent.reinitialisationRefusee`).
         XCTAssertEqual(try cible("/reset-password?code=c"), .aucune)
@@ -578,7 +582,9 @@ final class CentreNotificationsTests: XCTestCase {
     /// et `/inscription/reprendre`, présentées hors de l'espace par le coordinateur des liens (`AiguillageLiens`,
     /// action `.inscription`, `BoiteLiensInscription` lue par `RootView`) — un compte ouvert n'a pas d'inscription à
     /// faire.
-    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .confirmerInscription,
+    /// Reste de L1-T10 : le reset y revient, livré et présenté hors de l'espace comme la confirmation (même action
+    /// `.inscription`, `BoiteLiensInscription.reinitialisation`) ; depuis le centre, rien n'est présenté.
+    private static let sansCibleDansLEspace: Set<GenreRoute> = [.connexion, .resetPassword, .confirmerInscription,
                                                                 .inscriptionSoignant, .inscriptionReprendre,
                                                                 .inscriptionCompleter] // T8 : complétion hors espace
 

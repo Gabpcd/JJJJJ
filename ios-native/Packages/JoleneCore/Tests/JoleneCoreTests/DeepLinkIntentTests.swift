@@ -38,7 +38,7 @@ final class DeepLinkIntentTests: XCTestCase {
         let cas: [(String, CibleNotification)] = [
             ("https://jolene.app/soignant/tableau-de-bord", .accueil),
             ("https://jolene.app/soignant/recherche-missions", .explorer),
-            ("https://jolene.app/soignant/swipe-missions", .explorer),
+            ("https://jolene.app/soignant/swipe-missions", .secondaire(.swipe)), // L4-T3b : onglet Explorer en vue Swipe
             ("https://jolene.app/soignant/missions?tab=passees", .missions),
             ("https://jolene.app/soignant/missions/m%201", .mission(id: "m 1")),
             ("https://jolene.app/mission/m1", .mission(id: "m1")),
@@ -66,6 +66,8 @@ final class DeepLinkIntentTests: XCTestCase {
             ("https://jolene.app/soignant/contrats", .documents(onglet: .contrats)),
             ("https://jolene.app/contrat/c1", .contrat(id: "c1")),
             ("https://jolene.app/contrat/c1/certificat", .certificat(contratId: "c1")),
+            // L4-T12 : détail de série natif (report de la décision 11 du lot 1), écran secondaire empilé sur le Profil.
+            ("https://jolene.app/soignant/missions/serie/s%201", .secondaire(.serie(id: "s 1"))),
         ]
         for (lien, cible) in cas {
             let obtenue = try intention(lien)
@@ -83,16 +85,14 @@ final class DeepLinkIntentTests: XCTestCase {
     func testRoutesSansEcranOuExternesSontDesRenvoisWebCanoniques() throws {
         let safari = [
             "https://jolene.app/soignant/mes-gains?tab=factures",                     // lot 4 (D4)
-            "https://jolene.app/soignant/mes-gains?tab=bulletins&annee=2026",          // lot 4 (D4)
             "https://jolene.app/soignant/mes-gains?tab=avances",                      // lot 4 (D4)
             "https://jolene.app/soignant/mes-factures-honoraires",                    // alias, lot 4
-            "https://jolene.app/soignant/missions/serie/s1",                          // lot 4 (décision 11 du lot 1)
-            "https://jolene.app/soignant/litiges#l1",
+            // `/soignant/missions/serie/s1` en est sorti à L4-T12 (détail de série natif) et `/soignant/litiges#l1` à
+            // L4-T8 (litiges natifs, `LinksRouterLot4Tests`).
             // T7 (confirmation, `soignant`, `reprendre`) et T8 (`completer`) : présentées hors de l'espace
             // (`testLiensDInscriptionEtDeConfirmationPresentesHorsDeLEspace`).
-            "https://jolene.app/reset-password?token_hash=h&type=recovery",           // reset natif non livré
-            "https://jolene.app/reset-password#access_token=a&refresh_token=r&type=recovery",
-            "https://jolene.app/reset-password",                                      // sans identifiants
+            // Reste de L1-T10 : le reset (`token_hash`, implicit, sans identifiants) en est sorti, présenté hors de
+            // l'espace (`testToutLienHorsEspaceAppartientALaListeNommee`, `ReinitialisationTests`).
             "https://jolene.app/inscription/etablissement",
             "https://jolene.app/auth/psc/callback?status=success",                    // PSC non construit (D8)
             // `/contrat/c1` en est sorti à L2-T10 (contrat natif) ; DPAE et Conformité restent des pages web.
@@ -170,6 +170,10 @@ final class DeepLinkIntentTests: XCTestCase {
             case .confirmerInscription:
                 horsEspace.insert("confirmation")
                 XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
+            case .resetPassword:
+                // Reste de L1-T10 : écran de réinitialisation, présenté hors de l'espace (`BoiteLiensInscription`).
+                horsEspace.insert("reinitialisation")
+                XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
             case .inscription(let etape) where etape.page == .soignant || etape.page == .reprendre || etape.page == .completer:
                 horsEspace.insert("inscription")
                 XCTAssertEqual(aiguillage.recevoir(DeepLinkIntent(lien)), .inscription(destination), chemin)
@@ -178,7 +182,7 @@ final class DeepLinkIntentTests: XCTestCase {
             }
             XCTAssertFalse(aiguillage.aUnLienEnAttente, "\(chemin) : jamais mémorisé pour un espace à venir")
         }
-        XCTAssertEqual(horsEspace, ["connexion", "confirmation", "inscription"],
+        XCTAssertEqual(horsEspace, ["connexion", "confirmation", "inscription", "reinitialisation"],
                        "liste nommée : connexion (sans action), confirmation et inscription (T7, T8, présentées hors espace)")
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         XCTAssertNil(aiguillage.recevoir(url: url("https://jolene.app/connexion")), "écran de connexion : rien à ouvrir")
@@ -263,12 +267,12 @@ final class DeepLinkIntentTests: XCTestCase {
     }
 
     /// Sections de Revenus lues dans `?tab=` (comparaison exacte, `MesGains.tsx` l.899-900) : l'aperçu ouvre l'onglet
-    /// natif ; « Paiements à confirmer » ouvre l'onglet sur sa section (T13) ; factures, bulletins et avances restent des
-    /// renvois web (D4).
+    /// natif ; « Paiements à confirmer » ouvre l'onglet sur sa section (T13) ; bulletins : copies officielles natives
+    /// (L4-T10) ; factures et avances restent des renvois web (D4).
     func testSectionsDeRevenusDepuisTab() throws {
         let cas: [(String, SectionRevenus, Bool)] = [
             ("tab=apercu", .apercu, true), ("", .apercu, true), ("tab=APERCU", .apercu, true), ("tab=inconnu", .apercu, true),
-            ("tab=factures", .factures, false), ("tab=bulletins", .bulletins, false), ("tab=avances", .avances, false),
+            ("tab=factures", .factures, false), ("tab=bulletins", .bulletins, true), ("tab=avances", .avances, false),
             ("tab=paiements", .paiementsAConfirmer, true),
         ]
         for (query, section, natif) in cas {
@@ -278,7 +282,8 @@ final class DeepLinkIntentTests: XCTestCase {
             switch try intention(lien) {
             case .espace(let d):
                 XCTAssertTrue(natif, lien)
-                XCTAssertEqual(CibleNotification(d), .revenus(section: section), lien)
+                XCTAssertEqual(CibleNotification(d), section == .bulletins ? .secondaire(.bulletins(copieId: nil))
+                                   : .revenus(section: section), lien)
             case .renvoiWeb(let d):
                 XCTAssertFalse(natif, lien)
                 XCTAssertEqual(d.destination, .safari(url(lien)), lien)
@@ -352,11 +357,11 @@ final class DeepLinkIntentTests: XCTestCase {
     /// sans session, et jamais mémorisé pour un espace à venir.
     func testRenvoiWebPresenteAussitotSansSessionEtJamaisMemorise() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
-        // Série de missions : renvoi web assumé (décision 11 du lot 1) ; Stripe Connect est natif depuis T14a.
-        let serie = url("https://jolene.app/soignant/missions/serie/s1")
-        XCTAssertEqual(aiguillage.recevoir(url: serie), .renvoiWeb(.safari(serie)))
+        // DPAE : page web (décision 16 du lot 2) ; la série de missions est native depuis L4-T12, Stripe Connect depuis T14a.
+        let dpae = url("https://jolene.app/soignant/dpae")
+        XCTAssertEqual(aiguillage.recevoir(url: dpae), .renvoiWeb(.safari(dpae)))
         XCTAssertFalse(aiguillage.aUnLienEnAttente)
-        aiguillage.renvoiWebPresente(.safari(serie))
+        aiguillage.renvoiWebPresente(.safari(dpae))
         aiguillage.renvoiWebFerme()
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)), "déjà présenté : rien à rejouer")
         let etab = url("https://jolene.app/etablissement/missions/abc")
@@ -370,8 +375,9 @@ final class DeepLinkIntentTests: XCTestCase {
         XCTAssertNil(aiguillage.ouvrirEspace(snapshot(epoch: 1)))
         XCTAssertEqual(aiguillage.recevoir(url: url("https://jolene.app/reset-password?code=c")), .refusReinitialisation)
         let tokenHash = url("https://jolene.app/reset-password?token_hash=h&type=recovery")
-        XCTAssertEqual(aiguillage.recevoir(url: tokenHash), .renvoiWeb(.safari(tokenHash)),
-                       "`token_hash` : la page web de réinitialisation (écran natif non livré)")
+        XCTAssertEqual(aiguillage.recevoir(url: tokenHash), .inscription(DestinationLien(url: tokenHash)!),
+                       "reste de L1-T10 : `token_hash` ouvre l'écran natif, hors de l'espace, jamais mémorisé")
+        XCTAssertFalse(aiguillage.aUnLienEnAttente)
     }
 
     /// `LOT1_PLAN.md` §3 T10 : « un `.safari` issu de l'app n'est jamais rejoué comme lien universel ». Tant que le
@@ -380,10 +386,11 @@ final class DeepLinkIntentTests: XCTestCase {
     func testRenvoiWebIssuDeLAppJamaisRejoueCommeLienUniversel() {
         let aiguillage = AiguillageLiens(taps: BoiteTapsPush())
         _ = aiguillage.ouvrirEspace(snapshot(epoch: 1))
-        let litiges = url("https://jolene.app/soignant/litiges")
+        // `/soignant/litiges` est natif depuis L4-T8 : le renvoi web témoin est la page Conformité.
+        let litiges = url("https://jolene.app/soignant/conformite")
         aiguillage.renvoiWebPresente(.safari(litiges)) // présenté par l'app (centre, Accueil, profil)
         XCTAssertNil(aiguillage.recevoir(url: litiges), "même URL revenue par lien universel : ignorée")
-        XCTAssertNil(aiguillage.recevoir(url: url("https://www.jolene.app/soignant/litiges")), "même URL canonique")
+        XCTAssertNil(aiguillage.recevoir(url: url("https://www.jolene.app/soignant/conformite")), "même URL canonique")
         let autre = url("https://jolene.app/soignant/dpae") // `/contrat/c1` est natif depuis L2-T10
         XCTAssertEqual(aiguillage.recevoir(url: autre), .renvoiWeb(.safari(autre)), "autre lien : présenté")
         aiguillage.renvoiWebPresente(.safari(autre))

@@ -128,9 +128,10 @@ final class DemoRevenusTests: JoleneUITestCase {
         let paie = element("revenus-bulletins-web")
         require("« Paie » est atteignable") { self.visible(paie) }
         XCTAssertEqual(paie.label, "Paie")
+        // L4-T10 : « Paie » ouvre l'écran natif des copies officielles (empilé sur le Profil, `DemoBulletinsTests`).
         paie.tap()
-        liensRenvoiWebAffiche("https://jolene.app/soignant/mes-gains?tab=bulletins")
-        liensFermerRenvoiWeb()
+        require("« Paie » ouvre les copies officielles natives") { self.element("bulletins-screen").exists }
+        _ = ouvrirRevenus()
         require("L'onglet Revenus est intact après les renvois") { self.containerVisible(self.element("revenus-screen")) }
         // Documentation seulement (revue B8 de T12, m7) : `revenus-avances-web` n'est codé nulle part, cette assertion
         // passe à coup sûr. Elle rappelle l'écart 4 de la section T12 (`DECISIONS_LOT3.md`) : avance de trésorerie

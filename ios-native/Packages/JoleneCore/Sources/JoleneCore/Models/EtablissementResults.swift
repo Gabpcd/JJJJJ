@@ -174,25 +174,65 @@ public enum ClotureOutcome: Equatable, Sendable {
     case accesRefuse(message: String)
 }
 
-/// Ligne `presences` d'une mission de l'établissement (contrat minimal, complété par T8 ; jamais de
-/// coordonnées GPS).
+/// Mission embarquée dans une ligne `presences` (`missions!inner(…)`, `PresencesEtablissement.tsx` l.77) : ce que
+/// l'écran affiche et ce que la complétude du planning exige. Jamais `duree_heures` ni aucun montant (D15).
+public struct MissionPresenceEtab: Equatable, Sendable {
+    public var id: String
+    public var intitule: String?
+    public var service: String?
+    public var debutLe: String?
+    public var finLe: String?
+    public var nbCreneaux: Int?
+    /// Établissement de la mission relue : comparé au contexte confirmé, jamais une valeur de filtre.
+    public var etablissementId: String?
+
+    public init(id: String, intitule: String? = nil, service: String? = nil, debutLe: String? = nil, finLe: String? = nil,
+                nbCreneaux: Int? = nil, etablissementId: String? = nil) {
+        self.id = id; self.intitule = intitule; self.service = service; self.debutLe = debutLe; self.finLe = finLe
+        self.nbCreneaux = nbCreneaux; self.etablissementId = etablissementId
+    }
+}
+
+/// Ligne `presences` d'une mission de l'établissement (contrat posé par T1, complété par T8 : colonnes de
+/// `PresencesEtablissement.tsx` l.68-77 **sans** `arrivee_lat/lng`, `depart_lat/lng`, `coherence_incidents` ni
+/// `duree_heures`). Décodage tolérant dans `Etablissement/Presences/PresenceEtab.swift`. Aucune coordonnée, aucun
+/// montant, aucune durée servie : les durées affichées sont celles de `SynthesePresence` sur les créneaux relus.
 public struct PresenceEtab: Equatable, Sendable, Identifiable {
     public var id: String
     public var missionId: String
     public var valideParEtablissement: Bool
+    /// Valeur serveur, jamais posée localement.
     public var valideLe: String?
     public var motifLitige: String?
+    public var soignantId: String?
+    /// Distance à l'établissement relevée par le serveur à l'arrivée, en mètres (jamais une position).
+    public var distanceEtablissementM: Double?
+    public var perimetreGpsValide: Bool?
+    public var alerteTeleportation: Bool?
+    public var arriveeMockDetected: Bool?
+    public var departMockDetected: Bool?
+    public var mission: MissionPresenceEtab?
+    /// Créneaux hors pause de la mission (PREVISIONNEL et EFFECTIF), relus avec la liste (web l.126-144).
+    public var creneaux: [MissionSlot]
 
-    public init(id: String, missionId: String, valideParEtablissement: Bool, valideLe: String?, motifLitige: String?) {
+    public init(id: String, missionId: String, valideParEtablissement: Bool, valideLe: String?, motifLitige: String?,
+                soignantId: String? = nil, distanceEtablissementM: Double? = nil, perimetreGpsValide: Bool? = nil,
+                alerteTeleportation: Bool? = nil, arriveeMockDetected: Bool? = nil, departMockDetected: Bool? = nil,
+                mission: MissionPresenceEtab? = nil, creneaux: [MissionSlot] = []) {
         self.id = id; self.missionId = missionId; self.valideParEtablissement = valideParEtablissement
-        self.valideLe = valideLe; self.motifLitige = motifLitige
+        self.valideLe = valideLe; self.motifLitige = motifLitige; self.soignantId = soignantId
+        self.distanceEtablissementM = distanceEtablissementM; self.perimetreGpsValide = perimetreGpsValide
+        self.alerteTeleportation = alerteTeleportation; self.arriveeMockDetected = arriveeMockDetected
+        self.departMockDetected = departMockDetected; self.mission = mission; self.creneaux = creneaux
     }
 }
 
 // MARK: - Publication (T9)
 
 /// Brouillon d'une mission simple ou urgente, salariée, au taux horaire (D8). Contrat minimal posé par
-/// T1, complété par T9 ; `creneaux` = instants matérialisés par `PlanningDerive`, envoyés tels quels.
+/// T1, complété par T9 (niveau d'urgence, mode de sélection ; règles dans
+/// `Etablissement/Publication/PublicationMission.swift`) ; `creneaux` = instants matérialisés par `PlanningDerive`,
+/// envoyés tels quels. Aucun type de contrat ni mode d'exercice ici : la charge les fixe (`PublicationPayload`, D8).
 public struct PublicationMission: Equatable, Sendable {
     public var intitule: String
     public var description: String?
@@ -202,11 +242,17 @@ public struct PublicationMission: Equatable, Sendable {
     public var tauxHoraireBase: Double
     public var estUrgente: Bool
     public var creneaux: [CreneauConfirme]
+    /// Niveau 1 à 3 d'une mission urgente (T9) ; ignoré sinon (la charge envoie 0, comme le web).
+    public var niveauUrgence: Int
+    /// Mode de sélection (T9) ; défaut du web (`FormulaireMission.tsx`, état initial `PREMIER_ARRIVE`).
+    public var modeAttribution: ModeAttributionPublication
 
     public init(intitule: String, description: String?, professionRequise: String, service: String?,
-                tauxHoraireBase: Double, estUrgente: Bool, creneaux: [CreneauConfirme]) {
+                tauxHoraireBase: Double, estUrgente: Bool, creneaux: [CreneauConfirme], niveauUrgence: Int = 1,
+                modeAttribution: ModeAttributionPublication = .premierArrive) {
         self.intitule = intitule; self.description = description; self.professionRequise = professionRequise
         self.service = service; self.tauxHoraireBase = tauxHoraireBase; self.estUrgente = estUrgente; self.creneaux = creneaux
+        self.niveauUrgence = niveauUrgence; self.modeAttribution = modeAttribution
     }
 }
 
@@ -217,6 +263,9 @@ public enum PublicationOutcome: Equatable, Sendable {
     case refusee(code: String?, message: String)
     /// `{error: CODE, message}` de `fn_blocage_publication_etab` (correction 8) → renvoi web.
     case blocageEtablissement(code: String, message: String)
+    /// Le serveur a répondu `success:true` avec cet identifiant, mais la relecture n'a pas confirmé la mission
+    /// (lecture impossible, ou mission relue différente de l'envoi) : jamais un succès, jamais un renvoi (T9).
+    case nonConfirmee(missionId: String)
 }
 
 // MARK: - Tableau de bord (T4) : `Etablissement/Accueil/EtabDashboardSnapshot.swift`.

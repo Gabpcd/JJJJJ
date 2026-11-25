@@ -30,8 +30,14 @@ public enum ContratPresentation {
     }
 
     public static func carte(_ contrat: ContratResume) -> Carte {
+        carte(contrat, partie: .soignant)
+    }
+
+    /// Carte pour la partie qui regarde (lot 5, T10) : l'appel « Signer le contrat » suit la signature de cette partie
+    /// (`aSigner`, l.156-159).
+    public static func carte(_ contrat: ContratResume, partie: PartieContrat) -> Carte {
         let statut = ContratRules.statutAffiche(statut: contrat.statut)
-        let aSigner = ContratRules.aSignerParMoi(contrat)
+        let aSigner = ContratRules.aSignerParMoi(contrat, partie: partie)
         let creation = date(contrat.creeLe, masque: LibellesWeb.Contrats.formatDateCreation) ?? LibellesWeb.Contrats.sansValeur
         return Carte(id: contrat.id, numero: LibellesWeb.Contrats.numero(contrat.numeroContrat), statut: statut,
                      badge: LibellesWeb.Contrats.badge(statut),

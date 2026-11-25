@@ -34,9 +34,9 @@ final class LinksRouterLot4Tests: XCTestCase {
         for (chemin, ecran) in cas {
             let d = try lien(chemin)
             XCTAssertEqual(d.route, .secondaire(ecran), chemin)
-            XCTAssertEqual(DestinationLien.ecranNatifLivre(d.route), SecondairesLot4Tests.livres.contains(ecran),
+            XCTAssertEqual(DestinationLien.ecranNatifLivre(d.route), SecondairesLot4Tests.livre(ecran),
                            "\(chemin) : seuls les écrans des tranches livrées")
-            if SecondairesLot4Tests.livres.contains(ecran) {
+            if SecondairesLot4Tests.livre(ecran) {
                 XCTAssertEqual(d.destination, .secondaire(ecran), chemin)
                 continue
             }
@@ -60,14 +60,25 @@ final class LinksRouterLot4Tests: XCTestCase {
     }
 
     func testRenvoiWebCanoniqueEtIntentions() throws {
+        // L4-T8 : litiges natifs, onglet et litige visé gardés ; le lien canonique reste celui du web.
         let litige = try lien("/soignant/litiges?tab=litiges#l9")
-        XCTAssertEqual(litige.destination.externalURL?.absoluteString, "https://jolene.app/soignant/litiges?tab=litiges#l9")
-        XCTAssertEqual(DeepLinkIntent(litige), .renvoiWeb(litige))
-        XCTAssertEqual(CibleNotification(litige), .web(.safari(litige.canonique)))
+        XCTAssertEqual(litige.canonique.absoluteString, "https://jolene.app/soignant/litiges?tab=litiges#l9")
+        XCTAssertNil(litige.destination.externalURL, "écran livré : plus de renvoi web")
+        XCTAssertEqual(DeepLinkIntent(litige), .espace(litige))
+        XCTAssertEqual(CibleNotification(litige), .secondaire(.litiges(onglet: .litiges, litigeId: "l9")))
+        // Écran non livré : renvoi web canonique (témoin : les exclusions, tant que T11 ne les a pas livrées).
+        if !SecondairesLot4Tests.livre(.exclusions) {
+            let exclusions = try lien("/soignant/exclusions")
+            XCTAssertEqual(exclusions.destination.externalURL?.absoluteString, "https://jolene.app/soignant/exclusions")
+            XCTAssertEqual(DeepLinkIntent(exclusions), .renvoiWeb(exclusions))
+            XCTAssertEqual(CibleNotification(exclusions), .web(.safari(exclusions.canonique)))
+        }
         let swipe = try lien("/soignant/swipe-missions")
         XCTAssertEqual(DeepLinkIntent(swipe), .espace(swipe))
-        XCTAssertEqual(CibleNotification(swipe), .explorer, "repli natif : Explorer, comme avant L4-T1")
-        XCTAssertEqual(CibleNotification(try lien("/soignant/score")), .monCompte)
+        XCTAssertEqual(CibleNotification(swipe), .secondaire(.swipe), "T3b livrée : onglet Explorer en vue Swipe (jamais un écran empilé)")
+        XCTAssertEqual(CibleNotification(swipe).onglet, .explorer)
+        XCTAssertEqual(CibleNotification(try lien("/soignant/recherche-missions?vue=swipe")), .secondaire(.swipe), "même destination")
+        XCTAssertEqual(CibleNotification(try lien("/soignant/score")), .secondaire(.score), "T9 : écran natif livré")
     }
 
     func testDescriptionMasqueLesIdentifiants() throws {

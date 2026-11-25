@@ -81,7 +81,7 @@ public enum DemoWorld {
             compte: DemoAccountGateway(),
             audit: DemoAuditGateway(),
             flags: DemoFlagsGateway(surcharges: drapeaux),
-            recovery: UnwiredRecoveryPort(),            // T10
+            recovery: DemoRecoveryGateway(),            // T10 (reste : récupération du mot de passe)
             justificatifs: DemoJustificatifStorage()    // T7
         )
         câblerLot2(&gateways)
@@ -89,7 +89,8 @@ public enum DemoWorld {
         DemoLot4.cabler(&gateways) // lot 4 : une fabrique par domaine (`Demo/Lot4/`)
         // Lot 5 (T1) : ports établissement ; l'identité est celle de la session démo courante, si bien
         // que le compte soignant fictif y est refusé (`.demoOnly`).
-        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id })
+        gateways.etablissement = DemoEtablissementWorld.gateways(identite: { try? await auth.restoreSession()?.id },
+                                                                messagerie: gateways.messagerie as? DemoMessagerieGateway)
         return gateways
     }
 
@@ -226,8 +227,9 @@ public struct DemoMissionsGateway: MissionsPort {
 
     public init(missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
         // T6c : mission de recette de la confirmation de présence, ouverte par lien seulement (hors listes).
+        // L4-T3b : missions de recette du paquet de swipe, ouvertes en détail depuis Mes favoris ou Mes missions.
         try DemoFixtures.loadDashboard().missionsAssignees + DemoFixtures.loadMesMissions().passees.map(\.mission)
-            + (DemoPresenceGateway.missionJ1().map { [$0] } ?? [])
+            + (DemoPresenceGateway.missionJ1().map { [$0] } ?? []) + DemoFixtures.missionsRecetteSwipe()
     }, profil: @escaping @Sendable () async throws -> SoignantProfile = { DemoWorld.context.profile },
        missionsAttribuees: @escaping @Sendable () async -> Set<String> = { [] },
        presences: @escaping @Sendable (MissionRecord) async -> MissionRecord = { $0 },

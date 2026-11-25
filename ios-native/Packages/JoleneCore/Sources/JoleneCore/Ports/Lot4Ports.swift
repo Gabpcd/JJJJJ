@@ -109,6 +109,68 @@ public protocol MessageriePort: Sendable {
     /// « Écrire à l'établissement » depuis le détail de mission (correction 20).
     func conversationPourMission(missionId: String, etablissementId: String,
                                  context: MissionReadContext) async throws -> IssueConversationMission
+    /// Ajout additif de T7a : relecture après « rejoint » — messages dont `cree_le` ≥ `depuis` (valeur servie du dernier
+    /// message connu), 500 au plus, à fusionner par id. Défaut : filtre des 500 derniers.
+    func messages(conversationId: String, depuis: String, context: MissionReadContext) async throws -> [MessageChat]
+
+    // MARK: Ajout additif du lot 5 (T11) : mêmes RPC, même edge, sous le JWT d'un membre de l'établissement
+    // (`LOT5_PLAN.md` §2.3, D18). Le contexte établissement remplace le contexte soignant ; l'auteur d'un message reste
+    // l'utilisateur courant (le serveur le lit dans le JWT et compare à l'établissement). Défaut : refus « non câblé »
+    // (un double du lot 4 n'a rien à retoucher ; les gateways démo et Supabase les implémentent toutes).
+    func conversations(avant: CurseurConversations?, etab: EtablissementReadContext) async throws -> PageConversations
+    func interlocuteurs(ids: [String], etab: EtablissementReadContext) async throws -> [Interlocuteur]
+    func messages(conversationId: String, etab: EtablissementReadContext) async throws -> [MessageChat]
+    func messages(conversationId: String, depuis: String, etab: EtablissementReadContext) async throws -> [MessageChat]
+    func envoyer(conversationId: String, contenu: String, etab: EtablissementReadContext) async throws -> EnvoiOutcome
+    func message(id: String, conversationId: String, etab: EtablissementReadContext) async throws -> MessageChat?
+    func marquerLus(conversationId: String, etab: EtablissementReadContext) async throws -> IssueLecture
+    func saisie(debut: Bool, conversationId: String, etab: EtablissementReadContext) async throws
+    func presence(etab: EtablissementReadContext) async throws
+    func bloque(cibleId: String, etab: EtablissementReadContext) async throws -> Bool
+    func basculerBlocage(cibleId: String, bloquer: Bool, etab: EtablissementReadContext) async throws -> Bool
+    func signaler(cibleId: String, type: TypeCibleSignalement, categorie: String, motif: String, missionId: String?,
+                  etab: EtablissementReadContext) async throws -> IssueSignalement
+    /// Badge de l'onglet Messages : `fn_messages_non_lus()` (comptage d'équipe côté serveur).
+    func nonLus(etab: EtablissementReadContext) async throws -> Int
+    /// « Contacter le soignant » depuis le détail de mission (`DetailMission.tsx` l.1083) :
+    /// `fn_obtenir_conversation(p_autre_id := soignant assigné, p_mission_id)`.
+    func conversationPourSoignant(missionId: String, soignantId: String,
+                                  etab: EtablissementReadContext) async throws -> IssueConversationMission
+}
+
+public extension MessageriePort {
+    func messages(conversationId: String, depuis: String, context: MissionReadContext) async throws -> [MessageChat] {
+        try await messages(conversationId: conversationId, context: context).filter { FilMessages.pasAvant($0, depuis) }
+    }
+}
+
+/// Défauts du contexte établissement (lot 5, T11) : gap verrouillé, jamais une réponse plausible.
+public extension MessageriePort {
+    private var nonCableEtab: JoleneError { UnwiredPortsLot5.erreur(port: "messagerie établissement", tranche: "T11") }
+    func conversations(avant: CurseurConversations?, etab: EtablissementReadContext) async throws -> PageConversations {
+        throw nonCableEtab
+    }
+    func interlocuteurs(ids: [String], etab: EtablissementReadContext) async throws -> [Interlocuteur] { throw nonCableEtab }
+    func messages(conversationId: String, etab: EtablissementReadContext) async throws -> [MessageChat] { throw nonCableEtab }
+    func messages(conversationId: String, depuis: String, etab: EtablissementReadContext) async throws -> [MessageChat] {
+        try await messages(conversationId: conversationId, etab: etab).filter { FilMessages.pasAvant($0, depuis) }
+    }
+    func envoyer(conversationId: String, contenu: String, etab: EtablissementReadContext) async throws -> EnvoiOutcome {
+        throw nonCableEtab
+    }
+    func message(id: String, conversationId: String, etab: EtablissementReadContext) async throws -> MessageChat? {
+        throw nonCableEtab
+    }
+    func marquerLus(conversationId: String, etab: EtablissementReadContext) async throws -> IssueLecture { throw nonCableEtab }
+    func saisie(debut: Bool, conversationId: String, etab: EtablissementReadContext) async throws { throw nonCableEtab }
+    func presence(etab: EtablissementReadContext) async throws { throw nonCableEtab }
+    func bloque(cibleId: String, etab: EtablissementReadContext) async throws -> Bool { throw nonCableEtab }
+    func basculerBlocage(cibleId: String, bloquer: Bool, etab: EtablissementReadContext) async throws -> Bool { throw nonCableEtab }
+    func signaler(cibleId: String, type: TypeCibleSignalement, categorie: String, motif: String, missionId: String?,
+                  etab: EtablissementReadContext) async throws -> IssueSignalement { throw nonCableEtab }
+    func nonLus(etab: EtablissementReadContext) async throws -> Int { throw nonCableEtab }
+    func conversationPourSoignant(missionId: String, soignantId: String,
+                                  etab: EtablissementReadContext) async throws -> IssueConversationMission { throw nonCableEtab }
 }
 
 /// Realtime (`client.realtimeV2`, `messages_chat`, `typing_status`, `presence_status`) — T7a. Un flux n'est jamais une
@@ -119,6 +181,13 @@ public protocol RealtimePort: Sendable {
     func presence(userId: String) -> AsyncStream<EtatPresence>
     func etat() -> AsyncStream<EtatCanal>
     func fermerTout() async
+    /// Ajout additif de T7a : état du canal de messages d'une conversation (`nil` : canal de la liste), dernier état
+    /// connu d'abord. Défaut : `etat()` (tous canaux de messages confondus).
+    func etat(conversationId: String?) -> AsyncStream<EtatCanal>
+}
+
+public extension RealtimePort {
+    func etat(conversationId: String?) -> AsyncStream<EtatCanal> { etat() }
 }
 
 /// Copies officielles des bulletins (`fn_lister_copies_bulletins`, edge `copies-bulletins`,

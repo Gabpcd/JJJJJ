@@ -33,6 +33,8 @@ struct EtablissementTabView: View {
     @State private var chemins: [Tab: [EtabDestination]] = [:]
     /// Lot 5, T5 : filtre `?statut=` d'un lien vers la liste des missions, rejoué par `EtabMissionsScreen`.
     @State private var demandeMissions = DemandeFiltreMissions()
+    /// Lot 5, T8 : onglet `?tab=` d'un lien vers la page Présences, rejoué par `PresencesEtabScreen`.
+    @State private var demandePresences = DemandeOngletPresences()
 
     init(container: AppContainer, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
         self.container = container
@@ -62,7 +64,7 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-missions")
 
             NavigationStack(path: chemin(.presences)) {
-                EtabPresencesRoot(session: session, snapshot: snapshot)
+                EtabPresencesRoot(session: session, snapshot: snapshot, demande: demandePresences)
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.presences, snapshot: snapshot, session: session)
@@ -75,6 +77,7 @@ struct EtablissementTabView: View {
                     .destinationsEtablissement(snapshot: snapshot, session: session)
             }
             .ecranEtablissement(.messages, snapshot: snapshot, session: session)
+            .badgeMessagesEtablissement(container.cycleMessagerie) // T11 : `fn_messages_non_lus()` relu
             .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
             .tag(Tab.messages)
             .accessibilityIdentifier("tab-etab-messages")
@@ -89,13 +92,20 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-compte")
         }
         .tint(JoleneColor.rose700)
+        // Lot 5, T11 : cycle Realtime et horloge de la messagerie pour les racines et destinations de l'espace.
+        .environment(\.messagerieEtablissement,
+                     MessagerieEtablissementEnvironnement(cycle: container.cycleMessagerie, clock: container.clock))
         // Lot 5, T2b : lien reçu avant l'espace rejoué une fois, puis chaque demande de cet epoch.
         .onAppear {
             liens.espaceEtablissementOuvert(snapshot)
             executerDemande()
         }
         .onChange(of: liens.demandeEtablissement) { _ in executerDemande() }
-        .onDisappear { liens.espaceFerme(epoch: snapshot.epoch) }
+        // Revue B8 sécurité (vague D, m6) : copies de contrats écrites par l'espace établissement effacées à sa sortie.
+        .onDisappear {
+            liens.espaceFerme(epoch: snapshot.epoch)
+            FichiersTemporairesSensibles.purger()
+        }
     }
 
     private func chemin(_ onglet: Tab) -> Binding<[EtabDestination]> {
@@ -118,6 +128,10 @@ struct EtablissementTabView: View {
         chemins[cible.onglet] = cible.destination.map { [$0] } ?? []
         if cible.onglet == .missions, cible.destination == nil {
             demandeMissions = DemandeFiltreMissions(statut: cible.statut, jeton: demandeMissions.jeton + 1)
+        }
+        // T8 : `/etablissement/presences?tab=alertes` ouvre Présences sur l'onglet demandé (toute autre valeur : « À valider »).
+        if cible.onglet == .presences, cible.destination == nil {
+            demandePresences = DemandeOngletPresences(onglet: cible.ongletPresences, jeton: demandePresences.jeton + 1)
         }
     }
 }

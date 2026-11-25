@@ -7,20 +7,26 @@ import Foundation
 /// en attente **dérivés** des lignes de la fixture (candidatures lues seulement avec la permission `candidatures`).
 /// T6 : les décisions prises pendant la session démo (`DemoEtabEtatCandidatures`, partagé avec la gateway des
 /// candidatures) sont appliquées aux lignes lues : une mission acceptée est relue `ASSIGNEE`, ses candidatures traitées.
+/// T9 : les missions publiées pendant la session (`DemoEtabEtatPublication`, partagé avec la gateway de publication)
+/// s'ajoutent aux lignes lues, avec leurs créneaux.
 public struct DemoEtabMissionsGateway: EtabMissionsPort {
     private let fixture: DemoFixtures.EtabMissionsFile?
     private let etat: DemoEtabEtatCandidatures?
+    private let publications: DemoEtabEtatPublication?
 
-    public init(etat: DemoEtabEtatCandidatures? = nil) {
+    public init(etat: DemoEtabEtatCandidatures? = nil, publications: DemoEtabEtatPublication? = nil) {
         fixture = try? DemoFixtures.loadEtabMissions()
         self.etat = etat
+        self.publications = publications
     }
 
     private func donnees(_ context: EtablissementReadContext) async throws -> DemoFixtures.EtabMissionsFile {
         try DemoEtablissementWorld.verifier(context)
         guard let fixture else { throw JoleneError(.contract, "Fixture démo des missions établissement illisible.") }
-        guard let etat else { return fixture }
-        return fixture.appliquant(await etat.surcouche())
+        var lues = fixture
+        if let etat { lues = lues.appliquant(await etat.surcouche()) }
+        if let publications { lues = lues.completant(await publications.surcouche()) }
+        return lues
     }
 
     /// Lignes de l'établissement du contexte (jamais celles d'un autre identifiant).
@@ -121,6 +127,14 @@ public extension DemoFixtures {
                 relue.soignantAssigneId = soignant
                 return relue
             }
+            return copie
+        }
+
+        /// Lignes relues avec les missions publiées pendant la session démo (T9) et leurs créneaux.
+        func completant(_ surcouche: DemoEtabEtatPublication.Surcouche) -> EtabMissionsFile {
+            var copie = self
+            copie.missions += surcouche.missions
+            copie.creneaux += surcouche.creneaux
             return copie
         }
     }

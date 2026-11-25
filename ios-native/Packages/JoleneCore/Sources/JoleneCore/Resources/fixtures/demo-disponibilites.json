@@ -1,0 +1,17 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "disponibilites_soignant": [
+    {
+      "jour": "2026-11-03",
+      "creneau": "JOURNEE"
+    },
+    {
+      "jour": "2026-11-05",
+      "creneau": "NUIT"
+    },
+    {
+      "jour": "2026-11-14",
+      "creneau": "JOURNEE"
+    }
+  ]
+}

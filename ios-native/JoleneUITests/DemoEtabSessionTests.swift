@@ -8,7 +8,7 @@ import XCTest
 /// « lot3-profil-photo » de `ios-swift-ci.yml` (revue B8 de #1147, m5 : hors du socle).
 ///
 /// Identifiants : `tab-etab-{accueil|missions|presences|messages|compte}`, `etab-accueil-screen` (T4), `placeholder-etab-*`,
-/// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-list`,
+/// `etab-missions-publier`, `etab-renvoi-web` (+ `-message`, `-ouvrir`), `etab-compte-screen`,
 /// `etab-compte-{nom|role|email}`, `logout-button`, `network-sentinel`. Les écrans provisoires
 /// (`placeholder-etab-*`) sont remplacés par la tranche de leur domaine, qui migre ces assertions (T5 : onglet
 /// Missions → `etab-missions-screen`).
@@ -33,13 +33,15 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         let publier = element("etab-missions-publier")
         require("« Publier » est offert au propriétaire (permission missions)") { self.visible(publier) }
         tap("etab-missions-publier")
+        // T9 livrée : la destination `.publication` rend l'écran de publication, plus le provisoire.
         require("Le registre de destinations ouvre la publication") {
-            self.containerVisible(self.element("placeholder-etab-publication"))
+            self.containerVisible(self.element("publier-screen"))
         }
+        XCTAssertFalse(element("placeholder-etab-publication").exists)
         record("\(proofPrefix)-etab-publication")
 
-        ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "placeholder-etab-presences")
-        ouvrirOnglet("tab-etab-messages", label: "Messages", contenu: "placeholder-etab-messages")
+        ouvrirOnglet("tab-etab-presences", label: "Présences", contenu: "etab-presences-screen") // T8
+        ouvrirOnglet("tab-etab-messages", label: "Messages", contenu: "messagerie-screen")
         ouvrirCompte()
         XCTAssertEqual(element("etab-compte-nom").label, Self.nomEtablissement)
         XCTAssertEqual(element("etab-compte-role").label, "Propriétaire")
@@ -79,7 +81,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         tabButton("tab-etab-presences", label: "Présences").tap()
         let renvoi = element("etab-renvoi-web")
         require("L'onglet Présences coupé affiche le renvoi web") { self.containerVisible(renvoi) }
-        XCTAssertFalse(element("placeholder-etab-presences").exists, "l'écran natif coupé n'est jamais monté")
+        XCTAssertFalse(element("etab-presences-screen").exists, "l'écran natif coupé n'est jamais monté")
         XCTAssertFalse(element("etab-renvoi-web-message").label.isEmpty)
         let ouvrir = element("etab-renvoi-web-ouvrir")
         require("La sortie web est atteignable") { self.visible(ouvrir) }
@@ -96,7 +98,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         XCTAssertEqual(tabLabels, Self.ongletsEtablissement)
         ouvrirCompte()
         let deconnexion = element("logout-button")
-        if !visible(deconnexion) { scrollTo(deconnexion, in: element("etab-compte-list")) }
+        if !visible(deconnexion) { scrollTo(deconnexion, in: element("etab-compte-screen")) }
         tap("logout-button")
         require("La connexion est proposée après la déconnexion") { self.visible(self.element("login-scroll")) }
         XCTAssertFalse(tabBarExists, "plus aucun onglet établissement après la déconnexion")
@@ -118,7 +120,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
     private func ouvrirCompte() {
         tabButton("tab-etab-compte", label: "Compte").tap()
         require("Le compte de l'établissement est affiché") {
-            self.containerVisible(self.element("etab-compte-list")) && self.element("etab-compte-nom").exists
+            self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }
     }
 }

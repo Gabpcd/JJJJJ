@@ -1,0 +1,111 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "reponse": {
+    "success": true,
+    "total": 4,
+    "limit": 20,
+    "offset": 0,
+    "notations": [
+      {
+        "id": "demo-notation-001",
+        "mission_id": "demo-mission-notee-001",
+        "mission_intitule": "Remplacement IDE de jour",
+        "mission_fin_le": "2026-10-26T00:00:00.000Z",
+        "etablissement_id": "demo-etab-1",
+        "etablissement_nom": "Établissement fictif République",
+        "critere_1": 5,
+        "critere_2": 5,
+        "critere_3": 5,
+        "critere_4": 5,
+        "note_moyenne": 5,
+        "commentaire": "Très professionnelle, équipe ravie.",
+        "signale": false,
+        "cree_le": "2026-10-28T00:00:00.000Z"
+      },
+      {
+        "id": "demo-notation-002",
+        "mission_id": "demo-mission-notee-002",
+        "mission_intitule": "Renfort IDE de nuit",
+        "mission_fin_le": "2026-09-21T00:00:00.000Z",
+        "etablissement_id": "demo-etab-2",
+        "etablissement_nom": "Établissement fictif des Lilas",
+        "critere_1": 4,
+        "critere_2": 5,
+        "critere_3": 4,
+        "critere_4": 5,
+        "note_moyenne": 4.5,
+        "commentaire": null,
+        "signale": false,
+        "cree_le": "2026-09-23T00:00:00.000Z"
+      },
+      {
+        "id": "demo-notation-003",
+        "mission_id": "demo-mission-notee-003",
+        "mission_intitule": "Remplacement IDE week-end",
+        "mission_fin_le": "2026-07-23T00:00:00.000Z",
+        "etablissement_id": "demo-etab-1",
+        "etablissement_nom": "Établissement fictif République",
+        "critere_1": 4,
+        "critere_2": 4,
+        "critere_3": 4,
+        "critere_4": 4,
+        "note_moyenne": 4,
+        "commentaire": "Ponctuelle et à l’écoute.",
+        "signale": false,
+        "cree_le": "2026-07-25T00:00:00.000Z"
+      },
+      {
+        "id": "demo-notation-004",
+        "mission_id": "demo-mission-notee-004",
+        "mission_intitule": "Vacation IDE en cabinet",
+        "mission_fin_le": "2026-04-14T00:00:00.000Z",
+        "etablissement_id": "demo-etab-3",
+        "etablissement_nom": "Cabinet fictif du Parc",
+        "critere_1": 4,
+        "critere_2": 4,
+        "critere_3": 5,
+        "critere_4": 4,
+        "note_moyenne": 4.3,
+        "commentaire": "Mission écourtée.",
+        "signale": true,
+        "cree_le": "2026-04-16T00:00:00.000Z"
+      }
+    ],
+    "stats": {
+      "note_moyenne_globale": 4.4,
+      "total_evaluations": 4,
+      "pct_5_etoiles": 25
+    },
+    "evolution_6m": [
+      {
+        "mois": "2026-07",
+        "note_moyenne": 4,
+        "nb": 1
+      },
+      {
+        "mois": "2026-09",
+        "note_moyenne": 4.5,
+        "nb": 1
+      },
+      {
+        "mois": "2026-10",
+        "note_moyenne": 5,
+        "nb": 1
+      }
+    ],
+    "etabs_disponibles": [
+      {
+        "id": "demo-etab-1",
+        "nom": "Établissement fictif République"
+      },
+      {
+        "id": "demo-etab-2",
+        "nom": "Établissement fictif des Lilas"
+      },
+      {
+        "id": "demo-etab-3",
+        "nom": "Cabinet fictif du Parc"
+      }
+    ]
+  }
+}

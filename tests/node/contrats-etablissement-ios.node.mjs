@@ -60,6 +60,9 @@ const LOT5_CONSOMMEES = [
   'fn_soignant_pour_etablissement', // T5 : SupabaseEtabMissionsGateway
   'fn_lire_candidatures_mission_habilitee', 'fn_traiter_candidature_planning_v1', // T6 : SupabaseEtabCandidaturesGateway
   'fn_contrat_signe_pour_pointage', // T7 : SupabaseEtabPointageGateway
+  // T8 (B9) : SupabaseEtabPresencesGateway ; fn_creer_notation_mission reste l'entrée du lot 2, déjà consommée.
+  'fn_valider_presence', 'fn_valider_presences_lot', 'fn_contester_presence', 'fn_creer_notation_mission', 'fn_declarer_fin_retroactive',
+  'fn_creer_mission_multi_jours_v4', // T9 : SupabaseEtabPublicationGateway
 ];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [
@@ -593,12 +596,47 @@ test('T7 : la veille de l écran du code de pointage est libérée explicitement
     'libererVeille : retablirVeille du contrôleur unique, pour le demandeur de cet écran');
 });
 
-test('textes du lot 5 jamais affichés avant la validation de Gabrielle (HARD STOP n°4, m4)', () => {
+test('textes du lot 5 affichés seulement avec leur décision consignée au point 1 de l intégration de la vague D (HARD STOP n°4, m4)', () => {
   // `CandidaturesEtablissement` (T6), `BlocageEtablissement` (T4), `PublicationEtablissement` (T9) : textes repris
-  // verbatim, écrans soumis à la validation de Gabrielle (LOT5_PLAN §6.4). Tant qu'elle n'est pas consignée dans
-  // DECISIONS_LOT5.md, aucun source livré ne les référence hors de TextesWeb.swift (gap verrouillé, CLAUDE.md).
+  // verbatim. Aucun source livré ne les référence hors de TextesWeb.swift sans décision consignée (gap verrouillé,
+  // CLAUDE.md). Intégration de la vague D (24/11/2026), décision c : d'abord affichés sur délégation générale, puis
+  // validés explicitement par la fondatrice le 24/11/2026 (« Oui, je valide », commentaire de la PR #1179 cité au
+  // point 1). Revue B8 d'assemblage de la vague D (M2) : la référence doit figurer au point 1 de la section de décision,
+  // pas ailleurs. Depuis la validation, le point 1 doit porter la mention datée, la citation et sa référence, ainsi que
+  // ce que la validation ne couvre pas ; aucun bloc validé ne reste « en attente » ; aucun état périmé (« confirmation
+  // explicite demandée », « reste attendue avant merge ») ne subsiste ; et toute mention d'un affichage « sur
+  // délégation » doit être accompagnée, dans le même paragraphe, de la validation datée.
   const enums = ['CandidaturesEtablissement', 'BlocageEtablissement', 'PublicationEtablissement'];
-  const VALIDES = []; // la tranche validée y ajoute son enum, avec la référence de la validation dans DECISIONS_LOT5.md
+  const VALIDES = ['PublicationEtablissement', 'CandidaturesEtablissement', 'BlocageEtablissement'];
+  const VALIDATION = 'validés explicitement par la fondatrice le 24/11/2026';
+  const CITATION = '« Oui, je valide »';
+  const REFERENCE = 'https://github.com/Gabpcd/JJJJJ/pull/1179#issuecomment-7142442809';
+  const decisions = read('docs/mobile-swift/DECISIONS_LOT5.md');
+  const integration = section(decisions, "Précisions de l'intégration de la vague D (24/11/2026)");
+  const debutPoint1 = integration.indexOf('\n1. **');
+  assert.ok(debutPoint1 >= 0, 'point 1 de la section de décision absent');
+  const finPoint1 = integration.slice(debutPoint1 + 1).search(/\n\d+\. \*\*/);
+  const point1 = integration.slice(debutPoint1, finPoint1 < 0 ? undefined : debutPoint1 + 1 + finPoint1).replace(/\s+/g, ' ');
+  assert.ok(point1.includes(VALIDATION), 'point 1 : validation datée de la fondatrice absente');
+  assert.ok(point1.includes(CITATION), 'point 1 : citation de la validation absente');
+  assert.ok(point1.includes(REFERENCE), 'point 1 : référence de la validation (commentaire de la PR) absente');
+  assert.ok(point1.includes('Ce que la validation ne couvre pas'), 'point 1 : limites de la validation absentes');
+  const aplati = decisions.replace(/\s+/g, ' ');
+  for (const perime of [/confirmation explicite (de la liste des textes )?(est )?demandée/, /reste attendue avant merge/]) {
+    assert.ok(!perime.test(aplati), `DECISIONS_LOT5.md : état périmé encore écrit (${perime})`);
+  }
+  // Un paragraphe (point numéroté, puce ou bloc) qui affiche « sur délégation » doit porter la validation datée.
+  const paragraphes = decisions.split(/\n(?=\s*(?:\d+\.|-) |\n)/).map(p => p.replace(/\s+/g, ' '));
+  const delegationsSeules = paragraphes.filter(p => /(affichée?s? sur délégation|sur délégation de la fondatrice)/i.test(p)
+    && !/validée?s? explicitement par la fondatrice le 24\/11\/2026/.test(p));
+  assert.deepEqual(delegationsSeules, [], 'affichage « sur délégation » consigné sans la validation explicite datée');
+  const attente = section(decisions, 'En attente de Gabrielle').replace(/\s+/g, ' ');
+  assert.ok(attente.includes('Textes validés le 24/11/2026'), '« En attente » : textes validés non signalés comme tels');
+  assert.ok(!/confirmation explicite|sur délégation/.test(attente), '« En attente » : un texte validé reste listé en attente de confirmation');
+  for (const e of VALIDES) {
+    assert.ok(point1.includes(`\`TextesWeb.${e}\``), `${e} affiché sans référence au point 1 de la section de décision`);
+    assert.ok(!attente.includes(`TextesWeb.${e}`), `${e} encore listé comme en attente`);
+  }
   const referents = [];
   for (const chemin of swiftSous('ios-native')) {
     if (chemin === TEXTES_SWIFT || chemin.split('/').some(d => d.endsWith('Tests'))) continue;

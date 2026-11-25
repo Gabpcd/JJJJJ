@@ -104,14 +104,38 @@ const listeLot1 = etapes(jobLot1);
 const parEtapeLot1 = eclatsDesEtapes(listeLot1);
 const parResumeLot1 = eclatsDuResume(jobLot1);
 const ECLATS_LOT1 = new Map([
-  ['lot1-missions', ['DemoMesMissionsTests', 'DemoCandidatureTests', 'DemoConfirmationPresenceTests', 'DemoAnnulationTests']],
-  ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests']],
+  // Run 45446351274 : « lot1-missions » à 18,4 min de tests en iPad paysage ; DemoConfirmationPresenceTests rejoint
+  // « lot1-accueil-explorer » (garde des durées mesurées ci-dessous).
+  ['lot1-missions', ['DemoMesMissionsTests', 'DemoCandidatureTests', 'DemoAnnulationTests']],
+  ['lot1-accueil-explorer', ['DemoAccueilTests', 'DemoExplorerTests', 'DemoFavorisTests', 'DemoConfirmationPresenceTests']],
   // Lot 4 (L4-T4) : première tranche du lot 4 à livrer un XCUITest ; ses classes démo rejoignent cet éclat du job (D19).
-  ['lot4', ['DemoFiltresTests']],
+  // L4-T5 : DemoDisponibilitesTests (une méthode) rejoint l'éclat.
+  // L4-T12 : DemoSerieTests (détail de série) rejoint l'éclat.
+  // L4-T9 : DemoEvaluationsScoreTests (évaluations reçues et score) rejoint l'éclat.
+  // L4-T8 : litiges et réclamations générales rejoignent l'éclat.
+  // L4-T3b : vue Swipe d'Explorer
+  // L4-T6 : parrainage et capture par lien
+  // L4-T7b : la messagerie (DemoMessagerieTests, trois méthodes) rejoint « lot4 », estimé sous 20 min (décision 22).
+  // L5-T11 : la messagerie en contexte établissement (DemoEtabMessagerieTests, deux méthodes) rejoint « lot4 », l'éclat de
+  // l'écran qu'elle réemploie.
+  // Intégration de la vague D (24/11/2026) : « lot4 » scindé (34 méthodes, environ 34 min estimées) en deux éclats.
+  // Run 45446351274 (premier passage sous Xcode 26.4.1) : les deux éclats de 17 méthodes coupés à 30 min (29,4 et
+  // 26,5 min de tests mesurées) ; chacun scindé de nouveau, sous 18 min au rythme mesuré.
+  ['lot4', ['DemoFiltresTests', 'DemoDisponibilitesTests', 'DemoSerieTests', 'DemoBulletinsTests']],
+  ['lot4-score-litiges', ['DemoEvaluationsScoreTests', 'DemoLitigesTests', 'DemoReclamationsTests']],
+  ['lot4-swipe', ['DemoSwipeTests']],
+  ['lot4-messagerie', ['DemoPoolUrgenceTests', 'DemoParrainageTests', 'DemoMessagerieTests', 'DemoEtabMessagerieTests']],
   // Stabilité de la CI (23/11/2026) : deux éclats du job `ui` atteignaient leurs 30 min (« presences » : 27 à 30 min sur
   // iPad ; « lot3-notifications » : 23 à 30 min, runs 44475153698, 44555091967 et 44797977486). Les classes qui les
   // faisaient déborder tournent ici, le job `ui` étant à son plafond de onze éclats.
-  ['lot5-etablissement', ['DemoEtabLiensTests', 'DemoEtabMissionsTests', 'DemoEtabCandidaturesTests']],
+  // L5-T12 : DemoEtabCompteTests (deux tests, compte et renvois web) rejoint les classes établissement de cet éclat.
+  // L5-T8 : DemoEtabPresencesTests (quatre tests) rejoint l'éclat de l'espace établissement.
+  // L5-T9 : DemoEtabPublicationTests (quatre tests) rejoint les écrans de l'onglet Missions.
+  // L5-T10 : DemoEtabContratsTests (contrats et signature OTP établissement) rejoint l'éclat.
+  // Revue B8 de l'intégration de la vague D (assemblage, M1) : 22 méthodes, environ 22 à 32 min estimées ; scindé en
+  // deux éclats de onze méthodes (liens, missions, candidatures, compte ; présences, publication, contrats).
+  ['lot5-etablissement', ['DemoEtabLiensTests', 'DemoEtabMissionsTests', 'DemoEtabCandidaturesTests', 'DemoEtabCompteTests']],
+  ['lot5-etablissement-ecrans', ['DemoEtabPresencesTests', 'DemoEtabPublicationTests', 'DemoEtabContratsTests']],
   ['lot3-profil', ['DemoProfilTests']],
 ]);
 
@@ -140,9 +164,18 @@ test('lot 5 : session et liens établissement hors du socle, chacun dans son éc
   // L5-T7 : DemoEtabPointageTests (deux tests) rejoint « lot3-profil-photo », avec la session établissement.
   // Stabilité de la CI (23/11/2026) : liens, missions et candidatures établissement sortent de « presences » (27 à
   // 30 min sur iPad) vers l'éclat « lot5-etablissement » du job `ui-lot1`.
+  // L5-T12 : DemoEtabCompteTests (deux tests) rejoint « lot5-etablissement ».
   const attendus = new Map([['DemoEtabSessionTests', 'lot3-profil-photo'], ['DemoEtabLiensTests', 'lot5-etablissement'],
     ['DemoEtabAccueilTests', 'lot3-profil-photo'], ['DemoEtabMissionsTests', 'lot5-etablissement'],
-    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo']]);
+    ['DemoEtabCandidaturesTests', 'lot5-etablissement'], ['DemoEtabPointageTests', 'lot3-profil-photo'],
+    ['DemoEtabCompteTests', 'lot5-etablissement'],
+    // L5-T8 : présences établissement (quatre tests), avec les liens, missions et candidatures de l'espace.
+    // Revue B8 de l'intégration de la vague D (M1) : présences, publication et contrats dans « lot5-etablissement-ecrans ».
+    ['DemoEtabPresencesTests', 'lot5-etablissement-ecrans'],
+    ['DemoEtabPublicationTests', 'lot5-etablissement-ecrans'], // L5-T9
+    ['DemoEtabContratsTests', 'lot5-etablissement-ecrans'], // L5-T10
+    // L5-T11 : messagerie établissement dans « lot4 », avec la messagerie du lot 4 (job `ui-lot1`).
+    ['DemoEtabMessagerieTests', 'lot4-messagerie']]);
   for (const [classe, eclat] of attendus) {
     assert.ok(classes.includes(classe), `${classe} n est pas reconnue comme classe XCUITest`);
     const ou = [...domaines, ...parEtapeLot1].filter(e => classesDe(e).includes(classe)).map(e => e.nom);
@@ -163,7 +196,8 @@ test('stabilité : « presences » et « lot3-notifications » ne portent plus q
   assert.deepEqual(de('presences'), ['DemoPresencesTests', 'DemoPointageEtatsTests']);
   assert.deepEqual(de('lot3-notifications'), ['DemoNotificationsTests', 'DemoPreferencesTests']);
   // Les classes sorties tournent toujours, une fois, dans le job `ui-lot1`, et le socle les saute toujours.
-  for (const [eclat, attendues] of [['lot5-etablissement', ECLATS_LOT1.get('lot5-etablissement')], ['lot3-profil', ECLATS_LOT1.get('lot3-profil')]]) {
+  for (const eclat of ['lot5-etablissement', 'lot5-etablissement-ecrans', 'lot3-profil']) {
+    const attendues = ECLATS_LOT1.get(eclat);
     assert.deepEqual(classesDe(parEtapeLot1.find(e => e.nom === eclat)), attendues, `éclat ${eclat} du job ui-lot1`);
     for (const classe of attendues) {
       assert.ok(socle.sauf.includes(`JoleneUITests/${classe}`), `${classe} : non sautée par le socle`);
@@ -434,6 +468,77 @@ test('job ui-lot1 : même préparation que ui (simulateur, build-for-testing une
   }
 });
 
+// Revue B8 de l'intégration de la vague D (assemblage, M1 et m1). La garde comptait les classes, pas les méthodes :
+// « lot5-etablissement » avait atteint 22 méthodes (environ 22 min à une minute par méthode, la règle appliquée à la
+// scission de « lot4 », et jusqu'à 32 min au rythme mesuré en iPad paysage), au-delà des 20 min de la décision 22. Chaque
+// éclat du job `ui-lot1` compte au plus 17 méthodes `test…`, et l'en-tête du job énonce le plafond réellement posé.
+const methodesDe = classe => (read(`${DOSSIER_UI}/${classe}.swift`).match(/^ {4}func test\w*\(/gm) ?? []).length;
+// Run 45446351274 (premier passage des XCUITest sous Xcode 26.4.1) : la règle « une minute par méthode » sous-estimait
+// le rythme réel (1,5 à 1,7 min par méthode) ; « lot4 » (17 méthodes, 29,4 min) et « lot4-swipe-messagerie » (17,
+// 26,5 min) ont été coupés à leurs 30 min. Le plafond passe à 14 méthodes (le plus gros éclat après redécoupage), et
+// chaque éclat doit tenir sous 18 min de tests d'après les durées par classe ci-dessous.
+test('décision 22 (job ui-lot1) : chaque éclat compte au plus 14 méthodes de test', () => {
+  for (const e of parEtapeLot1) {
+    const total = classesDe(e).reduce((n, c) => n + methodesDe(c), 0);
+    assert.ok(total >= 1 && total <= 14, `éclat ${e.nom} : ${total} méthodes de test (au plus 14)`);
+  }
+});
+
+// Durées des tests par classe, en secondes, [ipad-landscape, ipad-portrait], relevées au run 45446351274 (premier
+// passage sous Xcode 26.4.1) dans `xctest-tests-<éclat>.json` des artefacts `ios-swift-journaux-ui-lot1-<format>` :
+// somme des durées des tests de la classe. Une classe dont des tests ont échoué vite (ou ont été coupés) garde une
+// valeur corrigée, signalée : la valeur de l'autre format, ou la mesure majorée du test manquant. Une classe absente de
+// la table fait échouer la garde : toute nouvelle classe y entre avec sa mesure ou son estimation.
+const DUREES_UI_LOT1 = {
+  DemoMesMissionsTests: [360, 306],
+  DemoCandidatureTests: [349, 224],
+  DemoAnnulationTests: [308, 382],
+  DemoConfirmationPresenceTests: [84, 60],
+  DemoAccueilTests: [228, 236],
+  DemoExplorerTests: [466, 466], // portrait : cinq tests en échec rapide, valeur du paysage
+  DemoFavorisTests: [159, 165],
+  DemoFiltresTests: [205, 240],
+  DemoDisponibilitesTests: [166, 145],
+  DemoSerieTests: [376, 310],
+  DemoBulletinsTests: [198, 180],
+  DemoEvaluationsScoreTests: [255, 294],
+  DemoLitigesTests: [291, 342],
+  DemoReclamationsTests: [259, 250],
+  DemoSwipeTests: [820, 830], // mesuré 639 / 752 avec deux ou trois tests en échec ou coupés, majoré
+  DemoPoolUrgenceTests: [184, 153],
+  DemoParrainageTests: [330, 206], // paysage : un test en échec (95 s), majoré
+  DemoMessagerieTests: [254, 240],
+  DemoEtabMessagerieTests: [199, 156],
+  DemoEtabLiensTests: [205, 149],
+  DemoEtabMissionsTests: [128, 110],
+  DemoEtabCandidaturesTests: [284, 215],
+  DemoEtabCompteTests: [227, 166],
+  DemoEtabPresencesTests: [230, 230], // un test en échec rapide dans les deux formats, majoré
+  DemoEtabPublicationTests: [564, 564], // paysage : trois tests en échec rapide, valeur du portrait
+  DemoEtabContratsTests: [187, 181],
+  DemoProfilTests: [672, 484],
+};
+test('décision 22 (job ui-lot1) : chaque éclat tient sous 18 min de tests aux durées mesurées (run 45446351274)', () => {
+  for (const e of parEtapeLot1) {
+    for (const [rang, format] of ['ipad-landscape', 'ipad-portrait'].entries()) {
+      const total = classesDe(e).reduce((n, c) => {
+        assert.ok(Object.hasOwn(DUREES_UI_LOT1, c), `classe ${c} (éclat ${e.nom}) sans durée mesurée ni estimée`);
+        return n + DUREES_UI_LOT1[c][rang];
+      }, 0);
+      assert.ok(total <= 18 * 60, `éclat ${e.nom} (${format}) : ${Math.round(total / 6) / 10} min de tests (au plus 18)`);
+    }
+  }
+});
+
+test('job ui-lot1 : l en-tête énonce le calcul du plafond réellement posé (aucun commentaire périmé)', () => {
+  const plafond = Number(/^ {4}timeout-minutes: (\d+)$/m.exec(jobLot1)?.[1]);
+  const n = parEtapeLot1.length;
+  const somme = 25 + 1 + 1 + 30 * n;
+  const entete = jobLot1.slice(0, jobLot1.indexOf('\n    timeout-minutes:'));
+  assert.ok(entete.includes(`${n} × 30 (éclats) = ${somme} min`), `en-tête : « ${n} × 30 (éclats) = ${somme} min » attendu`);
+  assert.ok(entete.includes(`porté à ${plafond} min`), `en-tête : « porté à ${plafond} min » attendu`);
+});
+
 // Gel iPhone CI — 16/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, section du même nom ; run 43889328109) : le fil
 // principal de l'app attend le serveur de rendu du simulateur (`CA::Render::Message::send_message`) après un glissement
 // qui ferme le pavé numérique ; le simulateur ne relance plus l'app et les éclats suivants meurent à 30 min sans preuve.
@@ -487,8 +592,9 @@ test('gel iPhone : le redémarrage est borné à 2 min dans l éclat suivant, le
   assert.equal(syntaxe.status, 0, `bash -n ${SCRIPT_GEL} : ${syntaxe.stderr}`);
 });
 
-test('gel iPhone : les éclats presences et pointage lancent le veilleur instrumenté, arrêté après xcodebuild', () => {
-  for (const nom of ['presences', 'pointage']) {
+test('gel iPhone : le socle et les éclats presences et pointage lancent le veilleur instrumenté, arrêté après xcodebuild', () => {
+  // Socle : depuis le 24/11/2026, il exécute DemoPointageQRTests, dont un test saisit au pavé numérique.
+  for (const nom of ['socle', 'presences', 'pointage']) {
     const e = parEtape.find(x => x.nom === nom);
     assert.ok(e, `éclat ${nom} absent`);
     const texte = liste.find(x => x.id === e.id).texte;
@@ -677,4 +783,213 @@ test('gel iPhone : un veilleur dont chaque outil échoue reste muet pour l étap
     assert.match(readFileSync(join(b.sortie, 'gel-presences-backboardd-sample-1.txt'), 'utf8'), /sample a échoué/);
     assert.ok(existsSync(join(b.sortie, 'gel-presences-ecran-1.txt')), 'capture en échec consignée');
   } finally { b.nettoyer(); }
+});
+
+// Éclat « pointage » — 24/11/2026 (docs/mobile-swift/DECISIONS_LOT2.md, décision 22). Run 45239724447 (`main` à
+// `f6e6be49`), UI — ipad-portrait : à la tentative 1, un toucher synthétisé perdu fait échouer un test ; à la tentative 2,
+// un test reste dix minutes sans réponse et l'éclat est coupé à 30 min, sans que le résumé du job nomme les tests
+// échoués. En ipad-landscape, l'étape mesurait 21,8 min (23,2 min au run 45238573082). Trois réponses, gardées ci-dessous :
+// rejeu borné du toucher, relevé des tests à la sortie de l'étape de résumé, découpage de la classe et veilleur déclenché
+// par la durée d'un test.
+
+// Rejeu borné du toucher de relecture des compteurs démo (run 45239724447, tentative 1, ipad-portrait : toucher
+// synthétisé perdu, `lectures` inchangé 15 s). Même forme que `basculer` : trois essais, 3 s par `attendreSansEchec`,
+// chaque rejeu consigné, `require` final. Les XCUITest ne sont pas compilés ici : la garde lit la source.
+test('pointage : le toucher de relecture des compteurs est rejoué trois fois au plus, consigné, puis exigé', () => {
+  const source = read(`${DOSSIER_UI}/DemoPointageUITestCase.swift`);
+  const corps = /\n {4}func compteursRelus\(dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line\) -> String \{\n([\s\S]*?)\n {4}\}\n/.exec(source)?.[1];
+  assert.ok(corps, 'compteursRelus(dans:file:line:) introuvable');
+  assert.match(corps, /for essai in 1\.\.\.3 \{/, 'trois essais au plus');
+  assert.equal(corps.split('tap("pointage-demo-relire")').length - 1, 1, 'un seul toucher par essai');
+  assert.match(corps, /let recu = attendreSansEchec\(attente, timeout: 3, file: file, line: line\) \{ self\.lecturesCompteurs\(\) > avant \}/);
+  assert.match(corps, /if recu \{ break \}\n\s+guard essai < 3 else \{ break \}\n\s+consignerRejeu\(attente, issue: /, 'un rejeu consigné, jamais après un toucher reçu');
+  const iBoucle = corps.indexOf('for essai in 1...3 {');
+  const iPreuve = corps.indexOf('require("Compteurs relus après l\'action", file: file, line: line) { self.lecturesCompteurs() > avant }');
+  assert.ok(iPreuve > iBoucle, 'le require final reste la preuve, après la boucle');
+  assert.ok(!/XCTSkip|continueAfterFailure/.test(corps), 'aucun test relancé ni échec toléré');
+});
+
+// Relevé des tests échoués et des durées (scripts/mobile/ios-ci-resume-tests.mjs). À la tentative 2, le résumé disait
+// seulement « 8 réussis, 2 échoués » : l'étape de l'éclat ayant été coupée, son `grep … | tail -n 60` n'a rien imprimé.
+const SCRIPT_RESUME = 'scripts/mobile/ios-ci-resume-tests.mjs';
+
+test('relevé des tests : script et tests dans les filtres de chemins, tests lancés par le job « Cœur »', () => {
+  for (const fichier of [SCRIPT_RESUME, 'scripts/mobile/ios-ci-resume-tests.test.mjs']) {
+    assert.ok(existsSync(join(root, fichier)), `${fichier} absent`);
+    assert.equal(yml.split(`\n      - '${fichier}'\n`).length - 1, 2, `${fichier} absent des filtres de chemins pull_request et push`);
+  }
+  assert.ok(jobNomme('coeur').includes('\n        run: node --test scripts/mobile/ios-ci-resume-tests.test.mjs\n'), 'tests du script non lancés par le job « Cœur »');
+});
+
+/** Commandes du bloc `run: |` d'une étape (sans indentation ni commentaire). */
+const commandes = etape => etape.texte.slice(etape.texte.indexOf('\n        run: |\n') + 16).split('\n')
+  .map(l => l.replace(/^ {10}/, '')).filter(l => l.trim() && !l.startsWith('#'));
+
+test('relevé des tests : lancé à la sortie de l étape « Résumé xcresult » de chaque job, pour chacun de ses éclats', () => {
+  for (const [nomJob, etapesDuJob, eclats] of [['ui', liste, parEtape], ['ui-lot1', listeLot1, parEtapeLot1]]) {
+    const resume = etapesDuJob.find(e => e.nom.startsWith('Résumé xcresult'));
+    assert.ok(resume, `job ${nomJob} : étape de résumé absente`);
+    const attendu = `trap 'node ${SCRIPT_RESUME} ${eclats.map(e => e.nom).join(' ')} || echo "::warning::Relevé des tests par éclat non lancé (${SCRIPT_RESUME})."' EXIT`;
+    // Première commande de l'étape : le relevé est armé avant la boucle qui sort sur un bundle absent.
+    assert.equal(commandes(resume)[0], attendu, `job ${nomJob} : relevé des tests absent, incomplet ou précédé d une autre commande`);
+    assert.equal(resume.texte.split(SCRIPT_RESUME).length - 1, 3, `job ${nomJob} : un seul lancement (deux mentions dans le trap, une en commentaire)`);
+    // Ce qui décide du statut est inchangé : mêmes conditions, même sortie en échec.
+    assert.ok(resume.texte.includes('e.code === "0" && s.result === "Passed" && t >= 1 && f === 0 && k === 0 && p === t && absentes.length === 0'));
+    assert.match(resume.texte, /\n {12}if \(!ok\) \{ console\.error\("::error::Tests simulateur [^"]*non concluants [^"]*"\); process\.exit\(1\); \}\n {10}'$/,
+      `job ${nomJob} : la sortie en échec reste la dernière commande de l étape`);
+    assert.doesNotMatch(resume.texte, /^ {8}continue-on-error:/m, `job ${nomJob} : l étape de résumé décide toujours du statut`);
+  }
+});
+
+test('relevé des tests : le trap ne change jamais le code de sortie de l étape, même si le relevé échoue', () => {
+  const resume = liste.find(e => e.nom.startsWith('Résumé xcresult'));
+  const piege = commandes(resume)[0];
+  const dir = mkdtempSync(join(tmpdir(), 'jolene-trap-'));
+  try {
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    const appels = join(dir, 'appels.log');
+    // `node` simulé : journalise ses arguments, sort avec le code demandé.
+    writeFileSync(join(bin, 'node'), `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> '${appels}'\nexit "\${FAUX_NODE_CODE:-0}"\n`);
+    chmodSync(join(bin, 'node'), 0o755);
+    // Même interpréteur et mêmes options que GitHub Actions (« shell: /bin/bash --noprofile --norc -e -o pipefail {0} »).
+    const bash = existsSync('/bin/bash') ? '/bin/bash' : 'bash';
+    const lancer = (corps, codeNode) => {
+      const fichier = join(dir, 'etape.sh');
+      writeFileSync(fichier, `${piege}\n${corps}\necho "fin de l étape"\n`);
+      rmSync(appels, { force: true });
+      const r = spawnSync(bash, ['--noprofile', '--norc', '-e', '-o', 'pipefail', fichier],
+        { encoding: 'utf8', timeout: 30_000, env: { PATH: `${bin}:${process.env.PATH}`, FAUX_NODE_CODE: String(codeNode) } });
+      return { ...r, appels: existsSync(appels) ? readFileSync(appels, 'utf8').trim().split('\n') : [] };
+    };
+    const lancement = `${SCRIPT_RESUME} ${parEtape.map(e => e.nom).join(' ')}`;
+    // Issues de l'étape : succès, `exit 1` du bloc Node (tests en échec), sortie de la boucle (bundle absent), commande
+    // en échec sous `-e`, commande introuvable. Le relevé tourne une fois dans chaque cas, le code est celui de l'étape.
+    for (const [corps, code] of [['true', 0], ['exit 1', 1], ['for e in a b; do [ -d /absent ] || { echo absent; exit 1; }; done', 1],
+      ['false', 1], ['exit 7', 7], ['commande_absente_du_runner', 127]]) {
+      for (const codeNode of [0, 3]) {
+        const r = lancer(corps, codeNode);
+        assert.equal(r.status, code, `« ${corps} », relevé en code ${codeNode} : code de l étape ${r.status} (${r.stderr})`);
+        assert.deepEqual(r.appels, [lancement], `« ${corps} » : le relevé tourne une fois, à la sortie`);
+        assert.equal(r.stdout.includes('::warning::Relevé des tests par éclat non lancé'), codeNode !== 0, 'avertissement si et seulement si le relevé échoue');
+        assert.equal(r.stdout.includes('fin de l étape'), corps === 'true', 'le relevé ne fait pas continuer une étape en échec');
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('journaux légers : chaque job publie journaux et relevés sans les xcresult, sans jamais décider du statut', () => {
+  for (const [nomJob, etapesDuJob, prefixe, dossier] of [['ui', liste, 'ios-swift-journaux-ui', '${{ matrix.format }}'],
+    ['ui-lot1', listeLot1, 'ios-swift-journaux-ui-lot1', 'lot1-${{ matrix.format }}']]) {
+    const iComplet = etapesDuJob.findIndex(e => e.nom.startsWith('Conserver xcresult'));
+    const leger = etapesDuJob[iComplet + 1];
+    assert.equal(leger?.nom, 'Conserver les journaux et relevés légers (lisibles sans les xcresult)', `job ${nomJob} : artefact léger après l artefact complet`);
+    assert.equal(leger.si, 'always()', `job ${nomJob} : publié quelle que soit l issue`);
+    assert.match(leger.texte, /\n {8}continue-on-error: true\n/, `job ${nomJob} : une publication en échec ne décide pas du statut`);
+    assert.match(leger.texte, /\n {8}uses: actions\/upload-artifact@[0-9a-f]{40} # v4\n/);
+    assert.ok(leger.texte.includes(`\n          name: ${prefixe}-\${{ matrix.format }}-\${{ github.event.pull_request.head.sha || github.sha }}\n`), `job ${nomJob} : nom de l artefact léger`);
+    const chemins = /\n {10}path: \|\n((?: {12}.+\n)+)/.exec(leger.texte)?.[1].trim().split('\n').map(l => l.trim());
+    assert.deepEqual(chemins, ['test-without-building-*.log', 'gel-*', 'relance-simulateur-*.txt', 'xctest-*.json', 'attachments/*/manifest.json', 'diagnostic/']
+      .map(c => `ios-native/test-results/${dossier}/${c}`), `job ${nomJob} : contenu de l artefact léger`);
+    assert.ok(!leger.texte.includes('.xcresult\n'), `job ${nomJob} : aucun bundle xcresult dans l artefact léger`);
+    assert.ok(!Number.isFinite(leger.delai), 'aucun délai ajouté au plafond du job');
+    // Les résumés xcresult que l'artefact publie sont ceux qu'écrit l'étape de résumé du même job.
+    assert.ok(etapesDuJob.find(e => e.nom.startsWith('Résumé xcresult')).texte.includes('> "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"'));
+  }
+  // Les autres fichiers publiés sont ceux qu'écrivent le veilleur, le redémarrage du simulateur et le relevé.
+  const script = read(SCRIPT_GEL);
+  assert.ok(script.includes('local prefixe="${JOLENE_UI_OUTPUT:-.}/gel-$eclat"') && script.includes('local trace="$sortie/relance-simulateur-avant-$eclat.txt"'));
+  const releve = read(SCRIPT_RESUME);
+  assert.ok(releve.includes('`diagnostic/spindump-${eclat}-${spindumps.length + 1}.txt`'), 'Spindump copiés dans diagnostic/');
+  assert.ok(releve.includes('join(sortie, `xctest-tests-${nom}.json`)'), 'durée de chaque test gardée dans xctest-tests-<éclat>.json');
+});
+
+// Découpage de DemoPointageTests : ses trois tests de QR forment DemoPointageQRTests, exécutée par le socle (éclat le
+// plus léger du job `ui` : 5,9 à 10,5 min aux deux runs), qui reçoit le veilleur des éclats presences et pointage.
+const TESTS_QR = ['testQRDetecteDeuxFoisNEnvoieQuUnScan', 'testQRIllisibleGardeLaCameraPuisSaisieManuelle', 'testRefusDeLaCameraRendLaSaisieManuelle'];
+
+/** Méthodes de test de chaque classe d'un fichier de JoleneUITests, dans l'ordre du fichier. */
+function testsParClasse(fichier) {
+  const parClasse = new Map();
+  let classe = null;
+  for (const ligne of read(`${DOSSIER_UI}/${fichier}`).split('\n')) {
+    const declaration = /^(?:final )?class (\w+): \w+/.exec(ligne);
+    if (declaration) { classe = declaration[1]; parClasse.set(classe, []); continue; }
+    const methode = /^ {4}func (test\w+)\(\)/.exec(ligne);
+    if (methode && classe) parClasse.get(classe).push(methode[1]);
+  }
+  return parClasse;
+}
+
+test('pointage : les trois tests de QR tournent dans le socle (DemoPointageQRTests), « pointage » garde sept tests', () => {
+  const parClasse = testsParClasse('DemoPointageTests.swift');
+  assert.deepEqual([...parClasse.keys()], ['DemoPointageTests', 'DemoPointageQRTests']);
+  assert.deepEqual(parClasse.get('DemoPointageQRTests'), TESTS_QR, 'aucun test retiré : les trois tests de QR, tels quels');
+  const restants = parClasse.get('DemoPointageTests');
+  // Sept tests : 16 min de tests en iPad paysage aux runs 45239724447 et 45238573082. Un huitième ramènerait l'étape
+  // au-dessus des 20 min de la décision 22 : le ranger dans DemoPointageQRTests (socle), ou re-mesurer d'abord.
+  assert.equal(restants.length, 7, `DemoPointageTests : ${restants.length} tests (${restants.join(', ')})`);
+  assert.ok(!restants.some(t => TESTS_QR.includes(t)), 'un test de QR est resté dans DemoPointageTests');
+  for (const c of ['DemoPointageTests', 'DemoPointageQRTests']) assert.ok(classes.includes(c), `${c} n est pas reconnue comme classe XCUITest`);
+  // « pointage » ne nomme que DemoPointageTests ; DemoPointageQRTests n'est nommée nulle part, donc exécutée par le socle.
+  assert.deepEqual(classesDe(parEtape.find(e => e.nom === 'pointage')), ['DemoPointageTests']);
+  assert.ok(!yml.includes('JoleneUITests/DemoPointageQRTests'), 'DemoPointageQRTests : ni -only-testing ni -skip-testing (elle tourne dans le socle)');
+  assert.ok(!socle.sauf.includes('JoleneUITests/DemoPointageQRTests') && socle.seulement.includes('JoleneUITests'), 'le socle exécute DemoPointageQRTests');
+  assert.equal(parResume.find(r => r.nom === 'pointage').classes.join(), 'DemoPointageTests', 'classe exigée par le résumé');
+});
+
+// Veilleur déclenché par la durée d'un test. À la tentative 2 du run 45239724447, un test a duré dix minutes (délai
+// d'exécution) avec un événement synthétisé toutes les 2 min 8 s ; rien ne garantit qu'une marque de gel figurait au
+// journal. Un test en cours depuis plus de `JOLENE_VEILLEUR_SEUIL_TEST_S` (420 s : 1,6 fois le plus long test des éclats
+// veillés, 264 s, et 3 min avant le délai d'exécution de 600 s) déclenche les mêmes relevés.
+const JOURNAL_TEST_EN_COURS = [
+  "Test Suite 'DemoPointageTests' started at 2026-11-24 09:57:29.100.",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' started.",
+  '    t =     0.00s Start Test at 2026-11-24 09:57:29.101',
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' passed (62.760 seconds).",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture]' started.",
+  '    t =    90.90s     Synthesize event',
+  '',
+].join('\n');
+
+test('veilleur : un test en cours au-delà du seuil déclenche les relevés, sans aucune marque de gel au journal', () => {
+  const script = read(SCRIPT_GEL);
+  assert.ok(script.includes('local seuil="${JOLENE_VEILLEUR_SEUIL_TEST_S:-420}"'), 'seuil par défaut du veilleur ≠ 420 s');
+  for (const marque of MARQUES_GEL) assert.ok(!JOURNAL_TEST_EN_COURS.toLowerCase().includes(marque.toLowerCase()));
+  const b = bac(OUTILS_VEILLEUR);
+  try {
+    const journal = join(b.sortie, 'test-without-building-pointage.log');
+    writeFileSync(journal, JOURNAL_TEST_EN_COURS);
+    const r = b.lancer(['veiller', 'pointage', journal],
+      { JOLENE_VEILLEUR_PAS_S: '1', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_VEILLEUR_SEUIL_TEST_S: '1', JOLENE_IPS_HOTE: join(b.dir, 'absent') });
+    assert.equal(r.status, 0, r.stderr);
+    for (const n of [1, 2, 3]) {
+      assert.match(r.stdout, new RegExp(`Passe ${n} du veilleur \\(pointage\\) : \\S+ — test -\\[JoleneUITests\\.DemoPointageTests testConsentementAccepteRefusVerbatimPuisOuvertureEtFermeture\\] en cours depuis plus de 1 s`));
+      assert.ok(existsSync(join(b.sortie, `gel-pointage-sample-${n}.txt`)), `sample de l app, passe ${n}`);
+    }
+    assert.ok(b.appels().includes(`sample 4242 5 -file ${join(b.sortie, 'gel-pointage-sample-1.txt')}`), 'sample de l app Jolene');
+    // Une marque de gel reste annoncée comme telle (déclenchement d'origine).
+    writeFileSync(journal, `${JOURNAL_TEST_EN_COURS}    t = 151.00s App event loop idle notification not received, will attempt to continue.\n`);
+    const marque = b.lancer(['veiller', 'pointage', journal], { JOLENE_VEILLEUR_PAS_S: '0', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_IPS_HOTE: join(b.dir, 'absent') });
+    assert.match(marque.stdout, /Passe 1 du veilleur \(pointage\) : \S+ — marque de gel au journal/);
+  } finally { b.nettoyer(); }
+});
+
+test('veilleur : sous le seuil, tests conclus ou journal absent — aucun relevé, quelle que soit l attente', () => {
+  const conclu = JOURNAL_TEST_EN_COURS.split('\n').slice(0, 4).join('\n');
+  for (const [cas, texte, seuil] of [['test en cours sous le seuil', JOURNAL_TEST_EN_COURS, '3600'], ['tous les tests conclus', `${conclu}\n`, '1'],
+    ['journal absent', null, '1'], ['seuil illisible, remplacé par 420 s', JOURNAL_TEST_EN_COURS, 'bientôt']]) {
+    const b = bac(OUTILS_VEILLEUR);
+    try {
+      const journal = join(b.sortie, 'test-without-building-pointage.log');
+      if (texte !== null) writeFileSync(journal, texte);
+      // Le veilleur attend sans fin (l'étape le tue après xcodebuild) : coupé ici après 2,5 s.
+      const r = spawnSync('bash', [join(root, SCRIPT_GEL), 'veiller', 'pointage', journal], { encoding: 'utf8', timeout: 2_500,
+        env: { PATH: `${join(b.dir, 'bin')}:${process.env.PATH}`, HOME: b.dir, UDID: 'UDID-TEST', JOLENE_UI_OUTPUT: b.sortie,
+          JOLENE_VEILLEUR_PAS_S: '1', JOLENE_VEILLEUR_PAUSE_S: '0', JOLENE_VEILLEUR_SEUIL_TEST_S: seuil } });
+      assert.equal(r.status, null, `${cas} : le veilleur attendait encore (${r.stdout})`);
+      assert.deepEqual(b.appels(), [], `${cas} : aucun outil de relevé appelé`);
+      assert.deepEqual(readdirSync(b.sortie).filter(f => f.startsWith('gel-')), [], `${cas} : aucun fichier gel-*`);
+    } finally { b.nettoyer(); }
+  }
 });

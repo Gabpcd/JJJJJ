@@ -69,9 +69,11 @@ final class PushTapIntentTests: XCTestCase {
             (["type_evenement": "MISSION_A_POURVOIR"], .explorer, .explorer),
             (["type_evenement": "MISSION_ANNULEE_ETAB"], .missions, .missions),
             (["type_evenement": "SYSTEM", "lien": "/soignant/notifications"], .notifications, .centre),
-            // L4-T1 : la page litiges a sa route (litige ciblé par le fragment), servie par le web jusqu'à T8.
+            // L4-T1 : la page litiges a sa route (litige ciblé par le fragment) ; L4-T8 : écran natif, litige visé déplié.
             (["type_evenement": "LITIGE_OUVERT", "litige_id": "l1"],
-             .secondaire(.litiges(onglet: nil, litigeId: "l1")), .web(.safari(url("https://jolene.app/soignant/litiges#l1")))),
+             .secondaire(.litiges(onglet: nil, litigeId: "l1")), .secondaire(.litiges(onglet: nil, litigeId: "l1"))),
+            (["type_evenement": "RECLAMATION_SCORE_DECISION"],
+             .secondaire(.litiges(onglet: .reclamations, litigeId: nil)), .secondaire(.litiges(onglet: .reclamations, litigeId: nil))),
             // L2-T10 : le contrat est natif (« Mon espace », onglet Profil), plus un renvoi web.
             (["type_evenement": "CONTRAT_A_SIGNER", "contrat_id": "c1"], .contrat(id: "c1"), .contrat(id: "c1")),
             (["type_evenement": "DPAE_RAPPEL"], .documents(onglet: "dpae"), .documents(onglet: .dpae)),

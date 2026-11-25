@@ -9,9 +9,9 @@ import XCTest
 /// Migré par T4b : la zone de pointage (`pointage-code-<mission>`, `pointage-submit-<mission>`, parcours complet dans
 /// `DemoPointageTests`) remplace l'encart provisoire `pointage-zone-provisoire-<mission>` ; « Voir le contrat » ouvre le
 /// contrat natif (`demo-contrat-pointage-c`, ajouté aux fixtures démo par T4b). « Détail » ouvre le détail natif (T5a).
-/// « Voir ou signaler un litige » (lot 4) n'est rendu qu'avec le présentateur de renvois web (jamais un bouton sans
-/// effet) : depuis la fusion du lot 3, le présentateur `.safari` du coordinateur des liens (L3-T3b, qui remplace L1-T10)
-/// est injecté ; sa présence et la page web présentée (`/soignant/litiges`) sont affirmées ici.
+/// « Voir ou signaler un litige » n'est rendu que si sa cible est présentable (jamais un bouton sans effet). Migré par
+/// L4-T8 : les litiges sont natifs, le bouton ouvre `LitigesScreen` (cible `PresencesRenvois.litiges`, présentée par
+/// l'espace) ; avant T8, il présentait la page web `/soignant/litiges`.
 final class DemoPresencesTests: JoleneUITestCase {
     /// Libellés exacts des onglets (`PresencesSoignant.tsx` l.520-523).
     private static let onglets: [(identifiant: String, libelle: String)] = [
@@ -110,24 +110,26 @@ final class DemoPresencesTests: JoleneUITestCase {
         XCTAssertTrue(element("presence-historique-detail-demo-presence-h1-presence").exists,
                       "« Détail » ouvre le détail natif des présences (T5a, `DemoPresenceDetailTests`)")
         record("\(proofPrefix)-presences-historique")
-        // « Voir ou signaler un litige » (l.752, lot 4 natif) : migré à la fusion des lots 2 et 3 (règle 8). Le
-        // présentateur `.safari` du coordinateur des liens (L3-T3b) est injecté : le bouton est rendu et présente
-        // `/soignant/litiges` (double démo, aucune requête réseau), puis « Fermer » rend l'historique. Avant la fusion,
-        // ce test exigeait son absence (jamais un bouton sans effet).
+        // « Voir ou signaler un litige » (l.752) : migré par L4-T8 (règle 8). Les litiges sont natifs : le bouton ouvre
+        // `LitigesScreen`, empilé sur le Profil remis à sa racine (aucune requête réseau), jamais la page web. Avant
+        // T8, ce test exigeait le renvoi web `/soignant/litiges`.
         let litige = element("presence-historique-litige-effectifs-mission-demo-presence-h3")
         require("« Voir ou signaler un litige » est proposé sur la ligne reconstruite") { litige.exists }
         scrollTo(litige, in: ecran)
         XCTAssertEqual(litige.label, "Voir ou signaler un litige", "libellé du web")
         tap("presence-historique-litige-effectifs-mission-demo-presence-h3")
-        liensRenvoiWebAffiche("https://jolene.app/soignant/litiges")
-        record("\(proofPrefix)-presences-litige-web")
-        liensFermerRenvoiWeb()
-        require("L'historique est de retour") {
-            self.containerVisible(ecran) && self.element("presences-tab-historique").isSelected
+        let litiges = element("litiges-screen")
+        require("Les litiges natifs sont ouverts (lot 4, T8)", timeout: 30) {
+            self.containerVisible(litiges) && self.element("litige-ouvrir").exists
         }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "litiges natifs : jamais la page web")
+        record("\(proofPrefix)-presences-litiges-natifs")
 
-        // Retour au Profil : aucune requête réseau en démonstration.
+        // Retour au Profil (la cible a remis sa pile à la racine) : aucune requête réseau en démonstration.
         revenir()
+        require("Retour au hub, à la racine de l'onglet Profil") {
+            self.containerVisible(self.element("profile-list")) && !litiges.exists
+        }
         let sentinelle = element("network-sentinel")
         let liste = element("profile-list")
         // La sentinelle est au-dessus de « Mon espace », d'où la liste a été ouverte : défilement vers le haut.

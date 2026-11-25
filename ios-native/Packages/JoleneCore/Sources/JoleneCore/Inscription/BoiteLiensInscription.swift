@@ -25,6 +25,9 @@ public final class BoiteLiensInscription: ObservableObject {
 
     @Published public private(set) var confirmation: Confirmation?
     @Published public private(set) var inscription: EtapeInscription?
+    /// Reste de L1-T10 : lien `/reset-password` (hors `?code=`, refusé en amont) à présenter au-dessus de tout état
+    /// (`ResetPasswordScreen`), une demande par lien reçu ; identifiants nil → refus sans appel.
+    @Published public private(set) var reinitialisation: Confirmation?
     private var compteur = 0
 
     public init() {}
@@ -41,10 +44,25 @@ public final class BoiteLiensInscription: ObservableObject {
         case .inscription(let etape):
             inscription = etape
             return true
+        case .resetPassword(credentials: .some(.pkce)):
+            return false // option B : refusé par `DeepLinkIntent`, jamais présenté ici
+        case .resetPassword(credentials: let credentials):
+            // Revue B8 tour 2 (mineur 5) : un même lien livré deux fois (`onOpenURL` puis `onContinueUserActivity`,
+            // double toucher) pendant que sa demande est présentée (vérification en cours, ou formulaire ouvert après
+            // une vérification réussie) est ignoré : une seconde demande relancerait `openRecoverySession`, qui
+            // révoquerait la première tentative (m4) et, pour un `token_hash` déjà consommé, afficherait « lien
+            // invalide » sur un lien légitime. Seul un lien strictement identique est ignoré ; tout autre lien, ou le
+            // même après la fermeture de l'écran, ouvre une nouvelle tentative.
+            if let credentials, reinitialisation?.credentials == credentials { return true }
+            compteur += 1
+            reinitialisation = Confirmation(id: compteur, credentials: credentials)
+            return true
         default:
             return false
         }
     }
+
+    public func retirerReinitialisation() { reinitialisation = nil }
 
     public func retirerConfirmation() { confirmation = nil }
     public func retirerInscription() { inscription = nil }

@@ -204,7 +204,7 @@ final class DemoWorldTests: XCTestCase {
     /// mondes (`unwiredPorts.filter(Lot1PortsTests.portsLot1.contains).isEmpty`) — jamais
     /// `unwiredPorts.isEmpty`, qui nomme aussi les ports des lots 2 et 3 tant que ces lots sont ouverts.
     /// Câblés depuis : T4b `favoris`, T5 `mesMissions`, T6a `candidature`, T6c `presence`, T7 `justificatifs`.
-    static let portsEnAttenteLot1 = ["recovery"]
+    static let portsEnAttenteLot1: [String] = [] // T10 (reste) : recovery câblé
 
     /// Lot 2 (T1) — ports du lot 2 que leur tranche n'a pas encore câblés : SOURCE UNIQUE de la liste
     /// (blueprint lot 2 §2.2). Chaque tranche (T3 pointage, T5a notation, T5b contestation, T6 documents,
@@ -229,19 +229,7 @@ final class DemoWorldTests: XCTestCase {
     /// lot 4 §2.2, décision D1). Chaque tranche remplace le corps de SA fabrique dans les deux mondes
     /// (`Demo/Lot4/Demo<Domaine>Gateway.swift`, `Lot4/Supabase<Domaine>Factory.swift`) et retire SA ligne d'ici dans
     /// la même PR ; `SupabaseGatewaysTests.testAucunPortNonCable` compare les deux mondes. Vide en T15.
-    static let portsEnAttenteLot4 = [
-        "disponibilites",    // T5
-        "parrainage",        // T6
-        "litiges",           // T8
-        "reclamations",      // T8
-        "messagerie",        // T7a
-        "realtime",          // T7a
-        "bulletins",         // T10
-        "evaluationsRecues", // T9
-        "poolUrgence",       // T11
-        "score",             // T9
-        "exclusions",        // T11
-    ]
+    static let portsEnAttenteLot4: [String] = []
 
     func testAucunPortNonCable() {
         let gateways = DemoWorld.gateways()
@@ -312,7 +300,7 @@ final class DemoWorldTests: XCTestCase {
     /// liste (`docs/mobile-swift/LOT5_PLAN.md` §2.3), comme `portsEnAttenteLot1`. Chaque PR qui câble un
     /// port le câble dans les deux mondes et le retire d'ici ; `SupabaseGatewaysTests` compare
     /// `SupabaseGateways.make(client:).etablissement` au monde démo. Vide à T14.
-    static let portsEnAttenteLot5 = ["etablissement.presences", "etablissement.publication"]
+    static let portsEnAttenteLot5: [String] = []
 
     func testPortsEtabEnAttente() {
         let gateways = DemoWorld.gateways()

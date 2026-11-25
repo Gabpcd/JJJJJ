@@ -240,17 +240,28 @@ final class DemoPushTests: JoleneUITestCase {
         }
     }
 
-    func testTapLitigeVersLeWebSansEcranBloquant() throws {
-        let page = "https://jolene.app/soignant/litiges"
+    /// Migré par L4-T8 (règle 8, comme le contrat à L2-T10) : les litiges sont natifs, le tap ouvre `LitigesScreen` sur
+    /// l'onglet Profil, jamais la page web. Avant T8, ce test exigeait le renvoi web canonique ; le tap vers une page
+    /// restée sur le web est prouvé par `DemoRevenusTests.testTapPushFactureEmiseOuvreLesFacturesSurLeWeb`.
+    func testTapLitigeOuvreLesLitigesNatifsSansEcranBloquant() throws {
         launchDemo(extraArguments: ["-JOLENE_SIMULER_PUSH", "LITIGE_OUVERT"])
         signInDemo()
-        liensRenvoiWebAffiche(page)
+        let ecran = element("litiges-screen")
+        require("Les litiges natifs sont ouverts par le tap", timeout: 30) {
+            self.containerVisible(ecran) && self.element("litige-ouvrir").exists
+        }
+        XCTAssertFalse(element("renvoi-web-demo").exists, "litiges natifs (L4-T8) : jamais la page web")
         XCTAssertFalse(element("access-blocked").exists)
         XCTAssertFalse(element("env-blocked").exists)
-        record("\(proofPrefix)-push-tap-web")
-        liensFermerRenvoiWeb()
-        require("L'espace est intact après la fermeture du renvoi") { self.containerVisible(self.element("accueil-screen")) }
-        XCTAssertEqual(element("deeplink-route").label, "safari \(page)", "page web canonique, jamais un écran vide")
+        aucuneAlerte()
+        XCTAssertEqual(element("deeplink-route").label, "secondaire(litiges, sans onglet, sans id)", "écran natif, jamais un écran vide")
+        record("\(proofPrefix)-push-tap-litiges")
+        let retour = app.navigationBars.buttons.firstMatch
+        require("Le bouton retour est disponible") { self.visible(retour) }
+        retour.tap()
+        require("Retour au hub, à la racine de l'onglet Profil") {
+            self.containerVisible(self.element("profile-list")) && !ecran.exists
+        }
     }
 
     // MARK: Pré-prompt (T5)

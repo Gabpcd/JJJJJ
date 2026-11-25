@@ -29,14 +29,27 @@ on:
       - 'src/lib/disponibilite-pointage.ts'
       # Lot 5, T3 : dérivation de planning (golden) et messages repris des écrans établissement (gardes Swift).
       - 'src/lib/planning-derive.ts'
+      - 'src/pages/ContratMission.tsx'
+      - 'src/components/FormulaireMission.tsx'
+      - 'src/components/PanneauContestation.tsx'
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T8 : textes des présences établissement relus par PresencesEtabRulesTests (garde de dérive).
+      - 'src/pages/PresencesEtablissement.tsx'
+      - 'src/components/CarteValidation.tsx'
+      - 'src/components/presence/BadgesAntiTrichePresence.tsx'
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
       # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
       - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
+      # Lot 5, T12 : sources relues par RenvoisWebEtabTests — routes déclarées (chaque chemin de la table des renvois
+      # web de l'espace établissement) et libellés du menu web du compte, de la page Chorus Pro et de la section API.
+      - 'src/App.tsx'
+      - 'src/pages/MonCompteEtablissement.tsx'
+      - 'src/pages/ChorusConfig.tsx'
+      - 'src/pages/APIEtablissement.tsx'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
@@ -90,6 +103,9 @@ on:
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
       - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Relevé des tests échoués et des durées par éclat (étape « Résumé xcresult » des jobs ui et ui-lot1).
+      - 'scripts/mobile/ios-ci-resume-tests.mjs'
+      - 'scripts/mobile/ios-ci-resume-tests.test.mjs'
       # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
       - 'mobile-native/scripts/ios-ci-toolchain.mjs'
       - 'mobile-native/scripts/png-dimensions.mjs'
@@ -102,6 +118,8 @@ on:
       - 'public/.well-known/apple-app-site-association'
       - 'src/components/AvatarUpload.tsx'
       - 'src/components/BandeauPaiementDeclare.tsx'
+      # L4-T12 : forme de l'identifiant de série relue par SupabaseSerieGatewayTests.
+      - 'src/components/CarteSerie.tsx'
       - 'src/components/ChoixModesExercice.tsx'
       - 'src/components/DemandePermissionPush.tsx'
       - 'src/components/ModalTeleversement.tsx'
@@ -120,6 +138,8 @@ on:
       - 'src/lib/geocodage.ts'
       - 'src/pages/ConfirmationInscription.tsx'
       - 'src/pages/DetailMissionSoignant.tsx'
+      # L4-T12 : textes et règles du détail de série relus à leur ligne par SerieVerbatimTests.
+      - 'src/pages/DetailSerieSoignant.tsx'
       - 'src/pages/DocumentsSoignant.tsx'
       - 'src/pages/InscriptionRapide.tsx'
       - 'src/pages/MesDocuments.tsx'
@@ -127,6 +147,7 @@ on:
       - 'src/pages/MonCompteSoignant.tsx'
       - 'src/pages/PageConnexion.tsx'
       - 'src/pages/PageParametresNotifications.tsx'
+      - 'src/pages/PageResetPassword.tsx'
       - 'src/pages/PageStripeConnect.tsx'
       - 'src/pages/ParcoursInscription.tsx'
       - 'src/pages/ProfilSoignant.tsx'
@@ -141,6 +162,28 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T9 : sources relues par EvaluationsScoreVerbatimTests (textes des évaluations, du score et de la
+      # contestation d'un événement de score, incident #1137) ; EvaluationsSoignant.tsx figure déjà ci-dessus.
+      - 'src/components/BadgeNiveauV2.tsx'
+      - 'src/components/BreakdownScore.tsx'
+      - 'src/components/GraphiqueEvolutionScore.tsx'
+      - 'src/components/NotationsRecues.tsx'
+      - 'src/components/score/ModaleReclamationScore.tsx'
+      - 'src/pages/PageScoreSoignant.tsx'
+      # Lot 4, T8 : sources web relues ligne à ligne par LitigesVerbatimTests (textes des litiges et des réclamations).
+      - 'src/components/FilDiscussionLitige.tsx'
+      - 'src/pages/LitigesContestationsSoignant.tsx'
+      - 'src/pages/LitigesSoignant.tsx'
+      - 'src/pages/MesReclamations.tsx'
+      # Lot 4, T11 (intégration de la vague D) : sources relues par SwipeSourcesAppTests (annotations de PoolUrgence.swift).
+      - 'src/components/PoolUrgenceToggle.tsx'
+      - 'src/pages/PoolUrgenceSoignant.tsx'
+      # Lot 4, T7b : sources relues par MessagerieVerbatimTests (textes de la messagerie native, incident #1137).
+      - 'src/components/messagerie/ModaleEducativeAntiLeak.tsx'
+      - 'src/components/BloquerUtilisateur.tsx'
+      - 'src/components/SignalerUtilisateur.tsx'
+      - 'src/components/BarreNavigation.tsx'
+      - 'src/hooks/useOuvrirConversation.ts'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -166,14 +209,27 @@ on:
       - 'src/lib/disponibilite-pointage.ts'
       # Lot 5, T3 : dérivation de planning (golden) et messages repris des écrans établissement (gardes Swift).
       - 'src/lib/planning-derive.ts'
+      - 'src/pages/ContratMission.tsx'
+      - 'src/components/FormulaireMission.tsx'
+      - 'src/components/PanneauContestation.tsx'
       - 'src/components/FormulaireRecurrence.tsx'
       - 'src/components/ListeCandidatures.tsx'
       - 'src/components/pointage/AffichageCodeRotatifEtab.tsx'
+      # Lot 5, T8 : textes des présences établissement relus par PresencesEtabRulesTests (garde de dérive).
+      - 'src/pages/PresencesEtablissement.tsx'
+      - 'src/components/CarteValidation.tsx'
+      - 'src/components/presence/BadgesAntiTrichePresence.tsx'
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
       # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
       - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
+      # Lot 5, T12 : sources relues par RenvoisWebEtabTests — routes déclarées (chaque chemin de la table des renvois
+      # web de l'espace établissement) et libellés du menu web du compte, de la page Chorus Pro et de la section API.
+      - 'src/App.tsx'
+      - 'src/pages/MonCompteEtablissement.tsx'
+      - 'src/pages/ChorusConfig.tsx'
+      - 'src/pages/APIEtablissement.tsx'
       - 'src/lib/completude-planning-mission.ts'
       - 'src/lib/nativeLinks.ts'
       - 'src/lib/geo.ts'
@@ -227,6 +283,9 @@ on:
       - '.github/workflows/ios-swift-ci.yml'
       - 'tests/node/ios-swift-ci-eclats.node.mjs'
       - 'scripts/mobile/ios-ci-gel-simulateur.sh'
+      # Relevé des tests échoués et des durées par éclat (étape « Résumé xcresult » des jobs ui et ui-lot1).
+      - 'scripts/mobile/ios-ci-resume-tests.mjs'
+      - 'scripts/mobile/ios-ci-resume-tests.test.mjs'
       # Scripts exécutés par ce workflow (sélection du simulateur, contrôle des captures).
       - 'mobile-native/scripts/ios-ci-toolchain.mjs'
       - 'mobile-native/scripts/png-dimensions.mjs'
@@ -239,6 +298,8 @@ on:
       - 'public/.well-known/apple-app-site-association'
       - 'src/components/AvatarUpload.tsx'
       - 'src/components/BandeauPaiementDeclare.tsx'
+      # L4-T12 : forme de l'identifiant de série relue par SupabaseSerieGatewayTests.
+      - 'src/components/CarteSerie.tsx'
       - 'src/components/ChoixModesExercice.tsx'
       - 'src/components/DemandePermissionPush.tsx'
       - 'src/components/ModalTeleversement.tsx'
@@ -257,6 +318,8 @@ on:
       - 'src/lib/geocodage.ts'
       - 'src/pages/ConfirmationInscription.tsx'
       - 'src/pages/DetailMissionSoignant.tsx'
+      # L4-T12 : textes et règles du détail de série relus à leur ligne par SerieVerbatimTests.
+      - 'src/pages/DetailSerieSoignant.tsx'
       - 'src/pages/DocumentsSoignant.tsx'
       - 'src/pages/InscriptionRapide.tsx'
       - 'src/pages/MesDocuments.tsx'
@@ -264,6 +327,7 @@ on:
       - 'src/pages/MonCompteSoignant.tsx'
       - 'src/pages/PageConnexion.tsx'
       - 'src/pages/PageParametresNotifications.tsx'
+      - 'src/pages/PageResetPassword.tsx'
       - 'src/pages/PageStripeConnect.tsx'
       - 'src/pages/ParcoursInscription.tsx'
       - 'src/pages/ProfilSoignant.tsx'
@@ -278,6 +342,28 @@ on:
       - 'src/pages/MesDisponibilites.tsx'
       - 'src/pages/PageMessagerie.tsx'
       - 'src/pages/PageParrainage.tsx'
+      # Lot 4, T9 : sources relues par EvaluationsScoreVerbatimTests (textes des évaluations, du score et de la
+      # contestation d'un événement de score, incident #1137) ; EvaluationsSoignant.tsx figure déjà ci-dessus.
+      - 'src/components/BadgeNiveauV2.tsx'
+      - 'src/components/BreakdownScore.tsx'
+      - 'src/components/GraphiqueEvolutionScore.tsx'
+      - 'src/components/NotationsRecues.tsx'
+      - 'src/components/score/ModaleReclamationScore.tsx'
+      - 'src/pages/PageScoreSoignant.tsx'
+      # Lot 4, T8 : sources web relues ligne à ligne par LitigesVerbatimTests (textes des litiges et des réclamations).
+      - 'src/components/FilDiscussionLitige.tsx'
+      - 'src/pages/LitigesContestationsSoignant.tsx'
+      - 'src/pages/LitigesSoignant.tsx'
+      - 'src/pages/MesReclamations.tsx'
+      # Lot 4, T11 (intégration de la vague D) : sources relues par SwipeSourcesAppTests (annotations de PoolUrgence.swift).
+      - 'src/components/PoolUrgenceToggle.tsx'
+      - 'src/pages/PoolUrgenceSoignant.tsx'
+      # Lot 4, T7b : sources relues par MessagerieVerbatimTests (textes de la messagerie native, incident #1137).
+      - 'src/components/messagerie/ModaleEducativeAntiLeak.tsx'
+      - 'src/components/BloquerUtilisateur.tsx'
+      - 'src/components/SignalerUtilisateur.tsx'
+      - 'src/components/BarreNavigation.tsx'
+      - 'src/hooks/useOuvrirConversation.ts'
       - 'supabase/functions/register-soignant/index.ts'
       - 'supabase/functions/escrow-debit-echeance/index.ts'
       - 'supabase/functions/stripe-connect-onboard/index.ts'
@@ -344,6 +430,8 @@ jobs:
         run: node scripts/mobile/check-rpc-contracts.mjs
       - name: Éclats des tests UI cohérents (DECISIONS_LOT2 décision 22)
         run: node --test tests/node/ios-swift-ci-eclats.node.mjs
+      - name: Relevé des tests échoués et des durées par éclat — tests du script
+        run: node --test scripts/mobile/ios-ci-resume-tests.test.mjs
       # Lot 5, T0 (LOT5_PLAN §2.9) : aucun littéral juridique dans le Swift livré — valeurs des CHECK
       # de matrice_modes_exercice (public.sql), sources de la matrice (migrations), noms interdits,
       # « Code du travail », « Légifrance », articles numérotés ; seules exceptions : TextesWeb.swift
@@ -657,6 +745,13 @@ jobs:
         run: |
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-socle.xcresult"
           set +e
+          # Veilleur du gel (scripts/mobile/ios-ci-gel-simulateur.sh), comme dans les éclats presences et pointage : depuis
+          # le 24/11/2026, le socle exécute DemoPointageQRTests, dont un test saisit au pavé numérique (déclencheur des gels
+          # relevés ; DECISIONS_LOT2, « Gel iPhone CI — 16/11/2026 »). Relevés gel-socle-* dans l'artefact ; le veilleur
+          # ne fait jamais échouer l'étape.
+          journal="$JOLENE_UI_OUTPUT/test-without-building-socle.log"
+          bash scripts/mobile/ios-ci-gel-simulateur.sh veiller socle "$journal" > "$JOLENE_UI_OUTPUT/gel-socle-veilleur.log" 2>&1 &
+          veilleur=$!
           xcodebuild test-without-building \
             -project ios-native/Jolene.xcodeproj \
             -scheme Jolene \
@@ -681,6 +776,7 @@ jobs:
             -skip-testing:JoleneUITests/DemoInscriptionTests \
             -skip-testing:JoleneUITests/DemoCompteLot3Tests \
             -skip-testing:JoleneUITests/DemoPushTests \
+            -skip-testing:JoleneUITests/DemoReinitialisationTests \
             -skip-testing:JoleneUITests/DemoNotificationsTests \
             -skip-testing:JoleneUITests/DemoPreferencesTests \
             -skip-testing:JoleneUITests/DemoProfilTests \
@@ -695,7 +791,11 @@ jobs:
             -skip-testing:JoleneUITests/DemoEtabLiensTests \
             -skip-testing:JoleneUITests/DemoEtabMissionsTests \
             -skip-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -skip-testing:JoleneUITests/DemoEtabPresencesTests \
             -skip-testing:JoleneUITests/DemoEtabPointageTests \
+            -skip-testing:JoleneUITests/DemoEtabCompteTests \
+            -skip-testing:JoleneUITests/DemoEtabPublicationTests \
+            -skip-testing:JoleneUITests/DemoEtabContratsTests \
             -skip-testing:JoleneUITests/DemoMesMissionsTests \
             -skip-testing:JoleneUITests/DemoCandidatureTests \
             -skip-testing:JoleneUITests/DemoConfirmationPresenceTests \
@@ -704,6 +804,17 @@ jobs:
             -skip-testing:JoleneUITests/DemoExplorerTests \
             -skip-testing:JoleneUITests/DemoFavorisTests \
             -skip-testing:JoleneUITests/DemoFiltresTests \
+            -skip-testing:JoleneUITests/DemoDisponibilitesTests \
+            -skip-testing:JoleneUITests/DemoSerieTests \
+            -skip-testing:JoleneUITests/DemoEvaluationsScoreTests \
+            -skip-testing:JoleneUITests/DemoLitigesTests \
+            -skip-testing:JoleneUITests/DemoReclamationsTests \
+            -skip-testing:JoleneUITests/DemoSwipeTests \
+            -skip-testing:JoleneUITests/DemoBulletinsTests \
+            -skip-testing:JoleneUITests/DemoPoolUrgenceTests \
+            -skip-testing:JoleneUITests/DemoParrainageTests \
+            -skip-testing:JoleneUITests/DemoMessagerieTests \
+            -skip-testing:JoleneUITests/DemoEtabMessagerieTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -712,6 +823,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             > "$JOLENE_UI_OUTPUT/test-without-building-socle.log" 2>&1
           code=$?
+          pkill -P "$veilleur" 2>/dev/null || true
+          kill "$veilleur" 2>/dev/null || true
           set -e
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-socle.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -774,6 +887,14 @@ jobs:
       - name: test-without-building — éclat pointage (XCUITest du pointage) (${{ matrix.format }})
         id: tests_pointage
         # Lancé même si un éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        # Éclat pointage sous 20 min (24/11/2026). Avec ses dix tests, DemoPointageTests portait cette étape à 21,8 et
+        # 23,2 min en iPad paysage (runs 45239724447 et 45238573082 ; 18,6 et 17,8 min sur iphone ; 15,0 et 11,2 min en
+        # iPad portrait), et un seul test resté dix minutes sans réponse a suffi à la couper à 30 min (tentative 2 du run
+        # 45239724447, ipad-portrait). Ses trois tests de QR (4,2 à 5,3 min en paysage) forment DemoPointageQRTests, que
+        # ne nomme aucun -only-testing : ils tournent dans le socle, l'éclat le plus léger du job (5,9 à 10,5 min aux
+        # mêmes runs), qui reçoit le même veilleur. DemoPointageTests garde sept tests : étape estimée à 17,6 et 17,9 min
+        # en paysage, 15 min sur iphone, 9 à 12 min en portrait. À re-mesurer au premier run ; au-delà de 20 min, sortir
+        # un autre test vers DemoPointageQRTests. Garde : tests/node/ios-swift-ci-eclats.node.mjs.
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
         env:
@@ -940,7 +1061,9 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot3-compte.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot3-compte) : code $code"
-      - name: test-without-building — éclat lot3-push (XCUITest taps push) (${{ matrix.format }})
+      # Reste de L1-T10 : DemoReinitialisationTests (récupération du mot de passe, quatre tests courts) rejoint cet éclat
+      # léger (DemoPushTests seul), sans nouvel éclat.
+      - name: test-without-building — éclat lot3-push (XCUITest taps push, récupération du mot de passe) (${{ matrix.format }})
         id: tests_lot3_push
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -966,6 +1089,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoPushTests \
+            -only-testing:JoleneUITests/DemoReinitialisationTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1157,6 +1281,12 @@ jobs:
           CODE_LOT3_PROFIL_PHOTO: ${{ steps.tests_lot3_profil_photo.outputs.code }}
           CODE_LOT3_REVENUS: ${{ steps.tests_lot3_revenus.outputs.code }}
         run: |
+          # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
+          # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
+          # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
+          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
+          trap 'node scripts/mobile/ios-ci-resume-tests.mjs socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
           for eclat in socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
@@ -1179,7 +1309,7 @@ jobs:
               { nom: "documents", code: process.env.CODE_DOCUMENTS, classes: ["DemoDocumentsTests", "DemoPresenceDetailTests"] },
               { nom: "contrats", code: process.env.CODE_CONTRATS, classes: ["DemoContratsTests", "DemoSignatureContratTests"] },
               { nom: "lot3-compte", code: process.env.CODE_LOT3_COMPTE, classes: ["DemoLiensLot3Tests", "DemoCompteLot3Tests"] },
-              { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests"] },
+              { nom: "lot3-push", code: process.env.CODE_LOT3_PUSH, classes: ["DemoPushTests", "DemoReinitialisationTests"] },
               { nom: "lot3-notifications", code: process.env.CODE_LOT3_NOTIFICATIONS, classes: ["DemoNotificationsTests", "DemoPreferencesTests"] },
               { nom: "lot3-inscription", code: process.env.CODE_LOT3_INSCRIPTION, classes: ["DemoInscriptionTests", "DemoCompletionInscriptionTests", "DemoLiensLot2Tests"] },
               { nom: "lot3-profil-photo", code: process.env.CODE_LOT3_PROFIL_PHOTO, classes: ["DemoPhotoPositionTests", "DemoEtabSessionTests", "DemoEtabAccueilTests", "DemoEtabPointageTests"] },
@@ -1351,6 +1481,26 @@ jobs:
             ios-native/test-results/${{ matrix.format }}/
           retention-days: 7
           if-no-files-found: warn
+      - name: Conserver les journaux et relevés légers (lisibles sans les xcresult)
+        # Journaux xcodebuild des éclats, relevés du veilleur (gel-*), redémarrages du simulateur, résumés xcresult et durée
+        # de chaque test (xctest-summary-* et xctest-tests-*), manifestes des pièces jointes, Spindump de XCTest
+        # (diagnostic/, copiés par ios-ci-resume-tests.mjs) : quelques Mo, quand l'artefact complet en pèse 300 à 1 000.
+        # Au run 45239724447, le journal de l'éclat coupé et les relevés du veilleur n'étaient lisibles que dans un
+        # artefact de 832 Mo. Relevé d'information : il ne décide jamais du statut du job (continue-on-error).
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-journaux-ui-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ios-native/test-results/${{ matrix.format }}/test-without-building-*.log
+            ios-native/test-results/${{ matrix.format }}/gel-*
+            ios-native/test-results/${{ matrix.format }}/relance-simulateur-*.txt
+            ios-native/test-results/${{ matrix.format }}/xctest-*.json
+            ios-native/test-results/${{ matrix.format }}/attachments/*/manifest.json
+            ios-native/test-results/${{ matrix.format }}/diagnostic/
+          retention-days: 7
+          if-no-files-found: warn
       - name: Éteindre le simulateur
         if: always()
         run: xcrun simctl shutdown all || true
@@ -1369,10 +1519,16 @@ jobs:
     # XCUITest y ouvre l'éclat « lot4 » (D19 de DECISIONS_LOT4 : job `ui-lot1` ou job propre au lot 4), plutôt qu'un
     # douzième éclat du job `ui`. Stabilité de la CI (23/11/2026) : il reçoit aussi « lot5-etablissement » et
     # « lot3-profil », sortis de deux éclats du job `ui` qui atteignaient leurs 30 min (mesures dans son en-tête d'éclats).
-    # Ce job durait 43 à 53 min au run 44797977486, le job `ui` 161 à 244 min. Plafond : 25 (build) + 1 + 1
-    # (Package.resolved) + 5 × 30 (éclats) = 177 min, plus 15 min de préparation = 192 min, porté à 195 min (marge).
+    # Ce job durait 43 à 53 min au run 44797977486, le job `ui` 161 à 244 min. Intégration de la vague D (24/11/2026) :
+    # « lot4 » scindé (« lot4-swipe-messagerie »), puis, revue B8 d'assemblage (M1), « lot5-etablissement » scindé
+    # (« lot5-etablissement-ecrans »). Run 45446351274 (premier passage sous Xcode 26.4.1) : « lot4 » et
+    # « lot4-swipe-messagerie » coupés à 30 min (29,4 et 26,5 min de tests mesurées) ; chacun scindé de nouveau
+    # (« lot4-score-litiges », « lot4-swipe », « lot4-messagerie ») et DemoConfirmationPresenceTests passé de
+    # « lot1-missions » (18,4 min) à « lot1-accueil-explorer » : neuf éclats, chacun sous 18 min de tests au rythme
+    # mesuré. Plafond : 25 (build) + 1 + 1 (Package.resolved) + 9 × 30 (éclats) = 297 min, plus 15 min de préparation =
+    # 312 min, porté à 315 min (marge).
     # Gardes : tests/node/ios-swift-ci-eclats.node.mjs.
-    timeout-minutes: 195
+    timeout-minutes: 315
     strategy:
       fail-fast: false
       matrix:
@@ -1466,7 +1622,7 @@ jobs:
         # suivante dans l'artefact « package-resolved-lot1-<format>-<sha> », lisible pendant que les éclats tournent.
         # **Correctif : committer tel quel le Package.resolved de cet artefact** (ou corriger project.yml si une version a
         # changé), puis relancer la CI. Délai de 1 min, plus 1 min pour l'artefact, hors éclats : le plafond du job reste
-        # tenu (25 + 1 + 1 + 5 × 30 = 177 ≤ 195 pour ce job). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
+        # tenu (25 + 1 + 1 + 7 × 30 = 237 ≤ 255 pour ce job). Garde : tests/node/ios-swift-ci-eclats.node.mjs.
         timeout-minutes: 1
         run: |
           fichier=ios-native/Jolene.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
@@ -1501,7 +1657,13 @@ jobs:
       # 4-6, 4-7, 1-2 et 4-6 min au prorata des classes mesurées. D'où environ 13-20 min pour « lot1-missions » et 13-21 min
       # pour « lot1-accueil-explorer » en paysage : DemoFavorisTests n'est pas dans « lot1-missions », qui aurait atteint
       # 21-26 min. À re-mesurer au premier run vert ; au-delà de 20 min, ouvrir un troisième éclat dans ce job.
-      - name: test-without-building — éclat lot1-missions (XCUITest Mes missions, candidature, confirmation de présence, annulation) (${{ matrix.format }})
+      # Mesures du run 45446351274 (premier passage sous Xcode 26.4.1, ipad-landscape / ipad-portrait, somme des durées
+      # des tests) : « lot1-missions » 18,4 / 16,2 min, dont DemoConfirmationPresenceTests 1,4 / 1,0 min ;
+      # « lot1-accueil-explorer » 14,2 / 12,1 min (cinq tests d'Explorer en échec rapide en portrait : 7,8 min mesurées en
+      # paysage). DemoConfirmationPresenceTests (2 méthodes) passe dans « lot1-accueil-explorer » : « lot1-missions »
+      # environ 17,0 min, « lot1-accueil-explorer » environ 15,6 min en paysage, chacun sous 18 min (garde
+      # tests/node/ios-swift-ci-eclats.node.mjs, durées mesurées par classe).
+      - name: test-without-building — éclat lot1-missions (XCUITest Mes missions, candidature, annulation) (${{ matrix.format }})
         id: tests_lot1_missions
         # Même condition que les éclats du job `ui` : une dérive du Package.resolved ne masque pas les XCUITest du lot 1.
         if: always() && steps.build.outcome == 'success'
@@ -1526,7 +1688,6 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoMesMissionsTests \
             -only-testing:JoleneUITests/DemoCandidatureTests \
-            -only-testing:JoleneUITests/DemoConfirmationPresenceTests \
             -only-testing:JoleneUITests/DemoAnnulationTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
@@ -1540,7 +1701,7 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot1-missions.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot1-missions) : code $code"
-      - name: test-without-building — éclat lot1-accueil-explorer (XCUITest Accueil, Explorer et favoris) (${{ matrix.format }})
+      - name: test-without-building — éclat lot1-accueil-explorer (XCUITest Accueil, Explorer, favoris et confirmation de présence) (${{ matrix.format }})
         id: tests_lot1_accueil_explorer
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1570,6 +1731,7 @@ jobs:
             -only-testing:JoleneUITests/DemoAccueilTests \
             -only-testing:JoleneUITests/DemoExplorerTests \
             -only-testing:JoleneUITests/DemoFavorisTests \
+            -only-testing:JoleneUITests/DemoConfirmationPresenceTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1582,10 +1744,21 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot1-accueil-explorer.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot1-accueil-explorer) : code $code"
-      # « lot4 » : écrans secondaires du lot 4 (L4-T4 : recherches sauvegardées et alerte rapide d'Explorer, deux méthodes,
-      # estimées à 3-6 min au prorata de DemoFavorisTests) ; chaque tranche du lot 4 y range sa classe démo tant que l'éclat
-      # reste estimé sous 20 min (décision 22), sinon ouvre un éclat voisin dans ce job.
-      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — recherches sauvegardées) (${{ matrix.format }})
+      # « lot4 » : écrans secondaires du lot 4 (décision 22 : un éclat estimé sous 20 min, sinon un éclat voisin dans ce
+      # job). Intégration de la vague D (24/11/2026) : avec les tranches T3b à T12 et L5-T11, 34 méthodes, scindées en deux
+      # éclats de 17. Run 45446351274 (premier passage sous Xcode 26.4.1) : ces deux éclats ont mesuré 29,2 / 29,4 min
+      # (« lot4 », ipad-landscape / ipad-portrait, aucun échec) et 26,5 / 25,1 min (« lot4-swipe-messagerie ») de tests,
+      # soit 1,5 à 1,7 min par méthode, et ont été coupés à leurs 30 min. Chacun est scindé de nouveau, pour qu'aucun éclat
+      # ne dépasse 18 min de tests au rythme mesuré (garde tests/node/ios-swift-ci-eclats.node.mjs) :
+      # « lot4 » — DemoFiltresTests (T4, 2), DemoDisponibilitesTests (T5, 1), DemoSerieTests (T12, 4), DemoBulletinsTests
+      # (T10, 2) : 9 méthodes, environ 15,5 min ;
+      # « lot4-score-litiges » — DemoEvaluationsScoreTests (T9, 2), DemoLitigesTests (T8, 3), DemoReclamationsTests (T8, 3) :
+      # 8 méthodes, environ 14 min (les trois tests les plus longs de l'ancien éclat, 2,5 à 3,1 min, en font partie) ;
+      # « lot4-swipe » — DemoSwipeTests (T3b, 7) : environ 14 min (2,0 à 2,6 min pour ses trois tests les plus longs) ;
+      # « lot4-messagerie » — DemoPoolUrgenceTests (T11, 2), DemoParrainageTests (T6, 3), DemoMessagerieTests (T7b, 3),
+      # DemoEtabMessagerieTests (L5-T11, 2, la messagerie en contexte établissement, avec l'écran qu'elle réemploie) :
+      # 10 méthodes, environ 16 min.
+      - name: test-without-building — éclat lot4 (XCUITest des écrans secondaires du lot 4 — filtres, disponibilités, séries, bulletins) (${{ matrix.format }})
         id: tests_lot4
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
@@ -1613,6 +1786,9 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/derived" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
             -only-testing:JoleneUITests/DemoFiltresTests \
+            -only-testing:JoleneUITests/DemoDisponibilitesTests \
+            -only-testing:JoleneUITests/DemoSerieTests \
+            -only-testing:JoleneUITests/DemoBulletinsTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1625,13 +1801,8 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot4.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot4) : code $code"
-      # « lot5-etablissement » (stabilité de la CI, 23/11/2026) : liens, missions et candidatures de l'espace établissement
-      # (lot 5), sortis de « presences » du job `ui`. Tests mesurés aux runs 44475153698, 44555091967 et 44797977486 :
-      # 8,7 / 8,1 / 6,2 min (iphone), 11,8 / 12,3 / 8,2 min (ipad-portrait), 11,9 / 11,1 / 13,3 min (ipad-landscape).
-      # Session, Accueil et pointage établissement restent dans « lot3-profil-photo » du job `ui` : les six classes
-      # ensemble auraient atteint 22 min en paysage.
-      - name: test-without-building — éclat lot5-etablissement (XCUITest liens, missions et candidatures de l'espace établissement) (${{ matrix.format }})
-        id: tests_lot5_etablissement
+      - name: test-without-building — éclat lot4-score-litiges (XCUITest du lot 4 — évaluations, score, litiges, réclamations) (${{ matrix.format }})
+        id: tests_lot4_score_litiges
         # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
         if: always() && steps.build.outcome == 'success'
         timeout-minutes: 30
@@ -1645,6 +1816,142 @@ jobs:
           ECLAT_PRECEDENT: lot4
           ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot4.outcome }}
           ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot4.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot4-score-litiges || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot4-score-litiges)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot4-score-litiges.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoEvaluationsScoreTests \
+            -only-testing:JoleneUITests/DemoLitigesTests \
+            -only-testing:JoleneUITests/DemoReclamationsTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot4-score-litiges.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot4-score-litiges.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot4-score-litiges) : code $code"
+      - name: test-without-building — éclat lot4-swipe (XCUITest du lot 4 — vue Swipe d'Explorer) (${{ matrix.format }})
+        id: tests_lot4_swipe
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot4-score-litiges
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot4_score_litiges.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot4_score_litiges.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot4-swipe || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot4-swipe)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot4-swipe.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoSwipeTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot4-swipe.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot4-swipe.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot4-swipe) : code $code"
+      - name: test-without-building — éclat lot4-messagerie (XCUITest du lot 4 — pool urgence, parrainage, messagerie) (${{ matrix.format }})
+        id: tests_lot4_messagerie
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot4-swipe
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot4_swipe.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot4_swipe.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot4-messagerie || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot4-messagerie)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot4-messagerie.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoPoolUrgenceTests \
+            -only-testing:JoleneUITests/DemoParrainageTests \
+            -only-testing:JoleneUITests/DemoMessagerieTests \
+            -only-testing:JoleneUITests/DemoEtabMessagerieTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot4-messagerie.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot4-messagerie.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot4-messagerie) : code $code"
+      # « lot5-etablissement » (stabilité de la CI, 23/11/2026) : liens, missions et candidatures de l'espace établissement
+      # (lot 5), sortis de « presences » du job `ui`. Tests mesurés aux runs 44475153698, 44555091967 et 44797977486 :
+      # 8,7 / 8,1 / 6,2 min (iphone), 11,8 / 12,3 / 8,2 min (ipad-portrait), 11,9 / 11,1 / 13,3 min (ipad-landscape).
+      # Session, Accueil et pointage établissement restent dans « lot3-profil-photo » du job `ui` : les six classes
+      # ensemble auraient atteint 22 min en paysage.
+      # L5-T8, L5-T9 et L5-T10 y avaient ajouté présences, publication et contrats : 22 méthodes, environ 22 min à une
+      # minute par méthode et jusqu'à 32 min au rythme mesuré en iPad paysage (revue B8 d'assemblage de la vague D, M1).
+      # L'éclat garde liens (5), missions (2), candidatures (2) et compte (2), soit 11 méthodes ; les trois autres classes
+      # passent dans « lot5-etablissement-ecrans » (étape suivante).
+      - name: test-without-building — éclat lot5-etablissement (XCUITest de l'espace établissement — liens, missions, candidatures, compte) (${{ matrix.format }})
+        id: tests_lot5_etablissement
+        # L5-T12 : DemoEtabCompteTests (deux tests, compte et renvois web) rejoint les autres classes établissement de cet
+        # éclat (6,2 à 13,3 min de tests mesurées avant elle), plutôt que « lot3-profil-photo » du job `ui`.
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot4-messagerie
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot4_messagerie.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot4_messagerie.outputs.code }}
         run: |
           bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot5-etablissement || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot5-etablissement)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot5-etablissement.xcresult"
@@ -1660,6 +1967,7 @@ jobs:
             -only-testing:JoleneUITests/DemoEtabLiensTests \
             -only-testing:JoleneUITests/DemoEtabMissionsTests \
             -only-testing:JoleneUITests/DemoEtabCandidaturesTests \
+            -only-testing:JoleneUITests/DemoEtabCompteTests \
             -resultBundlePath "$resultat" \
             -parallel-testing-enabled NO \
             -maximum-concurrent-test-simulator-destinations 1 \
@@ -1672,6 +1980,51 @@ jobs:
           grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot5-etablissement.log" | tail -n 60 || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "xcodebuild test-without-building (éclat lot5-etablissement) : code $code"
+      # « lot5-etablissement-ecrans » (revue B8 d'assemblage de la vague D, M1, scission de « lot5-etablissement ») :
+      # DemoEtabPresencesTests (L5-T8, 4), DemoEtabPublicationTests (L5-T9, 4), DemoEtabContratsTests (L5-T10, 3) :
+      # 11 méthodes, environ 11 min. Durée à relever au premier run (décision 22).
+      - name: test-without-building — éclat lot5-etablissement-ecrans (XCUITest de l'espace établissement — présences, publication, contrats) (${{ matrix.format }})
+        id: tests_lot5_etablissement_ecrans
+        # Lancé même si l'éclat précédent échoue ou dépasse son délai : chaque éclat apporte sa preuve.
+        if: always() && steps.build.outcome == 'success'
+        timeout-minutes: 30
+        env:
+          UDID: ${{ steps.simulateur.outputs.udid }}
+          # Variables lues par le runner XCUITest via ProcessInfo (préfixe TEST_RUNNER_ retiré par xcodebuild).
+          TEST_RUNNER_JOLENE_UI_ORIENTATION: ${{ matrix.orientation }}
+          TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
+          TEST_RUNNER_JOLENE_MODE: demo
+          # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
+          ECLAT_PRECEDENT: lot5-etablissement
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot5_etablissement.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot5_etablissement.outputs.code }}
+        run: |
+          bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot5-etablissement-ecrans || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot5-etablissement-ecrans)."
+          resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot5-etablissement-ecrans.xcresult"
+          set +e
+          xcodebuild test-without-building \
+            -project ios-native/Jolene.xcodeproj \
+            -scheme Jolene \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cloned" \
+            -only-testing:JoleneUITests/DemoEtabPresencesTests \
+            -only-testing:JoleneUITests/DemoEtabPublicationTests \
+            -only-testing:JoleneUITests/DemoEtabContratsTests \
+            -resultBundlePath "$resultat" \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 900 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            > "$JOLENE_UI_OUTPUT/test-without-building-lot5-etablissement-ecrans.log" 2>&1
+          code=$?
+          set -e
+          grep -E "Test Case|Test Suite|error: |\*\* TEST" "$JOLENE_UI_OUTPUT/test-without-building-lot5-etablissement-ecrans.log" | tail -n 60 || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "xcodebuild test-without-building (éclat lot5-etablissement-ecrans) : code $code"
       # « lot3-profil » (stabilité de la CI, 23/11/2026) : DemoProfilTests (lot 3, cinq tests), sortie de
       # « lot3-notifications » du job `ui`. Tests mesurés aux mêmes runs : 13,9 / 7,8 min (iphone, troisième run gelé
       # avant elle), 7,3 / 10,2 / 9,7 min (ipad-portrait), 12,2 / 11,2 / 11,1 min (ipad-landscape).
@@ -1687,9 +2040,9 @@ jobs:
           TEST_RUNNER_JOLENE_UI_FORMAT: ${{ matrix.format }}
           TEST_RUNNER_JOLENE_MODE: demo
           # Éclat précédent : simulateur redémarré s'il a gelé ou dépassé son délai (scripts/mobile/ios-ci-gel-simulateur.sh).
-          ECLAT_PRECEDENT: lot5-etablissement
-          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot5_etablissement.outcome }}
-          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot5_etablissement.outputs.code }}
+          ECLAT_PRECEDENT: lot5-etablissement-ecrans
+          ECLAT_PRECEDENT_ISSUE: ${{ steps.tests_lot5_etablissement_ecrans.outcome }}
+          ECLAT_PRECEDENT_CODE: ${{ steps.tests_lot5_etablissement_ecrans.outputs.code }}
         run: |
           bash scripts/mobile/ios-ci-gel-simulateur.sh relancer-si-gel lot3-profil || echo "::warning::Contrôle du gel de l'éclat précédent non exécuté (éclat lot3-profil)."
           resultat="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-lot3-profil.xcresult"
@@ -1721,11 +2074,21 @@ jobs:
           CODE_LOT1_MISSIONS: ${{ steps.tests_lot1_missions.outputs.code }}
           CODE_LOT1_ACCUEIL_EXPLORER: ${{ steps.tests_lot1_accueil_explorer.outputs.code }}
           CODE_LOT4: ${{ steps.tests_lot4.outputs.code }}
+          CODE_LOT4_SCORE_LITIGES: ${{ steps.tests_lot4_score_litiges.outputs.code }}
+          CODE_LOT4_SWIPE: ${{ steps.tests_lot4_swipe.outputs.code }}
+          CODE_LOT4_MESSAGERIE: ${{ steps.tests_lot4_messagerie.outputs.code }}
           CODE_LOT5_ETABLISSEMENT: ${{ steps.tests_lot5_etablissement.outputs.code }}
+          CODE_LOT5_ETABLISSEMENT_ECRANS: ${{ steps.tests_lot5_etablissement_ecrans.outputs.code }}
           CODE_LOT3_PROFIL: ${{ steps.tests_lot3_profil.outputs.code }}
         run: |
+          # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
+          # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
+          # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
+          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
+          trap 'node scripts/mobile/ios-ci-resume-tests.mjs lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
-          for eclat in lot1-missions lot1-accueil-explorer lot4 lot5-etablissement lot3-profil; do
+          for eclat in lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
             [ -d "$xcresult" ] || { echo "::error::Bundle xcresult absent pour l'éclat $eclat : aucun test n'a produit de résultat."; exit 1; }
             xcrun xcresulttool get test-results summary --path "$xcresult" > "$JOLENE_UI_OUTPUT/xctest-summary-$eclat.json"
@@ -1740,10 +2103,14 @@ jobs:
             // Éclats du lot 1 : chacun doit être vert, avoir exécuté au moins un test, et chacune de ses classes doit avoir
             // démarré (un -only-testing mal nommé n exécute rien).
             const eclats = [
-              { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoConfirmationPresenceTests", "DemoAnnulationTests"] },
-              { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests"] },
-              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests"] },
-              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests"] },
+              { nom: "lot1-missions", code: process.env.CODE_LOT1_MISSIONS, classes: ["DemoMesMissionsTests", "DemoCandidatureTests", "DemoAnnulationTests"] },
+              { nom: "lot1-accueil-explorer", code: process.env.CODE_LOT1_ACCUEIL_EXPLORER, classes: ["DemoAccueilTests", "DemoExplorerTests", "DemoFavorisTests", "DemoConfirmationPresenceTests"] },
+              { nom: "lot4", code: process.env.CODE_LOT4, classes: ["DemoFiltresTests", "DemoDisponibilitesTests", "DemoSerieTests", "DemoBulletinsTests"] },
+              { nom: "lot4-score-litiges", code: process.env.CODE_LOT4_SCORE_LITIGES, classes: ["DemoEvaluationsScoreTests", "DemoLitigesTests", "DemoReclamationsTests"] },
+              { nom: "lot4-swipe", code: process.env.CODE_LOT4_SWIPE, classes: ["DemoSwipeTests"] },
+              { nom: "lot4-messagerie", code: process.env.CODE_LOT4_MESSAGERIE, classes: ["DemoPoolUrgenceTests", "DemoParrainageTests", "DemoMessagerieTests", "DemoEtabMessagerieTests"] },
+              { nom: "lot5-etablissement", code: process.env.CODE_LOT5_ETABLISSEMENT, classes: ["DemoEtabLiensTests", "DemoEtabMissionsTests", "DemoEtabCandidaturesTests", "DemoEtabCompteTests"] },
+              { nom: "lot5-etablissement-ecrans", code: process.env.CODE_LOT5_ETABLISSEMENT_ECRANS, classes: ["DemoEtabPresencesTests", "DemoEtabPublicationTests", "DemoEtabContratsTests"] },
               { nom: "lot3-profil", code: process.env.CODE_LOT3_PROFIL, classes: ["DemoProfilTests"] },
             ];
             let total = 0, passed = 0, failed = 0, skipped = 0, log = "";
@@ -1814,7 +2181,7 @@ jobs:
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
         continue-on-error: true
         env:
-          ECLATS: lot1-missions lot1-accueil-explorer lot4 lot5-etablissement lot3-profil
+          ECLATS: lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil
         run: |
           # shellcheck disable=SC2016
           node --input-type=module -e '
@@ -1900,9 +2267,33 @@ jobs:
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-missions.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot1-accueil-explorer.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot4.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot4-score-litiges.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot4-swipe.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot4-messagerie.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot5-etablissement.xcresult
+            ${{ runner.temp }}/ui-${{ matrix.format }}-lot5-etablissement-ecrans.xcresult
             ${{ runner.temp }}/ui-${{ matrix.format }}-lot3-profil.xcresult
             ios-native/test-results/lot1-${{ matrix.format }}/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Conserver les journaux et relevés légers (lisibles sans les xcresult)
+        # Journaux xcodebuild des éclats, relevés du veilleur (gel-*), redémarrages du simulateur, résumés xcresult et durée
+        # de chaque test (xctest-summary-* et xctest-tests-*), manifestes des pièces jointes, Spindump de XCTest
+        # (diagnostic/, copiés par ios-ci-resume-tests.mjs) : quelques Mo, quand l'artefact complet en pèse 300 à 1 000.
+        # Au run 45239724447, le journal de l'éclat coupé et les relevés du veilleur n'étaient lisibles que dans un
+        # artefact de 832 Mo. Relevé d'information : il ne décide jamais du statut du job (continue-on-error).
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-swift-journaux-ui-lot1-${{ matrix.format }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ios-native/test-results/lot1-${{ matrix.format }}/test-without-building-*.log
+            ios-native/test-results/lot1-${{ matrix.format }}/gel-*
+            ios-native/test-results/lot1-${{ matrix.format }}/relance-simulateur-*.txt
+            ios-native/test-results/lot1-${{ matrix.format }}/xctest-*.json
+            ios-native/test-results/lot1-${{ matrix.format }}/attachments/*/manifest.json
+            ios-native/test-results/lot1-${{ matrix.format }}/diagnostic/
           retention-days: 7
           if-no-files-found: warn
       - name: Éteindre le simulateur

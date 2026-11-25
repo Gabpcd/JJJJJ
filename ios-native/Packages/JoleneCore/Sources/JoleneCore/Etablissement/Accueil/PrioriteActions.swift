@@ -42,16 +42,18 @@ public struct ActionPrioritaire: Equatable, Sendable, Identifiable {
 ///   un libellé neutre (« Valider les présences », « Évaluer vos soignants ») qui n'affirme aucun fait inconnu de l'app.
 ///
 /// Blocage et vérification : le titre de suspension (`TextesWeb.BlocageEtablissement`, `BandeauBlocageAuto.tsx` l.61)
-/// et le bandeau de vérification (l.564-565) attendent la validation HARD STOP n°4 de Gabrielle (§6.4, garde
-/// `contrats-etablissement-ios.node.mjs`) : d'ici là, l'action porte un texte natif de navigation, sans qualification
-/// de l'état du compte, et mène à la page web qui l'explique. Aucun montant (`BandeauBlocageAuto.tsx` l.74-88).
+/// et le bandeau de vérification (`DashboardEtablissement.tsx` l.564-565), déjà affichés tels quels sur le web, sont
+/// repris mot pour mot (HARD STOP n°4, décision c de l'intégration de la vague D, `DECISIONS_LOT5.md`) ; l'action mène
+/// à la page web qui explique la situation. Aucun montant (`BandeauBlocageAuto.tsx` l.74-88), ni date de blocage.
 public enum PrioriteActions {
     public enum Textes {
-        public static let blocageTitre = "Action requise sur jolene.app"
+        /// Titre du bandeau de suspension du web (`BandeauBlocageAuto.tsx` l.61), verbatim.
+        public static var blocageTitre: String { TextesWeb.BlocageEtablissement.publicationSuspendue }
         public static let blocageDetail = "Consultez la situation de votre établissement sur jolene.app."
         public static let blocageCta = "Voir sur jolene.app"
-        public static let verificationTitre = "Vérification de l'établissement"
-        public static let verificationDetail = "Suivez la vérification de votre établissement sur jolene.app."
+        /// Bandeau de vérification du web (`DashboardEtablissement.tsx` l.564-565), verbatim.
+        public static var verificationTitre: String { TextesWeb.BlocageEtablissement.verificationEnCoursTitre }
+        public static var verificationDetail: String { TextesWeb.BlocageEtablissement.verificationEnCoursDetail }
         /// Bouton du bandeau web (`DashboardEtablissement.tsx` l.567).
         public static let verificationCta = "Vérifier mon établissement"
         /// Sous-texte et bouton des candidatures (l.661-662).

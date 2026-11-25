@@ -133,45 +133,46 @@ export const RPC_SUIVIES = [
   { name: 'fn_modifier_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   { name: 'fn_supprimer_filtre_sauvegarde', statut: 'consommee', lot: 4 }, // L4-T4 : SupabaseFiltresGateway
   // T5 — disponibilités
-  { name: 'fn_definir_disponibilite', statut: 'a_venir', lot: 4 },
+  { name: 'fn_definir_disponibilite', statut: 'consommee', lot: 4 }, // L4-T5 : SupabaseDisponibilitesGateway
   // T6 — parrainage
-  { name: 'fn_obtenir_mes_parrainages', statut: 'a_venir', lot: 4 },
-  { name: 'fn_appliquer_parrainage', statut: 'a_venir', lot: 4 },
+  { name: 'fn_obtenir_mes_parrainages', statut: 'consommee', lot: 4 }, // L4-T6 : SupabaseParrainageGateway.etat
+  { name: 'fn_appliquer_parrainage', statut: 'consommee', lot: 4 }, // L4-T6 : SupabaseParrainageGateway.appliquer (code capté par lien)
   // T8 — litiges et réclamations générales (`fn_ouvrir_litige_rate_limited` : RPC_PARTAGEES_LOT4)
-  { name: 'fn_ajouter_message_litige', statut: 'a_venir', lot: 4 },
-  { name: 'fn_soumettre_reclamation', statut: 'a_venir', lot: 4 },
+  { name: 'fn_ajouter_message_litige', statut: 'consommee', lot: 4 }, // L4-T8 : SupabaseLitigesGateway.ajouterMessage
+  { name: 'fn_soumettre_reclamation', statut: 'consommee', lot: 4 }, // L4-T8 : SupabaseReclamationsGateway.soumettre
   // T9 — score, contestation et évaluations
-  { name: 'fn_mon_breakdown_actuel', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_evenements_score', statut: 'a_venir', lot: 4 },
-  { name: 'fn_evolution_score_soignant', statut: 'a_venir', lot: 4 },
-  { name: 'fn_lister_notations_recues', statut: 'a_venir', lot: 4 },
-  { name: 'fn_creer_reclamation_score', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_notations_recues_avec_stats', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_notation', statut: 'a_venir', lot: 4 },
-  // T7a/T7b — messagerie, blocage, signalement, fil de mission (correction 20)
-  { name: 'fn_lister_conversations_messagerie', statut: 'a_venir', lot: 4 },
-  { name: 'fn_interlocuteurs_conversations', statut: 'a_venir', lot: 4 },
-  { name: 'fn_marquer_messages_lus', statut: 'a_venir', lot: 4 },
-  { name: 'fn_messages_non_lus', statut: 'a_venir', lot: 4 },
-  { name: 'fn_typing_start', statut: 'a_venir', lot: 4 },
-  { name: 'fn_typing_stop', statut: 'a_venir', lot: 4 },
-  { name: 'fn_update_presence', statut: 'a_venir', lot: 4 },
-  { name: 'fn_est_bloque', statut: 'a_venir', lot: 4 },
-  { name: 'fn_bloquer_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_debloquer_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_utilisateur', statut: 'a_venir', lot: 4 },
-  { name: 'fn_user_id_pour_etablissement', statut: 'a_venir', lot: 4 },
-  { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 4 },
+  { name: 'fn_mon_breakdown_actuel', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_mes_evenements_score', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway (clé events)
+  { name: 'fn_evolution_score_soignant', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_lister_notations_recues', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway
+  { name: 'fn_creer_reclamation_score', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseScoreGateway (sans justificatif, D10)
+  { name: 'fn_mes_notations_recues_avec_stats', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseEvaluationsGateway
+  { name: 'fn_signaler_notation', statut: 'consommee', lot: 4 }, // L4-T9 : SupabaseEvaluationsGateway
+  // T7a — messagerie, blocage, signalement, fil de mission (correction 20) : toute la gateway est câblée par T7a
+  // (les écrans de T7b n'appellent aucune RPC de plus)
+  { name: 'fn_lister_conversations_messagerie', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_interlocuteurs_conversations', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_marquer_messages_lus', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_messages_non_lus', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_typing_start', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_typing_stop', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_update_presence', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_est_bloque', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_bloquer_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_debloquer_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_signaler_utilisateur', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_user_id_pour_etablissement', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
+  { name: 'fn_obtenir_conversation', statut: 'consommee', lot: 4 }, // L4-T7a : SupabaseMessagerieGateway
   // T10 — copies officielles des bulletins
-  { name: 'fn_lister_copies_bulletins', statut: 'a_venir', lot: 4 },
-  { name: 'fn_signaler_copie_bulletin', statut: 'a_venir', lot: 4 },
+  { name: 'fn_lister_copies_bulletins', statut: 'consommee', lot: 4 }, // L4-T10 : SupabaseBulletinsGateway
+  { name: 'fn_signaler_copie_bulletin', statut: 'consommee', lot: 4 }, // L4-T10 : SupabaseBulletinsGateway
   // T11 — pool urgence et exclusions
-  { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'a_venir', lot: 4 },
-  { name: 'fn_toggle_pool_urgence', statut: 'a_venir', lot: 4 },
-  { name: 'fn_toggle_pool_urgence_sms', statut: 'a_venir', lot: 4 },
-  { name: 'fn_mes_exclusions_recues', statut: 'a_venir', lot: 4 },
-  { name: 'fn_retirer_exclusion', statut: 'a_venir', lot: 4 },
-  { name: 'fn_exclure_utilisateur', statut: 'a_venir', lot: 4 },
+  { name: 'fn_pool_urgence_missions_pour_soignant', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway
+  { name: 'fn_toggle_pool_urgence', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway (seule écriture du pool)
+  { name: 'fn_toggle_pool_urgence_sms', statut: 'consommee', lot: 4 }, // L4-T11 : SupabasePoolUrgenceGateway
+  { name: 'fn_mes_exclusions_recues', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway
+  { name: 'fn_retirer_exclusion', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway
+  { name: 'fn_exclure_utilisateur', statut: 'consommee', lot: 4 }, // L4-T11 : SupabaseExclusionsGateway (détail de mission)
 ];
 
 /**
@@ -272,12 +273,12 @@ export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_lire_candidatures_mission_habilitee', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.lecture
   { name: 'fn_traiter_candidature_planning_v1', statut: 'consommee', lot: 5 }, // T6 : SupabaseEtabCandidaturesGateway.accepter/refuser
   { name: 'fn_contrat_signe_pour_pointage', statut: 'consommee', lot: 5 }, // T7 : SupabaseEtabPointageGateway.contratSigne
-  { name: 'fn_valider_presence', statut: 'a_venir', lot: 5 },
-  { name: 'fn_valider_presences_lot', statut: 'a_venir', lot: 5 },
-  { name: 'fn_contester_presence', statut: 'a_venir', lot: 5 },
-  { name: 'fn_creer_notation_mission', statut: 'a_venir', lot: 5 },
-  { name: 'fn_declarer_fin_retroactive', statut: 'a_venir', lot: 5 },
-  { name: 'fn_creer_mission_multi_jours_v4', statut: 'a_venir', lot: 5 },
+  { name: 'fn_valider_presence', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.valider
+  { name: 'fn_valider_presences_lot', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.validerLot
+  { name: 'fn_contester_presence', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.contester
+  { name: 'fn_creer_notation_mission', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.noter
+  { name: 'fn_declarer_fin_retroactive', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.cloturerSegment
+  { name: 'fn_creer_mission_multi_jours_v4', statut: 'consommee', lot: 5 }, // T9 : SupabaseEtabPublicationGateway.publier
   { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 5 },
 ];
 

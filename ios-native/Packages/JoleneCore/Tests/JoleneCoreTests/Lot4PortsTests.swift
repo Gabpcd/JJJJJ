@@ -7,8 +7,9 @@ import XCTest
 /// des lots 0 et 1 restent mot pour mot ; chaque monde assigne le bloc par `DemoLot4.cabler` / `SupabaseLot4.cabler`.
 final class Lot4PortsTests: XCTestCase {
     /// Champs ajoutés au lot 4, dans l'ordre de déclaration de `Gateways` (§2.2 ; `evaluationsRecues` : garde-fou 18).
+    /// « serie » : quatorzième champ, ajouté par T12 (précision 13 de `DECISIONS_LOT4.md`).
     static let portsLot4 = ["swipe", "filtres", "disponibilites", "parrainage", "litiges", "reclamations", "messagerie",
-                            "realtime", "bulletins", "evaluationsRecues", "poolUrgence", "score", "exclusions"]
+                            "realtime", "bulletins", "evaluationsRecues", "poolUrgence", "score", "exclusions", "serie"]
 
     private let c = DemoWorld.context
 
@@ -17,7 +18,7 @@ final class Lot4PortsTests: XCTestCase {
     func testInitDuLot0LaisseLesPortsDuLot4NonCablesApresCeuxDuLot3() {
         let g = Gateways(auth: NeutralAuth(), role: NeutralRole(), missions: NeutralMissions())
         XCTAssertEqual(g.unwiredPorts, Lot1PortsTests.portsLot1 + Lot2PortsTests.portsLot2 + Lot3PortsTests.portsLot3 + Self.portsLot4)
-        XCTAssertEqual(Self.portsLot4.count, 13)
+        XCTAssertEqual(Self.portsLot4.count, 14, "treize ports du blueprint §2.2, plus la série (T12)")
     }
 
     func testAssignerUnPortDuLot4LeRetireDeLaListe() {
@@ -56,6 +57,8 @@ final class Lot4PortsTests: XCTestCase {
         await refuse("T9") { _ = try await g.score.evenements(limite: 20, context: self.c) }
         await refuse("T11") { _ = try await g.poolUrgence.basculer(actif: true, rayonKm: 30, context: self.c) }
         await refuse("T11") { _ = try await g.exclusions.exclure(etablissementId: "e", motif: "m", context: self.c) }
+        await refuse("T12") { _ = try await g.serie.missions(serieId: "SERIE_1793577600000_ab12", context: self.c) }
+        await refuse("T12") { _ = try await g.serie.accepter(missionId: "m", creneaux: [], context: self.c) }
     }
 
     func testRealtimeNonCableNEmetAucunEvenement() async {

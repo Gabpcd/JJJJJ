@@ -25,6 +25,9 @@ import { matricePermissionsEtablissement, SOURCES } from './check-rpc-contracts.
 import { fixturesLot4 } from './demo-fixtures/lot4.mjs';
 import { buildDemoEtabMissions } from './demo-etab-missions.mjs';
 import { buildDemoEtabPointage } from './demo-etab-pointage.mjs';
+import { buildDemoEtabPresences } from './demo-etab-presences.mjs';
+import { buildDemoEtabContrats } from './demo-etab-contrats.mjs';
+import { buildDemoEtabMessagerie } from './demo-etab-messagerie.mjs';
 
 export const FIXED_NOW = '2026-11-02T00:00:00.000Z';
 export const MISSION_COUNT = 30;
@@ -531,8 +534,12 @@ const DONNEES_CDD_DEMO = {
   temps_partiel: 'NON', retraite_nom: FICTIF, retraite_adresse: FICTIF, prevoyance: 'NON',
 };
 
-/** Original démo complet : `rendreCddEmployeur` puis `wrapInDocument`, empreinte SHA-256 UTF-8. */
-export function rendreOriginalDemo({ numero, mission, etablissement, prepareLe }, moteur) {
+/**
+ * Original démo complet : `rendreCddEmployeur` puis `wrapInDocument`, empreinte SHA-256 UTF-8. `soignant` : prénom et
+ * nom du soignant du contrat (défaut : le soignant fictif du monde soignant ; lot 5, T10 : le soignant assigné de la
+ * mission de l'établissement démo).
+ */
+export function rendreOriginalDemo({ numero, mission, etablissement, prepareLe, soignant = { prenom: 'Camille', nom: 'Démo' } }, moteur) {
   const { donnees, champs } = moteur.validerDonneesCdd(DONNEES_CDD_DEMO);
   if (!donnees) throw new Error(`données CDD démo refusées par validerDonneesCdd : ${champs.join(', ')}`);
   // Variables de `buildVariables` (index.ts l.75-115) : valeurs échappées par `escapeHtml`.
@@ -541,8 +548,8 @@ export function rendreOriginalDemo({ numero, mission, etablissement, prepareLe }
     etablissement_nom: escapeHtmlEdge(etablissement.nom),
     etablissement_siret: escapeHtmlEdge(''),
     etablissement_adresse: escapeHtmlEdge([etablissement.adresse_code_postal, etablissement.adresse_ville].filter(Boolean).join(', ')),
-    soignant_prenom: escapeHtmlEdge('Camille'),
-    soignant_nom: escapeHtmlEdge('Démo'),
+    soignant_prenom: escapeHtmlEdge(soignant.prenom),
+    soignant_nom: escapeHtmlEdge(soignant.nom),
     soignant_date_naissance: escapeHtmlEdge('non renseignée'),
     soignant_adresse: escapeHtmlEdge(''),
     intitule_mission: escapeHtmlEdge(mission.intitule),
@@ -1222,8 +1229,41 @@ export function buildDemoEtabPointageFixture(now = new Date(FIXED_NOW)) {
   return buildDemoEtabPointage({ now, missions: buildDemoEtabMissionsFixture(now) });
 }
 
+/**
+ * Lot 5, T8 : présences de l'établissement démo (`demo-etab-presences.mjs`), dérivées des missions démo (embed et
+ * planning) et du pointage démo (segments EFFECTIF de M4 et M6) : une seule histoire par mission.
+ */
+export function buildDemoEtabPresencesFixture(now = new Date(FIXED_NOW)) {
+  return buildDemoEtabPresences({ now, missions: buildDemoEtabMissionsFixture(now), pointage: buildDemoEtabPointageFixture(now) });
+}
+
+/**
+ * Lot 5, T10 : contrats de l'établissement démo (`demo-etab-contrats.mjs`), dérivés des missions démo (mission,
+ * soignant assigné, horaires de `demo-etab-missions.json`) ; originaux rendus par le moteur serveur, comme au lot 2.
+ */
+export function buildDemoEtabContratsFixture(moteur, now = new Date(FIXED_NOW)) {
+  return buildDemoEtabContrats({
+    now,
+    missions: buildDemoEtabMissionsFixture(now),
+    etablissement: DEMO_ETABLISSEMENTS[0],
+    utilisateurEtablissement: DEMO_ETAB_USER_ID,
+    rendreOriginal: entree => rendreOriginalDemo(entree, moteur),
+  });
+}
+
+/**
+ * Lot 5, T11 : messagerie de l'établissement démo (`demo-etab-messagerie.mjs`), dérivée des missions démo (soignants
+ * assignés, intitulés, statuts) et du compte établissement démo : une seule source pour chaque identité.
+ */
+export function buildDemoEtabMessagerieFixture(now = new Date(FIXED_NOW)) {
+  return buildDemoEtabMessagerie({ now, utilisateurId: buildDemoEtablissement(now).utilisateur.id,
+    missions: buildDemoEtabMissionsFixture(now) });
+}
+
 export async function buildFixtures() {
-  const contrats = buildDemoContrats(await chargerMoteurContrat());
+  const moteurContrat = await chargerMoteurContrat();
+  const contrats = buildDemoContrats(moteurContrat);
+  const contratsEtab = buildDemoEtabContratsFixture(moteurContrat); // lot 5, T10
   const fixtures = {
     'demo-missions.json': { fixed_now: FIXED_NOW, missions: buildDemoMissions() },
     'demo-etablissements.json': { fixed_now: FIXED_NOW, etablissements: DEMO_ETABLISSEMENTS },
@@ -1249,6 +1289,10 @@ export async function buildFixtures() {
     'demo-mes-missions.json': buildDemoMesMissions(), // lot 1, T5
     'demo-etab-missions.json': buildDemoEtabMissionsFixture(), // lot 5, T5
     'demo-etab-pointage.json': buildDemoEtabPointageFixture(), // lot 5, T7
+    'demo-etab-presences.json': buildDemoEtabPresencesFixture(), // lot 5, T8
+    'demo-etab-contrats.json': contratsEtab.json, // lot 5, T10
+    ...Object.fromEntries(Object.entries(contratsEtab.fichiers).map(([nom, texte]) => [nom, { brut: texte }])),
+    'demo-etab-messagerie.json': buildDemoEtabMessagerieFixture(), // lot 5, T11
   };
   // Lot 4 (L4-T1c) : un module par domaine (scripts/mobile/demo-fixtures/), aucun fichier d'un lot antérieur réécrit.
   return { ...fixtures, ...fixturesLot4({ now: new Date(FIXED_NOW) }, fixtures) };

@@ -39,12 +39,27 @@ preuves des tranches).
   la mission ; la route web reste celle des présences, T8) : code et QR relus au serveur toutes les 5 s, écran visible et
   scène active seulement, plein écran natif (code en grand, QR au plus grand) et écran maintenu allumé pendant
   l'affichage du code, absents du web ; « Le soignant n'a pas pu scanner sa sortie ? Clôturer le segment » (fin
-  rétroactive, `fn_declarer_fin_retroactive`) **non porté** : présences, T8 (B9). Une valeur servie qui n'est pas six
-  chiffres n'est jamais présentée (le web l'afficherait).
-- Accueil : « Valider les présences » sans compteur jusqu'à T8, « Évaluer vos soignants » en lien web sans compteur
+  rétroactive, `fn_declarer_fin_retroactive`) n'est pas sur cet écran : il est porté par les présences (T8, B9). Une
+  valeur servie qui n'est pas six chiffres n'est jamais présentée (le web l'afficherait).
+- Accueil : « Valider les présences » sans compteur (non branché par T8 : `DECISIONS_LOT5.md`, précisions T8, point 8),
+  « Évaluer vos soignants » en lien web sans compteur
   (aucune source serveur, correction 20 ; libellés neutres, le web affiche des compteurs) ; aucun graphique ni montant
   (D15). « Planning à confirmer » suit `CompletudePlanning` comme la liste des missions, et non le critère local du
   web (`DashboardEtablissement.tsx` l.354-363) : intégration de la vague C, `DECISIONS_LOT5.md`.
+- Compte (`/etablissement/mon-compte`, T12) : identité servie (nom, rôle d'équipe), emblème de bâtiment sans logo comme
+  le web, vingt-trois renvois web (table `RenvoisWebEtab`), déconnexion. Plus strict que le menu web : équipe sous
+  `gerer_equipe`, factures et prélèvement SEPA sous `lecture_paiement` ∨ `paiement`, litiges et évaluations sous
+  `missions`, Chorus Pro pour le seul secteur public servi. Non repris : type d'établissement, thème, « Contacter
+  Jolene » (modale), onglets « Facturation & contrat », « Opérations » et « Sécurité & RGPD » des paramètres (atteints
+  depuis « Mon établissement »). Réclamations, préférences de notifications et recherches sauvegardées n'ont pas
+  d'entrée (absentes du menu web) : `DECISIONS_LOT5.md`, T12.
+- Présences (`/etablissement/presences`, `/etablissement/presences/mission/:id`, T8, **B9** : merge sur accord de
+  Gabrielle) : onglets dérivés des créneaux relus, validation avec note de 1 à 5, lot, contestation d'une présence à
+  valider, clôture d'un segment ouvert, missions terminées sans pointage ; « Validée » seulement après relecture. Non
+  portés : écart en minutes, précision GPS, contact du soignant, détail de la note par critère, contestation d'une
+  présence déjà validée, litiges et leur fil (jolene.app), simulation de paie et montants de la page d'une mission
+  (D15), compteur de l'Accueil. Ni position ni `coherence_incidents` lus. La clôture suit la permission `pointage`
+  servie ; un `POINTAGE_ONLY` y reçoit le refus du serveur, comme sur le web. Détail : `DECISIONS_LOT5.md`, précisions T8.
 - Acceptation native limitée aux missions `SALARIE` hors `MEDECIN` (D25) ; étudiant aide-soignant (cadre étudiant),
   mission `TOUS`/`LIBERAL` ou `MEDECIN` : « Accepter sur jolene.app » ; le refus reste natif.
 - Membre de plusieurs établissements : servi sur l'établissement choisi par `mon_etablissement_id()`, comme le web ;

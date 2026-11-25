@@ -13,11 +13,12 @@ enum DemoLot4 {
         gateways.litiges = litiges()
         gateways.reclamations = reclamations()
         gateways.messagerie = messagerie()
-        gateways.realtime = realtime()
+        gateways.realtime = realtime(gateways) // T7a : canaux simulés de la messagerie démo du même monde
         gateways.bulletins = bulletins()
         gateways.evaluationsRecues = evaluationsRecues()
-        gateways.poolUrgence = poolUrgence()
+        gateways.poolUrgence = poolUrgence(gateways)
         gateways.score = score()
         gateways.exclusions = exclusions()
+        gateways.serie = serie(gateways) // T12 : quatorzième port (précision 13 de `DECISIONS_LOT4.md`)
     }
 }

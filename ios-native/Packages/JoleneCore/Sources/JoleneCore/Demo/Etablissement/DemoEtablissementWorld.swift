@@ -8,8 +8,8 @@ import Foundation
 ///
 /// L'établissement démo est le premier établissement fictif du monde soignant (`demo-etab-1`), vu de
 /// l'autre côté : un seul nom par identifiant. Les arguments de lancement DEBUG
-/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`, `-JOLENE_POLL_INTERVAL`) sont analysés par l'app
-/// (T2) et traduits en `Configuration`.
+/// (`-JOLENE_DEMO_ROLE_ETAB`, `-JOLENE_DEMO_LEGACY`, `-JOLENE_DEMO_BLOCAGE`, `-JOLENE_POLL_INTERVAL`,
+/// `-JOLENE_DEMO_SECTEUR_PUBLIC`) sont analysés par l'app (T2) et traduits en `Configuration`.
 public enum DemoEtablissementWorld {
     public static let userId = "demo-etablissement"
     public static let messageDemoSeulement = "Le mode démonstration utilise uniquement son établissement fictif."
@@ -26,11 +26,14 @@ public enum DemoEtablissementWorld {
         public var planningModifie: Bool
         /// Cadence de relecture du code de pointage (`-JOLENE_POLL_INTERVAL <s>`, T7) ; `nil` = cadence nominale (D23).
         public var cadencePointage: TimeInterval?
+        /// Établissement servi comme relevant du secteur public (`est_secteur_public`, `-JOLENE_DEMO_SECTEUR_PUBLIC 1`,
+        /// T12 : renvoi web de la configuration Chorus Pro).
+        public var secteurPublic: Bool
 
         public init(role: RoleEtab = .proprietaire, legacy: Bool = false, blocage: Bool = false, planningModifie: Bool = false,
-                    cadencePointage: TimeInterval? = nil) {
+                    cadencePointage: TimeInterval? = nil, secteurPublic: Bool = false) {
             self.role = role; self.legacy = legacy; self.blocage = blocage; self.planningModifie = planningModifie
-            self.cadencePointage = cadencePointage
+            self.cadencePointage = cadencePointage; self.secteurPublic = secteurPublic
         }
 
         /// Rôle servi par le serveur : un compte legacy est toujours propriétaire
@@ -51,18 +54,22 @@ public enum DemoEtablissementWorld {
     /// (l'équivalent du JWT) : `DemoWorld` y branche `DemoAuthGateway.restoreSession`. Chaque port est
     /// câblé ici dans la même PR que sa tranche ; un port encore stub y est nommé explicitement
     /// (`DemoWorldTests.portsEnAttenteLot5`).
+    /// `messagerie` (lot 5, T11) : messagerie démo du même monde, dont l'Accueil relit les non-lus.
     public static func gateways(configuration: Configuration = Configuration(),
-                                identite: @escaping @Sendable () async -> String?) -> EtablissementGateways {
+                                identite: @escaping @Sendable () async -> String?,
+                                messagerie: DemoMessagerieGateway? = nil) -> EtablissementGateways {
         // T6 : décisions de la session partagées par les missions, les candidatures et le pointage (une seule source relue).
         let decisions = DemoEtabEtatCandidatures(planningModifie: configuration.planningModifie)
+        // T9 : missions publiées pendant la session, relues par les missions et les candidatures (une seule source).
+        let publications = DemoEtabEtatPublication()
         return EtablissementGateways(
             session: DemoEtabSessionGateway(configuration: configuration, identite: identite),
-            dashboard: DemoEtabDashboardGateway(),        // T4
-            missions: DemoEtabMissionsGateway(etat: decisions), // T5
-            candidatures: DemoEtabCandidaturesGateway(etat: decisions), // T6
+            dashboard: DemoEtabDashboardGateway(messagesNonLus: messagerie.map { m in { @Sendable contexte in await m.nonLusEtablissement(contexte) } }), // T4 (T11)
+            missions: DemoEtabMissionsGateway(etat: decisions, publications: publications), // T5
+            candidatures: DemoEtabCandidaturesGateway(etat: decisions, publications: publications), // T6
             pointage: DemoEtabPointageGateway(decisions: decisions, cadence: configuration.cadencePointage), // T7
-            presences: UnwiredEtabPresencesPort(),        // T8
-            publication: UnwiredEtabPublicationPort(),    // T9
+            presences: DemoEtabPresencesGateway(),        // T8
+            publication: DemoEtabPublicationGateway(etat: publications, blocage: configuration.blocage), // T9
             audit: DemoEtabAuditGateway()
         )
     }

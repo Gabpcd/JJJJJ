@@ -137,6 +137,9 @@ public struct Gateways: Sendable {
     public var poolUrgence: PoolUrgencePort = UnwiredPoolUrgencePort()                         // T11
     public var score: ScorePort = UnwiredScorePort()                                           // T9
     public var exclusions: ExclusionsPort = UnwiredExclusionsPort()                            // T11
+    // Quatorzième champ (L4-T12, précision 13 de `DECISIONS_LOT4.md`) : lecture et acceptation d'une série de
+    // missions (`Ports/SeriePort.swift`) ; le blueprint §2.2 n'en comptait que treize.
+    public var serie: SeriePort = UnwiredSeriePort()                                           // T12
 
     public init(auth: AuthPort, role: RolePort, missions: MissionsPort, clock: ClockPort = SystemClock()) {
         self.auth = auth; self.role = role; self.missions = missions; self.clock = clock
@@ -173,7 +176,7 @@ public struct Gateways: Sendable {
             ("swipe", swipe), ("filtres", filtres), ("disponibilites", disponibilites), ("parrainage", parrainage),
             ("litiges", litiges), ("reclamations", reclamations), ("messagerie", messagerie), ("realtime", realtime),
             ("bulletins", bulletins), ("evaluationsRecues", evaluationsRecues), ("poolUrgence", poolUrgence), ("score", score),
-            ("exclusions", exclusions),
+            ("exclusions", exclusions), ("serie", serie),
         ]
         return ports.filter { $0.port is UnwiredPort }.map(\.nom)
     }

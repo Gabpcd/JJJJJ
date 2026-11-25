@@ -47,15 +47,13 @@ final class DestinationLienTests: XCTestCase {
         }
     }
 
-    /// Factures, bulletins et avances : renvoi web assumé jusqu'au lot 4 (`PARITE_SOIGNANT.md`,
+    /// Factures et avances : renvoi web assumé jusqu'au lot 4 (`PARITE_SOIGNANT.md`,
     /// D4), alias compris ; l'URL canonique est celle du lien reçu (le web applique sa redirection).
-    func testFacturesBulletinsAvancesToujoursEnRenvoiWeb() throws {
+    func testFacturesAvancesToujoursEnRenvoiWeb() throws {
         let cas: [(String, SectionRevenus)] = [
             ("/soignant/mes-gains?tab=factures", .factures),
-            ("/soignant/mes-gains?tab=bulletins&annee=2026", .bulletins),
             ("/soignant/mes-gains?tab=avances", .avances),
             ("/soignant/mes-factures-honoraires", .factures),
-            ("/soignant/bulletins-paie", .bulletins),
             ("/soignant/mes-avances#haut", .avances),
         ]
         for (chemin, section) in cas {
@@ -65,13 +63,31 @@ final class DestinationLienTests: XCTestCase {
         }
     }
 
-    /// Détail de série : renvoi web assumé au lot 1 (décision 11 de `LOT1_PLAN.md`, `PARITE_SOIGNANT.md`
-    /// l.48 : « détail de série natif au lot 4 ») ; la route reste `.serieDetail` dans la table.
-    func testDetailDeSerieEnRenvoiWebJusquAuLot4() throws {
+    /// Bulletins (L4-T10) : la route de Revenus est gardée, sa destination est l'écran natif des copies officielles,
+    /// copie visée (`?copie=`) comprise ; alias `bulletins-paie` compris.
+    func testBulletinsVersLesCopiesOfficielles() throws {
+        let cas: [(String, String?)] = [
+            ("/soignant/mes-gains?tab=bulletins&annee=2026", nil),
+            ("/soignant/mes-gains?tab=bulletins&copie=c%201", "c 1"),
+            ("/soignant/mes-gains?tab=bulletins&copie=", nil),
+            ("/soignant/bulletins-paie", nil),
+        ]
+        for (chemin, copie) in cas {
+            let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
+            XCTAssertEqual(d.route, .revenus(section: .bulletins), chemin)
+            XCTAssertEqual(d.destination, .secondaire(.bulletins(copieId: copie)), chemin)
+            XCTAssertFalse(d.description.contains("c 1") || d.description.contains("c%201"), "identifiant jamais journalisé")
+        }
+    }
+
+    /// Détail de série : renvoi web assumé au lot 1 (décision 11 de `LOT1_PLAN.md`), natif depuis L4-T12
+    /// (`SerieDetailScreen`) ; la route reste `.serieDetail` dans la table, sa cible est l'écran secondaire `.serie`.
+    func testDetailDeSerieNatifDepuisLeLot4() throws {
         let d = try XCTUnwrap(lien("https://jolene.app/soignant/missions/serie/s%201?x=1"))
         XCTAssertEqual(d.route, .serieDetail(id: "s 1"))
-        XCTAssertFalse(DestinationLien.ecranNatifLivre(d.route))
-        XCTAssertEqual(d.destination, .safari(url("https://jolene.app/soignant/missions/serie/s%201?x=1")))
+        XCTAssertTrue(DestinationLien.ecranNatifLivre(d.route))
+        XCTAssertEqual(d.destination, .serieDetail(id: "s 1"), "écran natif livré : plus de renvoi web")
+        XCTAssertEqual(CibleNotification(d), .secondaire(.serie(id: "s 1")))
     }
 
     // MARK: Écrans du lot 3 livrés (la tranche passe sa ligne de `ecranNatifLivre` à `true`)
@@ -115,7 +131,8 @@ final class DestinationLienTests: XCTestCase {
     /// `?code=` sur `/reset-password` (option B, décision 7 du lot 1) ne dépend pas de cette ligne : `DeepLinkIntent`
     /// le lit sur la route (`DeepLinkIntentTests`). La confirmation d'inscription en est sortie à l'intégration de T7
     /// (`ConfirmationInscriptionScreen`, `testRoutesLot3AvecEcranLivreSontNatives`).
-    func testLiensDeRappelSansEcranNatifRenvoyesVersSafariCanonique() throws {
+    /// Reste de L1-T10 : l'écran natif est livré (`ResetPasswordScreen`) ; le lien ne part plus vers Safari.
+    func testLiensDeReinitialisationOuvrentLEcranNatif() throws {
         let cas: [(String, JoleneRoute)] = [
             ("/reset-password?token_hash=h&type=recovery", .resetPassword(credentials: .tokenHash(tokenHash: "h", otpType: "recovery"))),
             ("/reset-password#access_token=a&refresh_token=r&type=recovery",
@@ -126,8 +143,9 @@ final class DestinationLienTests: XCTestCase {
             let d = try XCTUnwrap(lien("https://jolene.app" + chemin), chemin)
             XCTAssertEqual(d.route, route, chemin)
             XCTAssertTrue(d.route.isNative, "\(chemin) : la route reste native dans la table")
-            XCTAssertFalse(DestinationLien.ecranNatifLivre(route), chemin)
-            XCTAssertEqual(d.destination, .safari(url("https://jolene.app" + chemin)), chemin)
+            XCTAssertTrue(DestinationLien.ecranNatifLivre(route), chemin)
+            XCTAssertEqual(d.destination, route, chemin)
+            XCTAssertNil(d.destination.externalURL, "\(chemin) : jamais servi par Safari")
         }
     }
 
@@ -160,11 +178,12 @@ final class DestinationLienTests: XCTestCase {
     }
 
     func testRenvoisWebEtEspaceEtablissementInchanges() throws {
-        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé), servie par le web
-        // tant que T8 ne l'a pas livrée.
+        // L4-T1 : la page litiges a sa route (`.secondaire(.litiges)`, fragment = litige ciblé) ; L4-T8 la livre : sa
+        // destination est l'écran natif, plus un renvoi web.
         let litiges = try XCTUnwrap(lien("https://www.jolene.app/soignant/litiges#l%201"))
         XCTAssertEqual(litiges.route, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
-        XCTAssertEqual(litiges.destination, .safari(url("https://jolene.app/soignant/litiges#l%201")))
+        XCTAssertEqual(litiges.destination, .secondaire(.litiges(onglet: nil, litigeId: "l 1")))
+        XCTAssertEqual(litiges.canonique, url("https://jolene.app/soignant/litiges#l%201"))
         let etab = try XCTUnwrap(lien("https://jolene.app/etablissement/missions/abc"))
         XCTAssertEqual(etab.destination, .etablissement(url("https://jolene.app/etablissement/missions/abc")))
         let horsAASA = try XCTUnwrap(lien("https://jolene.app/aide/pro-sante-connect?x=1"))
@@ -265,7 +284,7 @@ final class DestinationLienTests: XCTestCase {
             "/soignant/stripe-connect": ("stripeConnect", "stripeConnect", 6),               // T14a (livrée)
             "/soignant/mes-gains?tab=paiements": ("revenus(paiements)", "revenus(paiements)", 32), // T13 (livrée)
             "/soignant/mes-gains?tab=factures": ("revenus(factures)", "safari", 21),         // lot 4 (D4)
-            "/soignant/litiges": ("secondaire(litiges)", "safari", 46),                    // lot 4, T8
+            "/soignant/litiges": ("secondaire(litiges)", "secondaire(litiges)", 46),       // lot 4, T8 (livrée)
             "/soignant/mes-documents": ("documents", "documents", 30),                       // L2-T10 (contrats, dpae)
             "/etablissement/*": ("etablissement", "etablissement", 125),
             "/admin/*": ("safari", "safari", 47),
@@ -298,9 +317,10 @@ final class DestinationLienTests: XCTestCase {
             }
         }
         XCTAssertEqual(decomptes, attendus.mapValues { $0.nombre }, "décomptes par famille")
-        XCTAssertEqual(natifs, 626, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
-                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect)")
-        XCTAssertEqual(renvois, 264, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6)")
+        XCTAssertEqual(natifs, 672, "destinations natives (T5 : +6, centre de notifications ; T9 : +7, profil ; "
+                       + "T13 : +32, paiements à confirmer ; L2-T10 : +127, contrats et Mes documents ; T14a : +6, Stripe Connect ; "
+                       + "L4-T8 : +46, litiges et réclamations)")
+        XCTAssertEqual(renvois, 218, "renvois web (T13 : −32 ; L2-T10 : −127 ; T14a : −6 ; L4-T8 : −46)")
     }
 
     // MARK: Description masquée (PRINCIPES §7 : ni identifiant ni jeton dans les logs)
@@ -452,14 +472,14 @@ final class DestinationLienTests: XCTestCase {
     func testTableDesEcransLivres() {
         let table: [(JoleneRoute, Bool, String)] = [
             (.connexion, true, "lot 0"),
-            (.resetPassword(credentials: nil), false, "écran de réinitialisation natif non livré (reliquat L1-T10, T3b)"),
+            (.resetPassword(credentials: nil), true, "reste de L1-T10 : ResetPasswordScreen, hors espace"),
             (.confirmerInscription(credentials: nil), true, "T7 : ConfirmationInscriptionScreen, hors espace"),
             (.accueil, true, "lot 1"),
             (.explorer, true, "lot 1"),
             (.missions, true, "placeholder jusqu'à L1-T5"),
             (.favoris, true, "L1-T4b : MesFavorisScreen, empilé sur l'onglet Explorer"),
             (.missionDetail(id: "m"), true, "lot 1"),
-            (.serieDetail(id: "s"), false, "renvoi web, décision 11 du lot 1 ; lot 4"),
+            (.serieDetail(id: "s"), true, "L4-T12 : SerieDetailScreen (report de la décision 11 du lot 1)"),
             (.revenus(section: .apercu), true, "T12 : RevenusScreen (onglet Revenus)"),
             (.monCompte, true, "hub ProfileScreen"),
             (.notifications, true, "T5"),
@@ -472,7 +492,7 @@ final class DestinationLienTests: XCTestCase {
             (.stripeConnect(retour: nil), true, "T14a : StripeConnectScreen, empilé sur le Profil"),
             (.stripeConnect(retour: .succes), true, "T14a : retour de Stripe, statut relu avec force=true"),
             (.revenus(section: .factures), false, "lot 4"),
-            (.revenus(section: .bulletins), false, "lot 4"),
+            (.revenus(section: .bulletins), false, "route gardée : destination `.secondaire(.bulletins)` (L4-T10)"),
             (.revenus(section: .avances), false, "lot 4"),
             (.presences(onglet: nil, filtre: nil), true, "L2-T10 : PresencesScreen (T4a)"),
             (.presences(onglet: "historique", filtre: "a_valider"), true, "L2-T10 : PresencesScreen, onglet et filtre du lien"),

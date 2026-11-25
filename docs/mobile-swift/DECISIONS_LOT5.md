@@ -222,7 +222,8 @@ Aucune ne change une décision du §7 ni une règle juridique ; elles fixent ce 
    d'écran de Gabrielle, les actions « blocage » et « vérification » portent des textes natifs de navigation, sans
    qualification de l'état du compte (« Action requise sur jolene.app », « Vérification de l'établissement ») et mènent
    aux pages web qui l'expliquent (`/etablissement/facturation`, `/etablissement/activer`). La validation remplacera ces
-   textes par les constantes verbatim et ajoutera `BlocageEtablissement` à `VALIDES`.
+   textes par les constantes verbatim et ajoutera `BlocageEtablissement` à `VALIDES`. Levé à l'intégration de la vague D (point 1 de
+   sa section) ; textes validés explicitement par la fondatrice le 24/11/2026 (« Oui, je valide », référence au point 1).
 2. **Litiges et évaluations sous `missions`** : aucune clé de `fn_mes_permissions_etab` ne vise ces deux pages web. Choix
    d'affichage fail-closed (pas une règle) : membres qui gèrent les missions (PROPRIETAIRE, ADMIN_GROUPE, RH) ; un
    POINTAGE_ONLY ou un LECTURE_SEULE ne les voit pas. Blocage et vérification restent visibles de tout membre, comme le
@@ -292,7 +293,8 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
    (`VALIDES` vide dans `contrats-etablissement-ios.node.mjs`) : l'écran montre un lien de navigation neutre,
    « Conditions générales de vente sur jolene.app » (`https://jolene.app/cgv#art8`, ancre du web l.394), sans résumer
    les clauses. Après la validation d'écran de Gabrielle : la mention verbatim remplace ce lien (identifiant
-   `etab-candidatures-cgv`) et `CandidaturesEtablissement` entre dans `VALIDES`.
+   `etab-candidatures-cgv`) et `CandidaturesEtablissement` entre dans `VALIDES`. Levé à l'intégration de la vague D (point 1 de sa
+   section) ; texte validé explicitement par la fondatrice le 24/11/2026 (« Oui, je valide », référence au point 1).
 2. **D25 gardé deux fois.** Le modèle aiguille avant tout appel (contrat recherché relu par `EtabMissionsPort.mission`,
    profession de la lecture habilitée, étudiant aide-soignant) ; la gateway Supabase relit en plus, sous RLS, la
    candidature puis sa mission (`id, etablissement_id, type_contrat_recherche, profession_requise`) juste avant l'appel :
@@ -372,6 +374,36 @@ du web repris, refus serveur verbatim, quelques textes natifs de navigation).
     « Aucun code de pointage n’est à présenter pour cette mission. », « Le planning de cette mission n'a pas pu être
     relu. », « Impossible de charger le planning détaillé. Réessayez. ».
 
+## Précisions relevées par la tranche T11 (messagerie établissement, 24/11/2026)
+
+Base : `lot4/l4-t7b` (messagerie du lot 4, pas encore sur `main`). Aucune décision du §7 ni règle juridique changée ;
+aucun texte à portée contractuelle ajouté ; textes du web établissement repris mot pour mot.
+
+1. **Extension additive du port** : `MessageriePort` reçoit les mêmes méthodes avec `etab: EtablissementReadContext`
+   (défaut : refus « non câblé » T11, aucun double à retoucher) et `conversationPourSoignant(missionId:soignantId:etab:)`
+   (`fn_obtenir_conversation(p_autre_id := soignant assigné, p_mission_id)`, sans `fn_user_id_pour_etablissement`,
+   comme `DetailMission.tsx` l.1083). Les modèles du lot 4 (`ConversationsModel`, `FilModel`, `BlocageModel`,
+   `SignalementModel`, `CycleRealtime`) prennent un `ContexteMessagerie` (soignant ou établissement) ; les écrans du
+   lot 4 sont réemployés tels quels (`ContexteEcranMessagerie`), aucun second écran.
+2. **Auteur = utilisateur courant** : `moi` est `user.id` de la session dans les deux espaces ; la gateway refuse tout
+   envoi dont `etab.userId` n'est pas l'utilisateur du JWT ; l'edge pose `auteur_id = auth.uid()`. Règles d'affichage du
+   rôle `ADMIN_ETABLISSEMENT` (web l.305-307, l.738-748) : non-lu = message du soignant seul ; bulle d'un collègue du
+   côté de l'établissement avec « Équipe établissement ».
+3. **Compteurs relus** : l'Accueil garde `messages_non_lus` de `fn_stats_dashboard_etablissement` ; l'onglet Messages
+   porte le badge `fn_messages_non_lus()` du cycle. En démo, l'Accueil relit les non-lus de la messagerie démo (état
+   dérivé, plus la valeur figée de la fixture). Cycle Realtime ouvert aussi pour `.readyEtablissement`, coupe-circuit
+   `ios_natif_etab_messages_actif`.
+4. **Écarts au web assumés** : « Contacter le soignant » (libellé du bouton web, l.1085) est une ligne de lien du détail
+   et empile le fil sur la pile courante (le web navigue vers `/etablissement/messagerie?conv=`) ; signalement depuis le
+   fil (le web ne le propose que sur le profil du soignant, `ProfilSoignantEtablissement.tsx` l.145 : cible
+   `SOIGNANT`, sans mission), comme T7b pour Apple 1.2 ; libellé de cible du blocage « cet utilisateur » (défaut web hors
+   rôle soignant). L'écriture n'est pas filtrée par une permission côté natif : le web n'en filtre aucune, le serveur
+   juge (`CONVERSATION_NON_AUTORISEE` → libellé générique du web).
+5. **Monde démo** : `demo-etab-messagerie.json` (`scripts/mobile/demo-etab-messagerie.mjs`, dérivé des missions démo) ;
+   `EtabDestination.conversation.ecranLivre = true`. XCUITest `DemoEtabMessagerieTests` (deux tests) dans l'éclat
+   « lot4 » du job `ui-lot1` ; `DemoEtabMissionsTests` (fil natif au lieu du renvoi web), `DemoEtabLiensTests`,
+   `DemoEtabAccueilTests`, `DemoEtabSessionTests` migrés vers `messagerie-screen`. Non exécutés localement : preuve CI.
+
 ## Précisions de l'intégration de la vague C (19/11/2026)
 
 Branche `integration/ios-vague-c` (T4 à T7 réunies avec le lot 4). Aucune ne change une décision du §7 ni une règle
@@ -407,6 +439,385 @@ juridique ; aucun texte juridique n'est ajouté.
    aujourd'hui (SwiftUI ne signale pas la couverture par une feuille d'un autre niveau) : ligne dédiée de
    `RECETTE_DEVICE_LOT5.md` §1, à observer sur appareil avant T13.
 
+## Précisions relevées par la tranche T12 (compte minimal et renvois web, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés du menu web
+repris, deux libellés de navigation nommés au point 4).
+
+1. **Table dans `JoleneCore`** (`Etablissement/Compte/RenvoisWebEtab.swift`, et non sous `Jolene/Screens/` comme l'écrit
+   le blueprint) : la cible app n'a pas de tests unitaires (même motif que le registre de destinations, T2a point 1).
+   L'app ne porte que l'écran (`EtabCompteScreen.swift`, monté par `EtabCompteRoot`), sans aucune règle.
+2. **Vingt-trois clés**, celles du §3 T12 : `parametres` mène à `?tab=profil` sous le libellé du menu web « Mon
+   établissement » (l.63), `notifications` au centre de notifications (`/etablissement/notifications`, ligne de la
+   matrice), `api` à la redirection `/etablissement/api`. Cinq routes que la matrice confie à T12 n'ont pas d'entrée
+   dans le Compte, parce que le menu web ne les propose pas : `/etablissement/mes-reclamations`,
+   `/etablissement/reclamations`, `/etablissement/parametres/notifications`,
+   `/etablissement/parametres/recherches-sauvegardees` (atteintes depuis leur page parente) et `/etablissement/activer`
+   (action de l'Accueil, T4). `RenvoisWebEtabTests.testRoutesDeLaMatriceAttribueesAT12` prouve pour chacune des vingt et
+   une routes sa présence dans `App.tsx` et son renvoi web, et exige une entrée ou une absence motivée.
+3. **Entrées réservées** (§2.7, fail-closed ; booléens servis, aucune table rôle → permission) : équipe sous
+   `gerer_equipe` (blueprint) ; factures et prélèvement SEPA sous `lecture_paiement` ∨ `paiement` — le `canReadFinance`
+   du web, qui masque « Facturation » dans sa barre latérale (`BarreNavigation.tsx` l.217) ; plus strict que le menu web
+   du compte, qui montre « Mes factures » à tout membre — ; litiges et évaluations sous `missions` (même choix que
+   l'Accueil, T4 point 2) ; configuration Chorus Pro sous la condition des factures **et** `est_secteur_public` servi
+   vrai (le web ne propose ce lien qu'au secteur public, `FacturationEtablissement.tsx` l.1765 ; valeur absente :
+   masqué). Tout le reste, suppression du compte comprise (D17), est offert à tout membre, comme le menu web.
+4. **Libellés.** Dix-huit lignes du menu web (libellé et route sur la même ligne de `MonCompteEtablissement.tsx`, garde
+   `RenvoisWebEtabTests`), ses titres de section, « Configuration Chorus Pro » (titre de `ChorusConfig.tsx`), « API REST
+   Jolene » (titre de section d'`APIEtablissement.tsx`), « Notifications » (libellé du menu, page du centre). Deux
+   libellés ne viennent pas d'une ligne du menu ; `RenvoisWebEtab.libellesNatifs` les nomme : « Évaluer vos soignants »
+   (libellé neutre de l'Accueil, vague C point 2) et « Prélèvement SEPA » — libellé de navigation : le blueprint demande
+   un renvoi « SEPA » vers `/etablissement/facturation` que le menu web ne nomme pas ; le mot est celui du mode de
+   paiement sur le web (`DetailFacture.tsx` l.44). Non repris : les autres onglets de la page Paramètres (« Facturation &
+   contrat », « Opérations », « Sécurité & RGPD »), le thème, « Contacter Jolene » (modale sans page), le type
+   d'établissement en sous-titre.
+5. **Textes natifs ajoutés (non juridiques)** : « Les pages ci-dessous s'ouvrent sur jolene.app, où une nouvelle
+   connexion peut vous être demandée. » (D16, formule de l'Accueil et du détail d'une mission), « Application »,
+   « Version ».
+6. **Logo** : emblème de bâtiment, comme le web (`MonCompteEtablissement.tsx` l.97-102 lit `logo_url` sans l'afficher).
+   Aucune image distante n'est chargée (l'app n'a pas de chargeur d'image distante).
+7. **Ouverture** : chaque entrée rend sa route externe (`.etablissement(url)` sous l'AASA, `.safari(url)` pour une page
+   légale), présentée par le présentateur `.safari` du coordinateur des liens ; jamais `openURL`. Sans présentateur,
+   aucune entrée (règle du lot 3). L'URL est une constante de la table : ni jeton, ni identifiant, ni donnée de session
+   (`testUnRenvoiEstUnLienConstantSansJetonNiDonneePersonnelle`).
+8. **Sources web relues par les tests Swift** : `src/App.tsx`, `src/pages/MonCompteEtablissement.tsx`,
+   `src/pages/ChorusConfig.tsx` et `src/pages/APIEtablissement.tsx` entrent dans les filtres `pull_request` et `push` de
+   `ios-swift-ci.yml` (garde `check-sources-web-ios-ci`). Coût : une PR web qui touche `App.tsx` relance la CI iOS.
+9. **Monde démo** : `-JOLENE_DEMO_SECTEUR_PUBLIC 1` (`DemoEtablissementWorld.Configuration.secteurPublic`) sert le même
+   établissement fictif comme relevant du secteur public, pour prouver le renvoi Chorus Pro au niveau 2 ; la fixture
+   n'est pas modifiée.
+10. **Identifiants** : `etab-compte-screen` remplace `etab-compte-list` (pile non paresseuse : chaque entrée existe dans
+    l'arbre d'accessibilité, même hors écran) ; `DemoEtabSessionTests` migré. XCUITest `DemoEtabCompteTests` (deux tests)
+    dans l'éclat « lot5-etablissement » du job `ui-lot1`, jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté
+    localement (aucun simulateur) : preuve CI.
+11. **Point 9 de T2a** : le lien de suppression du compte (D17) est livré ; l'ouverture de l'espace hors démo reste
+    décidée par T13 (STAGING) et T14 (production). Compte coupé par son drapeau : comportement de T2a inchangé (renvoi
+    vers `/etablissement/mon-compte`, déconnexion offerte).
+
+## Précisions relevées par la tranche T8 (présences, 24/11/2026)
+
+**B9 paiements/escrow (D7)** : valider une présence déclenche côté serveur la libération du séquestre
+(`trg_escrow_release_on_validation`), contester la bloque (`motif_litige`). La tranche est poussée avec ses tests,
+**jamais mergée sans l'accord explicite de Gabrielle**. Aucune précision ne change une décision du §7 ni une règle
+juridique ; aucun texte juridique n'est ajouté (libellés d'interface du web repris, refus serveur verbatim, quelques
+textes natifs de navigation). Lignes citées : web et dump de `main` au 24/11/2026 (après #1153 et le re-baseline #1174).
+
+1. **RPC appelées telles quelles, une requête par geste, jamais renvoyée.** `fn_valider_presence(p_presence_id)`,
+   `fn_valider_presences_lot(p_ids)`, `fn_contester_presence(p_presence_id, p_motif)`,
+   `fn_creer_notation_mission(p_mission_id, 'ETAB_VERS_SOIGNANT', note ×4, NULL)`,
+   `fn_declarer_fin_retroactive(p_mission_id, p_heure_fin, p_raison)`, puis les relectures (`presences` par identifiant,
+   `fn_etat_pointage_mission.segment_ouvert`). Aucun montant ni aucune durée n'est lu, calculé ou envoyé ; aucun audit
+   doublé (le serveur écrit `PRESENCE_VALIDATION`, `PRESENCE_VALIDATION_LOT`, `PRESENCE_CONTESTATION` ; le web les double).
+2. **« Validée » après relecture seulement.** La gateway relit `valide_par_etablissement` et `valide_le` avant de rendre
+   `.validee` (relecture fausse → erreur, jamais un succès) ; le modèle n'écrit aucun état local (la mise à jour
+   optimiste du web, l.265-267, n'est pas portée) et relit la liste après chaque action. Issue inconnue (délai,
+   transport) : liste relue, jamais la mutation renvoyée. `enCours` est posé avant tout `await` : double toucher = un appel.
+3. **Lecture en liste blanche.** `presences` : `PresenceEtab.clesDecodees` + `missions!inner(id, intitule, service,
+   debut_le, fin_le, nb_creneaux, etablissement_id)` — jamais `arrivee_lat/lng`, `depart_lat/lng`, `coherence_incidents`,
+   `duree_heures`, `heures_reelles`, `alertes_fraude`, précisions GPS, ni aucun montant. « Prévu » et « Réel » sont les
+   sommes de `SynthesePresence` (lot 2, port doré) sur les créneaux relus : des durées planifiée et pointée, jamais une
+   durée facturée. **Écart** : l'écart en minutes du web (`CarteValidation.tsx` l.144-148) n'est pas affiché.
+4. **Nom du soignant** : le blueprint ne le lisait pas ; `fn_soignant_pour_etablissement` (port de T5, déjà consommée)
+   est appelée une fois par soignant listé (25 au plus par lecture, au mieux) ; en échec, « Soignant » (repli du web
+   l.430). `fn_mes_soignants_etablissement` et la table `soignants` ne sont pas lues.
+5. **Contestation** : proposée pour une présence « à valider » seulement ; motif de 3 caractères au moins après
+   nettoyage (borne et message du serveur, sans requête en dessous), saisie bornée à 500 caractères (choix natif). La
+   contestation d'une présence **validée** (`PanneauContestation`, fenêtre lue au serveur depuis #1153), l'ouverture d'un
+   litige et le fil de litige restent sur jolene.app : aucun texte de délai n'est affiché.
+6. **Clôture rétroactive** : action offerte avec la permission `pointage` servie (§2.7), sans table de rôles côté natif.
+   Le serveur exige en plus `est_admin_etablissement()` : un membre `POINTAGE_ONLY` reçoit son refus 42501 mot pour mot,
+   comme sur le web (amendement de la fiche, revue B8 de T0, mineur 4). **D28 verrouillé deux fois** : `ClotureSegment`
+   (modèle) et la gateway refusent une heure postérieure à maintenant avant tout envoi ; le sélecteur est borné à
+   [début du segment ouvert, maintenant], en heure de Paris. La saisie passe par `DateHeureParis.instantDepuisSaisie`
+   comme le web : une heure que le fuseau refuse (inexistante au printemps, répétée à l'automne) reçoit le message du web.
+   Le dump actuel ne sert plus `nouveau_code` ni `nouveau_hmac` ; la gateway ne lit que `creneau_effectif_id`.
+7. **Note (D6)** : obligatoire avant la validation unitaire, envoyée après la validation relue, au mieux ; un refus
+   serveur de la note (« Seules les missions TERMINEE peuvent être notées »…) s'affiche à part, mot pour mot, sans
+   défaire la validation. La validation en lot ne note pas (parité web). Le détail par critère du web n'est pas porté
+   (la note est répliquée sur les quatre critères).
+8. **Compteur de l'Accueil non branché** (écart au blueprint) : le web n'a pas ce compteur (correction 20) et le
+   brancher imposerait de relire toutes les présences et leurs créneaux à chaque ouverture de l'Accueil, sur une base à
+   CPU partagé. L'action « Valider les présences » reste sans compteur ; `PresencesEtabRules.repartir` le fournirait.
+9. **Monde démo** : `demo-etab-presences.json` (`scripts/mobile/demo-etab-presences.mjs`) **dérive** l'embed et le planning
+   de `demo-etab-missions.json` et les segments de M4 et M6 du dernier état de `demo-etab-pointage.json`. Écarts au
+   §2.10 : le segment à clôturer est celui de **M4** (T7 a livré M6 avec son premier créneau fermé) ; aucune présence
+   validée au départ (pas de douzième mission dans la fixture commune) ; les écritures de la session vivent dans un
+   acteur et sont relues. Écart démo assumé : une clôture faite dans Présences n'est pas reportée sur l'écran du code de
+   pointage de M4 (gateway de T7 inchangée). Le serveur fictif reproduit les refus du serveur mot pour mot.
+10. **`EtabDestination.presencesMission.ecranLivre = true`** : `/etablissement/presences/mission/{id}` ouvre les présences
+    de la mission (même écran, sans onglets ni lot) ; `?tab=` d'un lien vers la page sélectionne l'onglet (insertion dans
+    `EtablissementTabView`, jeton `DemandeOngletPresences`). Port étendu de deux lectures (`missionsTerminees`,
+    `creneaux(missionId:)`), signatures existantes inchangées.
+11. **Identifiants ajoutés au blueprint** : `etab-presence-litige-{id}`, `etab-presence-note-refus`,
+    `etab-presences-{succes|avertissement|erreur}`, feuilles `etab-{validation|contestation|cloture|presences-lot}-feuille`.
+    `ContestationEtabSheet` (et non `ContestationSheet`, déjà pris par l'espace soignant).
+12. **XCUITest** `DemoEtabPresencesTests` (quatre tests) dans l'éclat « lot5-etablissement » du job `ui-lot1`, jamais dans
+    le socle. Non compilé ni exécuté localement (Xcode local 16.4, aucun simulateur) : preuve CI. Les cibles iOS seules
+    (`JoleneDesign`, app) ne sont pas compilées localement non plus.
+13. **Textes natifs ajoutés (non juridiques)** : « Chargement des présences… », « Contester la présence », « Annuler »,
+    « L'heure de fin ne peut pas être postérieure à l'heure actuelle. », « N présence(s) validée(s) sur M
+    sélectionnée(s). », « L'action n'a pas pu être confirmée par une relecture. Vérifiez les présences avant de
+    recommencer. ».
+
+## Précisions relevées par la tranche T9 (publication d'une mission, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique n'est ajouté (libellés d'interface
+du web repris, refus serveur verbatim, quelques textes natifs de navigation).
+
+1. **Mention du type de contrat (HARD STOP n°4) — état à la livraison de T9, levé à l'intégration.** À la livraison de
+   T9, la description de l'option « Salarié » (`TextesWeb.PublicationEtablissement`, `FormulaireMission.tsx` l.766)
+   restait verrouillée et le récapitulatif n'affichait aucun type de contrat. Depuis l'intégration de la vague D
+   (point 1 ; textes validés explicitement par la fondatrice le 24/11/2026, « Oui, je valide »),
+   `mentionContrat` rend les deux constantes verbatim et `publier-recap-contrat` est affiché.
+   **Gap verrouillé** (toujours en vigueur) : sans la mention, l'espace établissement ne s'ouvre pas hors démo
+   (`PublicationPresentationTests.testMentionContratExigeeAvantToutEspaceOuvertHorsDemo`) ; T13 et T14 ne peuvent pas
+   ouvrir STAGING ni la production sans elle. La carte de la mission publiée porte, elle, le libellé de contrat de la
+   liste des missions (T5, `badgeContrat`).
+2. **Périmètre fixé par la charge (D8).** `PublicationPayload` envoie les seize paramètres de la signature SQL, dont sept
+   constants : `p_type_contrat_recherche 'SALARIE'`, `p_mode_remuneration 'TAUX_HORAIRE'`, rétrocession, nature de TVA et
+   spécialité `NULL`, `p_accepte_internes false`. L'écran ne propose ni n'affiche aucun type de contrat ni mode
+   d'exercice ; `fn_mode_exercice` n'est ni appelée ni décodée. Une profession `MEDECIN` n'est jamais retenue par le
+   modèle et est refusée avant réseau par les deux gateways.
+3. **Renvois web (D8).** Quatre lignes « Autres options », texte neutre du blueprint mot pour mot (« Cette option se
+   configure sur jolene.app. »), titres composés des libellés du web : « Type de contrat proposé : Tous profils ou
+   Libéral », « Profession requise : Médecin », « Sélection rapide des dates : Lundi–vendredi, 1 semaine civile sur 2 »,
+   « Dupliquer une mission ». Les trois premières ouvrent `/etablissement/missions/creer`, la duplication
+   `/etablissement/missions` (elle part d'une mission). Un lien `…/missions/creer?dupliquer=<id>` reste un renvoi web
+   (`LinkRouter.etablissementDestination`), le formulaire natif ne reprenant aucune mission source. « Récurrence
+   avancée » = la sélection rapide du web (« Toutes les dates », « Lundi–vendredi », « 1 semaine civile sur 2 »,
+   « Aucune ») ; « Appliquer le 1er horaire aux jours sélectionnés » est natif.
+4. **État dérivé.** Dates vides au départ (aucune date fictive) ; « Choisir la date » pose le jour civil de Paris de
+   l'horloge de la session (la dernière date reprend la première si elle existe) ; boutons « Jour précédent » / « Jour
+   suivant » et sélecteur. Toute modification d'une borne re-dérive les jours par `PlanningDerive.rederiver` : jour
+   resté dans la période conservé (état, créneaux, exceptions), jour nouveau au repos avec le créneau 07:00-19:00 du
+   web, jour sorti supprimé, période vide ou inversée sans aucun jour (parité `FormulaireRecurrence.tsx` l.164-178).
+   Erreurs, créneaux matérialisés et total d'heures sont recalculés à chaque lecture, jamais stockés.
+5. **Validation locale structurelle seulement (D9).** Champs obligatoires (intitulé d'au moins trois caractères,
+   profession de la liste, taux supérieur à zéro, niveau 1 à 3 si urgente), période, jour travaillé sans créneau, créneau
+   invalide, chevauchement. Non portés : « créneau déjà commencé », taux conseillé, estimation, commission, contrôle par
+   semaine civile, couleurs de durée : le serveur refuse, son texte est affiché mot pour mot. **Corrigé** (revue B8 des
+   textes de la vague D, M4) : le minimum du champ taux du web (`min`, l.921) n'était tenu par aucune couche (le serveur
+   ne refuse qu'un taux ≤ 0) ; il est désormais repris (section « Corrections des revues B8 de l'intégration de la
+   vague D », textes M4).
+6. **Issue `.nonConfirmee(missionId)` ajoutée à `PublicationOutcome`** : le serveur a répondu `success:true` mais la
+   relecture est impossible ou différente de l'envoi (comparaison par instants, `PublicationRelecture.confirme`). Le
+   blueprint disait « erreur » ; l'issue porte l'identifiant et n'est jamais un succès. Une erreur levée pendant l'envoi
+   (délai, transport) est une issue inconnue : « La publication n'a pas pu être confirmée par une relecture. Vérifiez
+   vos missions avant de recommencer. », aucun renvoi automatique. Seul un refus de session (`28000`, « Non
+   authentifié ») dit que rien n'a été publié.
+7. **Relecture par la gateway.** `missions` (`id, etablissement_id, statut, nb_creneaux, debut_le, fin_le,
+   type_contrat_recherche`, établissement confirmé) puis `mission_creneaux` PREVISIONNEL par le pager exact de T5 ;
+   aucun montant relu. Le modèle ne relit pas une seconde fois : le port ne rend `.publiee` qu'après cette relecture.
+8. **Niveaux d'urgence.** Libellés réduits au premier mot des options du web (« Modéré », « Élevé », « Critique ») : la
+   suite (« — besoin sous 48h ») porte la marque d'un plafond d'heures que la garde des textes refuse hors de
+   `TextesWeb.swift`. À reprendre en entier par une constante de `TextesWeb.swift` si Gabrielle le souhaite.
+9. **Blocage de publication.** Pas de pré-contrôle natif (les textes de blocage de l'Accueil sont verrouillés, T4) : le
+   blocage vient du serveur à l'envoi (`fn_blocage_publication_etab`, `message` mot pour mot, `publier-blocage`), avec
+   « Voir sur jolene.app » vers `/etablissement/facturation` (`PUBLICATION_SUSPENDUE`, `FACTURES_IMPAYEES`) ou
+   `/etablissement/activer` (les trois autres codes), comme les liens du web.
+10. **Identifiants.** Récapitulatif sur `ConfirmationSheet` : `publier-recap` (+ `-title`, `-message`, `-confirm`,
+    `-cancel`) au lieu de `publier-confirmer` ; bouton du formulaire `publier-ouvrir-recap` ; créneaux
+    `publier-creneau-{date}-{i}` avec `i` à partir de 0 (comme le `data-testid` du web), lignes du récapitulatif
+    `publier-recap-creneau-{n}` à partir de 1 (`SlotList`) ; dates `publier-date-{debut|fin}` (+ `-choisir`,
+    `-precedent`, `-suivant`).
+11. **Monde démo.** Aucune fixture JSON nouvelle : `DemoEtabEtatPublication` (acteur de session) reçoit la mission
+    créée et journalise la charge ; les gateways démo des missions et des candidatures le relisent (la mission apparaît
+    « Ouverte »). `-JOLENE_DEMO_BLOCAGE 1` → `PUBLICATION_SUSPENDUE` au texte du serveur. Refus rejoués : aucun créneau,
+    début dans le passé (horloge démo), droit `missions` absent (`CREATION_MISSION_INDISPONIBLE`) ; aucune règle du
+    temps de travail n'est rejouée.
+12. **`EtabDestination.publication.ecranLivre = true`** : « Publier » (barre de Missions), « Publier une mission »
+    (Accueil) et `/etablissement/missions/creer` ouvrent l'écran natif (`EtabRouteTests`, `DeepLinkCoordinatorTests`,
+    `DemoEtabSessionTests` migrés). XCUITest `DemoEtabPublicationTests` (quatre tests) dans l'éclat
+    « lot5-etablissement » du job `ui-lot1`, jamais dans le socle (garde `ios-swift-ci-eclats`). Non exécuté localement
+    (aucun simulateur) : preuve CI ; durée de l'éclat à relever au premier run. Niveau 1 vérifié en local le 24/11
+    (Xcode 16.4, `swift build --build-tests` puis `swift test`, concurrence stricte) : JoleneCore 2 394 tests et
+    JoleneSupabase 713 tests, aucun échec, aucun avertissement. Les trois écrans de `Screens/Etablissement/Publication/`
+    et la classe XCUITest ne sont **pas** compilés en local (cible app, `xcodebuild` exclu) : première compilation en CI.
+13. **Textes natifs ajoutés (non juridiques)** : « Autres options », « Ouvrir sur jolene.app », « Choisir la date »,
+    « Jour précédent », « Jour suivant », « Voir mes missions », « Voir la mission », « Publier une autre mission »,
+    « Voir sur jolene.app », « La publication n'a pas pu être confirmée par une relecture. Vérifiez vos missions avant
+    de recommencer. », « Le planning n'a pas pu être préparé. Vérifiez les dates et les horaires. », « La publication
+    n'a pas pu aboutir. Vérifiez votre connexion. », et les quatre titres de renvoi du point 3. Émojis décoratifs du web
+    non repris (titre du récapitulatif, « Publier », « Modifier », succès).
+
+## Précisions relevées par la tranche T10 (contrats et signature OTP établissement, 24/11/2026)
+
+Aucune ne change une décision du §7 ni une règle juridique ; aucun texte juridique nouveau (textes du web repris par
+`TextesWeb` et `LibellesWeb`, refus serveur traduits comme le web, quelques libellés natifs de navigation).
+
+1. **Port étendu, écrans réemployés (D18).** `ContratsPort` reçoit huit méthodes à contexte `EtablissementReadContext`
+   (défaut « non câblé » pour les conformances antérieures) ; `ContratModel`, `ContratsListeModel`, `ContratScreen`,
+   `ContratsListeView` et `SignatureOtpView` du lot 2 servent les deux espaces, aiguillés par `PartieContrat`. Aucun
+   appel sans la permission `contrats` servie (`ContratsEtablissement.verifier`, fail-closed). Supabase : extension
+   `Etablissement/SupabaseEtabContratsGateway.swift` du gateway du lot 2 (liste `eq(etablissement_id)`, détail borné à
+   l'établissement, compte TEST sur `etablissements.est_compte_test` ; la mission n'est pas relue, ses montants non
+   plus, D15) ; succès de signature annoncé seulement après relecture de `signature_etablissement_le` non nul et de la
+   preuve `signatures_contrats` du membre.
+2. **Identifiants.** Écran du lot 2 réemployé : ses identifiants restent (`contract-otp` pour le champ du code,
+   `contrat-signer` pour la validation, au lieu de `contrat-otp` et `contrat-otp-valider` du plan) ; racine
+   `contrat-detail` dans l'espace établissement (jamais `contrat-screen`) ; `etab-contrats-screen`, `etab-contrat-{id}`,
+   `etab-contrat-statut-{id}` (pastille, dans le bouton de la carte), `contrat-otp-envoyer`, `contrat-signe`,
+   `contrat-preparer-web` comme prévu ; `contrat-mode-otp` pour le mode de signature.
+3. **Point d'entrée (D13).** Aucun onglet « Contrats » : bouton « Contrats » de la barre de Missions
+   (`etab-missions-contrats`) et lien « Contrats » du détail d'une mission assignée, tous deux masqués sans la
+   permission `contrats` (absents pour POINTAGE_ONLY et LECTURE_SEULE). Liens `/etablissement/contrats?statut=` et
+   `/contrat/{id}` natifs dans l'espace établissement ; `/contrat/{id}/certificat` reste un renvoi web (§1.2), le résumé
+   du certificat restant affiché sur le contrat.
+4. **Mode de signature affiché (HARD STOP n°4, validé le 24/11/2026).** Au-dessus du formulaire OTP, l'écran établissement montre
+   `TextesWeb.Contrat.otpLibelle` et `TextesWeb.Contrat.otpDescription` (`ContratMission.tsx` l.742 et l.745, mention
+   « Conforme art. 1366-1367 Code civil »), verbatim, comme le web ; la signature manuscrite n'est pas proposée. Ces
+   textes sont ceux du lot 2 et ne sont pas sous le verrou `VALIDES` de `contrats-etablissement-ios.node.mjs`. Ils
+   figurent dans la liste validée explicitement par la fondatrice le 24/11/2026 (point 1 de l'intégration de la vague D,
+   « Oui, je valide »).
+
+## Précisions de l'intégration de la vague D (24/11/2026)
+
+Décisions prises par Claude sur délégation de Gabrielle du 24/11/2026 (« t'as mon go pour tout faire et tout merger
+meme paiements etc », « comme tu veux, tu es maitre prends tes décisions »), une par point.
+
+1. **Textes établissement déjà affichés par le web : repris mot pour mot et affichés (décision c).** Les trois blocs
+   ci-dessous, d'abord affichés sur délégation générale, font partie de la liste des textes à portée juridique de la
+   revue B8 du tour 2 (section 6, groupes A à E), **validés explicitement par la fondatrice le 24/11/2026** (« Oui, je
+   valide », consigné dans la PR : https://github.com/Gabpcd/JJJJJ/pull/1179#issuecomment-7142442809) au titre du HARD STOP n°4.
+   **Ce que la validation ne couvre pas** : tout texte ajouté après cette liste (il repasse par une validation) ; le
+   site, où les trois promesses du groupe D (« +10 points », « sous 72h », « validation étab sous 1h ») restent
+   affichées (suivi web à part : seuls leurs retraits natifs sont validés) ; l'ouverture de l'espace établissement hors
+   démo, qui fera l'objet d'une PR dédiée. La garde
+   `tests/node/contrats-etablissement-ios.node.mjs` retenait ces blocs de `TextesWeb` hors des écrans. Chacun est un
+   texte que le web affiche aujourd'hui tel quel (constante égale au texte du web, au caractère près, par
+   `check-textes-juridiques-ios`) ; la liste `VALIDES` les reçoit, et la garde exige leur référence dans ce point 1
+   (revue B8 d'assemblage de la vague D, M2 : une simple mention ailleurs dans ce fichier ne suffit plus) :
+   - `TextesWeb.PublicationEtablissement` : « Salarié » et « Vous êtes l’employeur : CDD, bulletin de paie, plafond
+     légal 48 h/semaine » (`src/components/FormulaireMission.tsx` l.766, description de l'option « Salarié » du
+     formulaire de publication), affichés dans le récapitulatif avant publication (`PublicationPresentation.mentionContrat`,
+     identifiant `publier-recap-contrat`). Précision T9 n°1 levée.
+   - `TextesWeb.CandidaturesEtablissement` : mention « Avant d’accepter un candidat, consultez les conditions de
+     non-contournement et de recrutement direct — CGV art. 8. Elles précisent les situations concernées, les durées
+     applicables et le calcul des frais de recrutement. » (`src/components/ListeCandidatures.tsx` l.390-398, montée par
+     `DetailMission.tsx` au-dessus des candidatures en attente), affichée à la même place au-dessus des candidatures en
+     attente ; le lien « non-contournement et de recrutement direct — CGV art. 8 » est souligné et la mention ouvre
+     `https://jolene.app/cgv#art8` (identifiant `etab-candidatures-cgv-lien` ; `etab-candidatures-cgv` sans
+     présentateur). Le lien neutre « Conditions générales de vente sur jolene.app » est retiré. Précision T6 levée.
+   - `TextesWeb.BlocageEtablissement` : « Publication de missions suspendue » (`BandeauBlocageAuto.tsx` l.61, titre du
+     bandeau de suspension automatique), « Votre compte est en cours de vérification » et « Vérifiez votre
+     établissement (FINESS + rattachement du représentant) pour pouvoir publier des missions. À défaut, l'équipe Jolene
+     valide votre dossier. » (`DashboardEtablissement.tsx` l.564-565), titres et détail des actions « blocage » et
+     « vérification » de l'Accueil (`PrioriteActions.Textes`). Le détail de l'action « blocage » reste le texte natif
+     de navigation « Consultez la situation de votre établissement sur jolene.app. » ; la date de blocage, les raisons
+     et les montants du bandeau web (l.63-88) ne sont toujours pas portés. Précision T4 levée.
+   Aucun texte retenu par la garde n'est absent du web : aucun n'est resté non affiché pour ce motif.
+
+## Corrections des revues B8 de l'intégration de la vague D (24/11/2026)
+
+Trois revues fraîches de la PR #1179 (assemblage et CI, sécurité et argent, textes et règles métier), toutes « À
+CORRIGER ». Un commit par constat ou petit groupe ; les réponses constat par constat sont postées dans la PR.
+
+**Assemblage et CI.**
+- B1 : `DemoEtabMessagerieTests` attend `etab-compte-screen` (L5-T12) ; relevé par script de tous les identifiants
+  littéraux des XCUITest contre les sources de l'app : aucun autre manquant.
+- M1, m1 : « lot5-etablissement » (22 méthodes) scindé en « lot5-etablissement » (liens, missions, candidatures, compte :
+  11) et « lot5-etablissement-ecrans » (présences, publication, contrats : 11). Plafond du job `ui-lot1` : 25 + 1 + 1 +
+  7 × 30 + 15 = 252, porté à 255 min ; en-tête réécrit. La garde exige au plus 17 méthodes par éclat du job et un
+  en-tête qui énonce le plafond posé. Les précisions T8 n°12, T9 n°12 et T10 qui citent « lot5-etablissement » datent
+  d'avant la scission.
+- M2 : voir le point 1 de l'intégration de la vague D ; garde durcie (référence au point 1 de la section de décision),
+  puis adaptée à la validation explicite du 24/11/2026 (mention datée et référence exigées, aucun bloc validé encore
+  « en attente »).
+
+**Sécurité et argent.**
+- M1 : une série dont les missions ne viennent pas toutes du même établissement n'est pas un pack
+  (`SerieRegles.unSeulEtablissement`, gateway et modèle) : « Pack introuvable », rien n'est présenté ni coché. Le web
+  et le serveur ne sont pas modifiés (le web garde le comportement relevé, à corriger hors chantier iOS).
+- m1 à m6 : retrait des balises jusqu'à stabilité sans tenir compte de la casse ; `\`, `%` et `_` échappés dans
+  l'ILIKE de la série ; formulaire bloqué après une publication non confirmée (`relectureRequise`) ; jeton de tentative
+  de la session de récupération (un nouveau lien révoque d'abord, une vérification tardive n'ouvre rien) ; lien
+  implicite de récupération gardé, en parité avec le site (m5, constat et raison dans `DECISIONS_LOT3.md`, « Reste de
+  L1-T10 ») ; copies temporaires de contrats et de bulletins
+  purgées au lancement et à la sortie des deux espaces.
+- m7 (choix consigné, aligné sur l'existant) : le coupe-circuit de la messagerie (`ios_natif_messagerie_actif`,
+  `ios_natif_etab_messages_actif`) reste **ouvert par défaut** : drapeau absent ou illisible = messagerie servie,
+  Realtime compris (`CycleRealtime`). C'est la règle de tous les drapeaux d'écran natifs (D18 de `DECISIONS_LOT4.md`,
+  D14 ci-dessus : « fail-open ») ; ils servent à couper un écran en production, pas à protéger une donnée. Les
+  contrôles de sécurité de la messagerie sont au serveur (edge `messagerie-validate`, RLS) et ne dépendent pas du
+  drapeau. Passer ce seul drapeau en fermé par défaut ferait de la messagerie l'exception ; à décider avec D18 si
+  Gabrielle le souhaite.
+
+**Textes et règles métier.**
+- M1, M2, M3 (lot 4) : voir `DECISIONS_LOT4.md`, précisions 16 (motif corrigé) et 21.
+- M4 : la publication native applique le plancher du taux horaire du web (`min` du champ hors libéral,
+  `FormulaireMission.tsx` l.921), repris par `LibellesWeb.Publication.tauxMinimumHorsLiberal` et épinglé à sa ligne
+  (`PublicationPayloadTests`), jamais recopié dans la logique. **Parité provisoire** : le serveur ne refuse qu'un taux
+  ≤ 0 (`fn_creer_mission_multi_jours*`, `public.sql` l.27339) et le dump ne contient aucun contrôle de ce plancher. Un
+  suivi serveur est à ouvrir (contrôle paramétré dans `fn_creer_mission_multi_jours*`, aucun seuil en dur, HARD STOP
+  n°4) ; **non fait ici**. Le web n'a pas de texte propre (refus natif du navigateur) : l'avis sous le champ est un
+  texte natif neutre, sans référence légale, valeur tirée de la constante (« Le taux horaire doit être d'au moins
+  11,65 €/h. », nombre formaté en `fr_FR` depuis la constante), validé explicitement par la fondatrice le 24/11/2026
+  (point 1 de l'intégration de la vague D, groupes A et E).
+- M5 : une présence validée propose « Contester cette présence » (libellé du web, `PanneauContestation.tsx` l.365) en
+  renvoi web vers `/etablissement/presences` ; aucune RPC, aucun texte de délai ; le serveur juge la fenêtre.
+- M6 : l'écran contrat de l'établissement affiche le statut (`DPAEStatus.tsx`) et le rappel (`BandeauRappelDPAE.tsx`)
+  DPAE du web, mot pour mot (`TextesWeb.DPAE`), sur les champs que le web lit (`dpae_numero`, `dpae_effectuee`,
+  `dpae_effectuee_le`, ajoutés à la lecture, jamais écrits) ; préparation et saisie du numéro en renvoi web.
+- M7 : voir M2 de l'assemblage.
+- Mineurs corrigés : 8 (texte du serveur sous un motif de contestation trop court), 9 (bornes de clôture : dernier
+  créneau EFFECTIF ouvert pause comprise, et minute qui suit son début, comme `fn_declarer_fin_retroactive` ; précision
+  T8 n°6 à lire avec cette borne), 13 (score : « Non noté » seul sans compte servi), 14 (« ne vous a exclu. »).
+- Mineurs non corrigés, une ligne chacun :
+  - 6 (niveaux d'urgence sans « besoin sous 48h / 24h / 6h ») : le texte porte un délai que la garde des textes refuse
+    hors de `TextesWeb.swift` (précision T9 n°8) ; à porter par une constante `TextesWeb` si Gabrielle le valide.
+  - 7 (« Écart : ±N min » non affiché) : écart calculé côté client par le web ; à porter avec la synthèse, tranche à
+    part, précision T8 n°3.
+  - 10 (officine qui n'apprend le blocage qu'à l'envoi) : le pré-contrôle du web lit l'activité de l'établissement ;
+    le refus du serveur est affiché mot pour mot ; tranche à part.
+  - 11 (Compte établissement : « Notifications » vers le centre natif, « Prélèvement SEPA », « revérifier » du bandeau
+    de suspension non porté) : choix de navigation de T12 ; « revérifier » déclenche une écriture serveur (RPC de
+    re-vérification) hors du périmètre de cette correction.
+
+## Mineurs du tour 2 de la revue B8 de l'intégration de la vague D (24/11/2026)
+
+Revue fraîche du tour 2 « CLÔTURABLE », cinq mineurs ; aucun texte affiché ajouté, aucune RPC nouvelle.
+
+1. m5 (lien implicite de récupération) : motif réécrit dans `DECISIONS_LOT3.md` (« Reste de L1-T10 »), décision
+   inchangée ; renvoi corrigé en §6.6 du plan du lot 1.
+2. « Contester cette présence » : le web n'affiche ce bouton que si `dansFenetre && !litige`
+   (`PanneauContestation.tsx` l.105-108). L'app masque désormais le renvoi quand un litige est attaché à la carte
+   (`motif_litige` relu, `PresencesEtabPresentation.carte`, test
+   `PresencesEtabRulesTests.testPresenceValideeOffreLeRecoursDuWebEnRenvoi`). **Écart restant** : la fenêtre de
+   contestation n'est pas connue de l'app. Le web la lit par `fn_fenetre_contestation_ouverte`, que la gateway
+   établissement n'appelle pas ; la recalculer en local depuis `valide_le` recopierait le délai
+   `parametres_litiges.delai_contestation_pointage_h` et son défaut serveur (interdit par D12 de `DECISIONS_LOT2.md`,
+   « aucune constante de délai côté client »). Après la fenêtre, l'app propose donc encore le renvoi ; la page web
+   ouverte n'affiche alors plus le bouton. Second écart : le web cherche une ligne `litiges` de la présence, quel que
+   soit son statut, alors que l'app ne voit que `presences.motif_litige` ; un litige ouvert sans ce motif n'est pas
+   détecté. Lever ces deux écarts suppose d'appeler la RPC de fenêtre et de lire `litiges` côté établissement
+   (contrat RPC du lot 5 à étendre) : tranche à part.
+3. Commentaires de documentation remis au-dessus de leur enum (`TextesWeb.CandidaturesEtablissement`,
+   `LibellesWeb.DetailMission`) ; `TextesWeb.DPAE` et `LibellesWeb.Publication` gardent leur propre commentaire.
+4. « Préparer les données DPAE » (`LibellesWeb.DPAE.preparer`, écran contrat, `statutDPAE`) : libellé gardé (liste
+   des textes) ; **écart consigné** : sur le site, le bouton appelle `fn_generer_donnees_dpae` sur place ; dans l'app,
+   il renvoie à la page du contrat sur jolene.app, où l'établissement touche le bouton une seconde fois. Aucune RPC
+   DPAE n'est appelée par l'app.
+5. Double réception d'un même lien de récupération : le routage ne dédoublonnait pas (`onOpenURL` et
+   `onContinueUserActivity` appellent tous deux `DeepLinkCoordinator.recevoir`, et `BoiteLiensInscription` créait une
+   nouvelle demande par lien). La boîte ignore désormais un lien strictement identique à celui de la demande
+   présentée (vérification en cours ou formulaire ouvert) ; tout autre lien, ou le même après fermeture de l'écran,
+   ouvre une nouvelle tentative, et les correctifs m4 du port (jeton de tentative, révocation de la session
+   précédente) sont inchangés. Rien n'est journalisé. Test :
+   `ReinitialisationTests.testMemeLienRecuDeuxFoisNOuvreQuUneTentative`.
+
+## Suivis ouverts de la revue fraîche du delta de la vague D (25/11/2026)
+
+- **m3 — garde des durées des éclats, iPad seulement** : `DUREES_UI_LOT1` (`tests/node/ios-swift-ci-eclats.node.mjs`
+  l.523) ne mesure que `ipad-landscape` et `ipad-portrait`, alors que le job « UI lot 1 » tourne aussi sur `iphone`.
+  Le plafond de 18 min n'est donc pas gardé sur iPhone. Suivi : ajouter la colonne iPhone (mesures d'un run complet) ou
+  écrire dans l'en-tête de la garde que l'iPhone n'est pas gardé.
+- **m1 — test Realtime, seconde tolérance sans fondement** :
+  `SupabaseRealtimeGatewayTests.swift` l.240-243 accepte que l'état global saute `.connexion`. Le flux global
+  (`DiffusionEvenements`, sans rejeu) reçoit pourtant chaque état publié, et son abonné est inscrit avant l'ouverture du
+  canal. Avec cette tolérance, une régression qui cesserait d'émettre `.connexion` à l'échelle globale passerait. La
+  première tolérance (l.185-191, flux par conversation qui garde le dernier état) reste légitime. Suivi : rétablir
+  l'égalité `[.connexion, .rejoint]` sur le flux global, ou documenter un cas réel observé.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
@@ -418,11 +829,17 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
 3. **B5b** (facultative, B9 SECURITY DEFINER) : accord ou refus explicite (visibilité du code de pointage, des
    finances et des identifiants Stripe par permission ; refus d'une heure de fin future ; refus de contester une
    présence validée).
-4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR) : mention CGV art. 8 (T6) ; absence
-   de case « cadre étudiant » et renvoi web (T6) ; publication native limitée au salariat et texte du renvoi
-   « libéral / tous contrats » (T9) ; titre de suspension de publication (T4) ; écran de signature OTP établissement
-   avec la mention art. 1366-1367 (T10) ; description verbatim de l'option « Salarié » au récapitulatif (T9) ;
-   absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25).
+4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR), hors textes de la liste validée :
+   absence de case « cadre étudiant » et renvoi web (T6) ; publication native limitée au salariat (T9, restriction
+   d'un mode d'exercice) ; absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25) ;
+   libellé du taux repris du web (« Taux horaire brut * (€/h) », `FormulaireMission.tsx` l.917, affiché) ; tout texte
+   ajouté après la liste.
+   **Textes validés le 24/11/2026** (plus en attente) : la liste de la revue B8 du tour 2 (section 6, groupes A à E),
+   validée explicitement par la fondatrice (« Oui, je valide », point 1 de l'intégration de la vague D) : statut et
+   rappel DPAE de l'écran contrat, avis du plancher du taux, renvoi « Contester cette présence », mention de signature
+   OTP art. 1366-1367 (T10), les trois blocs du point 1 et les titres de renvoi web de T9 (dont « libéral / tous
+   contrats », précision T9 n°13). Hors validation : les promesses du groupe D toujours affichées par le site (suivi
+   web à part) et l'ouverture de l'espace établissement hors démo (PR dédiée).
 5. **STAGING** : numéro de recette SMS pour `etablissements.telephone_contact` (preuve OTP établissement facultative
    de T10) ; confirmation qu'aucun abonnement SMS/e-mail réel n'existe sur les comptes de recette ; valeur de
    `parametres_systeme.inscriptions_publiques_actives`.
