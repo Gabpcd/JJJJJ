@@ -10,9 +10,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  APP_CONTAINER, DEMO_WORLD_TESTS, ENVIRONNEMENT, ESPACE_RESOLUTION, MODES, NOTES, NOTES_MAX, PORTS_COEUR, RETENTION_PROVENANCE_JOURS, WORKFLOW_CI_IOS, WORKFLOW_TESTFLIGHT,
+  APP_CONTAINER, DEMO_WORLD_TESTS, ENVIRONNEMENT, ESPACE_RESOLUTION, MODES, ROLES_SERVIS, NOTES, NOTES_MAX, PORTS_COEUR, RETENTION_PROVENANCE_JOURS, WORKFLOW_CI_IOS, WORKFLOW_TESTFLIGHT,
   evaluateBuild, evaluateCiIos, evaluateEntrees, evaluateNotes, evaluateSource, findProvenance, lireBuild, lirePortsEnAttente,
-  lireModes, lireOuvertureEtablissement, loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
+  lireCablageEtablissement, lireModes, lireOuvertureEtablissement, lireRolesEtablissement, loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
 } from '../../scripts/mobile/ios-native-app-store.mjs';
 import { APP, GuardFailure, ascClient } from '../../scripts/mobile/ios-native-testflight.mjs';
 import { lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
@@ -446,6 +446,80 @@ test('etablissement : AppContainer câble la table sur le mode de lancement, san
   const sansApp = arbreClos();
   delete sansApp.swiftSources[APP_CONTAINER];
   refus(() => evaluateSource(sansApp), 'etablissement', /AppContainer\.swift absent/);
+});
+
+// Revue fraîche de #1190 : M2 (contrôleur sous #if), m1 (.pour(mode: .demo) hors du monde démo), m2 (rôles refusés en
+// amont de la table). Chaque contournement montré par le relecteur est rejoué ici et doit être refusé.
+const LIGNE_PRODUCTION = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))';
+const LIGNE_DEMO = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))';
+const avecApp = (remplacer) => {
+  const files = arbreClos();
+  const avant = files.swiftSources[APP_CONTAINER];
+  files.swiftSources[APP_CONTAINER] = remplacer(avant);
+  assert.notEqual(files.swiftSources[APP_CONTAINER], avant, 'la mutation doit changer AppContainer.swift');
+  return files;
+};
+
+test('etablissement (M2) : le câblage du dépôt est lu construction par construction', () => {
+  const app = arbre().swiftSources[APP_CONTAINER];
+  assert.ok(app.includes(LIGNE_PRODUCTION) && app.includes(LIGNE_DEMO), 'lignes attendues par les mutations ci-dessous');
+  assert.deepEqual(lireCablageEtablissement(arbre().swiftSources), { erreurs: [], controleurs: 2, coordinateurs: 1, productionParMode: 1 });
+  assert.deepEqual(lireRolesEtablissement(arbre().swiftSources), []);
+});
+
+test('etablissement (M2) : un contrôleur de session sous #if, ou sans espaceEtablissement:, est refusé', () => {
+  // Contre-exemple exact du relecteur : la ligne DEBUG garde deux câblages par mode, le Release retombe sur .ferme.
+  const reviseur = avecApp((s) => s.replace(LIGNE_PRODUCTION,
+    `#if DEBUG\n                ${LIGNE_PRODUCTION}\n                #else\n                let controller = SessionController(gateways: gateways)   // défaut .ferme\n                #endif`));
+  refus(() => evaluateSource(reviseur), 'etablissement', /SessionController\( sous compilation conditionnelle/);
+  refus(() => evaluateSource(reviseur), 'etablissement', /SessionController\( sans espaceEtablissement: .*défaut \.ferme/);
+  // #if sans #else autour du seul câblage : refusé aussi.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, `#if DEBUG\n                ${LIGNE_PRODUCTION}\n                #endif`))),
+    'etablissement', /sous compilation conditionnelle/);
+  // Argument retiré : défaut .ferme du contrôleur.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, 'let controller = SessionController(gateways: gateways)'))),
+    'etablissement', /sans espaceEtablissement: .*défaut \.ferme/);
+  // Argument multiligne, valeur autre : refus nommé.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION,
+    'let controller = SessionController(gateways: gateways,\n                    espaceEtablissement: OuvertureEspaceEtablissement.ferme)'))),
+    'etablissement', /force l'ouverture .*OuvertureEspaceEtablissement\.ferme/);
+  // Aiguillage des liens sous #if ou sans argument.
+  refus(() => evaluateSource(avecApp((s) => s.replace('let liens = DeepLinkCoordinator(', '#if DEBUG\n        let liens = DeepLinkCoordinator(')
+    .replace('        self.liens = liens\n', '        #endif\n        self.liens = liens\n'))), 'etablissement', /DeepLinkCoordinator\( sous compilation conditionnelle/);
+  refus(() => evaluateSource(avecApp((s) => s.replace(/\s*espaceEtablissement: \.pour\(mode: environment\.mode\), \/\/ lot 5, T2b/, ''))),
+    'etablissement', /DeepLinkCoordinator\( sans espaceEtablissement:/);
+  // Un #if refermé avant la construction ne compte pas.
+  const ferme = avecApp((s) => s.replace(LIGNE_PRODUCTION, `#if DEBUG\n                let essai = 1\n                #endif\n                ${LIGNE_PRODUCTION}`));
+  assert.deepEqual(lireCablageEtablissement(ferme.swiftSources).erreurs, []);
+});
+
+test('etablissement (m1) : .pour(mode: .demo) n est admis que dans la branche case .demo', () => {
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, LIGNE_DEMO))), 'etablissement',
+    /force l'ouverture .*espaceEtablissement: \.pour\(mode: \.demo\)/);
+  refus(() => evaluateSource(avecApp((s) => s.replace('espaceEtablissement: .pour(mode: environment.mode), // lot 5, T2b',
+    'espaceEtablissement: .pour(mode: .demo), // lot 5, T2b'))), 'etablissement', /DeepLinkCoordinator\( force l'ouverture/);
+  // Un contrôleur construit hors d'AppContainer échappe au contrôle : refusé.
+  const ailleurs = arbreClos();
+  ailleurs.swiftSources['ios-native/Jolene/Composition/AutreConteneur.swift'] = 'let c = SessionController(gateways: g, espaceEtablissement: .pour(mode: .demo))\n';
+  refus(() => evaluateSource(ailleurs), 'etablissement', /construit hors d'AppContainer .*AutreConteneur\.swift:1/);
+});
+
+test('etablissement (m2) : un rôle établissement refusé en amont de la table ferme l espace de fait, refusé', () => {
+  for (const [chemin, avant, apres, fragment] of [
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      'case .adminEtablissement, .etablissementLegacy: return .bloque(.unsupportedRole(role))', /EspaceResolution\.espace ne rend pas \.etablissement pour \.adminEtablissement/],
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      'case .adminEtablissement: return .etablissement\n        case .etablissementLegacy: return .bloque(.unsupportedRole(role))', /pour \.etablissementLegacy/],
+    [ROLES_SERVIS, 'case .adminEtablissement, .etablissementLegacy: return true',
+      'case .adminEtablissement, .etablissementLegacy: return false', /UserRole\.isNativelyServed ne rend pas true/],
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      '#if DEBUG\n        case .adminEtablissement, .etablissementLegacy: return .etablissement\n        #else\n        case .adminEtablissement, .etablissementLegacy: return .bloque(.unsupportedRole(role))\n        #endif', /EspaceResolution\.espace : compilation conditionnelle/],
+  ]) {
+    const files = arbreClos();
+    assert.ok(files.swiftSources[chemin].includes(avant), `${avant} attendu dans ${chemin}`);
+    files.swiftSources[chemin] = files.swiftSources[chemin].replace(avant, apres);
+    refus(() => evaluateSource(files), 'etablissement', fragment);
+  }
 });
 
 // --- Build dans App Store Connect ------------------------------------------------------------
@@ -930,6 +1004,14 @@ test('cli source : la garde rejoue lots, établissement, Apple 4.2 et OTA sur l\
     writeFileSync(chemin, readFileSync(chemin, 'utf8').replace('case .production: return .ouvert', 'case .production: return .ferme'));
   });
   refuseCli(cli(t, { args: ['source', ferme] }), /\[etablissement\] espace établissement fermé en production/);
+  // Revue de #1190, M2 : contrôleur de production sous #if DEBUG / #else sans argument, sur l'arbre extrait.
+  const sousIf = arbreSurDisque(t, (dir) => {
+    const chemin = join(dir, APP_CONTAINER);
+    const ligne = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))';
+    writeFileSync(chemin, readFileSync(chemin, 'utf8').replace(ligne,
+      `#if DEBUG\n                ${ligne}\n                #else\n                let controller = SessionController(gateways: gateways)\n                #endif`));
+  });
+  refuseCli(cli(t, { args: ['source', sousIf] }), /\[etablissement\] SessionController\( sous compilation conditionnelle/);
   if (portsEnAttente(lire(DEMO_WORLD_TESTS), 1)?.length) refuseCli(cli(t, { args: ['source', root] }), /\[lots\] le lot 1 n'est pas clos/);
 });
 

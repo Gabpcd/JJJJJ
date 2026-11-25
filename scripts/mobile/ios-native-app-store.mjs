@@ -319,24 +319,163 @@ export function lireOuvertureEtablissement(source, modes) {
   return { etat: 'lue', cas };
 }
 
+/** Rôles UserRole qui ouvrent l'espace établissement (`EspaceResolution.espace`, `UserRole.isNativelyServed`). */
+export const ROLES_ETABLISSEMENT = Object.freeze(['adminEtablissement', 'etablissementLegacy']);
+/** `UserRole.isNativelyServed` (Mission.swift). */
+export const ROLES_SERVIS = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Models/Mission.swift';
+
+/** Parenthèse fermante de l'appel ouvert à `debut` (texte sans commentaires, chaînes ignorées), `-1` si non fermée. */
+function finAppel(texte, debut) {
+  let profondeur = 0;
+  let chaine = false;
+  for (let i = debut; i < texte.length; i += 1) {
+    const c = texte[i];
+    if (chaine) { if (c === '\\') i += 1; else if (c === '"') chaine = false; continue; }
+    if (c === '"') chaine = true;
+    else if (c === '(') profondeur += 1;
+    else if (c === ')') { profondeur -= 1; if (profondeur === 0) return i; }
+  }
+  return -1;
+}
+
+/** Argument `etiquette:` d'une liste d'arguments (niveau 0 seulement), normalisé ; `null` s'il est absent. */
+function argument(args, etiquette) {
+  let profondeur = 0;
+  let debut = 0;
+  const morceaux = [];
+  for (let i = 0; i <= args.length; i += 1) {
+    const c = args[i];
+    if (c === '(' || c === '[' || c === '{') profondeur += 1;
+    else if (c === ')' || c === ']' || c === '}') profondeur -= 1;
+    if (i === args.length || (c === ',' && profondeur === 0)) { morceaux.push(args.slice(debut, i)); debut = i + 1; }
+  }
+  const trouve = morceaux.map((m) => m.trim()).find((m) => m.startsWith(`${etiquette}:`));
+  return trouve === undefined ? null : trouve.slice(etiquette.length + 1).trim().replace(/\s+/g, ' ');
+}
+
+/** Profondeur de compilation conditionnelle (`#if` … `#endif`) à la position `pos`. */
+function profondeurIf(texte, pos) {
+  let profondeur = 0;
+  for (const m of texte.slice(0, pos).matchAll(/^\s*#(if|endif)\b/gm)) profondeur += m[1] === 'if' ? 1 : -1;
+  return profondeur;
+}
+
+/**
+ * Branches de `switch environment.mode { … }` : pour chaque position, la liste des modes du `case` qui la contient
+ * (niveau supérieur du switch), `null` hors du switch. Le switch doit être unique.
+ */
+function branchesDuMode(texte) {
+  const tetes = [...texte.matchAll(/\bswitch\s+environment\.mode\s*\{/g)];
+  if (tetes.length !== 1) return null;
+  const ouverture = tetes[0].index + tetes[0][0].length - 1;
+  const corps = corpsAccolades(texte, ouverture);
+  if (corps === null) return null;
+  const etiquettes = [];
+  let profondeur = 0;
+  for (let i = 0; i < corps.length; i += 1) {
+    const c = corps[i];
+    if (c === '{') profondeur += 1;
+    else if (c === '}') profondeur -= 1;
+    else if (profondeur === 0 && corps.startsWith('case', i) && !/[A-Za-z0-9_]/.test(corps[i - 1] ?? '')) {
+      const m = /^case\s+(\.[a-z]+(?:\s*,\s*\.[a-z]+)*)\s*:/.exec(corps.slice(i));
+      if (m) etiquettes.push({ pos: ouverture + 1 + i, modes: m[1].split(',').map((x) => x.trim().slice(1)) });
+    }
+  }
+  const fin = ouverture + 1 + corps.length;
+  return (pos) => {
+    if (pos <= ouverture || pos >= fin) return null;
+    const avant = etiquettes.filter((e) => e.pos < pos);
+    return avant.length ? avant[avant.length - 1].modes : null;
+  };
+}
+
+/** Correspondances `case .a, .b: return X` d'un corps de fonction ; `null` si une ligne `case` n'a pas cette forme. */
+function casRetour(corps) {
+  const cas = {};
+  for (const ligne of corps.split('\n').filter((l) => /^\s*case\b/.test(l))) {
+    const m = /^\s*case\s+(\.[a-zA-Z]+(?:\s*,\s*\.[a-zA-Z]+)*)\s*:\s*return\s+(.+?)\s*$/.exec(ligne);
+    if (!m) return null;
+    for (const nom of m[1].split(',').map((x) => x.trim().slice(1))) cas[nom] = m[2];
+  }
+  return cas;
+}
+
+/** Corps de la première fonction (ou propriété calculée) dont la tête correspond à `tete`, `null` sinon ou si doublée. */
+function corpsDe(source, tete) {
+  if (typeof source !== 'string') return null;
+  const texte = sansCommentaires(source);
+  const trouves = [...texte.matchAll(tete)];
+  if (trouves.length !== 1) return null;
+  return corpsAccolades(texte, trouves[0].index + trouves[0][0].length - 1);
+}
+
+/**
+ * Câblage de la table dans l'app (revue de #1190, M2, m1) : chaque construction de `SessionController(` et de
+ * `DeepLinkCoordinator(` de la cible app reçoit `espaceEtablissement:` hors de toute compilation conditionnelle ;
+ * `.pour(mode: environment.mode)` partout, `.pour(mode: .demo)` admis seulement dans la branche `case .demo:` de
+ * `switch environment.mode`. Une construction sans l'argument retombe sur le défaut `.ferme` : refus.
+ */
+export function lireCablageEtablissement(swiftSources) {
+  const erreurs = [];
+  const app = swiftSources?.[APP_CONTAINER];
+  if (app === undefined) return { erreurs: [`${APP_CONTAINER} absent : le câblage de l'espace établissement ne peut pas être contrôlé.`], controleurs: 0, coordinateurs: 0 };
+  const compte = { controleurs: 0, coordinateurs: 0, productionParMode: 0 };
+  for (const [chemin, source] of Object.entries(swiftSources)) {
+    if (!chemin.startsWith('ios-native/Jolene/')) continue;
+    const texte = sansCommentaires(source);
+    const branche = chemin === APP_CONTAINER ? branchesDuMode(texte) : null;
+    if (chemin === APP_CONTAINER && !branche) erreurs.push(`${APP_CONTAINER} : switch environment.mode introuvable ou ambigu, les branches du câblage ne peuvent pas être lues.`);
+    for (const m of texte.matchAll(/\b(SessionController|DeepLinkCoordinator)\s*\(/g)) {
+      const type = m[1];
+      const ouverture = m.index + m[0].length - 1;
+      const fermeture = finAppel(texte, ouverture);
+      const ligne = texte.slice(0, m.index).split('\n').length;
+      const ou = `${chemin}:${ligne}`;
+      if (chemin !== APP_CONTAINER) { erreurs.push(`${type}( construit hors d'AppContainer (${ou}) : le câblage de l'espace établissement ne peut pas être contrôlé.`); continue; }
+      if (fermeture < 0) { erreurs.push(`${type}( non fermé (${ou}).`); continue; }
+      if (type === 'SessionController') compte.controleurs += 1; else compte.coordinateurs += 1;
+      if (profondeurIf(texte, m.index) !== 0) erreurs.push(`${type}( sous compilation conditionnelle (#if) (${ou}) : un build Release peut construire l'espace autrement que le build contrôlé.`);
+      const valeur = argument(texte.slice(ouverture + 1, fermeture), 'espaceEtablissement');
+      const modes = branche ? branche(m.index) : null;
+      if (valeur === null) erreurs.push(`${type}( sans espaceEtablissement: (${ou}) : défaut .ferme, espace fermé.`);
+      else if (valeur === '.pour(mode: environment.mode)') {
+        if (type === 'SessionController' && modes?.includes('production')) compte.productionParMode += 1;
+      } else if (valeur === '.pour(mode: .demo)' && type === 'SessionController' && modes?.length === 1 && modes[0] === 'demo') {
+        // Monde démo seulement.
+      } else erreurs.push(`${type}( force l'ouverture de l'espace établissement hors de la table (${ou} : espaceEtablissement: ${valeur}).`);
+    }
+  }
+  if (compte.coordinateurs === 0) erreurs.push(`${APP_CONTAINER} ne construit aucun DeepLinkCoordinator( : l'aiguillage des liens n'est pas câblé sur la table.`);
+  if (compte.productionParMode === 0) erreurs.push(`${APP_CONTAINER} ne câble aucun SessionController( de la branche production sur .pour(mode: environment.mode).`);
+  return { erreurs, ...compte };
+}
+
+/** Rôles établissement ouverts par `EspaceResolution.espace` et servis par `UserRole.isNativelyServed` (m2). */
+export function lireRolesEtablissement(swiftSources) {
+  const erreurs = [];
+  const espace = corpsDe(swiftSources?.[ESPACE_RESOLUTION], /\bstatic\s+func\s+espace\s*\(\s*user\s*:[^)]*\)\s*->\s*EspaceAcces\s*\{/g);
+  const servi = corpsDe(swiftSources?.[ROLES_SERVIS], /\bvar\s+isNativelyServed\s*:\s*Bool\s*\{/g);
+  for (const [nom, corps, attendu, ou] of [['EspaceResolution.espace', espace, '.etablissement', ESPACE_RESOLUTION], ['UserRole.isNativelyServed', servi, 'true', ROLES_SERVIS]]) {
+    if (corps === null) { erreurs.push(`${nom} introuvable ou ambigu dans ${ou}.`); continue; }
+    if (/#if\b/.test(corps)) { erreurs.push(`${nom} : compilation conditionnelle (${ou}).`); continue; }
+    const cas = casRetour(corps);
+    if (cas === null) { erreurs.push(`${nom} illisible (${ou}) : chaque case doit être « case .x: return … ».`); continue; }
+    for (const role of ROLES_ETABLISSEMENT) {
+      if (cas[role] !== attendu) erreurs.push(`${nom} ne rend pas ${attendu} pour .${role} (${ou}, lu : ${cas[role] ?? 'absent'}) : espace établissement fermé de fait.`);
+    }
+  }
+  return erreurs;
+}
+
 function evaluateEtablissement(files, fail) {
   const sources = files.swiftSources ?? {};
   const lu = lireOuvertureEtablissement(sources[ESPACE_RESOLUTION], lireModes(sources[ENVIRONNEMENT]));
   if (lu.etat === 'absente') fail('etablissement', `table OuvertureEspaceEtablissement.pour(mode:) introuvable dans ${ESPACE_RESOLUTION} : l'ouverture de l'espace établissement ne peut pas être établie.`);
   else if (lu.etat === 'illisible') fail('etablissement', `table OuvertureEspaceEtablissement.pour(mode:) illisible dans ${ESPACE_RESOLUTION} (${lu.raison}) : l'ouverture de l'espace établissement ne peut pas être établie.`);
   else if (lu.cas.production !== 'ouvert') fail('etablissement', `espace établissement fermé en production dans la source de ce build (${ESPACE_RESOLUTION}, case .production: return .${lu.cas.production}) : rouvrir par une PR consignée dans docs/mobile-swift/DECISIONS_LOT5.md (section T14).`);
-  // La table ouverte ne sert à rien si l'app de production ne la lit pas : contrôleur et aiguillage câblés sur le mode.
-  const app = sources[APP_CONTAINER];
-  if (app === undefined) {
-    fail('etablissement', `${APP_CONTAINER} absent : le câblage de l'espace établissement ne peut pas être contrôlé.`);
-    return;
-  }
-  const texte = sansCommentaires(app);
-  const cablages = [...texte.matchAll(/espaceEtablissement:\s*(\.pour\(mode:\s*[^)\n]*\)|[^,)\n]+)/g)].map((m) => m[1].trim().replace(/\s+/g, ' '));
-  const parMode = cablages.filter((c) => c === '.pour(mode: environment.mode)').length;
-  if (parMode < 2) fail('etablissement', `${APP_CONTAINER} ne câble pas le contrôleur de session et l'aiguillage des liens sur .pour(mode: environment.mode) (${parMode} câblage(s) lu(s)).`);
-  const autres = cablages.filter((c) => !['.pour(mode: environment.mode)', '.pour(mode: .demo)'].includes(c));
-  if (autres.length) fail('etablissement', `${APP_CONTAINER} force l'ouverture de l'espace établissement hors de la table (${autres.join(', ')}).`);
+  // La table ouverte ne sert à rien si l'app ne la lit pas (M2, m1) ou si les rôles établissement sont refusés en amont (m2).
+  for (const erreur of lireCablageEtablissement(sources).erreurs) fail('etablissement', erreur);
+  for (const erreur of lireRolesEtablissement(sources)) fail('etablissement', erreur);
 }
 
 export function evaluateSource(files) {

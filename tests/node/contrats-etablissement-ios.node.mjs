@@ -20,6 +20,7 @@ import {
 } from '../../scripts/mobile/check-rpc-contracts.mjs';
 import { lecteurWeb, lireTextesSwift, TEXTES_SWIFT } from '../../scripts/mobile/check-textes-juridiques-ios.mjs';
 import { buildDemoEtabPermissions, FIXTURES_DIR } from '../../scripts/mobile/export-demo-fixtures.mjs';
+import { lireCablageEtablissement, loadSourceTree } from '../../scripts/mobile/ios-native-app-store.mjs';
 
 // Garde du lot 5, tranche T0 (docs/mobile-swift/LOT5_PLAN.md §3 T0) : les RPC de l'espace
 // établissement sont sous contrat avant toute gateway Swift, leurs exceptions interceptées sont des
@@ -571,6 +572,9 @@ test('AppContainer câble l ouverture de l espace établissement sur le mode de 
   assert.ok(coordinateur.includes('espaceEtablissement: .pour(mode: environment.mode)'),
     'DeepLinkCoordinator(espaceEtablissement:) : .pour(mode: environment.mode)');
   assert.ok(!/\.ouvert\b/.test(sansCommentaires), 'aucune ouverture forcée de l espace établissement dans AppContainer');
+  // Revue de #1190, M2 : chaque construction lue une à une, hors de toute compilation conditionnelle (même lecture que la
+  // garde etablissement de la soumission App Store).
+  assert.deepEqual(lireCablageEtablissement(loadSourceTree(root).swiftSources).erreurs, [], 'câblage de l espace établissement');
   // La table elle-même : ouverte en démo, en staging (T13, 24/11/2026) et en production (T14, 25/11/2026) ; défaut
   // fermé du contrôleur et de l'aiguillage. Refermer une ligne (production comprise) est une décision consignée dans
   // DECISIONS_LOT5.md et une PR de cette garde, jamais un effet de bord.
