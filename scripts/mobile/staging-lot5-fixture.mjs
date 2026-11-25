@@ -23,8 +23,13 @@
  *                   scans d'arrivée puis de départ sous le JWT de S1 (125 s d'écart, anti-rejeu serveur), attente de la
  *                   fin du créneau planifié, identifiant de la présence ajouté à l'entrée privée ;
  *   - `verifier`  : relectures en base après le parcours (candidature ACCEPTEE, présence validée, aucune ligne d'escrow…) ;
- *   - `nettoyer`  : suppression de la cohorte (une transaction, dépendances inconnues refusées), comptes Auth supprimés,
- *                   compte final des objets marqués exigé à 0 ; idempotent, à lancer même si le parcours échoue ;
+ *   - `nettoyer`  : suppression de la cohorte du manifeste (une transaction, dépendances inconnues refusées), comptes
+ *                   Auth supprimés, compte final des objets marqués exigé à 0 ; à lancer même si le parcours échoue ;
+ *   - `nettoyer_run` : reprise SANS manifeste (le runner hébergé l'efface avec lui) : la cohorte d'un run passé est
+ *                   retrouvée par son étiquette (`LOT5_NETTOYER_RUN`, nom exact `RECETTE-L5-<run>` de l'établissement,
+ *                   adresses `recette-l5-{e1,s1}-<run>@example.invalid`, métadonnées Auth du run), avec les mêmes verrous ;
+ *                   refus si l'étiquette n'a pas la forme attendue, si plus d'un établissement ou d'un soignant
+ *                   correspond, ou si une ligne trouvée n'est pas un compte TEST de ce run ;
  *   - `compter`   : compte des objets marqués, lecture seule.
  *
  * Verrou : toute action refuse de s'exécuter, avant le moindre appel réseau, si la référence de projet est celle de la
@@ -57,8 +62,9 @@ export const ECART_SCANS_MS = 125_000;
 export const M2_DEBUT_APRES_MIN = 12;
 /** Durée du créneau de M2 : les deux scans et l'attente anti-rejeu y tiennent. */
 export const M2_DUREE_MIN = 6;
-const ACTIONS = ['acces', 'preparer', 'scanner', 'verifier', 'nettoyer', 'compter'];
-const ECRITURES = new Set(['preparer', 'scanner', 'nettoyer']);
+const ACTIONS = ['acces', 'preparer', 'scanner', 'verifier', 'nettoyer', 'nettoyer_run', 'compter'];
+const ECRITURES = new Set(['preparer', 'scanner', 'nettoyer', 'nettoyer_run']);
+const RUN = /^[A-Za-z0-9][A-Za-z0-9-]{0,39}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Littéral SQL (apostrophes doublées) ; toute valeur interpolée passe ici ou par `uuid()`. */
@@ -103,6 +109,15 @@ export function destinationAdmise(url) {
 
 // MARK: - Manifeste
 
+/** Adresses des deux comptes d'un run : dérivées de l'étiquette seule (reprise sans manifeste). */
+export const emailsDuRun = runId => ({
+  etablissement: `recette-l5-e1-${runId.toLowerCase()}@example.invalid`,
+  soignant: `recette-l5-s1-${runId.toLowerCase()}@example.invalid`,
+});
+
+/** Commande de reprise d'un run dont le nettoyage a échoué (le manifeste disparaît avec le runner). */
+export const repriseDuRun = runId => `reprise : relancer ios-swift-lot5-staging.yml avec l'entrée nettoyer_run=${runId}`;
+
 export function runIdDepuis(env) {
   const brut = env.LOT5_RUN_ID || `local-${randomUUID().slice(0, 8)}`;
   if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,39}$/.test(brut)) throw new Error('LOT5_RUN_ID invalide (lettres, chiffres, tirets).');
@@ -120,8 +135,8 @@ export function manifeste(runId, maintenant) {
   const siret = '99' + (BigInt('0x' + sha256(`l5:${runId}`).slice(0, 12)) % 1_000_000_000_000n).toString().padStart(12, '0');
   return {
     purpose: PURPOSE, kind: KIND, projectRef: STAGING_REF, runId, marker, siret, preparedAt: maintenant.toISOString(),
-    etablissement: { id: randomUUID(), email: `recette-l5-e1-${runId.toLowerCase()}@example.invalid` },
-    soignant: { id: randomUUID(), email: `recette-l5-s1-${runId.toLowerCase()}@example.invalid` },
+    etablissement: { id: randomUUID(), email: emailsDuRun(runId).etablissement },
+    soignant: { id: randomUUID(), email: emailsDuRun(runId).soignant },
     documents: [randomUUID(), randomUUID()],
     m1: { id: randomUUID(), creneauId: randomUUID(), intitule: `${marker} · M1 candidature`,
       debut: jourM1.toISOString(), fin: new Date(jourM1.getTime() + 4 * 60 * minute).toISOString() },
@@ -158,8 +173,10 @@ SET LOCAL app.test_mode = 'true';
 SELECT pg_advisory_xact_lock(${BigInt('0x' + sha256(`L5:${m.runId}`).slice(0, 15))}::bigint);
 `;
 
-const ids = m => uuids([m.etablissement.id, m.soignant.id]);
-const missions = m => uuids([m.m1.id, m.m2.id]);
+/** Identifiant facultatif (reprise par étiquette : une partie de la cohorte peut manquer) : `NULL` ne désigne aucune ligne. */
+const u = v => (v ? uuid(v) : 'NULL::uuid');
+const ids = m => uuids([m.etablissement?.id, m.soignant?.id].filter(Boolean));
+const missions = m => uuids([m.m1?.id, m.m2?.id].filter(Boolean));
 const authDuRun = (m, qui, role) => `u.id = ${uuid(m[qui].id)} AND u.email = ${q(m[qui].email)}
     AND u.email_confirmed_at IS NOT NULL AND u.raw_app_meta_data->>'role' = ${q(role)}
     AND u.raw_app_meta_data->'est_compte_test' = 'true'::jsonb AND u.raw_app_meta_data->'is_test_playwright' = 'true'::jsonb
@@ -294,10 +311,149 @@ export function sqlVerifier(m) {
      AND (canal_email IS DISTINCT FROM false OR canal_sms IS DISTINCT FROM false OR canal_push IS DISTINCT FROM false)) AS canaux_ouverts;`;
 }
 
-/** Tables enfants supprimées explicitement, dans l'ordre (colonnes vérifiées dans `supabase/schema/public.sql`). */
-const ENFANTS_MISSION = ['notations_missions', 'evaluations', 'scans_pointage', 'codes_secours_mission', 'qr_codes_mission',
-  'pings_gps_mission', 'presences', 'partages_rib', 'rappels_contrat_travail', 'contrats_travail_missions',
-  'conformite_travail', 'messages_mission', 'matching_scores', 'swipes', 'missions_sauvegardees'];
+/**
+ * Tables à vider avant les racines de la cohorte (`missions`, `etablissements`, `soignants`) : fermeture transitive des
+ * clés étrangères du dump `supabase/schema/public.sql` vers une racine ou vers une table déjà retenue, hors `SET NULL` /
+ * `SET DEFAULT` (la ligne enfant survit) et hors auto-références. Les enfants `CASCADE` sont retenus aussi : leurs propres
+ * enfants restrictifs doivent partir avant eux. Ordre : parents avant enfants (les suppressions se font en sens inverse).
+ * Format : `table:colonne>parent,…`. Liste PROUVÉE, pas écrite à la main : `tests/node/staging-lot5-fixture.node.mjs`
+ * la recalcule depuis le dump et échoue à la moindre différence (régénérer avec `node … graphe`).
+ */
+export const GRAPHE_NETTOYAGE = [
+  'api_keys:etablissement_id>etablissements',
+  'assurance_config:etablissement_id>etablissements',
+  'assurances_mission:etablissement_id>etablissements,mission_id>missions',
+  'attestations_heures_externes:soignant_id>soignants',
+  'badges_soignant:soignant_id>soignants',
+  'bfa_suivi:etablissement_id>etablissements',
+  'calendar_events_sync:mission_id>missions',
+  'candidatures:mission_id>missions,soignant_id>soignants',
+  'chorus_pro_config:etablissement_id>etablissements',
+  'codes_secours_mission:mission_id>missions',
+  'conformite_travail:mission_id>missions,soignant_id>soignants',
+  'contrats_mission:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'contrats_service_signatures:etablissement_id>etablissements',
+  'contrats_travail_missions:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'conversations:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'conversions_liberal:soignant_id>soignants',
+  'copies_bulletins_paie:etablissement_id>etablissements,soignant_id>soignants',
+  'cotisations_sociales:mission_id>missions,soignant_id>soignants',
+  'credits_etablissement:etablissement_id>etablissements',
+  'documents_soignants:soignant_id>soignants',
+  'equipes:etablissement_id>etablissements',
+  'escrow_etablissement_etat:etablissement_id>etablissements',
+  'etablissement_preuve_audit:etablissement_id>etablissements',
+  'evaluations:mission_id>missions',
+  'factures_honoraires:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'favoris_soignant_etab:etablissement_id>etablissements,soignant_id>soignants',
+  'heures_externes_soignants:soignant_id>soignants',
+  'historique_blocages_etablissements:etablissement_id>etablissements',
+  'invitations_etablissement:etablissement_id>etablissements',
+  'mandats_facturation_signatures:soignant_id>soignants',
+  'matching_preferences_soignant:soignant_id>soignants',
+  'matching_scores:mission_id>missions,soignant_id>soignants',
+  'membres_etablissement:etablissement_id>etablissements',
+  'messages_mission:mission_id>missions',
+  'mission_creneaux:mission_id>missions',
+  'mission_series:etablissement_id>etablissements',
+  'missions_sauvegardees:mission_id>missions,soignant_id>soignants',
+  'notations_missions:mission_id>missions',
+  'notifications_notation_j1:mission_id>missions',
+  'paiements_escrow:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'paiements_mission:etablissement_id>etablissements,mission_id>missions',
+  'parcours_liberal_soignants:soignant_id>soignants',
+  'parrainages_etablissements:filleul_etab_id>etablissements,parrain_etab_id>etablissements',
+  'pings_gps_mission:mission_id>missions',
+  'presences:mission_id>missions,soignant_id>soignants',
+  'prevoyance_liste_attente:soignant_id>soignants',
+  'qr_codes_mission:mission_id>missions',
+  'rappels_contrat_travail:mission_id>missions',
+  'reclamations:mission_id>missions',
+  'reclamations_scoring:mission_id>missions,soignant_id>soignants',
+  'scoring_breakdown:soignant_id>soignants',
+  'souscriptions_prevoyance:soignant_id>soignants',
+  'streaks_soignant:soignant_id>soignants',
+  'stripe_connect_onboarding:soignant_id>soignants',
+  'suivi_conversion_3200h:soignant_id>soignants',
+  'super_swipes_quota:soignant_id>soignants',
+  'swipes:mission_id>missions,soignant_id>soignants',
+  'cessions_creance:facture_honoraire_id>factures_honoraires,soignant_id>soignants',
+  'chorus_submissions:invoice_id>factures_honoraires',
+  'equipe_membres:equipe_id>equipes',
+  'escrow_exposition_releases:etablissement_id>etablissements,paiement_escrow_id>paiements_escrow',
+  'escrow_release_queue:mission_id>missions,paiement_escrow_id>paiements_escrow',
+  'factor_advances:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
+  'factures:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions',
+  'factures_honoraires_documents:facture_honoraire_id>factures_honoraires',
+  'heures_externes:document_id>documents_soignants,soignant_id>soignants',
+  'invoice_audit_log:invoice_id>factures_honoraires',
+  'messages_chat:conversation_id>conversations',
+  'paiements_soignant:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
+  'partages_rib:contrat_id>contrats_mission,document_rib_id>documents_soignants,etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
+  'pauses_presence:presence_id>presences,soignant_id>soignants',
+  'scans_pointage:creneau_effectif_id>mission_creneaux,mission_id>missions',
+  'shifts:equipe_id>equipes,etablissement_id>etablissements',
+  'signalements_copies_bulletins:copie_id>copies_bulletins_paie',
+  'signatures_contrats:contrat_id>contrats_mission',
+  'stripe_refunds_queue:avoir_id>factures_honoraires,facture_origine_id>factures_honoraires,paiement_escrow_id>paiements_escrow',
+  'typing_status:conversation_id>conversations',
+  'litiges:etablissement_id>etablissements,mission_id>missions,paiement_soignant_id>paiements_soignant,presence_id>presences,soignant_id>soignants',
+  'shift_affectations:mission_id>missions,shift_id>shifts',
+  'stripe_transfers:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,facture_id>factures,mission_id>missions,soignant_id>soignants',
+  'bulletins_paie:etablissement_id>etablissements,litige_id>litiges,mission_id>missions,soignant_id>soignants',
+  'factures_honoraires_rectifications:facture_honoraire_id>factures_honoraires,litige_id>litiges',
+  'messages_litige:litige_id>litiges',
+];
+
+export const RACINES_COHORTE = ['missions', 'etablissements', 'soignants'];
+export function grapheNettoyage(dump) {
+  const re = /ALTER TABLE ONLY "public"\."(\w+)"\s+ADD CONSTRAINT "\w+" FOREIGN KEY \(([^)]*)\) REFERENCES "public"\."(\w+)"\(([^)]*)\)([^;]*);/g;
+  const liens = [];
+  for (const [, enfant, cols, parent, ref, reste] of dump.matchAll(re)) {
+    const action = /ON DELETE (CASCADE|SET NULL|SET DEFAULT|RESTRICT|NO ACTION)/.exec(reste)?.[1] ?? 'NO ACTION';
+    const colonnes = cols.replaceAll('"', '').split(',').map(c => c.trim());
+    liens.push({ enfant, colonnes, parent, ref: ref.replaceAll('"', '').trim(), action });
+  }
+  const suivis = liens.filter(l => l.enfant !== l.parent && !['SET NULL', 'SET DEFAULT'].includes(l.action) && !RACINES_COHORTE.includes(l.enfant));
+  const dans = new Set(RACINES_COHORTE), file = [...RACINES_COHORTE];
+  while (file.length) { const t = file.shift(); for (const l of suivis) if (l.parent === t && !dans.has(l.enfant)) { dans.add(l.enfant); file.push(l.enfant); } }
+  const tables = [...dans].filter(t => !RACINES_COHORTE.includes(t));
+  const entrants = new Map(tables.map(t => [t, suivis.filter(l => l.enfant === t && dans.has(l.parent))]));
+  for (const [t, ls] of entrants) for (const l of ls) if (l.colonnes.length !== 1 || l.ref !== 'id') throw new Error(`FK non gérée ${t}`);
+  // ordre : parents avant enfants (Kahn), égalités par nom
+  const ordre = [], places = new Set(RACINES_COHORTE);
+  let reste = [...tables].sort();
+  while (reste.length) {
+    const prets = reste.filter(t => entrants.get(t).every(l => places.has(l.parent)));
+    if (!prets.length) throw new Error(`cycle : ${reste.join(',')}`);
+    for (const t of prets) { ordre.push(t); places.add(t); }
+    reste = reste.filter(t => !places.has(t));
+  }
+  return ordre.map(t => `${t}:${[...new Set(entrants.get(t).map(l => `${l.colonnes[0]}>${l.parent}`))].sort().join(',')}`);
+}
+
+/** Lecture de `GRAPHE_NETTOYAGE` : `[{ table, liens: [{ colonne, parent }] }]`, dans l'ordre parents → enfants. */
+export function lireGraphe(graphe = GRAPHE_NETTOYAGE) {
+  return graphe.map(ligne => {
+    const [table, reste] = ligne.split(':');
+    return { table, liens: reste.split(',').map(l => { const [colonne, parent] = l.split('>'); return { colonne, parent }; }) };
+  });
+}
+
+const IDENT = /^[a-z_][a-z0-9_]*$/;
+/** SQL de collecte (parents → enfants) puis de suppression (enfants → parents) de la fermeture, sur la table `l5_ids`. */
+function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
+  const tables = lireGraphe(graphe);
+  for (const { table, liens } of tables) {
+    if (!IDENT.test(table) || liens.some(l => !IDENT.test(l.colonne) || !IDENT.test(l.parent))) throw new Error('Graphe L5 invalide.');
+  }
+  const parents = new Set(tables.flatMap(t => t.liens.map(l => l.parent)));
+  const condition = liens => liens.map(l => `x.${l.colonne} IN (SELECT id FROM l5_ids WHERE tbl = '${l.parent}')`).join(' OR ');
+  const collecte = tables.filter(t => parents.has(t.table)).map(t =>
+    `  INSERT INTO l5_ids SELECT '${t.table}', x.id FROM public.${t.table} x WHERE ${condition(t.liens)} ON CONFLICT DO NOTHING;`);
+  const suppression = [...tables].reverse().map(t => `  DELETE FROM public.${t.table} x WHERE ${condition(t.liens)};`);
+  return { collecte: collecte.join('\n'), suppression: suppression.join('\n') };
+}
 
 /**
  * Nettoyage (une transaction) : contrôle d'appartenance au run, suppression des enfants connus, refus nominatif de
@@ -305,8 +461,9 @@ const ENFANTS_MISSION = ['notations_missions', 'evaluations', 'scans_pointage', 
  * `journaux_audit` est immuable et conservé (CLAUDE.md). Sans ligne à supprimer, la transaction est un no-op.
  */
 export function sqlNettoyer(m) {
-  const e = m.etablissement, s = m.soignant;
-  const lesMissions = `ARRAY(SELECT id FROM public.missions WHERE etablissement_id = ${uuid(e.id)} OR id = ANY(${missions(m)}))`;
+  const e = m.etablissement ?? {}, s = m.soignant ?? {};
+  const fermeture = sqlFermeture();
+  const lesMissions = `ARRAY(SELECT id FROM public.missions WHERE etablissement_id = ${u(e.id)} OR id = ANY(${missions(m)}))`;
   return `${entete(m)}DO $l5_clean$
 DECLARE v_missions uuid[]; v_ids uuid[] := ${ids(m)}; fk record; n bigint;
 BEGIN
@@ -315,8 +472,8 @@ BEGIN
        OR u.raw_app_meta_data->>'load_fixture_kind' IS DISTINCT FROM ${q(KIND)} OR u.email NOT LIKE '%@example.invalid')) THEN
     RAISE EXCEPTION 'Identité hors du run L5 : aucune suppression';
   END IF;
-  IF EXISTS (SELECT 1 FROM public.etablissements WHERE id = ${uuid(e.id)} AND (est_compte_test IS NOT TRUE OR nom IS DISTINCT FROM ${q(m.marker)}))
-     OR EXISTS (SELECT 1 FROM public.soignants WHERE id = ${uuid(s.id)} AND (est_compte_test IS NOT TRUE OR source_acquisition IS DISTINCT FROM ${q(m.marker)})) THEN
+  IF EXISTS (SELECT 1 FROM public.etablissements WHERE id = ${u(e.id)} AND (est_compte_test IS NOT TRUE OR nom IS DISTINCT FROM ${q(m.marker)}))
+     OR EXISTS (SELECT 1 FROM public.soignants WHERE id = ${u(s.id)} AND (est_compte_test IS NOT TRUE OR source_acquisition IS DISTINCT FROM ${q(m.marker)})) THEN
     RAISE EXCEPTION 'Profil hors du run L5 (marqueur ou compte TEST absent) : aucune suppression';
   END IF;
   v_missions := ${lesMissions};
@@ -325,24 +482,24 @@ BEGIN
   END IF;
 
   UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"load_cleanup_pending":true}'::jsonb WHERE id = ANY(v_ids);
-  DELETE FROM public.notifications WHERE destinataire_id = ANY(v_ids);
+  -- Sans clé étrangère : notifications (toutes celles des missions du run aussi, quel que soit le destinataire), file
+  -- d'e-mails, compteurs, préférences, jetons push, présence en ligne.
+  DELETE FROM public.notifications WHERE destinataire_id = ANY(v_ids) OR id_ressource = ANY(v_missions);
   DELETE FROM public.email_queue WHERE destinataire_id = ANY(v_ids);
   DELETE FROM public.rate_limits WHERE cle = ANY(v_ids::text[]);
-${ENFANTS_MISSION.map(t => `  DELETE FROM public.${t} WHERE mission_id = ANY(v_missions);`).join('\n')}
-  DELETE FROM public.signatures_contrats WHERE contrat_id IN (SELECT id FROM public.contrats_mission WHERE mission_id = ANY(v_missions));
-  DELETE FROM public.partages_rib WHERE contrat_id IN (SELECT id FROM public.contrats_mission WHERE mission_id = ANY(v_missions));
-  DELETE FROM public.contrats_mission WHERE mission_id = ANY(v_missions);
-  DELETE FROM public.messages_chat WHERE conversation_id IN (SELECT id FROM public.conversations WHERE mission_id = ANY(v_missions)
-    OR etablissement_id = ${uuid(e.id)} OR soignant_id = ${uuid(s.id)});
-  DELETE FROM public.conversations WHERE mission_id = ANY(v_missions) OR etablissement_id = ${uuid(e.id)} OR soignant_id = ${uuid(s.id)};
-  DELETE FROM public.candidatures WHERE mission_id = ANY(v_missions) OR soignant_id = ${uuid(s.id)};
-  PERFORM set_config('jolene.sync_in_progress', 'true', true);
-  DELETE FROM public.mission_creneaux WHERE mission_id = ANY(v_missions);
   DELETE FROM public.preferences_notifications WHERE utilisateur_id = ANY(v_ids);
   DELETE FROM public.tokens_push WHERE utilisateur_id = ANY(v_ids);
   DELETE FROM public.presence_status WHERE user_id = ANY(v_ids);
-  DELETE FROM public.documents_soignants WHERE soignant_id = ${uuid(s.id)};
-  DELETE FROM public.membres_etablissement WHERE etablissement_id = ${uuid(e.id)} OR user_id = ANY(v_ids);
+
+  -- Fermeture des clés étrangères (GRAPHE_NETTOYAGE) : identifiants collectés des parents vers les enfants, puis
+  -- suppression des enfants vers les parents.
+  CREATE TEMP TABLE IF NOT EXISTS l5_ids (tbl text NOT NULL, id uuid NOT NULL, PRIMARY KEY (tbl, id)) ON COMMIT DROP;
+  INSERT INTO l5_ids SELECT 'missions', x FROM unnest(v_missions) x;
+  INSERT INTO l5_ids SELECT 'etablissements', ${u(e.id)} WHERE ${u(e.id)} IS NOT NULL;
+  INSERT INTO l5_ids SELECT 'soignants', ${u(s.id)} WHERE ${u(s.id)} IS NOT NULL;
+${fermeture.collecte}
+  PERFORM set_config('jolene.sync_in_progress', 'true', true);
+${fermeture.suppression}
 
   -- Dépendance inconnue : refus nominatif, rien n'est supprimé (rollback de toute la transaction).
   FOR fk IN SELECT c.conrelid::regclass AS enfant, c.confrelid::regclass AS parent, a.attname AS col
@@ -360,8 +517,8 @@ ${ENFANTS_MISSION.map(t => `  DELETE FROM public.${t} WHERE mission_id = ANY(v_m
   END LOOP;
 
   DELETE FROM public.missions WHERE id = ANY(v_missions);
-  DELETE FROM public.soignants WHERE id = ${uuid(s.id)};
-  DELETE FROM public.etablissements WHERE id = ${uuid(e.id)};
+  DELETE FROM public.soignants WHERE id = ${u(s.id)};
+  DELETE FROM public.etablissements WHERE id = ${u(e.id)};
 END $l5_clean$;
 COMMIT;
 SELECT true AS nettoye;`;
@@ -369,28 +526,78 @@ SELECT true AS nettoye;`;
 
 /** Objets marqués du run, lecture seule : tous à 0 après `nettoyer`. `journaux_audit` (immuable) n'est pas compté. */
 export function sqlCompter(m) {
-  const e = m.etablissement, s = m.soignant;
-  const lesMissions = `(SELECT coalesce(array_agg(id), '{}') FROM public.missions WHERE etablissement_id = ${uuid(e.id)}
+  const e = m.etablissement ?? {}, s = m.soignant ?? {};
+  const lesMissions = `(SELECT coalesce(array_agg(id), '{}') FROM public.missions WHERE etablissement_id = ${u(e.id)}
       OR id = ANY(${missions(m)}) OR left(intitule, ${m.marker.length}) = ${q(m.marker)})`;
   return `SELECT
   (SELECT count(*)::integer FROM auth.users WHERE id = ANY(${ids(m)}) OR raw_app_meta_data->>'load_fixture_run' = ${q(m.runId)}
      AND raw_app_meta_data->>'load_fixture_kind' = ${q(KIND)}) AS auth,
-  (SELECT count(*)::integer FROM public.etablissements WHERE id = ${uuid(e.id)} OR source_acquisition = ${q(m.marker)}) AS etablissements,
-  (SELECT count(*)::integer FROM public.soignants WHERE id = ${uuid(s.id)} OR source_acquisition = ${q(m.marker)}) AS soignants,
+  (SELECT count(*)::integer FROM public.etablissements WHERE id = ${u(e.id)} OR source_acquisition = ${q(m.marker)}) AS etablissements,
+  (SELECT count(*)::integer FROM public.soignants WHERE id = ${u(s.id)} OR source_acquisition = ${q(m.marker)}) AS soignants,
   (SELECT count(*)::integer FROM public.missions WHERE id = ANY(${lesMissions})) AS missions,
   (SELECT count(*)::integer FROM public.mission_creneaux WHERE mission_id = ANY(${lesMissions})) AS creneaux,
-  (SELECT count(*)::integer FROM public.candidatures WHERE mission_id = ANY(${lesMissions}) OR soignant_id = ${uuid(s.id)}) AS candidatures,
-  (SELECT count(*)::integer FROM public.contrats_mission WHERE mission_id = ANY(${lesMissions}) OR etablissement_id = ${uuid(e.id)}
-     OR soignant_id = ${uuid(s.id)}) AS contrats,
-  (SELECT count(*)::integer FROM public.presences WHERE mission_id = ANY(${lesMissions}) OR soignant_id = ${uuid(s.id)}) AS presences,
+  (SELECT count(*)::integer FROM public.candidatures WHERE mission_id = ANY(${lesMissions}) OR soignant_id = ${u(s.id)}) AS candidatures,
+  (SELECT count(*)::integer FROM public.contrats_mission WHERE mission_id = ANY(${lesMissions}) OR etablissement_id = ${u(e.id)}
+     OR soignant_id = ${u(s.id)}) AS contrats,
+  (SELECT count(*)::integer FROM public.presences WHERE mission_id = ANY(${lesMissions}) OR soignant_id = ${u(s.id)}) AS presences,
   (SELECT count(*)::integer FROM public.scans_pointage WHERE mission_id = ANY(${lesMissions})) AS scans,
   (SELECT count(*)::integer FROM public.notations_missions WHERE mission_id = ANY(${lesMissions})) AS notations,
-  (SELECT count(*)::integer FROM public.documents_soignants WHERE soignant_id = ${uuid(s.id)}) AS documents,
-  (SELECT count(*)::integer FROM public.notifications WHERE destinataire_id = ANY(${ids(m)})) AS notifications,
-  (SELECT count(*)::integer FROM public.membres_etablissement WHERE etablissement_id = ${uuid(e.id)} OR user_id = ANY(${ids(m)})) AS membres,
-  (SELECT count(*)::integer FROM public.conversations WHERE etablissement_id = ${uuid(e.id)} OR soignant_id = ${uuid(s.id)}) AS conversations,
-  (SELECT count(*)::integer FROM public.paiements_escrow WHERE mission_id = ANY(${missions(m)})) AS escrow,
+  (SELECT count(*)::integer FROM public.documents_soignants WHERE soignant_id = ${u(s.id)}) AS documents,
+  (SELECT count(*)::integer FROM public.notifications WHERE destinataire_id = ANY(${ids(m)}) OR id_ressource = ANY(${lesMissions})) AS notifications,
+  (SELECT count(*)::integer FROM public.membres_etablissement WHERE etablissement_id = ${u(e.id)} OR user_id = ANY(${ids(m)})) AS membres,
+  (SELECT count(*)::integer FROM public.conversations WHERE etablissement_id = ${u(e.id)} OR soignant_id = ${u(s.id)}) AS conversations,
+  (SELECT count(*)::integer FROM public.paiements_escrow WHERE mission_id = ANY(${lesMissions})) AS escrow,
   (SELECT count(*)::integer FROM public.preferences_notifications WHERE utilisateur_id = ANY(${ids(m)})) AS preferences;`;
+}
+
+/** Recherche, lecture seule, de la cohorte d'un run par son étiquette (aucun mot de passe, aucun jeton n'en sort). */
+export function sqlRetrouverRun(runId) {
+  if (!RUN.test(runId ?? '')) throw new Error('Étiquette de run L5 invalide.');
+  const marker = `RECETTE-L5-${runId}`, emails = emailsDuRun(runId);
+  return `SELECT
+  (SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'test', est_compte_test, 'email', email_contact) ORDER BY id), '[]'::jsonb)
+     FROM public.etablissements WHERE nom = ${q(marker)} OR source_acquisition = ${q(marker)}) AS etablissements,
+  (SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'test', est_compte_test, 'email', email) ORDER BY id), '[]'::jsonb)
+     FROM public.soignants WHERE email = ${q(emails.soignant)} OR source_acquisition = ${q(marker)}) AS soignants,
+  (SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'email', email, 'role', raw_app_meta_data->>'role',
+       'run', raw_app_meta_data->>'load_fixture_run', 'kind', raw_app_meta_data->>'load_fixture_kind') ORDER BY id), '[]'::jsonb)
+     FROM auth.users WHERE email IN (${q(emails.etablissement)}, ${q(emails.soignant)})
+       OR (raw_app_meta_data->>'load_fixture_run' = ${q(runId)} AND raw_app_meta_data->>'load_fixture_kind' = ${q(KIND)})) AS auth;`;
+}
+
+/**
+ * Cible de nettoyage d'un run retrouvé par étiquette. Refuse : plus d'un établissement ou d'un soignant, une ligne qui
+ * n'est pas un compte TEST, une identité Auth d'un autre run, d'un autre rôle ou d'une autre adresse, un établissement
+ * (propriétaire legacy) ou un soignant dont l'identifiant diffère de son compte Auth.
+ */
+export function cibleDepuisRecherche(runId, ligne) {
+  if (!RUN.test(runId ?? '')) throw new Error('Étiquette de run L5 invalide.');
+  const marker = `RECETTE-L5-${runId}`, emails = emailsDuRun(runId);
+  const liste = v => (Array.isArray(v) ? v : null);
+  const etabs = liste(ligne?.etablissements), soignants = liste(ligne?.soignants), auth = liste(ligne?.auth);
+  if (!etabs || !soignants || !auth) throw new Error('Recherche du run L5 illisible : aucune suppression.');
+  if (etabs.length > 1) throw new Error(`Plusieurs établissements portent l'étiquette ${marker} : aucune suppression.`);
+  if (soignants.length > 1) throw new Error(`Plusieurs soignants correspondent au run ${runId} : aucune suppression.`);
+  if ([...etabs, ...soignants].some(x => x?.test !== true || !UUID.test(String(x?.id)))) {
+    throw new Error(`Ligne du run ${runId} sans compte TEST : aucune suppression.`);
+  }
+  if (etabs[0] && etabs[0].email !== emails.etablissement) throw new Error(`Établissement ${marker} sans l'adresse du run : aucune suppression.`);
+  if (auth.length > 2) throw new Error(`Plus de deux identités Auth pour le run ${runId} : aucune suppression.`);
+  const roles = { [emails.etablissement]: 'ETABLISSEMENT', [emails.soignant]: 'SOIGNANT' };
+  for (const a of auth) {
+    if (!UUID.test(String(a?.id)) || roles[a?.email] !== a?.role || a?.run !== runId || a?.kind !== KIND) {
+      throw new Error(`Identité Auth hors du run ${runId} (adresse, rôle ou métadonnées) : aucune suppression.`);
+    }
+  }
+  const authE = auth.find(a => a.role === 'ETABLISSEMENT'), authS = auth.find(a => a.role === 'SOIGNANT');
+  if (etabs[0] && authE && etabs[0].id !== authE.id) throw new Error('Établissement et compte Auth du run L5 divergents : aucune suppression.');
+  if (soignants[0] && authS && soignants[0].id !== authS.id) throw new Error('Soignant et compte Auth du run L5 divergents : aucune suppression.');
+  return {
+    runId, marker,
+    etablissement: { id: etabs[0]?.id ?? authE?.id ?? null, email: emails.etablissement },
+    soignant: { id: soignants[0]?.id ?? authS?.id ?? null, email: emails.soignant },
+    auth: auth.map(a => ({ id: a.id, email: a.email })),
+  };
 }
 
 export const COMPTES = ['auth', 'etablissements', 'soignants', 'missions', 'creneaux', 'candidatures', 'contrats', 'presences',
@@ -485,6 +692,47 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     appendFileSync(env.GITHUB_ENV, `JOLENE_STAGING_PUBLISHABLE_KEY=${cle}\n`);
     log('Clé publishable STAGING résolue (masquée) ; production exclue.');
     return { publishable: true };
+  }
+
+  /** Nettoyage d'une cible (manifeste ou étiquette) ; tout échec nomme la reprise par étiquette. */
+  const nettoyerCible = async cible => {
+    try {
+      const { service } = await cles();
+      const [sortie] = await sql(sqlNettoyer(cible));
+      if (sortie?.nettoye !== true) throw new Error('Nettoyage SQL L5 non confirmé.');
+      for (const attendu of cible.auth) {
+        if (!attendu.id) continue;
+        const url = `${STAGING_URL}/auth/v1/admin/users/${attendu.id}`;
+        const u = await requete(url, { cle: service, absent: true });
+        if (!u) continue;
+        if (u.id !== attendu.id || u.email !== attendu.email || u.app_metadata?.load_fixture_run !== cible.runId
+          || u.app_metadata?.load_fixture_kind !== KIND) throw new Error('Auth hors du run L5 : aucune suppression.');
+        await requete(url, { methode: 'DELETE', cle: service, corps: { should_soft_delete: false } });
+      }
+      const [ligne] = await sql(sqlCompter(cible));
+      const etat = { ...Object.fromEntries(COMPTES.map(c => [c, ligne?.[c]])), total: totalMarques(ligne) };
+      if (etat.total !== 0) throw new Error(`objets marqués restants ${JSON.stringify(etat)}`);
+      log(`Nettoyage L5 prouvé (run ${cible.runId}) : 0 objet marqué (${COMPTES.join(', ')}) ; journaux_audit conservés (immuables).`);
+      return etat;
+    } catch (e) {
+      // Le manifeste disparaît avec le runner hébergé : la reprise passe par l'étiquette du run, jamais par lui.
+      throw new Error(`Nettoyage L5 incomplet (run ${cible.runId}) : ${String(e?.message ?? e)} ; ${repriseDuRun(cible.runId)}.`);
+    }
+  };
+
+  if (action === 'nettoyer_run') {
+    const runId = String(env.LOT5_NETTOYER_RUN ?? '').trim();
+    if (!RUN.test(runId)) throw new Error('LOT5_NETTOYER_RUN invalide : étiquette de run attendue (lettres, chiffres, tirets), aucune requête.');
+    const [trouve] = await sql(sqlRetrouverRun(runId));
+    const cible = cibleDepuisRecherche(runId, trouve);
+    if (!cible.etablissement.id && !cible.soignant.id && !cible.auth.length) {
+      const [ligne] = await sql(sqlCompter(cible));
+      const total = totalMarques(ligne);
+      if (total !== 0) throw new Error(`Run ${runId} introuvable par étiquette mais ${total} objet(s) marqué(s) : aucune suppression.`);
+      log(`Run ${runId} : aucune cohorte trouvée, 0 objet marqué.`);
+      return { total: 0, introuvable: true };
+    }
+    return nettoyerCible(cible);
   }
 
   const chemin = env.LOT5_MANIFEST;
@@ -609,28 +857,21 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
   }
 
   // nettoyer : SQL d'abord (idempotent), puis comptes Auth, puis compte final exigé à 0.
-  const { service } = await cles();
   doc.status = 'cleanup-started'; enregistrer();
-  const [sortie] = await sql(sqlNettoyer(doc));
-  if (sortie?.nettoye !== true) throw new Error('Nettoyage SQL L5 non confirmé.');
-  for (const qui of ['etablissement', 'soignant']) {
-    const url = `${STAGING_URL}/auth/v1/admin/users/${doc[qui].id}`;
-    const u = await requete(url, { cle: service, absent: true });
-    if (!u) continue;
-    if (u.id !== doc[qui].id || u.email !== doc[qui].email || u.app_metadata?.load_fixture_run !== doc.runId
-      || u.app_metadata?.load_fixture_kind !== KIND) throw new Error(`Auth ${qui} hors du run L5 : aucune suppression.`);
-    await requete(url, { methode: 'DELETE', cle: service, corps: { should_soft_delete: false } });
-  }
-  const etat = await compter();
-  if (etat.total !== 0) throw new Error(`Nettoyage L5 incomplet : ${JSON.stringify(etat)} ; manifeste conservé pour reprise.`);
+  const etat = await nettoyerCible({ ...doc, auth: ['etablissement', 'soignant'].map(qui => ({ id: doc[qui].id, email: doc[qui].email })) });
   doc.status = 'cleaned'; enregistrer();
   rmSync(entree, { force: true });
-  log(`Nettoyage L5 prouvé : 0 objet marqué (${COMPTES.join(', ')}) ; journaux_audit conservés (immuables).`);
   return etat;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
+    if (process.argv[2] === 'graphe') {
+      // Hors réseau : régénère GRAPHE_NETTOYAGE depuis le dump du dépôt (à recopier dans ce fichier).
+      const dump = readFileSync(new URL('../../supabase/schema/public.sql', import.meta.url), 'utf8');
+      console.log(grapheNettoyage(dump).map(l => `  '${l}',`).join('\n'));
+      process.exit(0);
+    }
     const resultat = await executer({ action: process.argv[2] });
     console.log(JSON.stringify(resultat));
   } catch (e) {

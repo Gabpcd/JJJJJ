@@ -16,6 +16,10 @@ name: iOS Swift — lot 5 STAGING (espace établissement)
 #   9. résumé : tests échoués nommés, bilan de chaque phase, artefact xcresult (seulement si le nettoyage a réussi :
 #      les comptes du run, dont le mot de passe saisi par le test, sont alors supprimés).
 #
+# Reprise (job « reprise », entrée nettoyer_run) : le manifeste de la cohorte disparaît avec le runner hébergé. Si un
+# nettoyage a échoué, relancer ce workflow avec nettoyer_run=<étiquette du run> (affichée par le résumé et par l'erreur) :
+# la cohorte est retrouvée par son étiquette (staging-lot5-fixture.mjs nettoyer_run), sans aucun secret publié.
+#
 # Garde-fous : dispatch manuel sur main seulement, SHA relu égal au SHA dispatché ; environnement native-staging-auth ;
 # concurrence partagée jolene-supabase-staging-writes (une écriture STAGING à la fois) ; le script refuse la production
 # (flripxtsyegjshnhzjkz) avant tout appel réseau. Aucun SMS (contrat inséré signé, aucun téléphone), aucun e-mail
@@ -29,6 +33,11 @@ on:
         description: SHA complet de main déjà relu (doit être celui du dispatch)
         type: string
         required: true
+      nettoyer_run:
+        description: "Reprise seulement : étiquette d'un run passé dont le nettoyage a échoué (ex. 123456789-1) ; vide = parcours complet"
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -71,9 +80,37 @@ jobs:
           grep -qE "final class StagingEtabParcoursTests\s*:\s*JoleneUITestCase" ios-native/JoleneUITests/StagingEtabParcoursTests.swift || {
             echo "::error::StagingEtabParcoursTests absent : ce workflow refuse de tourner à vide."; exit 1; }
 
+  reprise:
+    name: Reprise — nettoyage d'un run passé par son étiquette
+    if: github.ref == 'refs/heads/main' && inputs.nettoyer_run != ''
+    needs: politique
+    environment: native-staging-auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: jolene-supabase-staging-writes
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Nettoyer la cohorte du run et prouver 0 objet marqué
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          LOT5_STAGING_ECRITURE: COHORTE_D5
+          # Passée par l'environnement, jamais interpolée dans le shell ; forme vérifiée par le script.
+          LOT5_NETTOYER_RUN: ${{ inputs.nettoyer_run }}
+        run: node scripts/mobile/staging-lot5-fixture.mjs nettoyer_run
+
   parcours:
     name: Parcours établissement STAGING — iPhone (XCUITest)
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.nettoyer_run == ''
     needs: politique
     environment: native-staging-auth
     runs-on: macos-26
@@ -329,6 +366,7 @@ jobs:
               if (!(code === "0" && s.result === "Passed" && total === attendus && passed === total && failed === 0 && skipped === 0)) ok = false;
             }
             lignes.push(`- scans de S1 : ${e.ISSUE_SCANNER || "—"} ; relectures en base : ${e.ISSUE_VERIFIER || "—"} ; nettoyage (0 objet marqué) : ${e.ISSUE_NETTOYER || "—"}`);
+            lignes.push(`- étiquette du run : ${e.LOT5_RUN_ID}` + (e.ISSUE_NETTOYER === "success" ? "" : ` — reprise : relancer ce workflow avec nettoyer_run=${e.LOT5_RUN_ID}`));
             if (e.ISSUE_SCANNER !== "success" || e.ISSUE_VERIFIER !== "success" || e.ISSUE_NETTOYER !== "success") ok = false;
             lignes.push("- périmètre : rien en production ; aucun SMS ni e-mail ; preuves = assertions XCUITest et relectures SQL, aucune capture");
             appendFileSync(e.GITHUB_STEP_SUMMARY, lignes.join("\n") + "\n");

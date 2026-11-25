@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
+  GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -29,7 +30,19 @@ function banc(t, surcharge = {}) {
   const b = {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
+    recherches: 0,
     horloge: new Date('2026-11-24T10:00:00.000Z'),
+  };
+  // Recherche par étiquette : ce que le STAGING simulé contient pour le run, sans mot de passe.
+  b.recherche = () => {
+    const e1 = [...b.users.values()].find(u => u.app_metadata.role === 'ETABLISSEMENT');
+    const s1 = [...b.users.values()].find(u => u.app_metadata.role === 'SOIGNANT');
+    return {
+      etablissements: b.seeded && e1 ? [{ id: e1.id, test: true, email: e1.email }] : [],
+      soignants: b.seeded && s1 ? [{ id: s1.id, test: true, email: s1.email }] : [],
+      auth: [...b.users.values()].map(u => ({ id: u.id, email: u.email, role: u.app_metadata.role,
+        run: u.app_metadata.load_fixture_run, kind: u.app_metadata.load_fixture_kind })),
+    };
   };
   const rep = (corps, status = 200) => ({ status, ok: status >= 200 && status < 300, json: async () => corps });
   b.fetchImpl = async (url, opts) => {
@@ -48,6 +61,7 @@ function banc(t, surcharge = {}) {
       if (sql.includes('FROM public.candidatures') && sql.includes('SELECT id, statut')) return rep(b.candidature ? [b.candidature] : []);
       if (sql.includes('AS arrivee')) return rep(b.presence ? [b.presence] : []);
       if (sql.includes('AS candidature_statut')) return rep([b.relu]);
+      if (sql.includes('AS auth;')) { b.recherches += 1; return rep([b.recherche()]); }
       if (sql.includes('AS auth,')) {
         const ligne = b.reste ?? (b.seeded ? { ...ZERO, missions: 2, auth: b.users.size } : { ...ZERO, auth: b.users.size });
         return rep([ligne]);
@@ -89,7 +103,7 @@ function banc(t, surcharge = {}) {
 const lignesPubliques = b => b.logs.filter(l => !l.startsWith('::add-mask::')).join('\n');
 
 test('verrou : la référence de production est refusée nommément, avant tout appel réseau, pour chaque action', async t => {
-  for (const action of ['acces', 'preparer', 'scanner', 'verifier', 'nettoyer', 'compter']) {
+  for (const action of ['acces', 'preparer', 'scanner', 'verifier', 'nettoyer', 'nettoyer_run', 'compter']) {
     for (const surcharge of [{ STAGING_SUPABASE_PROJECT_REF: PRODUCTION_REF },
       { STAGING_SUPABASE_URL: `https://${PRODUCTION_REF}.supabase.co` }, { SUPABASE_URL: `https://${PRODUCTION_REF}.supabase.co` }]) {
       const b = banc(t, surcharge);
@@ -125,8 +139,8 @@ test('verrou : seules la Management API du STAGING et le projet STAGING sont des
 });
 
 test('écriture : préparer, scanner et nettoyer exigent l approbation explicite du workflow', async t => {
-  for (const action of ['preparer', 'scanner', 'nettoyer']) {
-    const b = banc(t, { LOT5_STAGING_ECRITURE: '' });
+  for (const action of ['preparer', 'scanner', 'nettoyer', 'nettoyer_run']) {
+    const b = banc(t, { LOT5_STAGING_ECRITURE: '', LOT5_NETTOYER_RUN: 'node-1' });
     await assert.rejects(b.run(action), /LOT5_STAGING_ECRITURE=COHORTE_D5/);
     assert.equal(b.appels.length, 0);
   }
@@ -216,7 +230,8 @@ test('nettoyage : dépendance inconnue ou compte restant → échec, manifeste c
   const reste = banc(t);
   await reste.run('preparer');
   reste.reste = { ...ZERO, notations: 1 };
-  await assert.rejects(reste.run('nettoyer'), /Nettoyage L5 incomplet/);
+  await assert.rejects(reste.run('nettoyer'), e => /Nettoyage L5 incomplet \(run node-1\)/.test(e.message)
+    && e.message.includes("nettoyer_run=node-1") && !/manifeste conservé/.test(e.message), 'le message nomme la reprise par étiquette');
   assert.notEqual(JSON.parse(readFileSync(reste.env.LOT5_MANIFEST, 'utf8')).status, 'cleaned');
 });
 
@@ -282,4 +297,107 @@ test('SQL : contexte service, verrou consultatif, aucun contournement de déclen
   const debut = new Date(m.m2.debut).getTime(), fin = new Date(m.m2.fin).getTime(), t0 = Date.parse('2026-11-24T10:00:00.000Z');
   assert.ok(debut - t0 <= 15 * 60_000 && debut > t0, 'créneau dans la fenêtre d affichage (15 min avant le début)');
   assert.ok(fin - debut >= ECART_SCANS_MS + 60_000, 'les deux scans tiennent dans le créneau');
+});
+
+// MARK: - Reprise par étiquette (revue de #1183, M1)
+
+test('nettoyer_run : la cohorte d un run perdu est retrouvée par son étiquette et nettoyée sans manifeste', async t => {
+  const b = banc(t);
+  await b.run('preparer');
+  rmSync(b.env.LOT5_MANIFEST); rmSync(b.env.LOT5_XCUITEST_JSON); // le runner hébergé disparaît avec eux
+  b.env.LOT5_NETTOYER_RUN = 'node-1';
+  const etat = await b.run('nettoyer_run');
+  assert.equal(etat.total, 0);
+  assert.equal(b.users.size, 0, 'les deux comptes Auth du run sont supprimés');
+  assert.equal(b.recherches, 1);
+  const nettoyage = b.appels.find(a => a.corps?.query?.includes('$l5_clean$')).corps.query;
+  const [e1] = [...b.appels.filter(a => a.url.endsWith('/auth/v1/admin/users'))].map(a => a.corps.id);
+  assert.ok(nettoyage.includes(e1), 'le nettoyage cible l établissement retrouvé');
+  assert.doesNotMatch(lignesPubliques(b), /CANARI/);
+  // Run déjà nettoyé (ou jamais créé) : rien trouvé, compte à 0, aucune suppression.
+  const deletes = b.appels.filter(a => a.methode === 'DELETE').length;
+  assert.deepEqual(await b.run('nettoyer_run'), { total: 0, introuvable: true });
+  assert.equal(b.appels.filter(a => a.methode === 'DELETE').length, deletes);
+});
+
+test('nettoyer_run : étiquette absente ou mal formée refusée avant tout appel réseau', async t => {
+  for (const run of [undefined, '', '-x', "x'; DROP", 'a'.repeat(41), 'é']) {
+    const b = banc(t, { LOT5_NETTOYER_RUN: run });
+    await assert.rejects(b.run('nettoyer_run'), /LOT5_NETTOYER_RUN invalide/);
+    assert.equal(b.appels.length, 0, String(run));
+  }
+  assert.throws(() => sqlRetrouverRun("x'"), /invalide/);
+});
+
+test('nettoyer_run : chaque ambiguïté ou ligne hors du run est refusée sans suppression', () => {
+  const run = 'node-1', em = emailsDuRun(run);
+  const E = '0b6a2f5e-1c2d-4e3f-9a8b-7c6d5e4f3a2b', S = '1c7b3a6f-2d3e-4f40-8b9c-8d7e6f5a4b3c', X = '2d8c4b70-3e4f-4051-9cad-9e8f7a6b5c4d';
+  const auth = [{ id: E, email: em.etablissement, role: 'ETABLISSEMENT', run, kind: 'LOT5_D5' },
+    { id: S, email: em.soignant, role: 'SOIGNANT', run, kind: 'LOT5_D5' }];
+  const ok = { etablissements: [{ id: E, test: true, email: em.etablissement }], soignants: [{ id: S, test: true, email: em.soignant }], auth };
+  const cible = cibleDepuisRecherche(run, ok);
+  assert.deepEqual([cible.etablissement.id, cible.soignant.id, cible.marker], [E, S, 'RECETTE-L5-node-1']);
+  const refus = [
+    [{ ...ok, etablissements: [ok.etablissements[0], { id: X, test: true, email: em.etablissement }] }, /Plusieurs établissements/],
+    [{ ...ok, soignants: [ok.soignants[0], { id: X, test: true, email: em.soignant }] }, /Plusieurs soignants/],
+    [{ ...ok, etablissements: [{ ...ok.etablissements[0], test: false }] }, /sans compte TEST/],
+    [{ ...ok, soignants: [{ ...ok.soignants[0], test: false }] }, /sans compte TEST/],
+    [{ ...ok, etablissements: [{ ...ok.etablissements[0], email: 'autre@example.invalid' }] }, /sans l'adresse du run/],
+    [{ ...ok, auth: [...auth, { ...auth[0], id: X }] }, /Plus de deux identités/],
+    [{ ...ok, auth: [{ ...auth[0], run: 'autre' }, auth[1]] }, /hors du run/],
+    [{ ...ok, auth: [{ ...auth[0], kind: 'AUTRE' }, auth[1]] }, /hors du run/],
+    [{ ...ok, auth: [{ ...auth[0], role: 'SOIGNANT' }, auth[1]] }, /hors du run/],
+    [{ ...ok, auth: [{ ...auth[0], id: X }, auth[1]] }, /divergents/],
+    [{ ...ok, auth: [auth[0], { ...auth[1], id: X }] }, /divergents/],
+    [{ ...ok, auth: null }, /illisible/],
+  ];
+  for (const [ligne, motif] of refus) assert.throws(() => cibleDepuisRecherche(run, ligne), motif);
+  assert.throws(() => cibleDepuisRecherche('../x', ok), /invalide/);
+});
+
+// MARK: - Liste des tables enfants prouvée par le dump (revue de #1183, m2)
+
+test('GRAPHE_NETTOYAGE = fermeture des clés étrangères du dump vers la cohorte (aucune table oubliée, ordre valide)', () => {
+  const dump = readFileSync(new URL('../../supabase/schema/public.sql', import.meta.url), 'utf8');
+  assert.deepEqual(GRAPHE_NETTOYAGE, grapheNettoyage(dump),
+    'le dump a changé : régénérer GRAPHE_NETTOYAGE (node scripts/mobile/staging-lot5-fixture.mjs graphe)');
+  // Contrôle indépendant : toute FK non-CASCADE/non-SET NULL vers une table retenue a son lien dans le graphe.
+  const tables = lireGraphe();
+  const retenues = new Set([...RACINES_COHORTE, ...tables.map(t => t.table)]);
+  const re = /ALTER TABLE ONLY "public"\."(\w+)"\s+ADD CONSTRAINT "\w+" FOREIGN KEY \("(\w+)"\) REFERENCES "public"\."(\w+)"\("id"\)([^;]*);/g;
+  let restrictives = 0;
+  for (const [, enfant, colonne, parent, reste] of dump.matchAll(re)) {
+    if (!retenues.has(parent) || enfant === parent || RACINES_COHORTE.includes(enfant) || /ON DELETE SET (NULL|DEFAULT)/.test(reste)) continue;
+    if (!/ON DELETE CASCADE/.test(reste)) restrictives += 1;
+    const t = tables.find(x => x.table === enfant);
+    assert.ok(t, `${enfant} (FK ${colonne} → ${parent}) absente de l ordre de suppression`);
+    assert.ok(t.liens.some(l => l.colonne === colonne && l.parent === parent), `${enfant}.${colonne} → ${parent} absent`);
+  }
+  assert.ok(restrictives > 50, `FK restrictives relues : ${restrictives}`);
+  for (const attendu of ['bulletins_paie', 'cotisations_sociales', 'paiements_soignant', 'paiements_mission', 'factures',
+    'factures_honoraires', 'assurances_mission', 'litiges', 'reclamations', 'shift_affectations', 'calendar_events_sync']) {
+    assert.ok(retenues.has(attendu), `${attendu} (constat m2 de la revue) retenue`);
+  }
+  // Parents avant enfants : chaque lien pointe vers une racine ou une table placée plus haut.
+  const rang = new Map(tables.map((t, i) => [t.table, i]));
+  for (const t of tables) for (const l of t.liens) {
+    assert.ok(RACINES_COHORTE.includes(l.parent) || rang.get(l.parent) < rang.get(t.table), `${t.table} avant son parent ${l.parent}`);
+  }
+  // Le SQL supprime chaque table retenue, enfants d abord, avant les racines.
+  const m = manifeste('graphe', new Date('2026-11-24T10:00:00.000Z'));
+  const sql = sqlNettoyer(m);
+  const positions = tables.map(t => sql.indexOf(`DELETE FROM public.${t.table} x WHERE`));
+  assert.ok(positions.every(p => p > 0), 'une suppression par table retenue');
+  for (const t of tables) for (const l of t.liens.filter(l => !RACINES_COHORTE.includes(l.parent))) {
+    assert.ok(positions[rang.get(t.table)] < positions[rang.get(l.parent)], `${t.table} supprimée avant ${l.parent}`);
+  }
+  assert.ok(Math.max(...positions) < sql.indexOf('DELETE FROM public.missions WHERE id = ANY(v_missions)'), 'enfants avant les missions');
+});
+
+// MARK: - Notifications des missions du run (revue de #1183, m3)
+
+test('notifications des missions du run : comptées et supprimées quel que soit le destinataire', () => {
+  const m = manifeste('notif', new Date('2026-11-24T10:00:00.000Z'));
+  assert.match(sqlNettoyer(m), /DELETE FROM public\.notifications WHERE destinataire_id = ANY\(v_ids\) OR id_ressource = ANY\(v_missions\)/);
+  assert.match(sqlCompter(m), /FROM public\.notifications WHERE destinataire_id = ANY\([^)]*\]::uuid\[\]\) OR id_ressource = ANY\(/);
 });
