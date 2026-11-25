@@ -9,7 +9,8 @@
 //   entrees            entrées du déclenchement (mode, build, phrase de confirmation, publication) et notes de version
 //   provenance <N>     commit dont est issu le build TestFlight N (run GitHub Actions) ; main n'a pas avancé
 //   ci <commit>        dernier run de ios-swift-ci.yml sur ce commit de main : réussi (revue M1 de #1177)
-//   source <dossier>   arbre source de ce commit : lots 1 à 5 clos, garde Apple 4.2, aucune mise à jour à chaud
+//   source <dossier>   arbre source de ce commit : lots 1 à 5 clos, espace établissement ouvert en production,
+//                      garde Apple 4.2, aucune mise à jour à chaud
 //   build <N>          build N dans App Store Connect : VALID, non expiré, bonne version, chiffrement exempté
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -246,8 +247,101 @@ export function portsEnAttente(source, lot) {
   return lu.etat === 'lue' ? lu.ports : null;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Garde « etablissement » : espace établissement ouvert en production (lot 5, T14)
+// ---------------------------------------------------------------------------------------------
+
+/** Table d'ouverture de l'espace établissement par mode (`OuvertureEspaceEtablissement.pour(mode:)`). */
+export const ESPACE_RESOLUTION = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EspaceResolution.swift';
+/** Déclaration de `JoleneMode` : source des modes que la table doit décider. */
+export const ENVIRONNEMENT = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Environment.swift';
+/** Câblage de la table dans l'app (contrôleur de session et aiguillage des liens). */
+export const APP_CONTAINER = 'ios-native/Jolene/Composition/AppContainer.swift';
+
+/** Corps entre l'accolade ouvrante à `debut` et sa fermante (texte sans commentaires), `null` si non fermé. */
+function corpsAccolades(texte, debut) {
+  let profondeur = 0;
+  for (let i = debut; i < texte.length; i += 1) {
+    if (texte[i] === '{') profondeur += 1;
+    else if (texte[i] === '}') { profondeur -= 1; if (profondeur === 0) return texte.slice(debut + 1, i); }
+  }
+  return null;
+}
+
+/** Cas de `enum JoleneMode` (Environment.swift), `null` si la déclaration est absente ou illisible. */
+export function lireModes(source) {
+  if (typeof source !== 'string') return null;
+  const texte = sansCommentaires(source);
+  const tete = [...texte.matchAll(/\benum\s+JoleneMode\b[^{]*\{/g)];
+  if (tete.length !== 1) return null;
+  const corps = corpsAccolades(texte, tete[0].index + tete[0][0].length - 1);
+  if (corps === null || !/^\s*(?:case\s+[a-z][A-Za-z0-9]*(?:\s*,\s*[a-z][A-Za-z0-9]*)*\s*)+$/.test(corps)) return null;
+  return [...corps.matchAll(/\bcase\s+([^\n]+)/g)].flatMap((m) => m[1].split(',').map((c) => c.trim()));
+}
+
+/**
+ * Lecture stricte de `OuvertureEspaceEtablissement.pour(mode:)` : commentaires retirés, une seule déclaration, un
+ * `switch mode` fait uniquement de `case .x(, .y): return .ouvert|.ferme`, sans `default`, sans `#if`, chaque mode de
+ * `JoleneMode` décidé une fois. Tout le reste est « illisible » : en cas de doute, la garde refuse.
+ */
+export function lireOuvertureEtablissement(source, modes) {
+  if (typeof source !== 'string') return { etat: 'absente' };
+  const texte = sansCommentaires(source);
+  const enums = [...texte.matchAll(/\benum\s+OuvertureEspaceEtablissement\b[^{]*\{/g)];
+  if (enums.length === 0) return { etat: 'absente' };
+  if (enums.length > 1) return { etat: 'illisible', raison: 'enum déclarée plusieurs fois' };
+  const enumCorps = corpsAccolades(texte, enums[0].index + enums[0][0].length - 1);
+  if (enumCorps === null) return { etat: 'illisible', raison: 'enum non fermée' };
+  const fonctions = [...enumCorps.matchAll(/\bstatic\s+func\s+pour\s*\(\s*mode\s*:\s*JoleneMode\s*\)\s*->\s*OuvertureEspaceEtablissement\s*\{/g)];
+  if (fonctions.length === 0) return { etat: 'absente' };
+  if (fonctions.length > 1) return { etat: 'illisible', raison: 'pour(mode:) déclarée plusieurs fois' };
+  const corps = corpsAccolades(enumCorps, fonctions[0].index + fonctions[0][0].length - 1);
+  if (corps === null) return { etat: 'illisible', raison: 'pour(mode:) non fermée' };
+  if (/#if\b/.test(corps)) return { etat: 'illisible', raison: 'compilation conditionnelle dans la table' };
+  const switchMode = /^\s*switch\s+mode\s*\{([\s\S]*)\}\s*$/.exec(corps);
+  if (!switchMode) return { etat: 'illisible', raison: 'pas un switch mode seul' };
+  if (/\bdefault\b/.test(switchMode[1])) return { etat: 'illisible', raison: 'default présent : chaque mode doit être décidé' };
+  const CAS = /^\s*case\s+(\.[a-z][A-Za-z0-9]*(?:\s*,\s*\.[a-z][A-Za-z0-9]*)*)\s*:\s*return\s+\.(ouvert|ferme)\s*$/;
+  const lignes = switchMode[1].split('\n').filter((ligne) => ligne.trim() !== '');
+  const cas = {};
+  for (const ligne of lignes) {
+    const m = CAS.exec(ligne);
+    if (!m) return { etat: 'illisible', raison: `ligne inattendue « ${ligne.trim()} »` };
+    for (const mode of m[1].split(',').map((c) => c.trim().slice(1))) {
+      if (mode in cas) return { etat: 'illisible', raison: `mode ${mode} décidé deux fois` };
+      cas[mode] = m[2];
+    }
+  }
+  if (!Array.isArray(modes)) return { etat: 'illisible', raison: `JoleneMode illisible dans ${ENVIRONNEMENT}` };
+  const manquants = modes.filter((mode) => !(mode in cas));
+  const inconnus = Object.keys(cas).filter((mode) => !modes.includes(mode));
+  if (manquants.length || inconnus.length) return { etat: 'illisible', raison: `modes non alignés sur JoleneMode (manquants : ${manquants.join(', ') || 'aucun'} ; inconnus : ${inconnus.join(', ') || 'aucun'})` };
+  return { etat: 'lue', cas };
+}
+
+function evaluateEtablissement(files, fail) {
+  const sources = files.swiftSources ?? {};
+  const lu = lireOuvertureEtablissement(sources[ESPACE_RESOLUTION], lireModes(sources[ENVIRONNEMENT]));
+  if (lu.etat === 'absente') fail('etablissement', `table OuvertureEspaceEtablissement.pour(mode:) introuvable dans ${ESPACE_RESOLUTION} : l'ouverture de l'espace établissement ne peut pas être établie.`);
+  else if (lu.etat === 'illisible') fail('etablissement', `table OuvertureEspaceEtablissement.pour(mode:) illisible dans ${ESPACE_RESOLUTION} (${lu.raison}) : l'ouverture de l'espace établissement ne peut pas être établie.`);
+  else if (lu.cas.production !== 'ouvert') fail('etablissement', `espace établissement fermé en production dans la source de ce build (${ESPACE_RESOLUTION}, case .production: return .${lu.cas.production}) : rouvrir par une PR consignée dans docs/mobile-swift/DECISIONS_LOT5.md (section T14).`);
+  // La table ouverte ne sert à rien si l'app de production ne la lit pas : contrôleur et aiguillage câblés sur le mode.
+  const app = sources[APP_CONTAINER];
+  if (app === undefined) {
+    fail('etablissement', `${APP_CONTAINER} absent : le câblage de l'espace établissement ne peut pas être contrôlé.`);
+    return;
+  }
+  const texte = sansCommentaires(app);
+  const cablages = [...texte.matchAll(/espaceEtablissement:\s*(\.pour\(mode:\s*[^)\n]*\)|[^,)\n]+)/g)].map((m) => m[1].trim().replace(/\s+/g, ' '));
+  const parMode = cablages.filter((c) => c === '.pour(mode: environment.mode)').length;
+  if (parMode < 2) fail('etablissement', `${APP_CONTAINER} ne câble pas le contrôleur de session et l'aiguillage des liens sur .pour(mode: environment.mode) (${parMode} câblage(s) lu(s)).`);
+  const autres = cablages.filter((c) => !['.pour(mode: environment.mode)', '.pour(mode: .demo)'].includes(c));
+  if (autres.length) fail('etablissement', `${APP_CONTAINER} force l'ouverture de l'espace établissement hors de la table (${autres.join(', ')}).`);
+}
+
 export function evaluateSource(files) {
   const { fail, done } = collector();
+  evaluateEtablissement(files, fail);
   // Lots clos : AUCUN port en attente, quel que soit le lot (revue M2 de #1177). Pas d'exception en dur :
   // soumettre avec un port non câblé exigerait une décision écrite de la fondatrice et une PR de ce fichier.
   // Au 24/11/2026, portsEnAttenteLot1 = ["recovery"] : réinitialisation native du mot de passe (LOT6_PLAN §2).
@@ -436,7 +530,7 @@ async function main(command, args) {
     case 'source': {
       if (!args[0] || !existsSync(join(args[0], 'ios-native'))) throw new Error('source <dossier contenant ios-native/> exigé');
       evaluateSource(loadSourceTree(args[0]));
-      summary('✓ Source du build : lots 1 à 5 clos, tableau de bord, missions et pointage natifs (Apple 4.2), aucune mise à jour à chaud (Apple 2.5.2).');
+      summary('✓ Source du build : lots 1 à 5 clos, espace établissement ouvert en production, tableau de bord, missions et pointage natifs (Apple 4.2), aucune mise à jour à chaud (Apple 2.5.2).');
       return;
     }
     case 'build': {
