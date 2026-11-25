@@ -10,7 +10,7 @@ public enum CandidaturesEtabRules {
     public static let contratAcceptableNativement = "SALARIE"
     /// Profession dont l'acceptation reste sur le web (statuts d'internat non portés, D10).
     public static let professionRenvoyeeAuWeb = "MEDECIN"
-    /// Profession du cadre étudiant (`fn_traiter_candidature_planning_v1`, l.62452-62455 : aiguillage seulement).
+    /// Profession du cadre étudiant (`fn_traiter_candidature_planning_v1`, l.62467-62470 : aiguillage seulement).
     public static let professionCadreEtudiant = "AS"
     /// Statut d'une candidature à traiter (web l.366).
     public static let statutEnAttente = "EN_ATTENTE"

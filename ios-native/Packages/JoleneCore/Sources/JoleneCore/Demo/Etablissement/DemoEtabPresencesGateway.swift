@@ -53,9 +53,9 @@ public struct DemoEtabPresencesGateway: EtabPresencesPort {
     /// Message neutre du refus RBAC, celui de `RPCInterception.messageRoleInsuffisant` (égalité gardée par
     /// `SupabaseEtabPresencesGatewayTests`).
     public static let roleInsuffisant = "Votre rôle dans cet établissement ne permet pas cette action."
-    // source: supabase/schema/public.sql l.65950, l.66049 (fn_valider_presence, fn_valider_presences_lot)
+    // source: supabase/schema/public.sql l.65965, l.66064 (fn_valider_presence, fn_valider_presences_lot)
     static let nonAutorise = "Non autorisé"
-    // source: supabase/schema/public.sql l.65960 (fn_valider_presence)
+    // source: supabase/schema/public.sql l.65975 (fn_valider_presence)
     static let presenceIntrouvable = "Présence introuvable"
     // source: supabase/schema/public.sql l.1253 (dec_bloquer_validation_presence_avant_fin_planning)
     static let avantFinPlanning = "La présence ne peut être validée avant la fin du dernier créneau planifié."

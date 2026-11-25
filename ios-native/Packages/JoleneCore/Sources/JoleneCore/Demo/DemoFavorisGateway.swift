@@ -75,7 +75,7 @@ actor DemoFavorisStore {
 public struct DemoFavorisGateway: FavorisPort {
     /// Équivalent démo d'une clé étrangère violée (mission inexistante), message générique.
     public static let sauvegardeImpossible = "La mission n'a pas pu être sauvegardée. Réessayez."
-    /// Refus de `fn_toggle_favori_etablissement` pour un établissement inexistant (l.62047), verbatim.
+    /// Refus de `fn_toggle_favori_etablissement` pour un établissement inexistant (l.62062), verbatim.
     public static let etablissementIntrouvable = "Établissement introuvable"
 
     private let store = DemoFavorisStore()

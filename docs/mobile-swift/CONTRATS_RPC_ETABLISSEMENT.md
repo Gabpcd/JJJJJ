@@ -345,7 +345,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.valider` — **B9 paiements/escrow** : la
   validation déclenche `trg_escrow_release_on_validation`, correction 6 ; merge sur accord explicite de Gabrielle).
 - **Usage** : validation unitaire après note 1-5 (D6) et relecture des créneaux.
-- **Signature SQL** (`supabase/schema/public.sql` l.65940, dump re-baseliné le 25/11/2026, #1184) :
+- **Signature SQL** (`supabase/schema/public.sql` l.65955, dump re-baseliné le 25/11/2026, #1184) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") RETURNS "jsonb"
@@ -375,7 +375,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid"
 
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.validerLot` — **B9**).
 - **Usage** : validation en lot des présences éligibles relues.
-- **Signature SQL** (`supabase/schema/public.sql` l.66035) :
+- **Signature SQL** (`supabase/schema/public.sql` l.66050) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[]) RETURNS "jsonb"
