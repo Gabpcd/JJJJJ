@@ -31,8 +31,8 @@ interface SignatureRow {
  * (qui, quand, IP, UA, hash document, OTP, PSC, RPPS) pour les parties
  * au contrat et les admins.
  *
- * Conforme art. 1366-1367 Code civil (signature électronique avancée
- * renforcée par OTP + horodatage + identification multi-facteurs).
+ * Signature électronique simple (art. 1366-1367 Code civil), renforcée par
+ * OTP + horodatage + identification multi-facteurs.
  *
  * NB : badge "Signature électronique sécurisée Jolene" (pas "AES eIDAS"
  * réservé aux PSCo qualifiés avec certificat).
@@ -169,10 +169,10 @@ export function CertificatSignature({ contratId, variant = 'resume' }: Props) {
       </div>
 
       <p className="text-[10px] text-muted-foreground border-t border-border pt-2">
-        Signature électronique sécurisée Jolene — conforme art. 1366-1367 Code civil
-        (signature électronique simple/avancée renforcée par OTP SMS + horodatage +
-        IP). Pour une signature qualifiée eIDAS, contactez un Prestataire de Services
-        de Confiance qualifié.
+        Signature électronique simple Jolene (art. 1366-1367 Code civil),
+        renforcée par OTP SMS + horodatage + IP. Pour une signature qualifiée
+        eIDAS, contactez un Prestataire de Services de Confiance
+        qualifié.
       </p>
     </div>
   );

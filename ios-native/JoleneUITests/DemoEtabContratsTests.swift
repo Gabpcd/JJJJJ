@@ -21,7 +21,7 @@ final class DemoEtabContratsTests: JoleneUITestCase {
 
     /// `TextesWeb.Contrat.otpLibelle` / `otpDescription` (`ContratMission.tsx` l.742, l.745), verbatim.
     static let modeOtpLibelle = "📱 Signature électronique OTP SMS"
-    static let modeOtpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Conforme art. 1366-1367 Code civil."
+    static let modeOtpDescription = "Code SMS à 6 chiffres + horodatage + hash document. Signature électronique simple (art. 1366-1367 Code civil)."
 
     func testContratDemoOtpPuisSigneRelu() throws {
         launchDemo(extraArguments: espaceEtablissement)
