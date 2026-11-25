@@ -89,6 +89,26 @@ private struct DrapeauxJournalises: FlagsPort {
     }
 }
 
+/// Coupe-circuit de l'espace (T14, M1) : valeur scriptée par appel (la dernière se répète), `nil` = réponse « défaut »
+/// (ce que rend `SupabaseFlagsGateway` sur erreur, droits refusés ou clé absente), barrière optionnelle (délai).
+private actor DrapeauEspaceScript {
+    private var valeurs: [Bool?]
+    init(_ valeurs: [Bool?]) { self.valeurs = valeurs }
+    func prochaine() -> Bool? { valeurs.count > 1 ? valeurs.removeFirst() : valeurs[0] }
+}
+
+private struct DrapeauEspaceScripte: FlagsPort {
+    let script: DrapeauEspaceScript
+    let log: CallLog
+    var gate: Gate?
+    func ecranActif(cle: String, defaut: Bool) async -> Bool {
+        await log.record("drapeau(\(cle))")
+        guard cle == EspaceEtablissementDrapeau.cle else { return defaut }
+        if let gate { await gate.wait() }
+        return await script.prochaine() ?? defaut
+    }
+}
+
 private struct ErreurReseauEtab: Error {}
 
 private let confirmeLe = Date(timeIntervalSince1970: 1_700_000_000)
@@ -125,6 +145,8 @@ private struct EtabFixture {
     var signInResult: Result<AuthenticatedUser, Error> = .success(utilisateurEtab())
     var profilSoignant: SoignantProfile?
     var audit = FakeAudit()
+    /// T14 (M1) : port de drapeaux ; nil = port non câblé (fail-open, défaut des autres tests).
+    var flags: FlagsPort?
 
     init(restored: AuthenticatedUser? = utilisateurEtab(),
          roles: [Result<RoleResult, Error>] = [.success(RoleResult(role: "ADMIN_ETABLISSEMENT", etablissementId: "etab-1"))],
@@ -144,6 +166,7 @@ private struct EtabFixture {
             clock: FixedClock(confirmeLe)
         )
         gateways.audit = audit
+        if let flags { gateways.flags = flags }
         gateways.etablissement.session = FakeEtabSession(script: session, log: log, permissionsGate: permissionsGate,
                                                          permissionsGateFromCall: permissionsGateFromCall, profilGate: profilGate)
         return gateways
@@ -265,7 +288,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
                        file: file, line: line)
     }
 
-    /// Défaut du contrôleur (fail-closed ; production fermée jusqu'à T14, `.ferme` reste le défaut après) : restauration.
+    /// Défaut du contrôleur, `.ferme` (fail-closed) : restauration. Avant T14, c'était aussi la configuration de production.
     func testEspaceFermeParDefautRendLeRefusDAvantLeLot5SansAppelEtablissement() async {
         let fixture = EtabFixture()
         let state = await SessionController(gateways: fixture.gateways()).start()
@@ -457,6 +480,93 @@ final class SessionControllerEtablissementTests: XCTestCase {
         XCTAssertEqual(PermissionsEtabResult(success: false, role: nil, etablissementId: nil, permissions: .aucune, messageServeur: "x"),
                        PermissionsEtabResult(success: false, role: nil, etablissementId: nil, permissions: .aucune),
                        "le message serveur est exclu de l'égalité")
+    }
+
+    // MARK: Coupe-circuit distant de l'espace (T14, M1 de la revue de #1190)
+
+    private func fixtureDrapeau(espace valeurs: [Bool?], gate: Gate? = nil) -> EtabFixture {
+        var fixture = EtabFixture()
+        fixture.flags = DrapeauEspaceScripte(script: DrapeauEspaceScript(valeurs), log: fixture.log, gate: gate)
+        return fixture
+    }
+
+    /// Drapeau à 0 : exactement le refus d'un espace fermé (avant T14), sans aucun appel établissement ; le drapeau est
+    /// lu après le rôle, avant `fn_mes_permissions_etab`.
+    func testDrapeauEspaceA0RendLeRefusDAvantT14SansAppelEtablissement() async {
+        for mode in [JoleneMode.staging, .production] {
+            let fixture = fixtureDrapeau(espace: [false])
+            let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .pour(mode: mode)).start()
+            await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
+            let entries = await fixture.log.entries
+            XCTAssertEqual(entries, ["restoreSession", "currentRole", "drapeau(\(EspaceEtablissementDrapeau.cle))"],
+                           "\(mode) : drapeau lu après le rôle, aucun appel établissement")
+        }
+    }
+
+    /// Drapeau à 1 : espace ouvert ; le drapeau est lu avant le périmètre serveur.
+    func testDrapeauEspaceA1OuvreLEspace() async {
+        let fixture = fixtureDrapeau(espace: [true])
+        let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .pour(mode: .production)).start()
+        guard case .readyEtablissement = state else { return XCTFail("espace établissement attendu, reçu \(state)") }
+        let entries = await fixture.log.entries
+        XCTAssertEqual(entries, ["restoreSession", "currentRole", "drapeau(\(EspaceEtablissementDrapeau.cle))",
+                                 "permissions(nil)", "profil"])
+    }
+
+    /// Absent, illisible ou en erreur (le port rend alors son défaut) : fail-open, comme les sept drapeaux d'écran.
+    func testDrapeauEspaceAbsentOuIllisibleResteOuvertFailOpen() async {
+        let fixture = fixtureDrapeau(espace: [nil])
+        let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .pour(mode: .production)).start()
+        guard case .readyEtablissement = state else { return XCTFail("fail-open attendu, reçu \(state)") }
+        let nonCable = EtabFixture() // UnwiredFlagsPort : défaut
+        let ouvert = await nonCable.controller(espace: .ouvert).start()
+        guard case .readyEtablissement = ouvert else { return XCTFail("port non câblé : fail-open attendu, reçu \(ouvert)") }
+    }
+
+    /// Délai de lecture épuisé : fail-open, l'espace s'ouvre quand même.
+    func testDrapeauEspaceEnDelaiResteOuvertFailOpen() async {
+        var fixture = fixtureDrapeau(espace: [false], gate: Gate()) // jamais ouverte
+        fixture.timeout = 0.05
+        let state = await fixture.controller(espace: .ouvert).start()
+        guard case .readyEtablissement = state else { return XCTFail("délai épuisé : fail-open attendu, reçu \(state)") }
+    }
+
+    /// Fermeture à distance : un espace ouvert, revalidé (retour au premier plan) avec le drapeau passé à 0, rend le refus
+    /// et avance l'epoch (les écrans établissement sont démontés), sans appel établissement de plus.
+    func testDrapeauEspacePasseA0EnRevalidationFermeLEspaceEtAvanceLEpoch() async {
+        let fixture = fixtureDrapeau(espace: [true, false])
+        let controller = fixture.controller(espace: .ouvert)
+        let premier = await controller.start()
+        guard case .readyEtablissement = premier else { return XCTFail("espace ouvert attendu, reçu \(premier)") }
+        let epoch = await controller.epoch
+        let revalide = await controller.start()
+        XCTAssertEqual(revalide, .blocked(.unsupportedRole("ADMIN_ETABLISSEMENT")), "même refus qu'un espace fermé")
+        let apres = await controller.epoch
+        XCTAssertEqual(apres, epoch + 1, "frontière de périmètre : epoch avancé")
+        let permissionsLues = await fixture.log.entries.filter { $0.hasPrefix("permissions(") }.count
+        XCTAssertEqual(permissionsLues, 1, "aucun appel établissement après la coupure")
+    }
+
+    /// Monde démo : `-JOLENE_FLAG_ios_natif_etab_espace_actif false` (`DemoFlagsGateway`) ferme l'espace de la même façon.
+    func testDrapeauEspaceSurchargeDemoFermeLEspace() async {
+        var fixture = EtabFixture()
+        let surcharges = DemoFlagsGateway.surcharges(arguments: ["Jolene", "-JOLENE_FLAG_\(EspaceEtablissementDrapeau.cle)", "false"])
+        XCTAssertEqual(surcharges, [EspaceEtablissementDrapeau.cle: false])
+        fixture.flags = DemoFlagsGateway(surcharges: surcharges)
+        let state = await SessionController(gateways: fixture.gateways(), espaceEtablissement: .pour(mode: .demo)).start()
+        await Self.verifierRefusDAvantLeLot5(state, log: fixture.log)
+        var ouverte = EtabFixture()
+        ouverte.flags = DemoFlagsGateway()
+        let ouvert = await SessionController(gateways: ouverte.gateways(), espaceEtablissement: .pour(mode: .demo)).start()
+        guard case .readyEtablissement = ouvert else { return XCTFail("démo sans surcharge : espace ouvert, reçu \(ouvert)") }
+    }
+
+    /// Espace fermé (`.ferme`, défaut du contrôleur) : le coupe-circuit n'est jamais lu.
+    func testDrapeauEspaceJamaisLuPourUnEspaceFerme() async {
+        let fixture = fixtureDrapeau(espace: [true])
+        _ = await SessionController(gateways: fixture.gateways()).start() // `.ferme`
+        let lus = await fixture.log.entries.filter { $0.hasPrefix("drapeau(") }
+        XCTAssertEqual(lus, [], "espace fermé : aucun drapeau lu")
     }
 
     func testPortSessionNonCableNOuvreJamaisLEspace() async {

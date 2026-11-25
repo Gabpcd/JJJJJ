@@ -382,8 +382,18 @@ public actor SessionController {
         case .soignant: break
         case .etablissement:
             guard let role else { return .blocked(.unsupportedRole(nil)) }
-            // Espace fermé (production avant T14, défaut du contrôleur) : refus d'avant le lot 5, aucun appel.
+            // Espace fermé (défaut du contrôleur, `.ferme`) : refus d'avant le lot 5, aucun appel.
             guard ouvertureEtablissement == .ouvert else { return .blocked(.unsupportedRole(role.role)) }
+            // T14 (M1 de la revue de #1190) : coupe-circuit distant de l'espace entier, lu avant tout appel
+            // établissement. À 0 : même refus qu'un espace fermé. Absent, illisible ou délai : fail-open.
+            let flags = gateways.flags
+            let espaceActif = (try? await bounded(timeout: resolutionTimeout) { await flags.espaceEtablissementActif() })
+                ?? FlagsPolicy.defautFailOpen
+            guard currentEpoch == expected else { return nil }
+            guard espaceActif else {
+                noter("espace:coupe")
+                return .blocked(.unsupportedRole(role.role))
+            }
             return await resolveEtablissement(user: user, role: role, gateways: gateways, epoch: expected, quiet: quiet)
         case let .bloque(access): return .blocked(access)
         }

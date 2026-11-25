@@ -24,10 +24,12 @@ final class EtabFeatureFlagsTests: XCTestCase {
     ]
 
     /// Session établissement démo prête (monde démo, aucun réseau), drapeaux remplacés par `flags`.
-    private func sessionPrete(flags: FlagsPort) async throws -> (SessionController, EtablissementSessionSnapshot) {
+    /// `delai` borne aussi la lecture du coupe-circuit de l'espace (T14, M1), faite par le contrôleur avant l'espace.
+    private func sessionPrete(flags: FlagsPort, delai: TimeInterval = SessionController.defaultResolutionTimeout) async throws
+        -> (SessionController, EtablissementSessionSnapshot) {
         var gateways = DemoWorld.gateways(espace: .etablissement(.init()))
         gateways.flags = flags
-        let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
+        let controller = SessionController(gateways: gateways, resolutionTimeout: delai, espaceEtablissement: .ouvert)
         _ = await controller.start()
         let state = await controller.signIn(email: DemoEspace.emailEtablissement, password: "demonstration")
         let snapshot = try XCTUnwrap(state.snapshotEtablissement, "espace établissement démo attendu, obtenu \(state)")
@@ -45,6 +47,16 @@ final class EtabFeatureFlagsTests: XCTestCase {
             Range(resultat.range(at: 1), in: migration).map { String(migration[$0]) }
         })
         XCTAssertEqual(clesMigration, Set(Self.septCles), "chaque clé lue par l'app existe dans parametres_systeme")
+    }
+
+    /// T14 (M1 de la revue de #1190) : coupe-circuit de l'espace entier, clé posée par sa migration, hors des sept écrans.
+    func testCleDuCoupeCircuitDeLEspaceIdentiqueALaMigrationT14() throws {
+        XCTAssertEqual(EspaceEtablissementDrapeau.cle, "ios_natif_etab_espace_actif")
+        XCTAssertFalse(Self.septCles.contains(EspaceEtablissementDrapeau.cle), "ce n'est pas un écran")
+        XCTAssertFalse(EcranNatifEtablissement.allCases.map(\.cle).contains(EspaceEtablissementDrapeau.cle))
+        let migration = try SourceWebLot5.lire("supabase/migrations/20261125130000_drapeau_ios_natif_etab_espace.sql")
+        XCTAssertTrue(migration.contains("VALUES('\(EspaceEtablissementDrapeau.cle)',1,"), "ligne posée à 1 par la migration T14")
+        XCTAssertTrue(migration.contains("ON CONFLICT(cle) DO NOTHING"), "jamais réarmée par un rejeu")
     }
 
     func testPermissionEtCheminWebParEcran() {
@@ -99,7 +111,8 @@ final class EtabFeatureFlagsTests: XCTestCase {
     }
 
     func testDelaiEpuiseRendVrai() async throws {
-        let (controller, snapshot) = try await sessionPrete(flags: DrapeauxMuets())
+        // Backend muet : le coupe-circuit de l'espace (T14) attend aussi son délai, puis s'ouvre (fail-open).
+        let (controller, snapshot) = try await sessionPrete(flags: DrapeauxMuets(), delai: 0.2)
         let ecrans = EcransEtablissementModel()
         await ecrans.charger(snapshot: snapshot, controller: controller, delai: 0.05)
         for ecran in EcranNatifEtablissement.allCases {

@@ -47,6 +47,7 @@ on:
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
+      - 'supabase/migrations/20261125130000_drapeau_ios_natif_etab_espace.sql'
       # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
       - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
       # Lot 5, T12 : sources relues par RenvoisWebEtabTests — routes déclarées (chaque chemin de la table des renvois
@@ -231,6 +232,7 @@ on:
       # Lot 5, T2a : sources relues par DemoEspaceTests (rôles d'équipe) et EtabFeatureFlagsTests (clés D-FLAGS).
       - 'src/pages/EquipeEtablissement.tsx'
       - 'supabase/migrations/20261102204450_drapeaux_ios_natif_lots_2_4_5.sql'
+      - 'supabase/migrations/20261125130000_drapeau_ios_natif_etab_espace.sql'
       # Lot 5, T2b : matrice de parité relue par EtabRouteTests (47 routes, natif ou renvoi web).
       - 'docs/mobile-swift/PARITE_ETABLISSEMENT.md'
       # Lot 5, T12 : sources relues par RenvoisWebEtabTests — routes déclarées (chaque chemin de la table des renvois
