@@ -226,3 +226,30 @@ public final class DiffusionEtat<Valeur: Sendable & Equatable>: @unchecked Senda
         abonnes[id] = nil
     }
 }
+
+/// Suivi de la fin d'un fil de messages (`ConversationScreen`) quand la hauteur visible du fil change (clavier, rotation,
+/// Split View, taille du texte) : le fil n'est ramené en bas que si sa fin était visible juste avant le changement, ou
+/// juste après un envoi de l'utilisateur. Un utilisateur qui relit l'historique garde sa position (revue fraîche de la
+/// PR #1185, mineur 1). L'insertion d'un message, elle, ramène toujours en bas (comportement d'avant la PR).
+public enum SuiviFinDuFil {
+    /// Marge (pt) sous le bas visible dans laquelle la fin du fil compte encore comme visible.
+    public static let tolerance: Double = 24
+    /// Fenêtre (s) après un envoi pendant laquelle un changement de hauteur suit la fin du fil : à l'envoi, le clavier se
+    /// ferme puis se rouvre (iPad paysage, simulateur iOS 18.6 : 83,5 → 480,5 → 83,5 pt en 0,1 s).
+    public static let fenetreApresEnvoi: TimeInterval = 2
+
+    /// La fin du fil est visible : le haut du repère de fin, dans le repère de la zone de défilement, est au-dessus du bas
+    /// visible (tolérance comprise). Hauteur inconnue (0) : non visible.
+    public static func finVisible(hautDuRepere: Double, hauteurVisible: Double) -> Bool {
+        hauteurVisible > 0 && hautDuRepere <= hauteurVisible + tolerance
+    }
+
+    /// Après un changement de hauteur visible : suivre la fin si elle était visible avant le changement, ou si
+    /// l'utilisateur vient d'envoyer un message.
+    public static func suivreApresChangementDeHauteur(finVisibleAvant: Bool, dernierEnvoi: Date?, maintenant: Date) -> Bool {
+        if finVisibleAvant { return true }
+        guard let dernierEnvoi else { return false }
+        let ecart = maintenant.timeIntervalSince(dernierEnvoi)
+        return ecart >= 0 && ecart < fenetreApresEnvoi
+    }
+}

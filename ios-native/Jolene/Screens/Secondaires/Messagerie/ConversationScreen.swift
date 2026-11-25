@@ -33,6 +33,12 @@ struct ConversationScreen: View {
     @State private var confirmationSignalement: String?
     /// Défilement vers la fin du fil en attente (un seul à la fois : le plus récent remplace le précédent).
     @State private var defilementFin: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduireAnimations
+    /// Fin du fil visible (repère de fin dans la zone), hauteur visible de la zone, dernier envoi de l'utilisateur :
+    /// décident du suivi de la fin quand la hauteur change (`SuiviFinDuFil`).
+    @State private var finVisible = true
+    @State private var hauteurVisible: CGFloat = 0
+    @State private var dernierEnvoi: Date?
     /// Dernier type détecté : la feuille garde son texte pendant sa fermeture.
     @State private var typeAntiFuite: DetectedType?
     private let moderation: ModerationConversation
@@ -213,8 +219,14 @@ struct ConversationScreen: View {
                         .frame(height: 1)
                         .id(Self.finDuFil)
                         .accessibilityHidden(true)
+                        .background(GeometryReader { repere in
+                            Color.clear
+                                .onAppear { noterFin(repere.frame(in: .named(Self.finDuFil)).minY) }
+                                .onChange(of: repere.frame(in: .named(Self.finDuFil)).minY) { haut in noterFin(haut) }
+                        })
                 }
             }
+            .coordinateSpace(name: Self.finDuFil)
             .accessibilityIdentifier("chat-messages")
             // Fin du fil gardée visible à chaque message inséré (pas seulement quand le dernier change) et quand la hauteur
             // visible change (clavier), une fois l'animation du clavier finie. Run 45527404765 (`DemoMessagerieTests`,
@@ -222,13 +234,31 @@ struct ConversationScreen: View {
             // ferme puis se rouvre (zone visible 83,5 → 480,5 → 83,5 pt en 0,1 s) ; le défilement demandé pendant cette
             // animation était écrasé par l'évitement du clavier, et la réponse démo, insérée par le flux avant la relecture
             // du message envoyé (dernier identifiant inchangé), restait sous le bas visible, jamais rendue par la pile
-            // paresseuse. Le repère de fin, hors de la pile, a une position exacte.
+            // paresseuse. Le repère de fin, hors de la pile, a une position exacte. Un changement de hauteur ne ramène en
+            // bas que si la fin était visible avant, ou juste après un envoi (`SuiviFinDuFil`) : l'historique relu garde
+            // sa position (revue fraîche de la PR #1185, mineur 1).
             .onChange(of: Self.signature(fil.messages)) { _ in defilerEnBas(proxy, apres: Self.delaiApresMessage) }
             .background(GeometryReader { zone in
-                Color.clear.onChange(of: zone.size.height) { _ in defilerEnBas(proxy, apres: Self.delaiApresClavier) }
+                Color.clear
+                    .onAppear { hauteurVisible = zone.size.height }
+                    .onChange(of: zone.size.height) { hauteur in
+                        let suivre = SuiviFinDuFil.suivreApresChangementDeHauteur(finVisibleAvant: finVisible,
+                                                                                  dernierEnvoi: dernierEnvoi, maintenant: maintenant)
+                        hauteurVisible = hauteur
+                        if suivre { defilerEnBas(proxy, apres: Self.delaiApresClavier) }
+                    }
             })
-            .onAppear { defilerEnBas(proxy, apres: Self.delaiApresMessage) }
+            // Ouverture : sans animation, au tour suivant de la boucle principale (mise en page faite). Un `scrollTo`
+            // immédiat dans `onAppear` rendait le bouton « Confirmer » du blocage inopérant (iPhone, iOS 18.6, 3 sur 3).
+            .onAppear { defilerEnBas(proxy, apres: Self.delaiApresMessage, anime: false) }
+            .onDisappear { defilementFin?.cancel() }
         }
+    }
+
+    /// Visibilité de la fin du fil, relue à chaque déplacement du repère de fin dans la zone de défilement.
+    private func noterFin(_ haut: CGFloat) {
+        let visible = SuiviFinDuFil.finVisible(hautDuRepere: Double(haut), hauteurVisible: Double(hauteurVisible))
+        if visible != finVisible { finVisible = visible }
     }
 
     /// Nombre de messages et dernier identifiant : change à toute insertion, en fin de fil ou avant le dernier.
@@ -243,12 +273,13 @@ struct ConversationScreen: View {
 
     /// Amène la fin du fil en bas de la zone visible après `apres` nanosecondes ; une demande plus récente remplace celle
     /// en attente (la dernière mise en page l'emporte).
-    private func defilerEnBas(_ proxy: ScrollViewProxy, apres delai: UInt64) {
+    private func defilerEnBas(_ proxy: ScrollViewProxy, apres delai: UInt64, anime: Bool = true) {
         defilementFin?.cancel()
+        let animation: Animation? = anime && !reduireAnimations ? .easeOut(duration: 0.2) : nil
         defilementFin = Task { @MainActor in
             if delai > 0 { try? await Task.sleep(nanoseconds: delai) } else { await Task.yield() }
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.finDuFil, anchor: .bottom) }
+            withAnimation(animation) { proxy.scrollTo(Self.finDuFil, anchor: .bottom) }
         }
     }
 
@@ -301,6 +332,7 @@ struct ConversationScreen: View {
     /// et relu, sinon le texte saisi reste.
     private func envoyer() {
         envoiLocal = true
+        dernierEnvoi = maintenant
         let contenu = MessageComposer.trimmed(texte)
         Task {
             let confirme = await fil.envoyer(contenu)
