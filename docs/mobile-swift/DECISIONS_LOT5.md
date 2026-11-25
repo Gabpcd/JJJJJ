@@ -1198,10 +1198,19 @@ parcours STAGING n'est pas vert et que la PR #1188 (corrections juridiques du po
    `.production`. La table est lue dans `EspaceResolution.swift` et les modes dans `enum JoleneMode`
    (`Environment.swift`), aucune valeur recopiée : commentaires retirés, un seul `switch mode` de
    `case .x: return .ouvert/.ferme`, sans `default` ni `#if`, chaque mode décidé une fois ; sinon « illisible » et refus.
-   Elle exige aussi qu'`AppContainer.swift` câble le contrôleur et l'aiguillage sur `.pour(mode: environment.mode)`
-   (démo : `.pour(mode: .demo)`), sans autre valeur. Tests : `tests/node/ios-native-app-store.node.mjs` (lecture du
-   dépôt, mutations fermée, regroupée, commentée, `default`, `#if`, mode manquant ou doublé, valeur calculée, câblage
-   forcé, fichiers absents, CLI sur un arbre extrait).
+   Câblage (revue fraîche de #1190, M2 et m1) : chaque construction de `SessionController(` et de
+   `DeepLinkCoordinator(` de la cible app est dans `AppContainer.swift`, hors de toute compilation conditionnelle
+   (`#if`), et reçoit `espaceEtablissement: .pour(mode: environment.mode)` ; `.pour(mode: .demo)` n'est admis que pour le
+   contrôleur de la branche `case .demo:` de `switch environment.mode` ; une construction sans l'argument (défaut
+   `.ferme`) est refusée. Le contre-exemple du relecteur (contrôleur de production sous `#if DEBUG … #else
+   SessionController(gateways:) #endif`, qui laissait la garde verte) est refusé. Rôles (m2) : `EspaceResolution.espace`
+   doit rendre `.etablissement` et `UserRole.isNativelyServed` `true` pour `.adminEtablissement` et
+   `.etablissementLegacy`. Limite écrite dans `APP_STORE.md` : la garde lit ces sources, pas la résolution complète de la
+   session ni le coupe-circuit distant (point 6) ; `SessionControllerEtablissementTests` couvre le reste. Tests :
+   `tests/node/ios-native-app-store.node.mjs` (lecture du dépôt, mutations fermée, regroupée, commentée, `default`, `#if`
+   dans la table, mode manquant ou doublé, valeur calculée, câblage forcé, contrôleur ou aiguillage sous `#if` ou sans
+   argument, `.pour(mode: .demo)` hors démo, contrôleur hors d'`AppContainer`, rôle refusé en amont, fichiers absents,
+   CLI sur un arbre extrait) ; la garde Node `contrats-etablissement-ios.node.mjs` applique la même lecture du câblage.
 4. **Preuves exigées avant merge** :
    - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6) sur le commit de `main` dont
      part la PR. **État au 25/11/2026 : TOUJOURS NON VERT.** Trois runs ont échoué. Le troisième (45677331174, `main`
@@ -1223,15 +1232,52 @@ parcours STAGING n'est pas vert et que la PR #1188 (corrections juridiques du po
      pas avant #1188.** Restent hors validation : le règlement eIDAS (non relu à la source), l'articulation entre la
      fenêtre de signature de 72 h et la transmission du CDD (L1242-13), les CGU, le modèle de contrat et le mandat de
      facturation, qui ne sont pas modifiés. Sources : corps de la PR, section « Juridique — HARD STOP n°4 ».
+     Textes `[juridique]` affichés à l'établissement (revue de #1190, M3) : chacun est rattaché dans le corps de la PR
+     (§2 c) à la liste validée le 24/11/2026 (#1179, section 6, groupes A à E) ou à #1188 ; les autres (bandeaux, pied
+     de page, compte à rebours, signature OTP et certificat de l'écran contrat partagé, dont « Signé avec succès…
+     (art. 1366-1367 Code civil) », « RPPS vérifié », « PSC actif » et « Audit trail complet disponible sur demande »)
+     sont **à soumettre à la fondatrice** (§3), sans rien trancher. La validation du 25/11 a été donnée dans la
+     conversation de travail et consignée par la session principale ; elle reste à poster dans la PR.
    - **Drapeaux** : les sept clés `ios_natif_etab_{accueil,missions,publier,presences,pointage,messages,compte}_actif`
      présentes et à 1 en production, et `fn_param_bool` exécutable par `authenticated`. Lues le 25/11/2026 par une
      requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
      enregistrée, `EXECUTE` accordé à `authenticated` et refusé à `anon`. Aucune migration nécessaire. À relire le jour
      du merge (un administrateur peut couper un écran à chaud) ; non relu en STAGING.
 5. **Ce qui n'est pas prouvé** : aucun parcours établissement n'a tourné contre le serveur de production ni contre le
-   STAGING dans cette tranche ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
+   STAGING dans cette tranche ; le coupe-circuit du point 6 n'a été exercé contre aucun serveur ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
    par la CI (26.4.1) ; les XCUITest n'ont pas été compilés ; aucun appareil physique ; aucun compte établissement legacy
    réel relu (« En attente », point 6).
+6. **Coupe-circuit distant de l'espace entier** (revue fraîche de #1190, M1 ; décision de la session de coordination
+   du 25/11/2026) : huitième drapeau `ios_natif_etab_espace_actif` (`EspaceEtablissementDrapeau.cle`), posé à 1 par la
+   migration `20261125130000_drapeau_ios_natif_etab_espace.sql` (même gabarit que D-FLAGS : `parametres_systeme`,
+   catégorie `OPERATIONS`, bornes 0 et 1, `ON CONFLICT (cle) DO NOTHING`, aucune fonction ni GRANT, lu par
+   `fn_param_bool` déjà accordée à `authenticated`). **Migration de données en production : approbation humaine au
+   merge** (elle part par `deploy-supabase` au merge, jamais par MCP).
+   - **Lecture** : `SessionController.resolve`, pour un compte établissement, après le rôle et l'ouverture par mode,
+     AVANT `fn_mes_permissions_etab` ; donc à la connexion, au lancement et à chaque retour au premier plan
+     (revalidation silencieuse de `start()`). Lecture bornée par `resolutionTimeout` (15 s).
+   - **À 0** : `.blocked(.unsupportedRole(<rôle>))`, exactement le refus d'un espace fermé (« Espace non disponible »,
+     renvoi jolene.app), sans aucun appel établissement et sans texte nouveau. En revalidation, l'espace ouvert est
+     remplacé par ce refus et l'epoch avance (écrans établissement démontés). Un compte soignant n'est pas concerné.
+   - **Absent, illisible, en erreur ou en délai : fail-open** (espace ouvert), comme les sept drapeaux d'écran. Choix
+     assumé, avec sa limite : le drapeau protège contre un défaut connu du NATIF, que l'administrateur coupe
+     délibérément ; une panne de lecture (réseau, `fn_param_bool` indisponible) n'est pas un signal de ce défaut, et un
+     fail-closed ferait de chaque incident réseau un refus « Espace non disponible » pour tous les établissements, sans
+     reprise automatique visible. **Limite** : si `fn_param_bool` elle-même est en panne, la coupure ne s'applique pas ;
+     et un backend qui ne répond pas à `fn_param_bool` retarde l'ouverture de l'espace jusqu'à 15 s.
+   - **Procédure de fermeture à distance** : un administrateur plateforme (`est_admin()`) passe la valeur à 0, soit dans
+     AdminConfig (`src/pages/admin/AdminConfig.tsx`, catégorie « Opérations », libellé « App iOS — espace établissement
+     actif »), soit par `fn_admin_maj_parametre('ios_natif_etab_espace_actif', 0)` (contrôle `est_admin()`, bornes
+     0 et 1). Effet : à la prochaine connexion, au prochain lancement ou au prochain retour au premier plan de chaque
+     app ; une session restée au premier plan garde l'espace jusqu'à sa prochaine revalidation. Réouverture : valeur 1,
+     même chemin. Aucune nouvelle version de l'app n'est nécessaire, et la garde `etablissement` de la soumission reste
+     inchangée.
+   - **Tests** : `SessionControllerEtablissementTests` (drapeau à 0 en staging et en production : refus d'avant T14,
+     appels « restauration, rôle, drapeau » seulement ; à 1 : ouvert ; défaut renvoyé ou port non câblé : ouvert ; délai :
+     ouvert ; passage à 0 en revalidation : refus et epoch + 1 ; surcharge démo `-JOLENE_FLAG_ios_natif_etab_espace_actif
+     false` : refus ; espace fermé : drapeau jamais lu), `EtabFeatureFlagsTests` (clé égale à la migration, hors des
+     sept écrans), `src/lib/__tests__/drapeauxIosNatifMigration.test.ts` (29 clés, gabarit, libellé propre).
+   - **Non relu** : la valeur en production (la ligne n'existe qu'après le merge) et en STAGING.
 
 ## En attente de Gabrielle
 
