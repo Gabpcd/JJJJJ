@@ -695,6 +695,27 @@ export function cibleDepuisRecherche(runId, ligne) {
 export const COMPTES = ['auth', 'etablissements', 'soignants', 'missions', 'creneaux', 'candidatures', 'contrats', 'presences',
   'scans', 'notations', 'documents', 'notifications', 'membres', 'conversations', 'escrow', 'preferences'];
 
+/**
+ * Pré-vol de la session établissement : ce que `SessionController` attend des trois RPC pour ouvrir l'espace d'E1
+ * (rôle servi, périmètre confirmé avec les permissions du parcours, profil du même établissement). Lève un message
+ * qui nomme l'écart, sans recopier de jeton ni d'adresse.
+ */
+export function controlerSessionEtablissement(doc, { role, permissions, profil }) {
+  const ecarts = [];
+  const e1 = doc.etablissement.id;
+  if (role?.role !== 'ADMIN_ETABLISSEMENT' || role?.etablissement_id !== e1) {
+    ecarts.push(`fn_get_my_role : rôle ${JSON.stringify(role?.role ?? null)}, établissement ${role?.etablissement_id === e1 ? 'E1' : 'autre ou absent'}`);
+  }
+  if (permissions?.success !== true) ecarts.push(`fn_mes_permissions_etab : success ${JSON.stringify(permissions?.success ?? null)} (compte inactif ou sans session)`);
+  else if (permissions?.role !== 'PROPRIETAIRE' || permissions?.etablissement_id !== e1) {
+    ecarts.push(`fn_mes_permissions_etab : rôle ${JSON.stringify(permissions?.role ?? null)}, établissement ${permissions?.etablissement_id === e1 ? 'E1' : 'autre ou absent'}`);
+  }
+  const manquantes = ['missions', 'candidatures', 'contrats', 'pointage', 'lecture'].filter(c => permissions?.permissions?.[c] !== true);
+  if (permissions?.success === true && manquantes.length) ecarts.push(`fn_mes_permissions_etab : permissions absentes ${manquantes.join(', ')}`);
+  if (profil?.id !== e1 || profil?.nom !== doc.marker) ecarts.push('fn_mon_etablissement_complet : établissement ou nom différent de E1');
+  if (ecarts.length) throw new Error(`Session établissement d'E1 refusée par le serveur (pré-vol) :\n- ${ecarts.join('\n- ')}`);
+}
+
 /** Total des objets marqués ; une colonne absente ou non entière n'est jamais un zéro. */
 export function totalMarques(ligne) {
   let total = 0;
@@ -892,7 +913,7 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     mkdirSync(dirname(chemin), { recursive: true });
     // Tous les identifiants sont durables AVANT la première écriture distante.
     writeFileSync(chemin, JSON.stringify(doc, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-    const { anon, service } = await cles();
+    const { anon, service, publishable } = await cles();
     for (const [qui, role] of [['etablissement', 'ETABLISSEMENT'], ['soignant', 'SOIGNANT']]) {
       doc.auth[qui] = 'planned'; enregistrer();
       const u = await requete(`${STAGING_URL}/auth/v1/admin/users`, { methode: 'POST', cle: service, corps: {
@@ -913,7 +934,15 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
       throw new Error('Candidature EN_ATTENTE de S1 sur M1 non relue.');
     }
     doc.candidatureId = candidatures[0].id;
-    await connecter('etablissement', anon); // E1 se connecte (identifiants corrects, email confirmé), sans rien écrire
+    // Pré-vol de la session établissement de l'app (second parcours STAGING du 25/11/2026 : refus à la connexion) :
+    // les trois lectures que fait SessionController, sous le JWT d'E1 et avec la clé de l'app (publishable), lecture
+    // seule. Un écart ici arrête la préparation avec la cause serveur, avant le XCUITest.
+    const jwtE1 = await connecter('etablissement', anon);
+    controlerSessionEtablissement(doc, {
+      role: await rpc('fn_get_my_role', {}, publishable ?? anon, jwtE1),
+      permissions: await rpc('fn_mes_permissions_etab', { p_etablissement_id: null }, publishable ?? anon, jwtE1),
+      profil: await rpc('fn_mon_etablissement_complet', {}, publishable ?? anon, jwtE1),
+    });
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);

@@ -9,7 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
-  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule,
+  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -31,7 +31,7 @@ function banc(t, surcharge = {}) {
   const b = {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
-    recherches: 0, residus: {},
+    recherches: 0, residus: {}, sessionEtab: [], permissions: null,
     horloge: new Date('2026-11-24T10:00:00.000Z'),
   };
   // Recherche par étiquette : ce que le STAGING simulé contient pour le run, sans mot de passe.
@@ -82,6 +82,20 @@ function banc(t, surcharge = {}) {
     if (u.pathname === '/auth/v1/token') {
       const user = [...b.users.values()].find(x => x.email === corps.email && x.password === corps.password);
       return user ? rep({ access_token: `jwt-CANARI-${user.app_metadata.role}`, user: { id: user.id } }) : rep({ message: 'Invalid login' }, 400);
+    }
+    const e1 = () => [...b.users.values()].find(x => x.app_metadata.role === 'ETABLISSEMENT');
+    if (u.pathname === '/rest/v1/rpc/fn_get_my_role') {
+      b.sessionEtab.push({ rpc: 'role', apikey: opts.headers.apikey, auth: opts.headers.Authorization });
+      return rep({ user_id: e1().id, role: 'ADMIN_ETABLISSEMENT', etablissement_id: e1().id });
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_mes_permissions_etab') {
+      b.sessionEtab.push({ rpc: 'permissions', apikey: opts.headers.apikey, corps });
+      return rep(b.permissions ?? { success: true, role: 'PROPRIETAIRE', etablissement_id: e1().id, permissions: {
+        missions: true, candidatures: true, contrats: true, pointage: true, lecture: true, rh: true } });
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_mon_etablissement_complet') {
+      b.sessionEtab.push({ rpc: 'profil' });
+      return rep({ id: e1().id, nom: e1().app_metadata.load_fixture_run ? `RECETTE-L5-${e1().app_metadata.load_fixture_run}` : null });
     }
     if (u.pathname === '/rest/v1/rpc/fn_postuler_mission') {
       b.candidature = { id: '0b6a2f5e-1c2d-4e3f-9a8b-7c6d5e4f3a2b', statut: 'EN_ATTENTE' }; return rep({ success: true });
@@ -481,4 +495,32 @@ test('m-B : SQL des résidus en lecture seule ; suppression ligne à ligne sur r
   assert.doesNotMatch(clean, /session_replication_role|DISABLE TRIGGER|ALTER TABLE|SET LOCAL ROLE|SET ROLE/);
   assert.doesNotMatch(clean, /EXCEPTION WHEN OTHERS/);
   assert.match(clean, /EXCEPTION WHEN foreign_key_violation THEN/);
+});
+
+// MARK: - Second parcours STAGING (25/11/2026) : pré-vol de la session établissement
+
+test('pré-vol : les trois lectures de la session établissement, sous le JWT d E1 et avec la clé de l app', async t => {
+  const b = banc(t);
+  await b.run('preparer');
+  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil']);
+  assert.ok(b.sessionEtab.every(x => !x.apikey || x.apikey === 'sb_publishable_CANARIpubliable0123'), 'clé publishable, comme l app');
+  assert.equal(b.sessionEtab[0].auth, 'Bearer jwt-CANARI-ETABLISSEMENT', 'JWT d E1');
+  assert.deepEqual(b.sessionEtab[1].corps, { p_etablissement_id: null }, 'même corps que SupabaseEtabSessionGateway');
+});
+
+test('pré-vol : un refus serveur arrête la préparation et nomme l écart', async t => {
+  for (const [permissions, motif] of [[{ success: false, role: null, permissions: {} }, /success false \(compte inactif ou sans session\)/],
+    [{ success: true, role: null, etablissement_id: null, permissions: {} }, /rôle null, établissement autre ou absent/],
+    [{ success: true, role: 'PROPRIETAIRE', etablissement_id: 'x', permissions: {} }, /établissement autre ou absent/]]) {
+    const b = banc(t);
+    b.permissions = permissions;
+    await assert.rejects(b.run('preparer'), e => /Session établissement d'E1 refusée par le serveur \(pré-vol\)/.test(e.message) && motif.test(e.message));
+    assert.equal(existsSync(b.env.LOT5_XCUITEST_JSON), false, 'aucune entrée de XCUITest');
+  }
+  const doc = { etablissement: { id: 'e1' }, marker: 'M' };
+  assert.doesNotThrow(() => controlerSessionEtablissement(doc, { role: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'e1' },
+    permissions: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1', permissions: { missions: true, candidatures: true, contrats: true, pointage: true, lecture: true } },
+    profil: { id: 'e1', nom: 'M' } }));
+  assert.throws(() => controlerSessionEtablissement(doc, { role: { role: 'INCONNU' }, permissions: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1', permissions: {} }, profil: {} }),
+    e => /fn_get_my_role/.test(e.message) && /permissions absentes missions, candidatures, contrats, pointage, lecture/.test(e.message) && /fn_mon_etablissement_complet/.test(e.message));
 });

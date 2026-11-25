@@ -31,6 +31,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   manifeste, sqlPreparer, sqlCode, sqlCandidature, sqlPresence, sqlVerifier, sqlNettoyer, sqlCompter, sqlResidus,
   sqlRetrouverRun, cibleDepuisRecherche, lireResidus, totalMarques, GRAPHE_NETTOYAGE, lireGraphe, KIND,
+  controlerSessionEtablissement,
 } from './staging-lot5-fixture.mjs';
 
 export const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -208,6 +209,17 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
   await pas('comptes Auth', sqlAuth(m));
   const [prep] = await pas('préparation (sqlPreparer)', sqlPreparer(m));
   if (prep?.prepare !== true) throw new Error('Banc L5 : préparation non confirmée.');
+  // Pré-vol de la session établissement (second parcours STAGING) : les trois lectures de SessionController sous le JWT
+  // d'E1, contrôlées par la même fonction que le script.
+  const [session] = await pas('session établissement d E1 (pré-vol)', `SELECT
+    set_config('request.jwt.claim.sub', '${m.etablissement.id}', false), set_config('request.jwt.claim.role', 'authenticated', false),
+    set_config('request.jwt.claims', '{"sub":"${m.etablissement.id}","role":"authenticated"}', false);
+  SELECT public.fn_get_my_role() AS role, public.fn_mes_permissions_etab(NULL) AS permissions,
+    public.fn_mon_etablissement_complet() AS profil;`);
+  await pas('fin du JWT simulé', `SELECT set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claim.role', '', false),
+    set_config('request.jwt.claims', '', false);`);
+  const lire = v => (typeof v === 'string' ? JSON.parse(v) : v);
+  controlerSessionEtablissement(m, { role: lire(session?.role), permissions: lire(session?.permissions), profil: lire(session?.profil) });
   await pas('candidature de S1 (fn_postuler_mission sous JWT)', sousJwt(m.soignant.id,
     `SELECT public.fn_postuler_mission('${m.m1.id}'::uuid, '${m.marker}', 'SALARIE');`));
   const candidatures = await pas('relecture de la candidature (sqlCandidature)', sqlCandidature(m));
@@ -215,6 +227,20 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
     throw new Error(`Banc L5 : candidature EN_ATTENTE attendue, relu ${JSON.stringify(candidatures)}.`);
   }
   m.candidatureId = candidatures[0].id;
+  // Acceptation par E1 telle que l'app l'envoie (SupabaseEtabCandidaturesGateway : créneaux relus tels quels, D26) :
+  // documents du salarié, passerelle de paiement (FACTURE_MENSUELLE), planning, contrat créé.
+  const [acceptation] = await pas('acceptation de la candidature par E1 (fn_traiter_candidature_planning_v1 sous JWT)', `SELECT
+    set_config('request.jwt.claim.sub', '${m.etablissement.id}', false), set_config('request.jwt.claim.role', 'authenticated', false),
+    set_config('request.jwt.claims', '{"sub":"${m.etablissement.id}","role":"authenticated"}', false);
+  SELECT public.fn_traiter_candidature_planning_v1('${m.candidatureId}'::uuid, 'ACCEPTEE',
+    (SELECT jsonb_agg(jsonb_build_object('debut', to_jsonb(c.debut) #>> '{}', 'fin', to_jsonb(c.fin) #>> '{}') ORDER BY c.debut)
+       FROM public.mission_creneaux c WHERE c.mission_id = '${m.m1.id}' AND c.type_creneau = 'PREVISIONNEL'), NULL) AS r;`);
+  await pas('fin du JWT simulé (acceptation)', `SELECT set_config('request.jwt.claim.sub', '', false),
+    set_config('request.jwt.claim.role', '', false), set_config('request.jwt.claims', '', false);`);
+  const issue = typeof acceptation?.r === 'string' ? JSON.parse(acceptation.r) : acceptation?.r;
+  if (!issue || issue.success === false || issue.error) {
+    throw new Error(`Banc L5 : acceptation refusée par le serveur : ${JSON.stringify(issue)}.`);
+  }
   const [code] = await pas('code de pointage (sqlCode)', sqlCode(m));
   if (!/^\d{6}$/.test(code?.code ?? '') || code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') {
     throw new Error(`Banc L5 : M2 non prête au pointage (${JSON.stringify({ ...code, code: code?.code ? 'six chiffres ?' : null })}).`);
@@ -234,6 +260,11 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
   }
   m.presenceId = presences[0].id;
   const [relu] = await pas('relectures (sqlVerifier)', sqlVerifier(m));
+  for (const [cle, attendu] of [['candidature_statut', 'ACCEPTEE'], ['candidature_traitee', true], ['m1_statut', 'ASSIGNEE'],
+    ['m1_assignee_s1', true], ['m2_contrat_statut', 'SIGNE_COMPLET']]) {
+    if (relu?.[cle] !== attendu) throw new Error(`Banc L5 : relecture ${cle} = ${JSON.stringify(relu?.[cle])}, attendu ${attendu}.`);
+  }
+  if (!(relu?.m1_contrats >= 1)) throw new Error(`Banc L5 : aucun contrat créé pour M1 par l'acceptation.`);
   for (const cle of ['escrow', 'escrow_file', 'emails_cohorte', 'canaux_ouverts']) {
     if (relu?.[cle] !== 0) throw new Error(`Banc L5 : relecture ${cle} = ${relu?.[cle]}, attendu 0.`);
   }
