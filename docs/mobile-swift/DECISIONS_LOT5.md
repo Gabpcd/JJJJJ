@@ -1172,6 +1172,57 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
        pointage, SIRET, téléphone collé) et les empreintes hexadécimales. Les noms de la cohorte sont fictifs
        (« Recette », « Lot cinq ») ; un nom réel cité par un message ne serait pas masqué.
 
+## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
+
+Branche `lot5/l5-t14-ouverture-production`, partie de `main` (`4466ed1c`). Préparée en local, sans push : la PR attend
+les trois preuves du point 4, dont la validation juridique de la fondatrice (HARD STOP n°4), qu'aucune revue de code ne
+remplace.
+
+1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
+   staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
+   modifié. Un compte établissement réel confirmé par `fn_mes_permissions_etab` reçoit en production les écrans livrés
+   par T4 à T12, au lieu de l'écran « Espace non disponible ». `.ferme` reste le défaut du contrôleur
+   (`SessionController`) et de l'aiguillage des liens (`AiguillageLiens`) : la table reste le seul point d'ouverture.
+   Le mode d'un build Release vient de l'Info.plist seulement (`JoleneEnvironment.load`, surcharges lues en DEBUG
+   uniquement) : non modifié, toujours couvert par `EnvironmentTests`.
+2. **Tests et gardes adaptés** (un retour à `.ferme` en production fait échouer chacun, vérifié en mutant la ligne) :
+   - `SessionControllerEtablissementTests.testOuvertureParModeDeLancement` (trois modes ouverts) et
+     `testStagingEtProductionOuvrentLEspaceLeVerrouFermeLeRefuse` (remplace `testStagingOuvreLEspaceEtLaProductionLeRefuse` :
+     le même compte reçoit l'espace avec les tables de staging et de production, et le refus d'avant le lot 5, sans appel
+     établissement, avec `.ferme`) ;
+   - garde Node `tests/node/contrats-etablissement-ios.node.mjs` : table lue dans la source, trois cas `ouvert`, trois cas
+     exactement, aucun `default` ; câblage d'`AppContainer` inchangé ;
+   - `PublicationPresentationTests.testMentionContratExigeeAvantToutEspaceOuvertHorsDemo` : commentaire seul ; le verrou
+     (mention de contrat exigée hors démo) vaut désormais pour la production aussi.
+3. **Garde `etablissement` de la soumission App Store** (`scripts/mobile/ios-native-app-store.mjs`, sous-commande
+   `source`, mode d'emploi `APP_STORE.md`) : refuse un build dont la source rend `.ferme` (ou rien de lisible) pour
+   `.production`. La table est lue dans `EspaceResolution.swift` et les modes dans `enum JoleneMode`
+   (`Environment.swift`), aucune valeur recopiée : commentaires retirés, un seul `switch mode` de
+   `case .x: return .ouvert/.ferme`, sans `default` ni `#if`, chaque mode décidé une fois ; sinon « illisible » et refus.
+   Elle exige aussi qu'`AppContainer.swift` câble le contrôleur et l'aiguillage sur `.pour(mode: environment.mode)`
+   (démo : `.pour(mode: .demo)`), sans autre valeur. Tests : `tests/node/ios-native-app-store.node.mjs` (lecture du
+   dépôt, mutations fermée, regroupée, commentée, `default`, `#if`, mode manquant ou doublé, valeur calculée, câblage
+   forcé, fichiers absents, CLI sur un arbre extrait).
+4. **Preuves exigées avant merge** :
+   - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6) sur le commit de `main` dont
+     part la PR. **État au 25/11/2026 : NON VERT.** Deux runs ont échoué ; un correctif est en cours dans une autre
+     branche. Aucun run de cette tranche.
+   - **Validation juridique explicite de la fondatrice** (HARD STOP n°4) sur les points instruits pour l'ouverture : les
+     cinq questions oui/non (publication native limitée au salariat ; acceptation d'un étudiant aide-soignant sur le
+     site seulement ; ouverture sans l'alerte de requalification ; missions de médecin sur le site seulement ; libellé
+     « Taux horaire brut * (€/h) ») et la question du plancher du taux salarié (11,65 €/h affiché et validé le 24/11,
+     inférieur au SMIC horaire brut de 12,31 € en vigueur depuis le 1er juin 2026 ; le serveur n'applique aucun
+     plancher). Sources et options : corps de la PR, section « Juridique — HARD STOP n°4 ». **Non obtenue.**
+   - **Drapeaux** : les sept clés `ios_natif_etab_{accueil,missions,publier,presences,pointage,messages,compte}_actif`
+     présentes et à 1 en production, et `fn_param_bool` exécutable par `authenticated`. Lues le 25/11/2026 par une
+     requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
+     enregistrée, `EXECUTE` accordé à `authenticated` et refusé à `anon`. Aucune migration nécessaire. À relire le jour
+     du merge (un administrateur peut couper un écran à chaud) ; non relu en STAGING.
+5. **Ce qui n'est pas prouvé** : aucun parcours établissement n'a tourné contre le serveur de production ni contre le
+   STAGING dans cette tranche ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
+   par la CI (26.4.1) ; les XCUITest n'ont pas été compilés ; aucun appareil physique ; aucun compte établissement legacy
+   réel relu (« En attente », point 6).
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
@@ -1219,3 +1270,5 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
    de `fn_generer_qr_mission` ; consigné dans `PORTE_LOT5.md` seulement avec son accord explicite.
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
+11. **T14 (ouverture en production)** : validation juridique explicite (cinq questions oui/non et plancher du taux
+    salarié face au SMIC, section T14, point 4) et go de merge après le parcours STAGING vert.
