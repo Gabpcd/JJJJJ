@@ -326,7 +326,7 @@ export function sqlVerifier(m) {
  * clés étrangères du dump `supabase/schema/public.sql` vers une racine ou vers une table déjà retenue, hors `SET NULL` /
  * `SET DEFAULT` (la ligne enfant survit) et hors auto-références. Les enfants `CASCADE` sont retenus aussi : leurs propres
  * enfants restrictifs doivent partir avant eux. Ordre : parents avant enfants (les suppressions se font en sens inverse).
- * Format : `table:colonne>parent,…`. Liste PROUVÉE, pas écrite à la main : `tests/node/staging-lot5-fixture.node.mjs`
+ * Format : `table:colonne>parent,…`, `*` final pour un lien `ON DELETE CASCADE`. Liste PROUVÉE, pas écrite à la main : `tests/node/staging-lot5-fixture.node.mjs`
  * la recalcule depuis le dump et échoue à la moindre différence (régénérer avec `node … graphe`).
  */
 export const GRAPHE_NETTOYAGE = [
@@ -334,12 +334,12 @@ export const GRAPHE_NETTOYAGE = [
   'assurance_config:etablissement_id>etablissements',
   'assurances_mission:etablissement_id>etablissements,mission_id>missions',
   'attestations_heures_externes:soignant_id>soignants',
-  'badges_soignant:soignant_id>soignants',
+  'badges_soignant:soignant_id>soignants*',
   'bfa_suivi:etablissement_id>etablissements',
   'calendar_events_sync:mission_id>missions',
   'candidatures:mission_id>missions,soignant_id>soignants',
   'chorus_pro_config:etablissement_id>etablissements',
-  'codes_secours_mission:mission_id>missions',
+  'codes_secours_mission:mission_id>missions*',
   'conformite_travail:mission_id>missions,soignant_id>soignants',
   'contrats_mission:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
   'contrats_service_signatures:etablissement_id>etablissements',
@@ -348,51 +348,51 @@ export const GRAPHE_NETTOYAGE = [
   'conversions_liberal:soignant_id>soignants',
   'copies_bulletins_paie:etablissement_id>etablissements,soignant_id>soignants',
   'cotisations_sociales:mission_id>missions,soignant_id>soignants',
-  'credits_etablissement:etablissement_id>etablissements',
-  'documents_soignants:soignant_id>soignants',
+  'credits_etablissement:etablissement_id>etablissements*',
+  'documents_soignants:soignant_id>soignants*',
   'equipes:etablissement_id>etablissements',
-  'escrow_etablissement_etat:etablissement_id>etablissements',
+  'escrow_etablissement_etat:etablissement_id>etablissements*',
   'etablissement_preuve_audit:etablissement_id>etablissements',
   'evaluations:mission_id>missions',
   'factures_honoraires:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
-  'favoris_soignant_etab:etablissement_id>etablissements,soignant_id>soignants',
-  'heures_externes_soignants:soignant_id>soignants',
+  'favoris_soignant_etab:etablissement_id>etablissements*,soignant_id>soignants*',
+  'heures_externes_soignants:soignant_id>soignants*',
   'historique_blocages_etablissements:etablissement_id>etablissements',
-  'invitations_etablissement:etablissement_id>etablissements',
-  'mandats_facturation_signatures:soignant_id>soignants',
-  'matching_preferences_soignant:soignant_id>soignants',
-  'matching_scores:mission_id>missions,soignant_id>soignants',
-  'membres_etablissement:etablissement_id>etablissements',
+  'invitations_etablissement:etablissement_id>etablissements*',
+  'mandats_facturation_signatures:soignant_id>soignants*',
+  'matching_preferences_soignant:soignant_id>soignants*',
+  'matching_scores:mission_id>missions*,soignant_id>soignants*',
+  'membres_etablissement:etablissement_id>etablissements*',
   'messages_mission:mission_id>missions',
-  'mission_creneaux:mission_id>missions',
+  'mission_creneaux:mission_id>missions*',
   'mission_series:etablissement_id>etablissements',
-  'missions_sauvegardees:mission_id>missions,soignant_id>soignants',
-  'notations_missions:mission_id>missions',
-  'notifications_notation_j1:mission_id>missions',
+  'missions_sauvegardees:mission_id>missions*,soignant_id>soignants*',
+  'notations_missions:mission_id>missions*',
+  'notifications_notation_j1:mission_id>missions*',
   'paiements_escrow:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
   'paiements_mission:etablissement_id>etablissements,mission_id>missions',
-  'parcours_liberal_soignants:soignant_id>soignants',
-  'parrainages_etablissements:filleul_etab_id>etablissements,parrain_etab_id>etablissements',
-  'pings_gps_mission:mission_id>missions',
+  'parcours_liberal_soignants:soignant_id>soignants*',
+  'parrainages_etablissements:filleul_etab_id>etablissements*,parrain_etab_id>etablissements*',
+  'pings_gps_mission:mission_id>missions*',
   'presences:mission_id>missions,soignant_id>soignants',
-  'prevoyance_liste_attente:soignant_id>soignants',
-  'qr_codes_mission:mission_id>missions',
+  'prevoyance_liste_attente:soignant_id>soignants*',
+  'qr_codes_mission:mission_id>missions*',
   'rappels_contrat_travail:mission_id>missions',
   'reclamations:mission_id>missions',
   'reclamations_scoring:mission_id>missions,soignant_id>soignants',
-  'scoring_breakdown:soignant_id>soignants',
+  'scoring_breakdown:soignant_id>soignants*',
   'souscriptions_prevoyance:soignant_id>soignants',
-  'streaks_soignant:soignant_id>soignants',
+  'streaks_soignant:soignant_id>soignants*',
   'stripe_connect_onboarding:soignant_id>soignants',
   'suivi_conversion_3200h:soignant_id>soignants',
-  'super_swipes_quota:soignant_id>soignants',
-  'swipes:mission_id>missions,soignant_id>soignants',
-  'cessions_creance:facture_honoraire_id>factures_honoraires,soignant_id>soignants',
+  'super_swipes_quota:soignant_id>soignants*',
+  'swipes:mission_id>missions*,soignant_id>soignants*',
+  'cessions_creance:facture_honoraire_id>factures_honoraires*,soignant_id>soignants',
   'chorus_submissions:invoice_id>factures_honoraires',
-  'equipe_membres:equipe_id>equipes',
+  'equipe_membres:equipe_id>equipes*',
   'escrow_exposition_releases:etablissement_id>etablissements,paiement_escrow_id>paiements_escrow',
   'escrow_release_queue:mission_id>missions,paiement_escrow_id>paiements_escrow',
-  'factor_advances:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
+  'factor_advances:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires*,mission_id>missions,soignant_id>soignants',
   'factures:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions',
   'factures_honoraires_documents:facture_honoraire_id>factures_honoraires',
   'heures_externes:document_id>documents_soignants,soignant_id>soignants',
@@ -400,15 +400,15 @@ export const GRAPHE_NETTOYAGE = [
   'messages_chat:conversation_id>conversations',
   'paiements_soignant:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
   'partages_rib:contrat_id>contrats_mission,document_rib_id>documents_soignants,etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
-  'pauses_presence:presence_id>presences,soignant_id>soignants',
-  'scans_pointage:creneau_effectif_id>mission_creneaux,mission_id>missions',
+  'pauses_presence:presence_id>presences*,soignant_id>soignants',
+  'scans_pointage:creneau_effectif_id>mission_creneaux*,mission_id>missions',
   'shifts:equipe_id>equipes,etablissement_id>etablissements',
   'signalements_copies_bulletins:copie_id>copies_bulletins_paie',
-  'signatures_contrats:contrat_id>contrats_mission',
+  'signatures_contrats:contrat_id>contrats_mission*',
   'stripe_refunds_queue:avoir_id>factures_honoraires,facture_origine_id>factures_honoraires,paiement_escrow_id>paiements_escrow',
-  'typing_status:conversation_id>conversations',
-  'litiges:etablissement_id>etablissements,mission_id>missions,paiement_soignant_id>paiements_soignant,presence_id>presences,soignant_id>soignants',
-  'shift_affectations:mission_id>missions,shift_id>shifts',
+  'typing_status:conversation_id>conversations*',
+  'litiges:etablissement_id>etablissements*,mission_id>missions,paiement_soignant_id>paiements_soignant,presence_id>presences,soignant_id>soignants*',
+  'shift_affectations:mission_id>missions,shift_id>shifts*',
   'stripe_transfers:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,facture_id>factures,mission_id>missions,soignant_id>soignants',
   'bulletins_paie:etablissement_id>etablissements,litige_id>litiges,mission_id>missions,soignant_id>soignants',
   'factures_honoraires_rectifications:facture_honoraire_id>factures_honoraires,litige_id>litiges',
@@ -439,14 +439,17 @@ export function grapheNettoyage(dump) {
     for (const t of prets) { ordre.push(t); places.add(t); }
     reste = reste.filter(t => !places.has(t));
   }
-  return ordre.map(t => `${t}:${[...new Set(entrants.get(t).map(l => `${l.colonnes[0]}>${l.parent}`))].sort().join(',')}`);
+  return ordre.map(t => `${t}:${[...new Set(entrants.get(t).map(l => `${l.colonnes[0]}>${l.parent}${l.action === 'CASCADE' ? '*' : ''}`))].sort().join(',')}`);
 }
 
 /** Lecture de `GRAPHE_NETTOYAGE` : `[{ table, liens: [{ colonne, parent }] }]`, dans l'ordre parents → enfants. */
 export function lireGraphe(graphe = GRAPHE_NETTOYAGE) {
   return graphe.map(ligne => {
     const [table, reste] = ligne.split(':');
-    return { table, liens: reste.split(',').map(l => { const [colonne, parent] = l.split('>'); return { colonne, parent }; }) };
+    return { table, liens: reste.split(',').map(l => {
+      const [colonne, cible] = l.split('>');
+      return { colonne, parent: cible.replace(/\*$/, ''), cascade: cible.endsWith('*') };
+    }) };
   });
 }
 
@@ -465,6 +468,9 @@ export const NON_SUPPRIMABLES = {
   mandats_facturation_signatures: 'trg_preserver_preuve_mandat_facturation (durée de rétention)',
 };
 
+/** Tables supprimées avant toutes les autres (déclencheur qui en dépend ; aucune table du graphe ne les référence). */
+export const SUPPRIMER_D_ABORD = ['candidatures'];
+
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 /** SQL de collecte (parents → enfants) puis de suppression (enfants → parents) de la fermeture, sur la table `l5_ids`. */
 function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
@@ -479,8 +485,16 @@ function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
   // Une table non supprimable n'est jamais touchée. Ailleurs, si une ligne est retenue par une clé étrangère (parent
   // d'un résidu non supprimable), elle est conservée seule : suppression ligne par ligne, seul le refus de clé
   // étrangère (23503) est rattrapé ; tout autre refus (déclencheur, droit) fait échouer la transaction.
-  const suppression = [...tables].reverse().map(t => NON_SUPPRIMABLES[t.table]
+  // `candidatures` d'abord : dec_verrouiller_planning_candidatures refuse de supprimer un créneau PREVISIONNEL tant
+  // qu'une candidature est en attente (banc SQL local, 25/11/2026) ; aucune table du graphe ne dépend de candidatures.
+  const ordre = [...tables].reverse().sort((a, b) => (SUPPRIMER_D_ABORD.includes(b.table) ? 1 : 0) - (SUPPRIMER_D_ABORD.includes(a.table) ? 1 : 0));
+  // Une table dont tous les liens sont `CASCADE` part avec ses parents : la supprimer d'abord ferait jouer ses
+  // déclencheurs avec un parent encore présent (fn_protect_creneaux_si_facture refuse un créneau PREVISIONNEL d'une
+  // mission gelée, banc SQL local, 25/11/2026), alors que la cascade est l'effet normal de la suppression du parent.
+  const suppression = ordre.map(t => NON_SUPPRIMABLES[t.table]
     ? `  -- ${t.table} : non supprimable (${NON_SUPPRIMABLES[t.table]}), compté par sqlResidus.`
+    : t.liens.every(l => l.cascade)
+    ? `  -- ${t.table} : supprimée par cascade avec ses parents (${t.liens.map(l => l.parent).join(', ')}).`
     : `  BEGIN
     DELETE FROM public.${t.table} x WHERE ${condition(t.liens)};
   EXCEPTION WHEN foreign_key_violation THEN
