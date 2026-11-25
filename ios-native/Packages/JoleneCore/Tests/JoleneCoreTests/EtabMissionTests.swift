@@ -183,6 +183,9 @@ final class EtabMissionTests: XCTestCase {
         XCTAssertEqual(liensAssignee.map(\.cle), [.pointage, .contrat, .message])
         XCTAssertEqual(liensAssignee.first?.cible, .ecran(.pointage(missionId: "m-1")), "T7 livrée : écran natif du code de pointage")
         XCTAssertEqual(liensAssignee.first?.titre, "Code de pointage")
+        XCTAssertEqual(liensAssignee.first { $0.cle == .contrat }?.cible, .ecran(.contrats(statut: nil)),
+                       "T10 livrée : liste native des contrats de l'établissement")
+        XCTAssertEqual(liensAssignee.first { $0.cle == .contrat }?.titre, "Contrats")
         XCTAssertEqual(EtabMissionsPresentation.liens(assignee, permissions: PermissionsEtab(accordees: [.lecture, .lecturePaiement]))
             .map(\.cle), [.message], "LECTURE_SEULE : ni pointage ni contrat")
         XCTAssertEqual(EtabMissionsPresentation.liens(assignee, permissions: PermissionsEtab(accordees: [.lecture, .pointage]))
@@ -190,7 +193,11 @@ final class EtabMissionTests: XCTestCase {
         let terminee = EtabMissionDetail(mission: mission(statut: "TERMINEE", soignant: "s-1"), creneaux: [], soignantAssigneId: "s-1")
         let liensTerminee = EtabMissionsPresentation.liens(terminee, permissions: tout)
         XCTAssertEqual(liensTerminee.map(\.cle), [.presences, .contrat, .message])
-        XCTAssertTrue(liensTerminee.allSatisfy(\.estWeb), "T8, T10, T11 non livrées")
+        XCTAssertEqual(liensTerminee.first?.cible, .ecran(.presencesMission(missionId: "m-1")), "T8 livrée : présences natives de la mission")
+        XCTAssertEqual(liensTerminee.first?.titre, "Présences")
+        XCTAssertEqual(liensTerminee.map(\.estWeb), [false, false, false], "T8, T10 et T11 livrées")
+        XCTAssertEqual(liensTerminee.last?.cible, .contactSoignant(missionId: "m-1", soignantId: "s-1"),
+                       "T11 livrée : « Contacter le soignant » ouvre la conversation de la mission")
         XCTAssertEqual(liensTerminee.map(\.identifiant),
                        ["etab-mission-lien-presences", "etab-mission-lien-contrat", "etab-mission-lien-message"])
     }

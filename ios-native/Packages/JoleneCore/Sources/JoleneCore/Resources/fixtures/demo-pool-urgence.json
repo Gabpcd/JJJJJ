@@ -1,0 +1,67 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "etat": {
+    "pool_actif": false,
+    "rayon_km": 30,
+    "sms_opt_in": false
+  },
+  "missions": [
+    {
+      "mission_id": "demo-mission-001",
+      "distance_km": 4.2
+    },
+    {
+      "mission_id": "demo-mission-urgence-tous",
+      "distance_km": 8
+    },
+    {
+      "mission_id": "demo-mission-016",
+      "distance_km": 12.5
+    },
+    {
+      "mission_id": "demo-mission-021",
+      "distance_km": 22
+    }
+  ],
+  "missions_supplementaires": [
+    {
+      "id": "demo-mission-urgence-tous",
+      "intitule": "Démonstration · Urgence de nuit (contrat au choix)",
+      "description": "Mission entièrement fictive pour découvrir le pool urgence. Aucun remplacement, contrat ou paiement ne peut être engagé dans ce pilote.",
+      "service": "Médecine polyvalente",
+      "profession_requise": "IDE",
+      "specialite_medicale_requise": null,
+      "accepte_non_specialises": null,
+      "debut_le": "2026-11-05T07:00:00.000Z",
+      "fin_le": "2026-11-05T15:00:00.000Z",
+      "duree_heures": 8,
+      "nb_creneaux": 1,
+      "taux_horaire_base": 27,
+      "taux_rist_plafonne": null,
+      "rist_plafond_applique": false,
+      "total_brut": null,
+      "net_a_payer": null,
+      "est_urgente": true,
+      "niveau_urgence": 2,
+      "statut": "OUVERTE",
+      "etablissement_id": "demo-etab-2",
+      "type_contrat_recherche": "TOUS",
+      "boostee_le": null,
+      "mode_remuneration": "HORAIRE",
+      "retrocession_pct": null,
+      "mode_attribution": "PREMIER_ARRIVE",
+      "presence_confirmee_le": null,
+      "soignant_assigne_id": null,
+      "creneaux": [
+        {
+          "id": "demo-mission-urgence-tous-slot-1",
+          "mission_id": "demo-mission-urgence-tous",
+          "debut": "2026-11-05T07:00:00.000Z",
+          "fin": "2026-11-05T15:00:00.000Z",
+          "est_pause": false,
+          "type_creneau": "PREVISIONNEL"
+        }
+      ]
+    }
+  ]
+}

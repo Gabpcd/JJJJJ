@@ -72,7 +72,8 @@ public struct DemoMesMissionsGateway: MesMissionsPort {
 
     public func candidatures(context: MissionReadContext) async throws -> [CandidatureRecord] {
         try verifierContexteDemo(context)
-        let missions = try DemoFixtures.loadMissions().missions
+        // L4-T3b : une candidature posée par ❤️ sur une mission de recette du paquet de swipe est listée comme les autres.
+        let missions = try DemoFixtures.loadMissions().missions + DemoFixtures.missionsRecetteSwipe()
         let etablissements = try chargerEtablissements()
         let lignes = Self.uneParMission(await candidaturesDeSession() + (try DemoFixtures.loadMesMissions().candidatures))
         return lignes

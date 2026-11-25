@@ -59,16 +59,21 @@ public struct DemoEtabCandidaturesGateway: EtabCandidaturesPort {
 
     private let fixture: DemoFixtures.EtabMissionsFile?
     private let etat: DemoEtabEtatCandidatures
+    /// T9 : missions publiées pendant la session, lues ici comme par la gateway des missions (aucune candidature).
+    private let publications: DemoEtabEtatPublication?
 
-    public init(etat: DemoEtabEtatCandidatures) {
+    public init(etat: DemoEtabEtatCandidatures, publications: DemoEtabEtatPublication? = nil) {
         fixture = try? DemoFixtures.loadEtabMissions()
         self.etat = etat
+        self.publications = publications
     }
 
     private func donnees(_ context: EtablissementReadContext) async throws -> DemoFixtures.EtabMissionsFile {
         try DemoEtablissementWorld.verifier(context)
         guard let fixture else { throw JoleneError(.contract, "Fixture démo des missions établissement illisible.") }
-        return fixture.appliquant(await etat.surcouche())
+        let lues = fixture.appliquant(await etat.surcouche())
+        guard let publications else { return lues }
+        return lues.completant(await publications.surcouche())
     }
 
     public func lecture(missionId: String, context: EtablissementReadContext) async throws -> LectureCandidaturesHabilitee {

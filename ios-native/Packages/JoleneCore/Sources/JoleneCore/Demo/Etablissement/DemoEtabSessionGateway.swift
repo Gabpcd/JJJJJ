@@ -42,7 +42,10 @@ public struct DemoEtabSessionGateway: EtabSessionPort {
 
     private func profilFixture() throws -> EtablissementProfil {
         let fichier = try DemoFixtures.loadEtablissementDemo()
-        return configuration.blocage ? fichier.etablissementBloque : fichier.etablissement
+        var profil = configuration.blocage ? fichier.etablissementBloque : fichier.etablissement
+        // T12 : même établissement fictif, servi comme relevant du secteur public (renvoi Chorus Pro).
+        if configuration.secteurPublic { profil.estSecteurPublic = true }
+        return profil
     }
 
     private func verifierIdentite() async throws {

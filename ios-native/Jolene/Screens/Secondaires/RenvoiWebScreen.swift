@@ -9,6 +9,10 @@ import JoleneDesign
 /// `renvoi-web-demo`), jamais `openURL` : les chemins `/soignant/*` reviendraient dans l'app par lien universel. Sans
 /// présentateur (aperçus), aucun bouton : jamais un bouton sans effet.
 ///
+/// Contenu définitif (L4-T13, intégration de la vague D, décision f) : titre de la page web de l'écran
+/// (`RenvoisWebLot4.titreEcran`, aucun titre si la page web n'en a pas), phrase neutre, bouton. Aucun texte juridique,
+/// aucun jeton transmis.
+///
 /// Identifiants : `secondaire-<nom du coupe-circuit>` (l'écran), `renvoi-web-message`, `renvoi-web-ouvrir`.
 struct RenvoiWebScreen: View {
     static let message = "Cet écran est disponible sur jolene.app."
@@ -42,6 +46,7 @@ struct RenvoiWebScreen: View {
         .background(JoleneColor.lavender.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("secondaire-\(ecran.nom.rawValue)")
+        .navigationTitle(RenvoisWebLot4.titreEcran(ecran.nom) ?? "")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

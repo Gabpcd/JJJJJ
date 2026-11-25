@@ -526,6 +526,20 @@ public enum LibellesWeb {
         // source: src/pages/ListeContrats.tsx:144
         public static let videTous = "Vos contrats apparaîtront ici après avoir accepté une mission."
 
+        /// Liste de l'établissement (lot 5, T10 ; branche `ADMIN_ETABLISSEMENT` du même composant) : titre de la page
+        /// (l.103) et états vides (branches `isEtab`, l.132-143) : voir `descriptionVideEtablissement(_:)`.
+        // source: src/pages/ListeContrats.tsx:103
+        public static let titreEtablissement = "Contrats"
+
+        // source: src/pages/ListeContrats.tsx:133
+        public static let videEnAttenteEtablissement = "Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission."
+
+        // source: src/pages/ListeContrats.tsx:137
+        public static let videSignesEtablissement = "Aucun contrat finalisé pour le moment. Les contrats signés par vos soignants s'afficheront ici."
+
+        // source: src/pages/ListeContrats.tsx:143
+        public static let videTousEtablissement = "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions."
+
         /// Carte mobile (l.205-226) : voir `numero(_:)`, `mission(intitule:)`, `typeEtDate(type:dateFormatee:)`,
         /// `action(aSigner:)`.
         // source: src/pages/ListeContrats.tsx:210
@@ -591,6 +605,17 @@ public enum LibellesWeb {
             case .signeComplet: return videSignes
             case .annule: return videAnnules
             case .tous: return videTous
+            }
+        }
+
+        /// Description de l'état vide de l'établissement (l.130-145, branches `isEtab` ; lot 5, T10) ; « Aucun contrat
+        /// annulé. » est commun aux deux rôles (l.140).
+        public static func descriptionVideEtablissement(_ filtre: FiltreContrat) -> String {
+            switch filtre {
+            case .enAttenteSignatures: return videEnAttenteEtablissement
+            case .signeComplet: return videSignesEtablissement
+            case .annule: return videAnnules
+            case .tous: return videTousEtablissement
             }
         }
 
@@ -1170,6 +1195,40 @@ public enum LibellesWeb {
         public static let propositionRefuseeTexte = "La proposition a été refusée."
     }
 
+    /// Publication d'une mission (lot 5, T9 ; revue B8 des textes de l'intégration de la vague D, M4) : plancher du taux
+    /// horaire du web, attribut `min` du champ hors `LIBERAL` (le navigateur refuse l'envoi en dessous). Valeur reprise
+    /// telle quelle, jamais recopiée dans la logique (`PublicationRules.tauxMinimum`). Parité provisoire tant que le
+    /// serveur ne contrôle pas ce plancher (`DECISIONS_LOT5.md`).
+    public enum Publication {
+        // source: src/components/FormulaireMission.tsx:921
+        public static let tauxMinimumHorsLiberal = "11.65"
+    }
+
+    /// DPAE côté employeur (revue B8 des textes de la vague D, M6) : libellés non juridiques de `DPAEStatus.tsx` et
+    /// `BandeauRappelDPAE.tsx` ; les textes d'obligation sont dans `TextesWeb.DPAE` (HARD STOP n°4).
+    public enum DPAE {
+        // source: src/components/DPAEStatus.tsx:107
+        public static let declaree = "DPAE déclarée"
+
+        // source: src/components/DPAEStatus.tsx:109
+        public static let numeroLibelle = "Numéro DPAE :"
+
+        // source: src/components/DPAEStatus.tsx:140
+        public static let preparer = "Préparer les données DPAE"
+
+        // source: src/components/BandeauRappelDPAE.tsx:50
+        public static let tracabiliteDebut = "Une fois la DPAE transmise, saisissez le numéro URSSAF retourné dans la section"
+
+        // source: src/components/BandeauRappelDPAE.tsx:50
+        public static let tracabiliteSection = "DPAE"
+
+        // source: src/components/BandeauRappelDPAE.tsx:50
+        public static let tracabiliteFin = "du contrat afin d'en conserver la traçabilité interne."
+
+        // source: src/components/BandeauRappelDPAE.tsx:59
+        public static let netEntreprises = "Accéder à net-entreprises.fr"
+    }
+
     /// Points d'entrée du détail d'une mission vers les présences (`DetailMissionSoignant.tsx` l.1477-1494, lot 2 T5a).
     public enum DetailMission {
         // source: src/pages/DetailMissionSoignant.tsx:1483
@@ -1235,6 +1294,153 @@ public enum LibellesWeb {
         public static let garderCandidature = "Garder la candidature"
     }
 
+    /// Copies officielles des bulletins (lot 4, T10) : libellés non juridiques de `CopiesBulletins.tsx`, du composant
+    /// réellement monté `CopiesBulletinsListe.tsx` et des messages de `copiesBulletins.ts`. La mention de l'employeur et
+    /// l'avertissement de retrait : `TextesWeb.CopiesBulletins` (HARD STOP n°4). Les lignes assemblées (période, version
+    /// et publication, motif de remplacement) le sont par `BulletinsPresentation` à partir des fragments ci-dessous.
+    public enum CopiesBulletins {
+        // source: src/components/CopiesBulletins.tsx:43
+        public static let titre = "Copies des bulletins officiels"
+
+        // source: src/components/CopiesBulletins.tsx:46
+        public static let chargement = "Chargement des copies…"
+
+        // source: src/components/CopiesBulletins.tsx:47
+        public static let reessayer = "Réessayer les copies"
+
+        // source: src/lib/copiesBulletins.ts:94
+        public static let chargementImpossible = "Impossible de charger les copies des bulletins. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutPubliee = "Copie disponible"
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutRemplacee = "Version remplacée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:14
+        public static let statutRetiree = "Copie retirée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifDestinataire = "Ce document ne me concerne pas"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifContenu = "Le contenu contient une erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:15
+        public static let motifAutre = "Autre erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:33
+        public static let ouvertureImpossible = "Impossible d’ouvrir ce PDF. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:43
+        public static let copieRetiree = "La copie a été retirée. Son PDF n’est plus accessible dans Jolene."
+
+        // source: src/components/CopiesBulletinsListe.tsx:44
+        public static let signalementEnregistre = "Le signalement est enregistré. L’établissement peut le consulter."
+
+        // source: src/components/CopiesBulletinsListe.tsx:46
+        public static let operationNonConfirmee = "L’opération n’a pas été confirmée. Réessayez."
+
+        // source: src/components/CopiesBulletinsListe.tsx:53
+        public static let copieDemandeeIndisponible = "La copie demandée n’est pas disponible pour ce compte. Les documents accessibles sont affichés ci-dessous."
+
+        // source: src/components/CopiesBulletinsListe.tsx:54
+        public static let employeur = "Employeur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:56
+        public static let tousLesEmployeurs = "Tous les employeurs"
+
+        // source: src/components/CopiesBulletinsListe.tsx:60
+        public static let vide = "Aucune copie de bulletin officiel disponible. Les simulations sont présentées séparément."
+
+        // source: src/components/CopiesBulletinsListe.tsx:61
+        public static let accessibiliteVersion = "Copie du bulletin, version"
+
+        // source: src/components/CopiesBulletinsListe.tsx:65
+        public static let periodeDu = "Du"
+
+        // source: src/components/CopiesBulletinsListe.tsx:65
+        public static let periodeAu = "au"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let version = "Version"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let publieeLe = "· publiée le"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let separateur = "·"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let mission = "mission"
+
+        // source: src/components/CopiesBulletinsListe.tsx:69
+        public static let liee = "liée"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let motifRemplacement = "Motif de remplacement :"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let remplacementContenu = "correction du contenu"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let remplacementAutre = "autre correction"
+
+        // source: src/components/CopiesBulletinsListe.tsx:70
+        public static let point = "."
+
+        // source: src/components/CopiesBulletinsListe.tsx:71
+        public static let erreurSignalee = "Une erreur a été signalée sur cette version."
+
+        // source: src/components/CopiesBulletinsListe.tsx:72
+        public static let ancienneVersion = "Cette ancienne version est conservée. Consultez la version la plus récente."
+
+        // source: src/components/CopiesBulletinsListe.tsx:73
+        public static let pdfPlusAccessible = "Le PDF de cette version n’est plus accessible."
+
+        // source: src/components/CopiesBulletinsListe.tsx:75
+        public static let ouverture = "Ouverture…"
+
+        // source: src/components/CopiesBulletinsListe.tsx:75
+        public static let ouvrir = "Ouvrir / télécharger le PDF original"
+
+        // source: src/components/CopiesBulletinsListe.tsx:77
+        public static let signaler = "Signaler une erreur"
+
+        // source: src/components/CopiesBulletinsListe.tsx:84
+        public static let signalementDescription = "Le signalement concerne uniquement cette version du document."
+
+        // source: src/components/CopiesBulletinsListe.tsx:87
+        public static let signalementQuestion = "Quelle erreur souhaitez-vous signaler ?"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let annuler = "Annuler"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let enregistrement = "Enregistrement…"
+
+        // source: src/components/CopiesBulletinsListe.tsx:93
+        public static let envoyerSignalement = "Envoyer le signalement"
+
+        // source: src/lib/copiesBulletins.ts:217
+        public static let signalementNonConfirme = "Le signalement n’a pas été confirmé. Réessayez."
+
+        // source: src/lib/copiesBulletins.ts:226
+        public static let copieDejaRetiree = "Cette copie a été retirée. Son PDF n’est plus accessible."
+
+        // source: src/lib/copiesBulletins.ts:234
+        public static let pdfIndisponible = "Le PDF ne peut pas être ouvert. Votre accès ou la disponibilité du document a pu changer. Réessayez."
+
+        // source: src/lib/copiesBulletins.ts:238
+        public static let integriteNonConfirmee = "L’intégrité du PDF ne peut pas être confirmée. Réessayez."
+
+        // source: src/lib/copiesBulletinsPartageNatif.ts:84
+        public static let titrePartage = "Copie du bulletin de paie"
+
+        // source: src/pages/BulletinsPaie.tsx:53
+        public static let simulations = "Mes simulations de paie"
+    }
+
     /// `String(valeur).padStart(2, '0')` du web (minuteurs ; valeur positive ou nulle).
     static func deuxChiffres(_ valeur: Int) -> String {
         valeur < 10 ? String(0) + String(valeur) : String(valeur)
@@ -1242,6 +1448,14 @@ public enum LibellesWeb {
 
     /// Tous les libellés, pour les tests (la garde Node vérifie que la liste est complète et exacte).
     public static let catalogue: [EntreeTexteWeb] = [
+        .init(cle: "Publication.tauxMinimumHorsLiberal", texte: Publication.tauxMinimumHorsLiberal),
+        .init(cle: "DPAE.declaree", texte: DPAE.declaree),
+        .init(cle: "DPAE.numeroLibelle", texte: DPAE.numeroLibelle),
+        .init(cle: "DPAE.preparer", texte: DPAE.preparer),
+        .init(cle: "DPAE.tracabiliteDebut", texte: DPAE.tracabiliteDebut),
+        .init(cle: "DPAE.tracabiliteSection", texte: DPAE.tracabiliteSection),
+        .init(cle: "DPAE.tracabiliteFin", texte: DPAE.tracabiliteFin),
+        .init(cle: "DPAE.netEntreprises", texte: DPAE.netEntreprises),
         .init(cle: "Presences.relancer", texte: Presences.relancer),
         .init(cle: "Presences.relanceEnvoi", texte: Presences.relanceEnvoi),
         .init(cle: "Presences.relanceSucces", texte: Presences.relanceSucces),
@@ -1371,6 +1585,10 @@ public enum LibellesWeb {
         .init(cle: "Contrats.videSignes", texte: Contrats.videSignes),
         .init(cle: "Contrats.videAnnules", texte: Contrats.videAnnules),
         .init(cle: "Contrats.videTous", texte: Contrats.videTous),
+        .init(cle: "Contrats.titreEtablissement", texte: Contrats.titreEtablissement),
+        .init(cle: "Contrats.videEnAttenteEtablissement", texte: Contrats.videEnAttenteEtablissement),
+        .init(cle: "Contrats.videSignesEtablissement", texte: Contrats.videSignesEtablissement),
+        .init(cle: "Contrats.videTousEtablissement", texte: Contrats.videTousEtablissement),
         .init(cle: "Contrats.sansValeur", texte: Contrats.sansValeur),
         .init(cle: "Contrats.pictoMission", texte: Contrats.pictoMission),
         .init(cle: "Contrats.creeLe", texte: Contrats.creeLe),
@@ -1552,5 +1770,52 @@ public enum LibellesWeb {
         .init(cle: "Annulation.explicationExemple", texte: Annulation.explicationExemple),
         .init(cle: "Annulation.choisirFichier", texte: Annulation.choisirFichier),
         .init(cle: "Annulation.garderCandidature", texte: Annulation.garderCandidature),
+        .init(cle: "CopiesBulletins.titre", texte: CopiesBulletins.titre),
+        .init(cle: "CopiesBulletins.chargement", texte: CopiesBulletins.chargement),
+        .init(cle: "CopiesBulletins.reessayer", texte: CopiesBulletins.reessayer),
+        .init(cle: "CopiesBulletins.chargementImpossible", texte: CopiesBulletins.chargementImpossible),
+        .init(cle: "CopiesBulletins.statutPubliee", texte: CopiesBulletins.statutPubliee),
+        .init(cle: "CopiesBulletins.statutRemplacee", texte: CopiesBulletins.statutRemplacee),
+        .init(cle: "CopiesBulletins.statutRetiree", texte: CopiesBulletins.statutRetiree),
+        .init(cle: "CopiesBulletins.motifDestinataire", texte: CopiesBulletins.motifDestinataire),
+        .init(cle: "CopiesBulletins.motifContenu", texte: CopiesBulletins.motifContenu),
+        .init(cle: "CopiesBulletins.motifAutre", texte: CopiesBulletins.motifAutre),
+        .init(cle: "CopiesBulletins.ouvertureImpossible", texte: CopiesBulletins.ouvertureImpossible),
+        .init(cle: "CopiesBulletins.copieRetiree", texte: CopiesBulletins.copieRetiree),
+        .init(cle: "CopiesBulletins.signalementEnregistre", texte: CopiesBulletins.signalementEnregistre),
+        .init(cle: "CopiesBulletins.operationNonConfirmee", texte: CopiesBulletins.operationNonConfirmee),
+        .init(cle: "CopiesBulletins.copieDemandeeIndisponible", texte: CopiesBulletins.copieDemandeeIndisponible),
+        .init(cle: "CopiesBulletins.employeur", texte: CopiesBulletins.employeur),
+        .init(cle: "CopiesBulletins.tousLesEmployeurs", texte: CopiesBulletins.tousLesEmployeurs),
+        .init(cle: "CopiesBulletins.vide", texte: CopiesBulletins.vide),
+        .init(cle: "CopiesBulletins.accessibiliteVersion", texte: CopiesBulletins.accessibiliteVersion),
+        .init(cle: "CopiesBulletins.periodeDu", texte: CopiesBulletins.periodeDu),
+        .init(cle: "CopiesBulletins.periodeAu", texte: CopiesBulletins.periodeAu),
+        .init(cle: "CopiesBulletins.version", texte: CopiesBulletins.version),
+        .init(cle: "CopiesBulletins.publieeLe", texte: CopiesBulletins.publieeLe),
+        .init(cle: "CopiesBulletins.separateur", texte: CopiesBulletins.separateur),
+        .init(cle: "CopiesBulletins.mission", texte: CopiesBulletins.mission),
+        .init(cle: "CopiesBulletins.liee", texte: CopiesBulletins.liee),
+        .init(cle: "CopiesBulletins.motifRemplacement", texte: CopiesBulletins.motifRemplacement),
+        .init(cle: "CopiesBulletins.remplacementContenu", texte: CopiesBulletins.remplacementContenu),
+        .init(cle: "CopiesBulletins.remplacementAutre", texte: CopiesBulletins.remplacementAutre),
+        .init(cle: "CopiesBulletins.point", texte: CopiesBulletins.point),
+        .init(cle: "CopiesBulletins.erreurSignalee", texte: CopiesBulletins.erreurSignalee),
+        .init(cle: "CopiesBulletins.ancienneVersion", texte: CopiesBulletins.ancienneVersion),
+        .init(cle: "CopiesBulletins.pdfPlusAccessible", texte: CopiesBulletins.pdfPlusAccessible),
+        .init(cle: "CopiesBulletins.ouverture", texte: CopiesBulletins.ouverture),
+        .init(cle: "CopiesBulletins.ouvrir", texte: CopiesBulletins.ouvrir),
+        .init(cle: "CopiesBulletins.signaler", texte: CopiesBulletins.signaler),
+        .init(cle: "CopiesBulletins.signalementDescription", texte: CopiesBulletins.signalementDescription),
+        .init(cle: "CopiesBulletins.signalementQuestion", texte: CopiesBulletins.signalementQuestion),
+        .init(cle: "CopiesBulletins.annuler", texte: CopiesBulletins.annuler),
+        .init(cle: "CopiesBulletins.enregistrement", texte: CopiesBulletins.enregistrement),
+        .init(cle: "CopiesBulletins.envoyerSignalement", texte: CopiesBulletins.envoyerSignalement),
+        .init(cle: "CopiesBulletins.signalementNonConfirme", texte: CopiesBulletins.signalementNonConfirme),
+        .init(cle: "CopiesBulletins.copieDejaRetiree", texte: CopiesBulletins.copieDejaRetiree),
+        .init(cle: "CopiesBulletins.pdfIndisponible", texte: CopiesBulletins.pdfIndisponible),
+        .init(cle: "CopiesBulletins.integriteNonConfirmee", texte: CopiesBulletins.integriteNonConfirmee),
+        .init(cle: "CopiesBulletins.titrePartage", texte: CopiesBulletins.titrePartage),
+        .init(cle: "CopiesBulletins.simulations", texte: CopiesBulletins.simulations),
     ]
 }

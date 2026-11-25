@@ -688,9 +688,58 @@ public enum TextesWeb {
 
     // MARK: - Lot 5 — espace établissement (LOT5_PLAN §2.9, tranche T0, D30)
     //
-    // Repris verbatim du web pour les écrans T4, T6 et T9 ; chaque écran exige la validation de
-    // Gabrielle (HARD STOP n°4, LOT5_PLAN §6.4). La mention de l'écran de signature OTP
+    // Repris verbatim du web pour les écrans T4, T6 et T9 ; textes validés explicitement par la
+    // fondatrice le 24/11/2026 (HARD STOP n°4, `DECISIONS_LOT5.md`, intégration de la vague D,
+    // point 1) ; tout texte ajouté après cette liste repasse par une validation. La mention de l'écran de signature OTP
     // établissement (« Conforme art. 1366-1367 Code civil », T10) est `Contrat.otpDescription`.
+
+    /// DPAE côté employeur (revue B8 des textes de l'intégration de la vague D, M6) : statut (`DPAEStatus.tsx`) et rappel
+    /// (`BandeauRappelDPAE.tsx`) montés par `ContratMission.tsx` (l.644-655, l.826-829) pour un contrat salarié non
+    /// annulé, expiré ni refusé. Repris mot pour mot ; les actions (préparation des données, saisie du numéro) restent
+    /// sur jolene.app (aucune écriture native). Textes citant la loi (HARD STOP n°4) : validés explicitement par la
+    /// fondatrice le 24/11/2026 (`DECISIONS_LOT5.md`, intégration de la vague D, point 1).
+    /// Libellés non juridiques du même bloc : `LibellesWeb.DPAE`.
+    public enum DPAE {
+        // source: src/components/DPAEStatus.tsx:122 [juridique]
+        public static let aVerifierTitre = "DPAE — formalité à vérifier selon le cadre déclaré"
+
+        // source: src/components/DPAEStatus.tsx:123 [juridique]
+        public static let obligatoireTitre = "DPAE obligatoire — Mission salariée"
+
+        // source: src/components/DPAEStatus.tsx:126 [juridique]
+        public static let aVerifierDetail = "L’employeur vérifie les formalités applicables à cet engagement. Si une DPAE est requise, effectuez-la avant la prise de poste et renseignez son numéro ici."
+
+        // source: src/components/DPAEStatus.tsx:127 [juridique]
+        public static let obligatoireDetail = "La Déclaration Préalable à l'Embauche doit être effectuée auprès de l'URSSAF avant la prise de poste (art. R1221-2 Code travail)."
+
+        // source: src/components/BandeauRappelDPAE.tsx:25 [juridique]
+        public static let effectuee = "✅ DPAE déclarée comme effectuée par l'établissement"
+
+        /// Suivi de la date `d MMMM yyyy` : voir `effectueeLe(dateFormatee:)`.
+        // source: src/components/BandeauRappelDPAE.tsx:25 [fragment]
+        public static let effectueeLeMot = "le"
+
+        /// « ✅ DPAE déclarée comme effectuée par l'établissement le <date> » (l.25), date déjà formatée `d MMMM yyyy`.
+        public static func effectueeLe(dateFormatee: String) -> String {
+            effectuee + " " + effectueeLeMot + " " + dateFormatee
+        }
+
+        // source: src/components/BandeauRappelDPAE.tsx:28 [juridique]
+        public static let effectueeDetail = "Jolene conserve ce suivi interne ; la preuve opposable reste l'accusé transmis par l'Urssaf."
+
+        // source: src/components/BandeauRappelDPAE.tsx:41 [juridique]
+        public static let rappelCadreTitre = "Formalités employeur : vérifiez les démarches applicables au cadre déclaré pour cet engagement."
+
+        // source: src/components/BandeauRappelDPAE.tsx:42 [juridique]
+        public static let rappelLegalTitre = "⚠️ Rappel légal : effectuez la Déclaration Préalable à l'Embauche (DPAE) sur net-entreprises.fr avant le début de la mission."
+
+        // source: src/components/BandeauRappelDPAE.tsx:46 [juridique]
+        public static let rappelCadreDetail = "Si une DPAE est requise, effectuez-la avant la prise de poste. Le texte fourni par l’employeur ne dispense pas des formalités applicables."
+
+        // source: src/components/BandeauRappelDPAE.tsx:47 [juridique]
+        public static let rappelLegalDetail = "La DPAE est obligatoire pour ce contrat salarié. Pour une mission libérale directe, elle n'est pas requise."
+
+    }
 
     /// Revue des candidatures (`ListeCandidatures.tsx` l.386-398, T6, D10) : rappel des conditions
     /// de non-contournement avant l'acceptation, lien vers l'article 8 des CGV ouvert dans Safari.
@@ -819,6 +868,51 @@ public enum TextesWeb {
         public static let mentionAccepter = "En acceptant, tu t'engages à être présent(e) aux dates et horaires indiqués."
     }
 
+    /// Feuille « première candidature » de la vue Swipe (lot 4, T3b, `LOT4_PLAN.md` §3 T3b ; HARD STOP n°4 : portée
+    /// d'engagement, reprise à l'identique de `VueSwipeMissions.tsx` l.540-563, en attente de la relecture de Gabrielle).
+    /// Affichée une seule fois par compte, après le récapitulatif exact et avant le premier ❤️ envoyé
+    /// (`ParcoursCandidatureSwipe`). Tutoiement du web conservé verbatim : le vouvoiement passera d'abord par le web.
+    /// Le paragraphe d'acceptation est rendu par React en quatre morceaux (deux passages en gras) : `acceptation`.
+    public enum PremiereCandidature {
+        // source: src/components/swipe/VueSwipeMissions.tsx:540 [juridique]
+        public static let titre = "Ta première candidature 🎉"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:542 [juridique]
+        public static let description = "Ici, candidater est un engagement — pas un simple like."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:548 [fragment]
+        public static let acceptationDirecte = "L'établissement peut t'accepter directement"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:548-549 [fragment]
+        public static let acceptationSiCas = "— si c'est le cas, la mission est"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:549 [fragment]
+        public static let acceptationConfirmee = "confirmée"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:549 [fragment]
+        public static let acceptationCompteSurToi = ": il compte sur toi auprès de ses patients."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:552 [juridique]
+        public static let retraitLibre = "Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:553 [juridique]
+        public static let annulationTardive = "Après acceptation, une annulation tardive impacte ton score de fiabilité."
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:559 [libellé]
+        public static let pasMaintenant = "Pas maintenant"
+
+        // source: src/components/swipe/VueSwipeMissions.tsx:562 [juridique]
+        public static let confirmer = "J'ai compris — envoyer ma candidature"
+
+        /// Paragraphe rendu par React : gras, texte, gras, texte, chaque morceau séparé du suivant par une espace.
+        public static var acceptation: String {
+            acceptationDirecte + " " + acceptationSiCas + " " + acceptationConfirmee + " " + acceptationCompteSurToi
+        }
+
+        /// Les deux puces de la liste, dans l'ordre du web.
+        public static let engagements = [retraitLibre, annulationTardive]
+    }
+
     /// Confirmation de présence J-1 du détail de mission (lot 1, T6c, `LOT1_PLAN.md` §3 T6c ; HARD STOP n°4 : chaînes
     /// reprises à l'identique du web, `DetailMissionSoignant.tsx` l.1419-1438). Bouton du bloc, confirmation affichée
     /// après relecture (toast web, ici notice), état « confirmée » et repli d'un refus sans message serveur. Le titre et
@@ -880,6 +974,78 @@ public enum TextesWeb {
             guard let points, points < 0 else { return candidatureAnnulee }
             return scoreImpacteDebut + " " + String(points) + " " + scoreImpacteFin
         }
+    }
+
+    /// Copies officielles des bulletins (lot 4, T10, `docs/mobile-swift/LOT4_PLAN.md` §3 T10 ; HARD STOP n°4 : textes
+    /// repris verbatim du web, en attente de la relecture de Gabrielle). Mention affichée en tête de la liste : les PDF
+    /// sont déposés par l'employeur, Jolene ne les établit pas, et une copie ne vaut pas preuve de paiement. Avertissement
+    /// affiché avant la confirmation d'un signalement « Ce document ne me concerne pas » : `fn_signaler_copie_bulletin`
+    /// retire alors la copie (`statut = 'RETIREE'`), sans retour possible depuis l'app. Les autres libellés de l'écran
+    /// sont dans `LibellesWeb.CopiesBulletins`.
+    public enum CopiesBulletins {
+        // source: src/components/CopiesBulletins.tsx:44 [juridique]
+        public static let mentionEmployeur = "Retrouvez les PDF déposés par l’employeur, déjà remis par son service paie. Une copie disponible ne confirme pas le paiement du salaire."
+
+        // source: src/components/CopiesBulletinsListe.tsx:90 [juridique]
+        public static let avertissementRetrait = "La copie sera immédiatement retirée et son PDF ne sera plus accessible dans Jolene."
+    }
+
+    /// Pool urgence et exclusions (lot 4, T11, HARD STOP n°4 : consentement aux alertes du pool, dont les SMS, et
+    /// confirmation de l'exclusion, repris verbatim du web, tutoiement compris, en attente de la validation de Gabrielle).
+    /// Écart arbitré (décision b de l'intégration de la vague D, `DECISIONS_LOT4.md` précision 17) : la promesse
+    /// « +10 points de fiabilité » (`PoolUrgenceToggle.tsx` l.215, l.230) suit le trigger legacy `dec_bonus_urgence`, alors
+    /// que le score v2 applique un bonus de 5 (`LOT4_PLAN.md` §3 T11) : ni `avantageFiabilite` ni la dernière phrase de
+    /// l'engagement (`engagementPoints`, `engagementFin`, `engagement`) ne sont affichées ; elles restent ici, verbatim,
+    /// pour que la garde des textes suive le web. L'écran affiche `PoolUrgenceTextes.engagementAffiche`.
+    public enum PoolUrgence {
+        // source: src/components/PoolUrgenceToggle.tsx:109 [consentement]
+        public static let disponible = "🚨 Disponible pour les remplacements d'urgence"
+
+        // source: src/components/PoolUrgenceToggle.tsx:111 [consentement]
+        public static let disponibleDescription = "Tu seras alerté(e) en priorité quand un soignant annule une mission dans ton rayon."
+
+        // source: src/components/PoolUrgenceToggle.tsx:184 [consentement]
+        public static let smsTitre = "Alertes SMS du pool urgence"
+
+        // source: src/components/PoolUrgenceToggle.tsx:187 [consentement]
+        public static let smsDescription = "Notification immédiate par SMS, en plus des push et e-mails, pour ne manquer aucune mission de dernière minute."
+
+        // Non affiché : promesse de +10 points que le score de production ne tient pas (bonus de 5, précision 17).
+        // source: src/components/PoolUrgenceToggle.tsx:215 [juridique]
+        public static let avantageFiabilite = "+10 points fiabilité par mission urgence terminée"
+
+        /// Texte d'engagement (l.228-231) : voir `engagement`.
+        // source: src/components/PoolUrgenceToggle.tsx:229-230 [fragment]
+        public static let engagementDebut = "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte"
+
+        // Non affiché (précision 17), comme `engagementFin` et `engagement`.
+        // source: src/components/PoolUrgenceToggle.tsx:230 [fragment]
+        public static let engagementPoints = "+10 points de fiabilité"
+
+        // source: src/components/PoolUrgenceToggle.tsx:230 [fragment]
+        public static let engagementFin = "."
+
+        /// Texte d'engagement du pool, rendu du paragraphe l.228-231 (« +10 points de fiabilité » en gras sur le web).
+        public static var engagement: String { engagementDebut + " " + engagementPoints + engagementFin }
+    }
+
+    /// « Ne plus travailler ensemble » (`BoutonExclusion.tsx`, D25, lot 4 T11, HARD STOP n°4) : bouton, confirmation et
+    /// effet annoncé, repris verbatim du web.
+    public enum Exclusion {
+        // source: src/components/BoutonExclusion.tsx:53 [consentement]
+        public static let bouton = "🚫 Ne plus travailler ensemble"
+
+        // source: src/components/BoutonExclusion.tsx:60 [consentement]
+        public static let titre = "🚫 Confirmer l'exclusion"
+
+        // source: src/components/BoutonExclusion.tsx:62 [juridique]
+        public static let effet = "Les missions de cette partie ne seront plus visibles. Vous pourrez annuler cette exclusion depuis vos paramètres."
+
+        // source: src/components/BoutonExclusion.tsx:77 [consentement]
+        public static let confirmer = "Confirmer l'exclusion"
+
+        // source: src/components/BoutonExclusion.tsx:39 [juridique]
+        public static let enregistree = "Exclusion enregistrée. Les missions ne seront plus visibles."
     }
 
     /// Tous les textes, pour les tests (la garde Node vérifie que la liste est complète et exacte).
@@ -950,6 +1116,17 @@ public enum TextesWeb {
         .init(cle: "Contrat.otpLibelle", texte: Contrat.otpLibelle),
         .init(cle: "Contrat.otpDescription", texte: Contrat.otpDescription),
         .init(cle: "Contrat.dejaSigne", texte: Contrat.dejaSigne),
+        .init(cle: "DPAE.aVerifierTitre", texte: DPAE.aVerifierTitre),
+        .init(cle: "DPAE.obligatoireTitre", texte: DPAE.obligatoireTitre),
+        .init(cle: "DPAE.aVerifierDetail", texte: DPAE.aVerifierDetail),
+        .init(cle: "DPAE.obligatoireDetail", texte: DPAE.obligatoireDetail),
+        .init(cle: "DPAE.effectuee", texte: DPAE.effectuee),
+        .init(cle: "DPAE.effectueeLeMot", texte: DPAE.effectueeLeMot),
+        .init(cle: "DPAE.effectueeDetail", texte: DPAE.effectueeDetail),
+        .init(cle: "DPAE.rappelCadreTitre", texte: DPAE.rappelCadreTitre),
+        .init(cle: "DPAE.rappelLegalTitre", texte: DPAE.rappelLegalTitre),
+        .init(cle: "DPAE.rappelCadreDetail", texte: DPAE.rappelCadreDetail),
+        .init(cle: "DPAE.rappelLegalDetail", texte: DPAE.rappelLegalDetail),
         .init(cle: "Contrat.mentionCadreEmployeur", texte: Contrat.mentionCadreEmployeur),
         .init(cle: "Contrat.mentionSalarieEcrit", texte: Contrat.mentionSalarieEcrit),
         .init(cle: "Contrat.mentionPrestationLiberale", texte: Contrat.mentionPrestationLiberale),
@@ -1037,6 +1214,16 @@ public enum TextesWeb {
         .init(cle: "Candidature.engagementCandidature", texte: Candidature.engagementCandidature),
         .init(cle: "Candidature.engagementAcceptation", texte: Candidature.engagementAcceptation),
         .init(cle: "Candidature.mentionAccepter", texte: Candidature.mentionAccepter),
+        .init(cle: "PremiereCandidature.titre", texte: PremiereCandidature.titre),
+        .init(cle: "PremiereCandidature.description", texte: PremiereCandidature.description),
+        .init(cle: "PremiereCandidature.acceptationDirecte", texte: PremiereCandidature.acceptationDirecte),
+        .init(cle: "PremiereCandidature.acceptationSiCas", texte: PremiereCandidature.acceptationSiCas),
+        .init(cle: "PremiereCandidature.acceptationConfirmee", texte: PremiereCandidature.acceptationConfirmee),
+        .init(cle: "PremiereCandidature.acceptationCompteSurToi", texte: PremiereCandidature.acceptationCompteSurToi),
+        .init(cle: "PremiereCandidature.retraitLibre", texte: PremiereCandidature.retraitLibre),
+        .init(cle: "PremiereCandidature.annulationTardive", texte: PremiereCandidature.annulationTardive),
+        .init(cle: "PremiereCandidature.pasMaintenant", texte: PremiereCandidature.pasMaintenant),
+        .init(cle: "PremiereCandidature.confirmer", texte: PremiereCandidature.confirmer),
         .init(cle: "ConfirmationPresence.bouton", texte: ConfirmationPresence.bouton),
         .init(cle: "ConfirmationPresence.confirmation", texte: ConfirmationPresence.confirmation),
         .init(cle: "ConfirmationPresence.etatConfirme", texte: ConfirmationPresence.etatConfirme),
@@ -1051,5 +1238,20 @@ public enum TextesWeb {
         .init(cle: "Annulation.candidatureAnnulee", texte: Annulation.candidatureAnnulee),
         .init(cle: "Annulation.participationAnnulee", texte: Annulation.participationAnnulee),
         .init(cle: "Annulation.ouiAnnuler", texte: Annulation.ouiAnnuler),
+        .init(cle: "CopiesBulletins.mentionEmployeur", texte: CopiesBulletins.mentionEmployeur),
+        .init(cle: "CopiesBulletins.avertissementRetrait", texte: CopiesBulletins.avertissementRetrait),
+        .init(cle: "PoolUrgence.disponible", texte: PoolUrgence.disponible),
+        .init(cle: "PoolUrgence.disponibleDescription", texte: PoolUrgence.disponibleDescription),
+        .init(cle: "PoolUrgence.smsTitre", texte: PoolUrgence.smsTitre),
+        .init(cle: "PoolUrgence.smsDescription", texte: PoolUrgence.smsDescription),
+        .init(cle: "PoolUrgence.avantageFiabilite", texte: PoolUrgence.avantageFiabilite),
+        .init(cle: "PoolUrgence.engagementDebut", texte: PoolUrgence.engagementDebut),
+        .init(cle: "PoolUrgence.engagementPoints", texte: PoolUrgence.engagementPoints),
+        .init(cle: "PoolUrgence.engagementFin", texte: PoolUrgence.engagementFin),
+        .init(cle: "Exclusion.bouton", texte: Exclusion.bouton),
+        .init(cle: "Exclusion.titre", texte: Exclusion.titre),
+        .init(cle: "Exclusion.effet", texte: Exclusion.effet),
+        .init(cle: "Exclusion.confirmer", texte: Exclusion.confirmer),
+        .init(cle: "Exclusion.enregistree", texte: Exclusion.enregistree),
     ]
 }

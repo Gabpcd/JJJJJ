@@ -352,7 +352,8 @@
     {
       "fonctions": [
         "LibellesWeb.Contrats.titreVide",
-        "LibellesWeb.Contrats.descriptionVide"
+        "LibellesWeb.Contrats.descriptionVide",
+        "LibellesWeb.Contrats.descriptionVideEtablissement"
       ],
       "source": "src/pages/ListeContrats.tsx:128-145",
       "code": [
@@ -510,6 +511,51 @@
         "const msg = points < 0",
         "? `Candidature annulée. Score impacté : ${points} pts.`",
         ": 'Candidature annulée.';"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PremiereCandidature.acceptation"
+      ],
+      "source": "src/components/swipe/VueSwipeMissions.tsx:547-550",
+      "code": [
+        "<p>",
+        "<strong>L'établissement peut t'accepter directement</strong> — si c'est le cas,",
+        "la mission est <strong>confirmée</strong> : il compte sur toi auprès de ses patients.",
+        "</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PremiereCandidature.engagements"
+      ],
+      "source": "src/components/swipe/VueSwipeMissions.tsx:551-554",
+      "code": [
+        "<ul className=\"space-y-1.5 text-muted-foreground text-xs list-disc ml-4\">",
+        "<li>Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée.</li>",
+        "<li>Après acceptation, une annulation tardive impacte ton score de fiabilité.</li>",
+        "</ul>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.PoolUrgence.engagement"
+      ],
+      "source": "src/components/PoolUrgenceToggle.tsx:228-231",
+      "code": [
+        "<p className=\"text-xs text-muted-foreground\">",
+        "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon.",
+        "Tu restes libre de refuser. Chaque mission urgence terminée te rapporte <strong className=\"text-foreground\">+10 points de fiabilité</strong>.",
+        "</p>"
+      ]
+    },
+    {
+      "fonctions": [
+        "TextesWeb.DPAE.effectueeLe"
+      ],
+      "source": "src/components/BandeauRappelDPAE.tsx:25",
+      "code": [
+        "✅ DPAE déclarée comme effectuée par l'établissement{dpaeEffectueeLe ? ` le ${format(new Date(dpaeEffectueeLe), 'd MMMM yyyy', { locale: fr })}` : ''}"
       ]
     }
   ],
@@ -830,6 +876,16 @@
       "rendu": "Aucun contrat annulé."
     },
     {
+      "fonction": "LibellesWeb.Contrats.descriptionVideEtablissement",
+      "appel": "descriptionVideEtablissement(.tous)",
+      "rendu": "Les contrats apparaîtront ici après qu'un soignant ait accepté une de vos missions."
+    },
+    {
+      "fonction": "LibellesWeb.Contrats.descriptionVideEtablissement",
+      "appel": "descriptionVideEtablissement(.enAttenteSignatures)",
+      "rendu": "Aucun contrat en attente de signature. Les contrats apparaîtront ici quand un soignant acceptera une mission."
+    },
+    {
       "fonction": "LibellesWeb.Contrats.numero",
       "appel": "numero(nil)",
       "rendu": "—"
@@ -913,6 +969,21 @@
       "fonction": "TextesWeb.StripeConnect.salarieEtapeConfirmation",
       "appel": "salarieEtapeConfirmation",
       "rendu": "Tu confirmes la réception dans Mes gains"
+    },
+    {
+      "fonction": "TextesWeb.PremiereCandidature.acceptation",
+      "appel": "acceptation",
+      "rendu": "L'établissement peut t'accepter directement — si c'est le cas, la mission est confirmée : il compte sur toi auprès de ses patients."
+    },
+    {
+      "fonction": "TextesWeb.PoolUrgence.engagement",
+      "appel": "engagement",
+      "rendu": "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte +10 points de fiabilité."
+    },
+    {
+      "fonction": "TextesWeb.DPAE.effectueeLe",
+      "appel": "effectueeLe(dateFormatee: \"3 novembre 2026\")",
+      "rendu": "✅ DPAE déclarée comme effectuée par l'établissement le 3 novembre 2026"
     }
   ]
 }

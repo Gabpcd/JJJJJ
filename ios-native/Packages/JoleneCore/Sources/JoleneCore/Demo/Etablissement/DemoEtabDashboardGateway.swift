@@ -8,15 +8,21 @@ import Foundation
 public struct DemoEtabDashboardGateway: EtabDashboardPort {
     private let clock: any ClockPort
     private let planningIndisponible: Bool
+    /// Lot 5 (T11) : non-lus relus de la messagerie démo du même monde (le serveur compte `messages_chat`) ; `nil` :
+    /// valeur de la fixture.
+    private let messagesNonLus: (@Sendable (EtablissementReadContext) async -> Int?)?
 
-    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), planningIndisponible: Bool = false) {
+    public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow), planningIndisponible: Bool = false,
+                messagesNonLus: (@Sendable (EtablissementReadContext) async -> Int?)? = nil) {
         self.clock = clock
         self.planningIndisponible = planningIndisponible
+        self.messagesNonLus = messagesNonLus
     }
 
     public func tableauDeBord(context: EtablissementReadContext) async throws -> EtabDashboardSnapshot {
         try DemoEtablissementWorld.verifier(context)
-        let fichier = try DemoFixtures.loadEtabDashboard()
+        var fichier = try DemoFixtures.loadEtabDashboard()
+        if let messagesNonLus, let relus = await messagesNonLus(context) { fichier.stats.messagesNonLus = relus }
         guard !planningIndisponible else { return EtabDashboardSnapshot(stats: fichier.stats, planning: nil) }
         let maintenant = clock.now()
         let finFenetre = EtabPlanningAccueil.finFenetre(maintenant)

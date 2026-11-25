@@ -1,0 +1,62 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "messages": [
+    {
+      "id": "demo-message-001",
+      "conversation_id": "demo-conv-001",
+      "auteur_id": "demo-soignant",
+      "contenu": "Bonjour, je suis disponible pour cette mission.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-10-31T22:00:00.000Z"
+    },
+    {
+      "id": "demo-message-002",
+      "conversation_id": "demo-conv-001",
+      "auteur_id": "demo-interlocuteur-etab-1",
+      "contenu": "Bonjour Camille, merci pour votre candidature.",
+      "lu": false,
+      "est_admin": false,
+      "cree_le": "2026-11-01T21:00:00.000Z"
+    },
+    {
+      "id": "demo-message-003",
+      "conversation_id": "demo-conv-001",
+      "auteur_id": "demo-interlocuteur-etab-1",
+      "contenu": "Pouvez-vous nous préciser votre expérience en médecine polyvalente ?",
+      "lu": false,
+      "est_admin": false,
+      "cree_le": "2026-11-01T21:10:00.000Z"
+    },
+    {
+      "id": "demo-message-004",
+      "conversation_id": "demo-conv-002",
+      "auteur_id": "demo-jolene",
+      "contenu": "Bienvenue sur Jolene. Cette conversation vous relie à notre équipe.",
+      "lu": true,
+      "est_admin": true,
+      "cree_le": "2026-10-23T00:05:00.000Z"
+    },
+    {
+      "id": "demo-message-005",
+      "conversation_id": "demo-conv-003",
+      "auteur_id": "demo-interlocuteur-etab-2",
+      "contenu": "Merci pour votre mission, à bientôt.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-09-27T00:00:00.000Z"
+    },
+    {
+      "id": "demo-message-006",
+      "conversation_id": "demo-conv-003",
+      "auteur_id": "demo-soignant",
+      "contenu": "Merci à vous, bonne continuation.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-09-27T00:10:00.000Z"
+    }
+  ],
+  "reponse_demo": {
+    "contenu": "Bien reçu, merci pour votre message."
+  }
+}

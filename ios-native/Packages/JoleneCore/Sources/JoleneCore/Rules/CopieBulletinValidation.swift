@@ -72,12 +72,18 @@ public enum CopieBulletinValidation {
         case .chaine(let remplaceId)? where estUUID(remplaceId): break
         default: return nil
         }
+        let motifRemplacement: MotifRemplacementCopie?
         switch ligne["motif_remplacement"] {
-        case .null?, .chaine("CONTENU")?, .chaine("AUTRE")?: break
+        case .null?: motifRemplacement = nil
+        case .chaine("CONTENU")?: motifRemplacement = .contenu
+        case .chaine("AUTRE")?: motifRemplacement = .autre
         default: return nil
         }
-        return CopieBulletin(id: id, employeurNom: etablissementNom, periodeDebut: periodeDebut, periodeFin: periodeFin,
-                             statut: statut, tailleOctets: Int(taille), sha256: sha256, missionIds: missionIds, signalee: signalee)
+        // T10 : `version` est un entier sûr du web (`Number.isSafeInteger`), donc toujours représentable ici (64 bits).
+        return CopieBulletin(id: id, etablissementId: etablissementId, employeurNom: etablissementNom,
+                             periodeDebut: periodeDebut, periodeFin: periodeFin, statut: statut, version: Int(version),
+                             publieLe: publieLe, motifRemplacement: motifRemplacement, tailleOctets: Int(taille),
+                             sha256: sha256, missionIds: missionIds, signalee: signalee)
     }
 
     // MARK: - Contrôles de champ

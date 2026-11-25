@@ -2,15 +2,27 @@ import Foundation
 
 /// Dernier état connu et ses changements, diffusés à des abonnés `AsyncStream` (revue fraîche de T4b, m5) : mécanique de
 /// `NetworkMonitor` (cible app, `NWPathMonitor` ; le module `Network` reste hors de JoleneCore), extraite pour être
-/// testée (`PointageSaisieTests`). Un abonné reçoit l'état courant s'il est connu, puis chaque changement (un doublon
-/// n'est pas rediffusé). Le premier envoi d'un abonnement et la diffusion d'un changement se font SOUS le verrou : un
-/// changement concurrent d'un abonnement ne peut pas être livré à ce nouvel abonné avant l'état qu'il remplace (sinon
-/// le bandeau hors ligne resterait faux jusqu'au changement suivant).
+/// testée (`PointageSaisieTests`, `DiffusionDernierEtatTests`). Un abonné reçoit l'état courant s'il est connu, puis
+/// chaque changement (un doublon n'est pas rediffusé). Un changement concurrent d'un abonnement n'est jamais livré à ce
+/// nouvel abonné avant l'état qu'il remplace (sinon le bandeau hors ligne resterait faux jusqu'au changement suivant).
 ///
-/// `@unchecked Sendable` : tout l'état mutable est protégé par `verrou`, dans des sections synchrones ; `yield` ne fait
-/// que mettre la valeur en tampon (aucun code d'abonné n'y est exécuté).
+/// Deux verrous, et aucun `yield`, `finish` ni code externe sous `verrou` (gel du 24/11/2026, reproduit par
+/// `DiffusionDernierEtatTests`) : l'annulation d'une tâche qui lit un flux exécute `onTermination` (→ `desabonner`, qui
+/// prend `verrou`) en tenant le verrou d'état de cette tâche, et `yield` reprend la tâche qui attend le flux en prenant
+/// ce même verrou d'état ; un `yield` fait sous `verrou` figeait donc les deux fils.
+/// - `verrou` protège `dernier` et `abonnes`, en sections courtes sans appel externe ; c'est le seul que prend
+///   `onTermination`.
+/// - `emission` sérialise les envois : le premier envoi d'un abonnement (`abonner`), la diffusion d'un changement
+///   (`recevoir`) et la fin des flux (`terminer`). Les `yield` et `finish` se font sous `emission` seul, `verrou`
+///   relâché ; `onTermination` ne prend jamais `emission`. Ordre de prise : `emission` puis `verrou`, jamais l'inverse.
+/// Garantie d'ordre : l'inscription d'un abonné et la lecture de l'état qu'il recevra d'abord se font dans une même
+/// section `verrou`, sous `emission`. Un changement soit précède cette section (l'abonné lit le nouvel état et ne figure
+/// pas dans la diffusion), soit la suit (sa diffusion attend `emission`, donc l'envoi de l'état courant à l'abonné).
+///
+/// `@unchecked Sendable` : tout l'état mutable est protégé par `verrou`, dans des sections synchrones.
 public final class DiffusionDernierEtat<Valeur: Sendable & Equatable>: @unchecked Sendable {
     private let verrou = NSLock()
+    private let emission = NSLock()
     private var dernier: Valeur?
     private var abonnes: [UUID: AsyncStream<Valeur>.Continuation] = [:]
 
@@ -24,10 +36,16 @@ public final class DiffusionDernierEtat<Valeur: Sendable & Equatable>: @unchecke
 
     /// Nouvel état : diffusé à chaque abonné s'il change.
     public func recevoir(_ valeur: Valeur) {
-        verrou.lock(); defer { verrou.unlock() }
-        guard dernier != valeur else { return }
+        emission.lock(); defer { emission.unlock() }
+        verrou.lock()
+        guard dernier != valeur else {
+            verrou.unlock()
+            return
+        }
         dernier = valeur
-        for suite in abonnes.values { suite.yield(valeur) }
+        let suites = Array(abonnes.values)
+        verrou.unlock()
+        for suite in suites { suite.yield(valeur) }
     }
 
     /// État courant (s'il est connu) puis chaque changement, jusqu'à l'abandon du flux ou `terminer()`.
@@ -41,11 +59,12 @@ public final class DiffusionDernierEtat<Valeur: Sendable & Equatable>: @unchecke
 
     /// Termine tous les flux (fin du moniteur).
     public func terminer() {
+        emission.lock(); defer { emission.unlock() }
         verrou.lock()
         let suites = Array(abonnes.values)
         abonnes.removeAll()
         verrou.unlock()
-        // Hors du verrou : `finish()` appelle aussitôt `onTermination`, qui le reprend.
+        // `finish()` appelle aussitôt `onTermination`, qui reprend `verrou` (relâché ici).
         suites.forEach { $0.finish() }
     }
 
@@ -56,9 +75,12 @@ public final class DiffusionDernierEtat<Valeur: Sendable & Equatable>: @unchecke
     }
 
     private func abonner(_ id: UUID, _ suite: AsyncStream<Valeur>.Continuation) {
-        verrou.lock(); defer { verrou.unlock() }
+        emission.lock(); defer { emission.unlock() }
+        verrou.lock()
         abonnes[id] = suite
-        if let dernier { suite.yield(dernier) }
+        let courant = dernier
+        verrou.unlock()
+        if let courant { suite.yield(courant) }
     }
 
     private func desabonner(_ id: UUID) {

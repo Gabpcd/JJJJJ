@@ -11,6 +11,10 @@ final class Lot4WiringSwipeTests: XCTestCase {
         let gateways = DemoWorld.gateways()
         XCTAssertTrue(gateways.swipe is DemoSwipeGateway)
         XCTAssertFalse(gateways.unwiredPorts.contains("swipe"))
+        // T3b : le ❤️ du monde démo rend ses avis (`CandidatureSwipePort`), comme le monde Supabase.
+        XCTAssertTrue(gateways.candidature is any CandidatureSwipePort)
+        XCTAssertEqual(LibellesCandidature.recapEngagement(.swipeLike), TextesWeb.Candidature.engagementCandidature,
+                       "❤️ : candidature retirable, même phrase d'engagement que POSTULER (récapitulatif du web sans `retraitPossible`)")
     }
 
     func testParcoursDemoPasserSauvegarderCandidaterPuisRetirer() async throws {
@@ -59,15 +63,13 @@ final class Lot4WiringSwipeTests: XCTestCase {
         XCTAssertEqual(nombre, 3)
     }
 
-    func testUrgenceResteVerrouilleeEnDemo() async throws {
+    /// URGENCE est livrée par T11 (`DemoPoolUrgenceTests` côté cœur) : un planning vide n'est jamais accepté.
+    func testUrgenceSansPlanningJamaisAccepteeEnDemo() async throws {
         let gateways = DemoWorld.gateways()
-        do {
-            _ = try await gateways.candidature.confirmer(action: .urgence, missionId: "demo-mission-015", creneaux: [], message: nil,
-                                                         choixContrat: nil, candidatureId: nil, context: context)
-            XCTFail("URGENCE doit rester refusée (T11)")
-        } catch let erreur as JoleneError {
-            XCTAssertEqual(erreur.kind, .contract)
-        }
+        let issue = try await gateways.candidature.confirmer(action: .urgence, missionId: "demo-mission-015", creneaux: [],
+                                                             message: nil, choixContrat: nil, candidatureId: nil, context: context)
+        XCTAssertEqual(issue, .planningAReconfirmer(code: DemoCandidatureGateway.codePlanningModifie,
+                                                    message: DemoCandidatureGateway.Textes.planningModifie))
     }
 
     func testPreferencesHorsBornesRefuseesEtContexteEtrangerRefuse() async throws {

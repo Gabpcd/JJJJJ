@@ -56,15 +56,36 @@ public final class ContratModel: ObservableObject {
     @Published public private(set) var erreurRelecture: String?
 
     public let contratId: String
+    /// Partie qui regarde le contrat : le soignant (lot 2), ou un membre habilité de l'établissement (lot 5, T10).
+    public let partie: PartieContrat
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    /// Epoch de la session et périmètre des appels du port (contexte soignant ou contexte confirmé de l'établissement).
+    private let snapshot: CadreContrat
+    /// Relecture du périmètre après un refus de droit de l'établissement (`SessionStore.refreshEtablissementScope`).
+    private let relirePerimetre: @MainActor () async -> Void
     /// Ports de l'epoch, retenus au chargement : une action OTP démarre sans suspension (un seul envoi en vol).
     private var ports: Gateways?
     private var derniereDemande = 0
 
     public init(controller: SessionController, snapshot: SessionSnapshot, contratId: String) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.snapshot = CadreContrat(snapshot)
+        self.partie = .soignant
+        self.relirePerimetre = {}
+        self.contratId = contratId
+        self.session = SessionSignatureOtp(cle: CleSessionOtp(contratId: contratId, empreinte: nil, documentPret: false))
+    }
+
+    /// Contrat vu par l'établissement (lot 5, T10) : mêmes règles, appels du port sous le contexte confirmé de
+    /// l'établissement (`contrat(id:etab:)`, `envoyerOtp(…etab:)`, `signer(…etab:)`), signature de l'établissement.
+    /// `relirePerimetre` : relecture des permissions après un refus de droit (`NON_AUTORISE`, permission retirée),
+    /// une fois par refus, jamais une déconnexion (§2.2).
+    public init(controller: SessionController, etablissement snapshot: EtablissementSessionSnapshot, contratId: String,
+                relirePerimetre: @escaping @MainActor () async -> Void = {}) {
+        self.controller = controller
+        self.snapshot = CadreContrat(snapshot)
+        self.partie = .etablissement
+        self.relirePerimetre = relirePerimetre
         self.contratId = contratId
         self.session = SessionSignatureOtp(cle: CleSessionOtp(contratId: contratId, empreinte: nil, documentPret: false))
     }
@@ -78,7 +99,7 @@ public final class ContratModel: ObservableObject {
     /// ferme à son échéance, `ContratMission.tsx` l.311-317, et bascule sur un autre mode ; décision 18 : renvoi web),
     /// original contrôlé ou non ; un compte réel l'a dès que l'original est contrôlé.
     public func disponibiliteSignature(maintenant: Date) -> DisponibiliteSignature {
-        guard let contrat, ContratRules.zoneSignatureVisible(contrat) else { return .indisponible }
+        guard let contrat, ContratRules.zoneSignatureVisible(contrat, partie: partie) else { return .indisponible }
         if contrat.estCompteTest && !admissionOuverte(maintenant: maintenant) { return .renvoiWeb }
         return original != nil ? .possible : .indisponible
     }
@@ -101,11 +122,30 @@ public final class ContratModel: ObservableObject {
                                                     nouvelEnvoiAutorise: nouvelEnvoiAutorise(maintenant: maintenant),
                                                     actionsSuspendues: actionsSuspendues, erreurRelecture: erreurRelecture)
         if session.etape == .signe { return .otp(presentation) }
-        guard ContratRules.zoneSignatureVisible(contrat) else { return nil }
+        guard ContratRules.zoneSignatureVisible(contrat, partie: partie) else { return nil }
         if disponibiliteSignature(maintenant: maintenant) == .renvoiWeb {
             return .renvoiWeb(message: ZoneSignature.messageRenvoiWeb, route: ContratPresentation.renvoiSignature(contratId: contrat.id))
         }
         return .otp(presentation)
+    }
+
+    /// Mode de signature annoncé à l'établissement au-dessus du formulaire OTP (`ContratMission.tsx` l.742-745 ; lot 5,
+    /// T10) : le natif ne porte que ce mode (D18, signature manuscrite non portée). Affiché quand le web propose ce mode :
+    /// zone « Votre signature » visible et SMS disponible (jamais pour un compte TEST sans admission, l.738), et plus
+    /// après la signature de cette session. `nil` pour le soignant (écran du lot 2 inchangé).
+    public func modeSignatureOtp(maintenant: Date) -> ModeSignatureOtp? {
+        guard partie == .etablissement, session.etape != .signe, let contrat,
+              ContratRules.zoneSignatureVisible(contrat, partie: partie),
+              disponibiliteSignature(maintenant: maintenant) != .renvoiWeb else { return nil }
+        return ModeSignatureOtp()
+    }
+
+    /// CDD sans original vu par l'établissement (`cddSansOriginal`, l.602-604) : la préparation par l'employeur se
+    /// fait sur le web (`PreparationCddEmployeur`, non portée : `LOT5_PLAN.md` §1.2, D18). `false` pour le soignant,
+    /// qui lit le texte du web (décision 19 du lot 2).
+    public var preparationSurLeWeb: Bool {
+        guard partie == .etablissement, let contrat else { return false }
+        return ContratRules.cddSansOriginal(contrat)
     }
 
     /// Admission de recette ouverte : `admittedUntil = canSend ? expiresAt : otpExpiresAt`, close quand cette échéance est
@@ -125,12 +165,11 @@ public final class ContratModel: ObservableObject {
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
         guard demande == derniereDemande, !Task.isCancelled else { return }
         ports = gateways
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         let delai = controller.resolutionTimeout
         let id = contratId
         do {
-            var detail = try await bounded(timeout: delai) { try await port.contrat(id: id, context: context) }
+            var detail = try await bounded(timeout: delai) { try await port.contrat(id: id) }
             var controle: OriginalContrat?
             var motif: MotifOriginalIndisponible?
             if ContratRules.cddSansOriginal(detail) {
@@ -138,10 +177,10 @@ public final class ContratModel: ObservableObject {
             } else {
                 let avant = detail
                 do {
-                    let lu = try await bounded(timeout: delai) { try await port.original(contrat: avant, context: context) }
+                    let lu = try await bounded(timeout: delai) { try await port.original(contrat: avant) }
                     if (avant.storagePath ?? "").isEmpty {
                         // Rendu serveur : le contrat relu doit porter l'empreinte de l'original contrôlé.
-                        detail = try await bounded(timeout: delai) { try await port.contrat(id: id, context: context) }
+                        detail = try await bounded(timeout: delai) { try await port.contrat(id: id) }
                     }
                     if lu.empreinte == detail.hashDocument { controle = lu } else { motif = .hashMismatch }
                 } catch let refus as ContratOriginalIndisponible {
@@ -152,7 +191,7 @@ public final class ContratModel: ObservableObject {
             var erreurLignes: String?
             if ContratRules.certificatVisible(detail) {
                 do {
-                    lignes = try await bounded(timeout: delai) { try await port.certificat(contratId: id, context: context) }
+                    lignes = try await bounded(timeout: delai) { try await port.certificat(contratId: id) }
                 } catch {
                     let erreur = Self.traduire(error)
                     if erreur.kind == .cancelled || erreur.kind == .unauthorized { throw error }
@@ -161,7 +200,7 @@ public final class ContratModel: ObservableObject {
             }
             var recette: AdmissionSignatureRecette?
             if detail.estCompteTest, controle != nil {
-                recette = try await bounded(timeout: delai) { try await port.admissionRecette(contratId: id, context: context) }
+                recette = try await bounded(timeout: delai) { try await port.admissionRecette(contratId: id) }
             }
             guard await controller.epoch == snapshot.epoch, demande == derniereDemande else { return }
             contrat = detail
@@ -182,6 +221,8 @@ public final class ContratModel: ObservableObject {
             if erreur.kind == .cancelled { return }
             if erreur.kind == .unauthorized { sessionExpired = true }
             etat = .echec(erreur.message)
+            // Refus de droit de l'établissement (permission `contrats` non servie) : périmètre relu une fois (T10).
+            if error is RefusAccesEtablissement { await relirePerimetre() }
         }
     }
 
@@ -203,11 +244,10 @@ public final class ContratModel: ObservableObject {
         guard let gateways = ports, await controller.epoch == snapshot.epoch, !actionsSuspendues,
               let demande = session.demanderEnvoi(nouvelEnvoiAutorise: nouvelEnvoiAutorise(maintenant: gateways.clock.now()))
         else { return }
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         do {
             let issue = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.envoyerOtp(contratId: demande.contratId, empreinte: demande.empreinte, context: context)
+                try await port.envoyerOtp(contratId: demande.contratId, empreinte: demande.empreinte)
             }
             guard await controller.epoch == snapshot.epoch else { return }
             session.terminerEnvoi(issue, demande: demande, maintenant: gateways.clock.now())
@@ -216,12 +256,14 @@ public final class ContratModel: ObservableObject {
                 if contrat?.estCompteTest == true { await relireAdmission(gateways) }
             case .refuse(let code, _, _):
                 if let code, SignatureOtpPresentation.codesIndisponibles.contains(code) { await publierSiEpoch(relire(gateways)) }
+                if code == Self.codeNonAutorise { await relirePerimetre() }
             }
         } catch {
             guard await controller.epoch == snapshot.epoch else { return }
             let erreur = Self.traduire(error)
             if erreur.kind == .unauthorized { sessionExpired = true }
             session.echouerEnvoi(message: erreur.kind == .cancelled ? nil : erreur.message, demande: demande)
+            if error is RefusAccesEtablissement { await relirePerimetre() }
         }
     }
 
@@ -233,11 +275,10 @@ public final class ContratModel: ObservableObject {
         guard let gateways = ports, await controller.epoch == snapshot.epoch, !actionsSuspendues,
               let demande = session.demanderSignature(maintenant: gateways.clock.now()),
               case .signature(let code) = demande.nature else { return }
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         do {
             let issue = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.signer(contratId: demande.contratId, code: code, empreinte: demande.empreinte, context: context)
+                try await port.signer(contratId: demande.contratId, code: code, empreinte: demande.empreinte)
             }
             guard await controller.epoch == snapshot.epoch else { return }
             switch issue {
@@ -254,12 +295,18 @@ public final class ContratModel: ObservableObject {
             case .refuse(let codeRefus, _, _):
                 session.terminerSignature(issue, demande: demande)
                 if let codeRefus, SignatureOtpPresentation.codesIndisponibles.contains(codeRefus) { await publierSiEpoch(relire(gateways)) }
+                if codeRefus == Self.codeNonAutorise { await relirePerimetre() }
             }
         } catch {
             guard await controller.epoch == snapshot.epoch else { return }
             let erreur = Self.traduire(error)
             if erreur.kind == .unauthorized { sessionExpired = true }
             session.echouerSignature(message: erreur.kind == .cancelled ? nil : erreur.message, demande: demande)
+            if error is RefusAccesEtablissement {
+                // Refus de droit avant tout appel (permission `contrats` non servie) : rien n'a été signé, périmètre relu.
+                await relirePerimetre()
+                return
+            }
             // La signature a pu être appliquée malgré l'échec : l'écran montre l'état relu du serveur. Rien n'est relu
             // avec une session expirée ni après une annulation (écran quitté).
             guard erreur.kind != .unauthorized, erreur.kind != .cancelled else { return }
@@ -279,11 +326,10 @@ public final class ContratModel: ObservableObject {
             erreurPartage = FichierContratTemporaire.messageIndisponible
             return nil
         }
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         do {
             let url = try await bounded(timeout: controller.resolutionTimeout) {
-                try await port.fichierOriginal(contrat: original, context: context)
+                try await port.fichierOriginal(contrat: original)
             }
             guard await controller.epoch == snapshot.epoch else {
                 FichierContratTemporaire.effacer(url)
@@ -338,14 +384,13 @@ public final class ContratModel: ObservableObject {
     /// échec laisse l'état affiché inchangé ; un certificat illisible reste une erreur non bloquante ; jeton refusé →
     /// session à vérifier ; annulation → rien).
     private func relire(_ gateways: Gateways) async -> Relecture {
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         let id = contratId
         let delai = controller.resolutionTimeout
         var resultat = Relecture()
         let relu: ContratDetail
         do {
-            relu = try await bounded(timeout: delai) { try await port.contrat(id: id, context: context) }
+            relu = try await bounded(timeout: delai) { try await port.contrat(id: id) }
         } catch {
             resultat.noter(Self.traduire(error))
             return resultat
@@ -353,7 +398,7 @@ public final class ContratModel: ObservableObject {
         resultat.contrat = relu
         guard ContratRules.certificatVisible(relu) else { return resultat }
         do {
-            resultat.signatures = try await bounded(timeout: delai) { try await port.certificat(contratId: id, context: context) }
+            resultat.signatures = try await bounded(timeout: delai) { try await port.certificat(contratId: id) }
         } catch {
             let erreur = Self.traduire(error)
             resultat.noter(erreur)
@@ -384,13 +429,12 @@ public final class ContratModel: ObservableObject {
     /// Admission relue après un envoi (`onOtpEnvoye` → `relireSmsRecette`, l.765) : budget et échéance du code ; le
     /// formulaire reste affiché, sans action possible, pendant la relecture (`actionsSuspendues`, l.761).
     private func relireAdmission(_ gateways: Gateways) async {
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         let id = contratId
         actionsSuspendues = true
         defer { actionsSuspendues = false }
         let recette = try? await bounded(timeout: controller.resolutionTimeout) {
-            try await port.admissionRecette(contratId: id, context: context)
+            try await port.admissionRecette(contratId: id)
         }
         guard await controller.epoch == snapshot.epoch else { return }
         admission = recette.flatMap { $0 }
@@ -403,9 +447,15 @@ public final class ContratModel: ObservableObject {
         return admission.otpExpireLe
     }
 
+    /// Refus de `fn_envoyer_otp_signature` et `fn_signer_contrat_otp` quand le compte n'est plus habilité (rôle ou
+    /// permission `contrats` retirés) : le périmètre de l'établissement est alors relu.
+    static let codeNonAutorise = "NON_AUTORISE"
+
     private static func traduire(_ error: Error) -> JoleneError {
         if let jolene = error as? JoleneError { return jolene }
         if error is CancellationError { return JoleneError(.cancelled, "") }
+        // Refus de droit de l'établissement : message servi (ou neutre), jamais « session expirée » (T10).
+        if let refus = error as? RefusAccesEtablissement { return JoleneError(.unknown, refus.message) }
         return JoleneError(.unknown, MessagesContrats.indisponible)
     }
 }
@@ -424,13 +474,29 @@ public final class ContratsListeModel: ObservableObject {
     @Published public private(set) var filtre: FiltreContrat
     @Published public private(set) var sessionExpired = false
 
+    /// Partie qui regarde la liste : le soignant (lot 2), ou un membre habilité de l'établissement (lot 5, T10).
+    public let partie: PartieContrat
     private let controller: SessionController
-    private let snapshot: SessionSnapshot
+    private let snapshot: CadreContrat
+    private let relirePerimetre: @MainActor () async -> Void
     private var derniereDemande = 0
 
     public init(controller: SessionController, snapshot: SessionSnapshot, filtreInitial: FiltreContrat = .tous) {
         self.controller = controller
-        self.snapshot = snapshot
+        self.snapshot = CadreContrat(snapshot)
+        self.partie = .soignant
+        self.relirePerimetre = {}
+        self.filtre = filtreInitial
+    }
+
+    /// Contrats de l'établissement confirmé (lot 5, T10 ; `ListeContrats.tsx`, branche `ADMIN_ETABLISSEMENT`) :
+    /// `contratsEtablissement(context:)` du port, filtre initial depuis `?statut=` (l.55-56).
+    public init(controller: SessionController, etablissement snapshot: EtablissementSessionSnapshot,
+                filtreInitial: FiltreContrat = .tous, relirePerimetre: @escaping @MainActor () async -> Void = {}) {
+        self.controller = controller
+        self.snapshot = CadreContrat(snapshot)
+        self.partie = .etablissement
+        self.relirePerimetre = relirePerimetre
         self.filtre = filtreInitial
     }
 
@@ -450,15 +516,20 @@ public final class ContratsListeModel: ObservableObject {
         derniereDemande += 1
         let demande = derniereDemande
         guard let gateways = await controller.gateways(for: snapshot.epoch), demande == derniereDemande, !Task.isCancelled else { return }
-        let port = gateways.contrats
-        let context = snapshot.context
+        let port = AccesContrats(port: gateways.contrats, perimetre: snapshot.perimetre)
         do {
-            let liste = try await bounded(timeout: controller.resolutionTimeout) { try await port.contrats(context: context) }
+            let liste = try await bounded(timeout: controller.resolutionTimeout) { try await port.contrats() }
             guard await controller.epoch == snapshot.epoch, demande == derniereDemande else { return }
             etat = .charge(liste)
         } catch {
             guard await controller.epoch == snapshot.epoch, demande == derniereDemande else { return }
             if error is CancellationError || (error as? JoleneError)?.kind == .cancelled { return }
+            if let refus = error as? RefusAccesEtablissement {
+                // Permission `contrats` non servie (T10) : message du refus, périmètre relu une fois, jamais une déconnexion.
+                etat = .echec(refus.message)
+                await relirePerimetre()
+                return
+            }
             let erreur = (error as? JoleneError) ?? JoleneError(.unknown, MessagesContrats.indisponible)
             if erreur.kind == .unauthorized { sessionExpired = true }
             etat = .echec(erreur.message)

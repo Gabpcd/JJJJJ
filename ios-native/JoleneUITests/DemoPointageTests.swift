@@ -15,7 +15,7 @@ import XCTest
 /// l'instant du succès. Scénarios DEBUG : `-JOLENE_DEMO_GPS refuse | reduite`, `-JOLENE_DEMO_RESEAU horsligne`,
 /// `-JOLENE_DEMO_QR 123456 | illisible | refus` (lecture sur l'action explicite `pointage-scanner-demo-lire`, seconde revue
 /// fraîche, MJ1), `-JOLENE_DEMO_SCENARIO scan-incertain`. Aucune attente par délai fixe : tout passe par `require`.
-/// Étapes communes : `DemoPointageUITestCase` ; états d'erreur et reprise : `DemoPointageEtatsTests`.
+/// Étapes communes : `DemoPointageUITestCase` ; états d'erreur et reprise : `DemoPointageEtatsTests` ; QR : `DemoPointageQRTests`, en fin de fichier.
 ///
 /// Identifiants : `pointage-zone-<m>`, `pointage-code-<m>`, `pointage-qr-<m>`, `pointage-submit-<m>`,
 /// `pointage-message-<m>`, `pointage-qr-message-<m>`, `pointage-position-<m>`, `pointage-en-service-<m>`,
@@ -157,67 +157,6 @@ final class DemoPointageTests: DemoPointageUITestCase {
         record("\(proofPrefix)-pointage-hors-ligne")
     }
 
-    // MARK: - QR
-
-    func testQRDetecteDeuxFoisNEnvoieQuUnScan() throws {
-        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "123456"])
-        connexionDemo()
-        let ecran = ouvrirMesPresences()
-        ouvrirScanner(Self.missionA, dans: ecran)
-        record("\(proofPrefix)-pointage-qr-scanner")
-        // Lecture démo sur action explicite (MJ1) : deux détections du même QR, un seul code remis, la feuille se ferme.
-        lireQRDemo()
-        accepterConsentement()
-        require("QR lu et pointage enregistré", timeout: 30) {
-            self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
-        }
-        XCTAssertFalse(element("pointage-scanner").exists, "feuille du scanner fermée après la remise")
-        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 1 avec position",
-                       "un seul scan malgré deux détections, relu après le succès (un second envoi s'y verrait)")
-        XCTAssertFalse(element("pointage-segment-\(Self.missionA)-2").exists, "un seul segment")
-        record("\(proofPrefix)-pointage-qr")
-    }
-
-    func testQRIllisibleGardeLaCameraPuisSaisieManuelle() throws {
-        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "illisible"])
-        connexionDemo()
-        let ecran = ouvrirMesPresences()
-        ouvrirScanner(Self.missionA, dans: ecran)
-        lireQRDemo()
-        require("QR non reconnu : message du web, caméra conservée", timeout: 30) {
-            self.libelle("pointage-scanner-message").contains("QR non reconnu. Saisissez le code à 6 chiffres.")
-        }
-        XCTAssertTrue(element("pointage-scanner").exists, "la feuille du scanner reste ouverte")
-        XCTAssertTrue(text("Scanner le QR de pointage").exists, "titre du dialogue web (l.233)")
-        record("\(proofPrefix)-pointage-qr-illisible")
-        tap("pointage-scanner-fermer")
-        require("Feuille fermée, saisie manuelle disponible") {
-            !self.element("pointage-scanner").exists && self.element("pointage-code-\(Self.missionA)").exists
-        }
-        XCTAssertFalse(element("gps-consent-sheet").exists, "aucun code remis : rien n'est demandé")
-        XCTAssertEqual(compteursRelus(dans: ecran), "0 scan · 0 avec position", "relu après la fermeture du scanner")
-    }
-
-    func testRefusDeLaCameraRendLaSaisieManuelle() throws {
-        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "refus"])
-        connexionDemo()
-        let ecran = ouvrirMesPresences()
-        ouvrirScanner(Self.missionA, dans: ecran)
-        // Refus de la caméra rendu sur action explicite (MJ1) : la feuille se ferme, la saisie manuelle reste.
-        lireQRDemo()
-        require("Caméra refusée : message du web (l.192)", timeout: 30) {
-            self.libelle("pointage-qr-message-\(Self.missionA)").contains("Scan impossible. Saisissez le code manuellement.")
-        }
-        XCTAssertFalse(element("pointage-scanner").exists)
-        record("\(proofPrefix)-pointage-camera-refusee")
-        saisir("123456", mission: Self.missionA, dans: ecran)
-        appuyerSurPointer(Self.missionA, dans: ecran)
-        accepterConsentement()
-        require("La saisie manuelle pointe", timeout: 30) {
-            self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
-        }
-    }
-
     // MARK: - Réponse perdue
 
     func testScanIncertainReconcilieParRelectureSansSecondScan() throws {
@@ -303,5 +242,76 @@ final class DemoPointageTests: DemoPointageUITestCase {
         }
         XCTAssertFalse(element("gps-consent-sheet").exists)
         XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 0 avec position")
+    }
+}
+
+/// QR du pointage démo (lot 2, T4b) : même monde, mêmes étapes (`DemoPointageUITestCase`) et mêmes preuves que
+/// `DemoPointageTests`. Scénarios DEBUG `-JOLENE_DEMO_QR 123456 | illisible | refus`, lus sur l'action explicite
+/// `pointage-scanner-demo-lire` (seconde revue fraîche de T4b, MJ1).
+///
+/// Classe à part depuis le 24/11/2026, sans changement des trois tests : avec eux, `DemoPointageTests` portait l'éclat
+/// « pointage » de la CI à 21,8 et 23,2 min en iPad paysage (runs 45239724447 et 45238573082 ; seuil de 20 min de la
+/// décision 22 de DECISIONS_LOT2), et un seul test resté dix minutes sans réponse suffisait à couper l'éclat à sa limite
+/// de 30 min (tentative 2 du run 45239724447, ipad-portrait). Aucun `-only-testing` ne nomme cette classe : elle tourne
+/// dans l'éclat socle, le plus léger du job `ui` (5,9 à 10,5 min aux mêmes runs). Garde :
+/// `tests/node/ios-swift-ci-eclats.node.mjs`.
+final class DemoPointageQRTests: DemoPointageUITestCase {
+    func testQRDetecteDeuxFoisNEnvoieQuUnScan() throws {
+        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "123456"])
+        connexionDemo()
+        let ecran = ouvrirMesPresences()
+        ouvrirScanner(Self.missionA, dans: ecran)
+        record("\(proofPrefix)-pointage-qr-scanner")
+        // Lecture démo sur action explicite (MJ1) : deux détections du même QR, un seul code remis, la feuille se ferme.
+        lireQRDemo()
+        accepterConsentement()
+        require("QR lu et pointage enregistré", timeout: 30) {
+            self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
+        }
+        XCTAssertFalse(element("pointage-scanner").exists, "feuille du scanner fermée après la remise")
+        XCTAssertEqual(compteursRelus(dans: ecran), "1 scan · 1 avec position",
+                       "un seul scan malgré deux détections, relu après le succès (un second envoi s'y verrait)")
+        XCTAssertFalse(element("pointage-segment-\(Self.missionA)-2").exists, "un seul segment")
+        record("\(proofPrefix)-pointage-qr")
+    }
+
+    func testQRIllisibleGardeLaCameraPuisSaisieManuelle() throws {
+        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "illisible"])
+        connexionDemo()
+        let ecran = ouvrirMesPresences()
+        ouvrirScanner(Self.missionA, dans: ecran)
+        lireQRDemo()
+        require("QR non reconnu : message du web, caméra conservée", timeout: 30) {
+            self.libelle("pointage-scanner-message").contains("QR non reconnu. Saisissez le code à 6 chiffres.")
+        }
+        XCTAssertTrue(element("pointage-scanner").exists, "la feuille du scanner reste ouverte")
+        XCTAssertTrue(text("Scanner le QR de pointage").exists, "titre du dialogue web (l.233)")
+        record("\(proofPrefix)-pointage-qr-illisible")
+        tap("pointage-scanner-fermer")
+        require("Feuille fermée, saisie manuelle disponible") {
+            !self.element("pointage-scanner").exists && self.element("pointage-code-\(Self.missionA)").exists
+        }
+        XCTAssertFalse(element("gps-consent-sheet").exists, "aucun code remis : rien n'est demandé")
+        XCTAssertEqual(compteursRelus(dans: ecran), "0 scan · 0 avec position", "relu après la fermeture du scanner")
+    }
+
+    func testRefusDeLaCameraRendLaSaisieManuelle() throws {
+        launchDemo(extraArguments: ["-JOLENE_DEMO_QR", "refus"])
+        connexionDemo()
+        let ecran = ouvrirMesPresences()
+        ouvrirScanner(Self.missionA, dans: ecran)
+        // Refus de la caméra rendu sur action explicite (MJ1) : la feuille se ferme, la saisie manuelle reste.
+        lireQRDemo()
+        require("Caméra refusée : message du web (l.192)", timeout: 30) {
+            self.libelle("pointage-qr-message-\(Self.missionA)").contains("Scan impossible. Saisissez le code manuellement.")
+        }
+        XCTAssertFalse(element("pointage-scanner").exists)
+        record("\(proofPrefix)-pointage-camera-refusee")
+        saisir("123456", mission: Self.missionA, dans: ecran)
+        appuyerSurPointer(Self.missionA, dans: ecran)
+        accepterConsentement()
+        require("La saisie manuelle pointe", timeout: 30) {
+            self.libelle("pointage-message-\(Self.missionA)").contains(Self.segmentOuvert)
+        }
     }
 }

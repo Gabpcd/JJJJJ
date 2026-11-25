@@ -1,0 +1,121 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "breakdown": {
+    "id": "demo-breakdown-001",
+    "soignant_id": "demo-soignant",
+    "score_total": 72.6,
+    "niveau": "OR",
+    "en_periode_probatoire": false,
+    "notation_etab_soignant_pct": 88.8,
+    "notation_etab_soignant_poids": 38.9,
+    "presentisme_pct": 95,
+    "presentisme_poids": 22.2,
+    "ponctualite_pct": 72,
+    "ponctualite_poids": 16.7,
+    "reactivite_pct": null,
+    "reactivite_poids": null,
+    "anciennete_volume_pct": 40,
+    "anciennete_volume_poids": 11.1,
+    "notation_soignant_etab_pct": 50,
+    "notation_soignant_etab_poids": 11.1,
+    "litiges_malus": 0,
+    "absence_sans_prevenir_malus": -5,
+    "bonus_super_actif": 0,
+    "composantes_inactives_json": [
+      {
+        "composante": "reactivite",
+        "poids_initial": 10
+      }
+    ],
+    "composantes_actives_count": 5,
+    "redistribution_json": {
+      "facteur": 1.111,
+      "total_poids_actifs": 90
+    },
+    "raison_recalcul": "MISSION_TERMINEE",
+    "cree_le": "2026-11-01T12:00:00.000Z"
+  },
+  "soignant": {
+    "total_missions_terminees": 12,
+    "score_fiabilite": 72.6,
+    "niveau": "OR",
+    "en_periode_probatoire": false
+  },
+  "evolution": [
+    {
+      "mois": "2026-06",
+      "score": 64,
+      "niveau": "ARGENT",
+      "cree_le": "2026-06-01T12:00:00.000Z"
+    },
+    {
+      "mois": "2026-07",
+      "score": 66.5,
+      "niveau": "ARGENT",
+      "cree_le": "2026-07-01T12:00:00.000Z"
+    },
+    {
+      "mois": "2026-08",
+      "score": 70.2,
+      "niveau": "OR",
+      "cree_le": "2026-08-01T12:00:00.000Z"
+    },
+    {
+      "mois": "2026-09",
+      "score": 74,
+      "niveau": "OR",
+      "cree_le": "2026-09-01T12:00:00.000Z"
+    },
+    {
+      "mois": "2026-10",
+      "score": 77.6,
+      "niveau": "OR",
+      "cree_le": "2026-10-01T12:00:00.000Z"
+    },
+    {
+      "mois": "2026-11",
+      "score": 72.6,
+      "niveau": "OR",
+      "cree_le": "2026-11-01T12:00:00.000Z"
+    }
+  ],
+  "evenements": {
+    "success": true,
+    "type": "SOIGNANT",
+    "events": [
+      {
+        "id": "demo-evenement-001",
+        "type_evenement": "ANNULATION_12_24H",
+        "points": -5,
+        "points_corriges": null,
+        "motif": "Annulation entre 12 h et 24 h avant le début de la mission",
+        "contestable": true,
+        "decision_admin": null,
+        "cree_le": "2026-10-23T00:00:00.000Z",
+        "mission_id": "demo-mission-notee-005"
+      },
+      {
+        "id": "demo-evenement-002",
+        "type_evenement": "LITIGE_TORT_RECONNU",
+        "points": -8,
+        "points_corriges": -4,
+        "motif": "Litige clos : tort partagé",
+        "contestable": false,
+        "decision_admin": "REDUIRE",
+        "cree_le": "2026-09-18T00:00:00.000Z",
+        "mission_id": null
+      },
+      {
+        "id": "demo-evenement-003",
+        "type_evenement": "BONUS_FIDELITE",
+        "points": 5,
+        "points_corriges": null,
+        "motif": "Dix missions terminées sans annulation",
+        "contestable": false,
+        "decision_admin": null,
+        "cree_le": "2026-08-14T00:00:00.000Z",
+        "mission_id": null
+      }
+    ]
+  }
+}

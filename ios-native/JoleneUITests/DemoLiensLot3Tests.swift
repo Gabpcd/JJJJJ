@@ -10,7 +10,7 @@ import XCTest
 ///   est rejoué une seule fois après `.ready` : centre de notifications natif (`/soignant/notifications`), édition du
 ///   profil (`/soignant/profil`), préférences de notifications (`/soignant/parametres/notifications`), chacun empilé
 ///   sur son onglet, retour à la racine de l'onglet par la barre de navigation ;
-/// - une route sans écran natif livré (`/soignant/missions/serie/:id`, lot 4 ; Stripe Connect natif depuis T14a) et une section de Revenus en
+/// - une route sans écran natif (`/soignant/dpae`, page web : décision 16 du lot 2 ; série de missions native depuis L4-T12, Stripe Connect depuis T14a) et une section de Revenus en
 ///   renvoi web (`/soignant/mes-gains?tab=factures`, D4) sont présentées **aussitôt**, sans session, par le
 ///   présentateur `.safari` (double démo `renvoi-web-demo`, URL canonique lue dans `renvoi-web-url`, aucune requête
 ///   réseau) ; après fermeture puis connexion, rien n'est rejoué ;
@@ -95,10 +95,11 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
         XCTAssertEqual(sentinel.label, "0 requête", "liens démo : aucune requête réseau")
     }
 
-    /// Route sans écran natif livré (série de missions, lot 4) : renvoi web aussitôt, sans session (un renvoi n'a pas
-    /// besoin de l'espace) ; jamais mémorisé, donc rien n'est rejoué après la connexion.
+    /// Route sans écran natif (DPAE, page web : décision 16 du lot 2 ; la série de missions, exemple d'origine, est native
+    /// depuis L4-T12, `DemoSerieTests`) : renvoi web aussitôt, sans session (un renvoi n'a pas besoin de l'espace) ; jamais
+    /// mémorisé, donc rien n'est rejoué après la connexion.
     func testRouteNonLivreeRenvoiWebAussitotSansSession() throws {
-        let lien = "https://jolene.app/soignant/missions/serie/demo-serie-001?origine=mail"
+        let lien = "https://jolene.app/soignant/dpae?origine=mail"
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien])
         liensRenvoiWebAffiche(lien)
         record("\(proofPrefix)-liens-renvoi-web")
@@ -160,7 +161,7 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
     /// `-JOLENE_OPEN_URL_SUIVANT`) ferme d'abord le renvoi, puis présente l'alerte du refus une fois la feuille fermée ;
     /// jamais l'alerte sous la feuille, jamais le code servi par Safari.
     func testRenvoiAffichePuisLienDeReinitialisationAlerteApresLaFermeture() throws {
-        let lien = "https://jolene.app/soignant/missions/serie/demo-serie-001?origine=mail"
+        let lien = "https://jolene.app/soignant/dpae?origine=mail"
         let reinitialisation = "https://jolene.app/reset-password?code=demo"
         launchDemo(extraArguments: ["-JOLENE_OPEN_URL", lien, "-JOLENE_OPEN_URL_SUIVANT", reinitialisation])
         liensRenvoiWebAffiche(lien)

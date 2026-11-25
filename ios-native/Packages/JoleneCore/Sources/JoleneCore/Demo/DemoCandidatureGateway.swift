@@ -20,7 +20,8 @@ import Foundation
 ///   cette mission »), choix de contrat, ligne `swipes` déjà posée (`mission_deja_swipee`, libellé `SwipeRefus`), puis
 ///   candidature `EN_ATTENTE` de session relue et ligne `swipes` LIKE consignée (`missionsLikees`, lue par
 ///   `DemoSwipeGateway`) ; le retrait (`retirerCandidature`) supprime la candidature `EN_ATTENTE` comme
-///   `fn_retirer_candidature`, la ligne `swipes` reste (correction 12). URGENCE reste refusée (T11).
+///   `fn_retirer_candidature`, la ligne `swipes` reste (correction 12). URGENCE (T11) : `accepterUrgence`, dans
+///   l'ordre de `fn_accepter_mission_urgence`.
 ///
 /// Annulations (T7) : mêmes contrôles, même ordre et mêmes textes que `fn_annuler_candidature_soignant`
 /// (motif, texte de 10 caractères, candidature, statut) et `fn_annuler_mission_soignant` (mission, attribution,
@@ -40,6 +41,8 @@ public actor DemoCandidatureGateway: CandidaturePort {
         public static let propositionPlusEnAttente = "Cette proposition n’est plus en attente"
         /// `fn_enregistrer_swipe` (LIKE) et `fn_retirer_candidature` (T3a).
         public static let dejaCandidate = "Vous avez déjà candidaté à cette mission"
+        /// `fn_accepter_mission_urgence` (T11, `public.sql` l.5339).
+        public static let urgenceNonDisponible = "Mission urgente non disponible"
         public static let retraitIntrouvable = "Candidature introuvable"
         public static let retraitDejaTraitee = "La candidature a déjà été traitée et ne peut plus être retirée ici."
         public static let choixContrat = [
@@ -83,17 +86,24 @@ public actor DemoCandidatureGateway: CandidaturePort {
     private let missionsAssignees: @Sendable () throws -> [DemoFixtures.MissionFixture]
     private var annulees: Set<String> = []
     private var justificatifs: [String: String] = [:]
+    /// L4-T3b : lignes `swipes` posées hors de la session (`DemoFixtures.swipesAnterieurs`) : ❤️ refusé par
+    /// `mission_deja_swipee`, comme ✕ et ⭐ dans `DemoSwipeGateway`.
+    private let swipesAnterieurs: @Sendable () throws -> Set<String>
 
+    /// `missions` : `demo-missions.json` et, depuis L4-T3b, les missions de recette du paquet de swipe
+    /// (`DemoFixtures.missionsRecetteSwipe`, hors d'Explorer) : un ❤️ sur l'une d'elles est contrôlé comme les autres.
     public init(clock: any ClockPort = FixedClock(DemoWorld.fixedNow),
-                missions: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = { try DemoFixtures.loadMissions().missions },
+                missions: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = DemoCandidatureGateway.missionsDesFixtures,
                 candidaturesInitiales: @escaping @Sendable () throws -> [CandidatureRecord] = DemoCandidatureGateway.candidaturesDesFixtures,
                 missionsAssignees: @escaping @Sendable () throws -> [DemoFixtures.MissionFixture] = {
                     try DemoFixtures.loadDashboard().missionsAssignees
-                }) {
+                },
+                swipesAnterieurs: @escaping @Sendable () throws -> Set<String> = { try DemoFixtures.swipesAnterieurs() }) {
         self.clock = clock
         self.missions = missions
         self.candidaturesInitiales = candidaturesInitiales
         self.missionsAssignees = missionsAssignees
+        self.swipesAnterieurs = swipesAnterieurs
     }
 
     /// Chemin du justificatif transmis avec l'annulation de cette candidature (relecture des tests).
@@ -105,6 +115,16 @@ public actor DemoCandidatureGateway: CandidaturePort {
     /// Missions annulées par le profil fictif pendant la session, relues par `DemoMissionsGateway` (servies `OUVERTE`,
     /// non attribuées, comme la remise en ligne du serveur) et par Mes missions (hors « À venir ») : revue B8 de #1156, M1.
     public func missionsAnnulees() -> Set<String> { annulees }
+
+    /// Missions ouvertes de `demo-missions.json`, plus la mission urgente propre au pool (T11, `demo-pool-urgence.json`,
+    /// contrat `TOUS` : seule mission démo dont l'acceptation rapide demande un choix de contrat).
+    public static let missionsDesFixtures: @Sendable () throws -> [DemoFixtures.MissionFixture] = {
+        try DemoFixtures.loadMissions().missions + DemoFixtures.missionsRecetteSwipe()
+            + DemoFixtures.loadPoolUrgence().missionsSupplementaires
+    }
+
+    /// T11 : candidature de la session ou des fixtures sur cette mission (relue par `DemoPoolUrgenceGateway`).
+    public func candidatureDeMission(_ missionId: String) throws -> CandidatureRecord? { try candidatureCourante(missionId: missionId) }
 
     /// Candidatures en attente de `demo-mes-missions.json` et proposition de l'Accueil (`demo-dashboard.json`).
     public static let candidaturesDesFixtures: @Sendable () throws -> [CandidatureRecord] = {
@@ -147,7 +167,8 @@ public actor DemoCandidatureGateway: CandidaturePort {
     public func confirmer(action: ActionPlanning, missionId: String, creneaux: [CreneauConfirmePayload], message: String?,
                           choixContrat: String?, candidatureId: String?, context: MissionReadContext) async throws -> CandidatureOutcome {
         try Self.verifier(context)
-        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike else {
+        guard action == .postuler || action == .accepter || action == .proposition || action == .swipeLike
+                || action == .urgence else {
             throw CandidatureRules.actionHorsLot1(action)
         }
         if action == .proposition {
@@ -169,6 +190,9 @@ public actor DemoCandidatureGateway: CandidaturePort {
         }
         if action == .swipeLike {
             return try aimer(fixture.record, choixContrat: choixContrat, context: context)
+        }
+        if action == .urgence {
+            return try accepterUrgence(fixture.record, context: context)
         }
         // Ordre des délégués : `fn_accepter_mission` refuse le mode candidature avant de résoudre le contrat ;
         // `fn_postuler_mission` résout le contrat (`choix_requis`) avant de chercher un doublon.
@@ -283,7 +307,7 @@ public actor DemoCandidatureGateway: CandidaturePort {
         if mission.typeContratRecherche == "TOUS", context.profile.typeExercice == "MIXTE", (choixContrat ?? "").isEmpty {
             return .choixRequis(Textes.choixContrat)
         }
-        guard !likes.contains(mission.id) else {
+        guard !likes.contains(mission.id), try !swipesAnterieurs().contains(mission.id) else {
             let refus = SwipeRefus.traduire("mission_deja_swipee")
             return .refusee(code: refus.code, message: refus.message, documentsRequisPour: nil)
         }
@@ -293,6 +317,28 @@ public actor DemoCandidatureGateway: CandidaturePort {
         session.insert(CandidatureRecord(id: id, missionId: mission.id, statut: "EN_ATTENTE", message: nil,
                                          typeContratChoisi: choixContrat, creeLe: DateHeureParis.isoUTC(clock.now())), at: 0)
         guard CandidatureRules.candidaturePoseeRelue(try candidatureCourante(missionId: mission.id), id: id, missionId: mission.id) else {
+            throw JoleneError(.contract, Self.messageRelecture)
+        }
+        return .confirmed(candidatureId: id, contratId: nil)
+    }
+
+    /// URGENCE (T11) dans l'ordre de `fn_accepter_mission_urgence` (l.5322-5388) : mission urgente, contrat résolu SANS
+    /// choix (`p_choix_contrat` ignoré : `choix_requis` jamais rejouable ici), doublon, puis candidature
+    /// `EN_ATTENTE_VALIDATION_ETAB` relue dans l'acteur.
+    private func accepterUrgence(_ mission: MissionRecord, context: MissionReadContext) throws -> CandidatureOutcome {
+        guard mission.estUrgente else { return .refusee(code: nil, message: Textes.urgenceNonDisponible, documentsRequisPour: nil) }
+        if mission.typeContratRecherche == "TOUS", context.profile.typeExercice == "MIXTE" {
+            return .choixRequis(Textes.choixContrat)
+        }
+        if try toutes().contains(where: { $0.missionId == mission.id }) {
+            return .refusee(code: nil, message: Textes.dejaCandidate, documentsRequisPour: nil)
+        }
+        compteur += 1
+        let id = "demo-candidature-urgence-\(compteur)"
+        session.insert(CandidatureRecord(id: id, missionId: mission.id, statut: PoolUrgenceRegles.statutEnAttenteValidation,
+                                         message: nil, typeContratChoisi: mission.typeContratRecherche,
+                                         creeLe: DateHeureParis.isoUTC(clock.now())), at: 0)
+        guard try candidatureCourante(missionId: mission.id)?.statut == PoolUrgenceRegles.statutEnAttenteValidation else {
             throw JoleneError(.contract, Self.messageRelecture)
         }
         return .confirmed(candidatureId: id, contratId: nil)

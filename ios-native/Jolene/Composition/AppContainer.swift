@@ -90,6 +90,10 @@ final class AppContainer: ObservableObject {
     /// Lot 4, T4 : « Aller à la recherche » — recherche déposée par `RecherchesScreen` (Profil), appliquée par Explorer
     /// (`AlerteRapideExplorer`), remise à son seul auteur.
     let rechercheExplorer = BoiteRechercheExplorer()
+    /// Lot 4, T3b : réglages de la vue Swipe d'Explorer (`SwipeModeView`) — marqueurs locaux par compte (quiz vu, feuille
+    /// « première candidature » vue, vue préférée), `UserDefaults` en staging et production, mémoire vive en démo ; durée
+    /// du toast d'annulation (5 s, surcharge `JOLENE_DEMO_SWIPE_ANNULATION` en démo et en DEBUG seulement).
+    let swipe: ReglagesSwipe
     /// Lot 3, T11 : thème de l'app (D16), appliqué à la racine (`ThemeRacine`) ; par appareil (`UserDefaults`,
     /// clé `jolene.theme`) en staging et production, mémoire vive en démo (chaque lancement démo part de Système).
     let theme: PreferenceThemeModel
@@ -134,7 +138,7 @@ final class AppContainer: ObservableObject {
         // d'inscription dans `liensInscription`, que `RootView` présente hors de l'espace.
         let inscription = BoiteLiensInscription()
         liensInscription = inscription
-        // Lot 4, T1c : capture du parrainage (stub verrouillé jusqu'à T6) ; stockage par appareil hors démo, mémoire
+        // Lot 4, T1c : capture du parrainage (implémentée par T6) ; stockage par appareil hors démo, mémoire
         // vive en démo (chaque lancement démo part sans capture).
         let parrainage = ParrainageApplicateur(stockage: environment.mode == .demo ? MemoireStockageAppareil()
                                                                                    : UserDefaultsStockageAppareil())
@@ -151,6 +155,18 @@ final class AppContainer: ObservableObject {
             fluxExterne = presentateur
         }
         theme = PreferenceThemeModel(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil())
+        // Lot 4, T3b : marqueurs du swipe et durée du toast d'annulation (surcharge honorée en démo et en DEBUG seulement).
+        #if DEBUG
+        let surchargesSwipe = true
+        #else
+        let surchargesSwipe = false
+        #endif
+        // Lot 4, T6 : durée de l'avis du parrainage (8 s ; même surcharge, démo et DEBUG seulement).
+        parrainage.dureeAvis = DureeAvisParrainage.duree(demo: environment.mode == .demo, debug: surchargesSwipe,
+                                                         environnement: processEnvironment)
+        swipe = ReglagesSwipe(stockage: environment.mode == .demo ? MemoireStockageAppareil() : UserDefaultsStockageAppareil(),
+                              dureeAnnulation: ReglagesSwipe.dureeAnnulation(demo: environment.mode == .demo, debug: surchargesSwipe,
+                                                                             environnement: processEnvironment))
         selectionAvatarDemo = environment.mode == .demo
             ? DemoFixtures.selectionAvatarDemo(scenario: Self.scenarioAvatarDemo(arguments: arguments)) : nil
         // Lot 3, T11 (revue B8, m8) : un fichier d'export RGPD laissé par un arrêt brutal (feuille de partage jamais
@@ -205,6 +221,7 @@ final class AppContainer: ObservableObject {
             // Lot 5 : espace établissement ouvert en démo seulement (`OuvertureEspaceEtablissement`).
             let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))
             parrainage.controleur = controller // lot 4, T1c
+            parrainage.horloge = gateways.clock // lot 4, T6 : fenêtre de 30 jours sur l'horloge des gateways
             let permission = DemoPushPermission(etat: Self.autorisationPushDemo(arguments: arguments))
             let coordinator = PushCoordinator(controller: controller, permission: permission,
                                               registrar: DemoPushRegistrar(), memoire: MemoirePushTokenStore())
@@ -228,6 +245,7 @@ final class AppContainer: ObservableObject {
                 // Lot 5 : espace établissement fermé jusqu'à la clôture du lot (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 parrainage.controleur = controller // lot 4, T1c
+                parrainage.horloge = gateways.clock // lot 4, T6
                 let (permission, registrar) = Self.appareilPush(mode: environment.mode, arguments: arguments)
                 let coordinator = PushCoordinator(controller: controller, permission: permission,
                                                   registrar: registrar, memoire: KeychainPushTokenStore())

@@ -13,6 +13,8 @@ struct JoleneApp: App {
     /// Lot 3, T15 (D21) : Sentry démarré avant le conteneur, jamais en démo ni sans DSN (`CrashReporting`) ; le port
     /// rendu suit la session (identifiant utilisateur).
     init() {
+        // Revue B8 sécurité (vague D, m6) : copies temporaires laissées par un arrêt brutal pendant un partage.
+        FichiersTemporairesSensibles.purger()
         let crashReporting = CrashReporting.demarrerAuLancement()
         _container = StateObject(wrappedValue: AppContainer(crashReporting: crashReporting))
     }

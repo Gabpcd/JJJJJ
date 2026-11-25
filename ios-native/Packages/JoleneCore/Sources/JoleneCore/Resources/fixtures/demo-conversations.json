@@ -1,0 +1,99 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "conversations": [
+    {
+      "id": "demo-conv-001",
+      "participant_1_id": "demo-soignant",
+      "participant_2_id": "demo-interlocuteur-etab-1",
+      "mission_id": "demo-mission-004",
+      "etablissement_id": "demo-etab-1",
+      "soignant_id": "demo-soignant",
+      "cree_le": "2026-10-30T00:00:00.000Z",
+      "archived_at": null,
+      "autre_id": "demo-interlocuteur-etab-1",
+      "mission_intitule": "Démonstration · Soins de suite 4",
+      "mission_statut": "OUVERTE"
+    },
+    {
+      "id": "demo-conv-002",
+      "participant_1_id": "demo-jolene",
+      "participant_2_id": "demo-soignant",
+      "mission_id": null,
+      "etablissement_id": null,
+      "soignant_id": null,
+      "cree_le": "2026-10-23T00:00:00.000Z",
+      "archived_at": null,
+      "autre_id": "demo-jolene",
+      "mission_intitule": null,
+      "mission_statut": null
+    },
+    {
+      "id": "demo-conv-003",
+      "participant_1_id": "demo-soignant",
+      "participant_2_id": "demo-interlocuteur-etab-2",
+      "mission_id": "demo-terminee-002",
+      "etablissement_id": "demo-etab-2",
+      "soignant_id": "demo-soignant",
+      "cree_le": "2026-09-23T00:00:00.000Z",
+      "archived_at": "2026-10-28T00:00:00.000Z",
+      "autre_id": "demo-interlocuteur-etab-2",
+      "mission_intitule": "Démonstration · Mission terminée 2",
+      "mission_statut": "TERMINEE"
+    }
+  ],
+  "interlocuteurs": [
+    {
+      "conversation_id": "demo-conv-001",
+      "participant_id": "demo-interlocuteur-etab-1",
+      "prenom": "Établissement fictif République",
+      "nom": "",
+      "avatar_url": null,
+      "est_jolene": false
+    },
+    {
+      "conversation_id": "demo-conv-002",
+      "participant_id": "demo-jolene",
+      "prenom": "Jolene",
+      "nom": "",
+      "avatar_url": null,
+      "est_jolene": true
+    },
+    {
+      "conversation_id": "demo-conv-003",
+      "participant_id": "demo-interlocuteur-etab-2",
+      "prenom": "Établissement fictif des Lilas",
+      "nom": "",
+      "avatar_url": null,
+      "est_jolene": false
+    }
+  ],
+  "etablissements": [
+    {
+      "id": "demo-etab-1",
+      "nom": "Établissement fictif République",
+      "interlocuteur_id": "demo-interlocuteur-etab-1"
+    },
+    {
+      "id": "demo-etab-2",
+      "nom": "Établissement fictif des Lilas",
+      "interlocuteur_id": "demo-interlocuteur-etab-2"
+    },
+    {
+      "id": "demo-etab-3",
+      "nom": "Cabinet fictif du Parc",
+      "interlocuteur_id": "demo-interlocuteur-etab-3"
+    }
+  ],
+  "presences": [
+    {
+      "user_id": "demo-interlocuteur-etab-1",
+      "status": "ONLINE",
+      "last_seen_at": "2026-11-01T23:58:00.000Z"
+    },
+    {
+      "user_id": "demo-interlocuteur-etab-2",
+      "status": "OFFLINE",
+      "last_seen_at": "2026-10-27T00:00:00.000Z"
+    }
+  ]
+}

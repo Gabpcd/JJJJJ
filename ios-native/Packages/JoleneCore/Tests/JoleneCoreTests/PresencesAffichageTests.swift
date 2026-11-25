@@ -167,7 +167,11 @@ final class PresencesAffichageTests: XCTestCase {
     /// route forcée web (`LinksRouterLot2Tests.testRenvoisWebForcesSurviventAuRoutageNatif`).
     func testRenvoisWebResolusParLeRouteurSansURLEnDur() throws {
         XCTAssertNil(AccueilPresentation.renvoiWeb("/contrat/c-1"), "contrat natif depuis L2-T10 : aucun renvoi web résolu")
-        XCTAssertEqual(PresencesRenvois.litiges?.externalURL?.absoluteString, "https://jolene.app/soignant/litiges")
+        // Lot 4, T8 (lien croisé) : les litiges sont natifs ; « Voir ou signaler un litige » garde une cible présentable
+        // (l'écran natif), au lieu d'un renvoi web devenu nil.
+        XCTAssertEqual(PresencesRenvois.litiges, .secondaire(.litiges(onglet: nil, litigeId: nil)))
+        XCTAssertEqual(PresencesRenvois.litiges?.estPresentable(renvoiWebDisponible: false), true)
+        XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/litiges"), "page native depuis L4-T8 : aucun renvoi web résolu")
         XCTAssertEqual(PresencesRenvois.presences?.externalURL?.absoluteString, "https://jolene.app/soignant/presences")
         XCTAssertNil(AccueilPresentation.renvoiWeb("/soignant/presences"), "page native depuis L2-T10 : renvoi forcé")
     }

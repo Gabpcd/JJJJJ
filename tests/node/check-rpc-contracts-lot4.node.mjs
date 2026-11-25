@@ -111,6 +111,16 @@ const LOT4_RECLASSEES = ['fn_suggestions_missions_pour_soignant'];
 // quatre RPC du swipe de T3a.
 const GATEWAY_SWIPE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Swipe/SupabaseSwipeGateway.swift';
 const GATEWAY_FILTRES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Filtres/SupabaseFiltresGateway.swift';
+const GATEWAY_DISPONIBILITES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Disponibilites/SupabaseDisponibilitesGateway.swift';
+const GATEWAY_EVALUATIONS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift';
+const GATEWAY_SCORE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Score/SupabaseScoreGateway.swift';
+const GATEWAY_LITIGES = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Litiges/SupabaseLitigesGateway.swift';
+const GATEWAY_RECLAMATIONS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Reclamations/SupabaseReclamationsGateway.swift';
+const GATEWAY_BULLETINS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Bulletins/SupabaseBulletinsGateway.swift';
+const GATEWAY_POOL = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift';
+const GATEWAY_EXCLUSIONS = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift';
+const GATEWAY_PARRAINAGE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Parrainage/SupabaseParrainageGateway.swift';
+const GATEWAY_MESSAGERIE = 'ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift';
 const LOT4_CONSOMMEES = new Map([
   ['fn_obtenir_missions_swipe', ['T3a', GATEWAY_SWIPE]],
   ['fn_enregistrer_swipe', ['T3a', GATEWAY_SWIPE]],
@@ -120,6 +130,39 @@ const LOT4_CONSOMMEES = new Map([
   ['fn_creer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_modifier_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
   ['fn_supprimer_filtre_sauvegarde', ['T4', GATEWAY_FILTRES]],
+  ['fn_definir_disponibilite', ['T5', GATEWAY_DISPONIBILITES]],
+  ['fn_mon_breakdown_actuel', ['T9', GATEWAY_SCORE]],
+  ['fn_mes_evenements_score', ['T9', GATEWAY_SCORE]],
+  ['fn_evolution_score_soignant', ['T9', GATEWAY_SCORE]],
+  ['fn_lister_notations_recues', ['T9', GATEWAY_SCORE]],
+  ['fn_creer_reclamation_score', ['T9', GATEWAY_SCORE]],
+  ['fn_mes_notations_recues_avec_stats', ['T9', GATEWAY_EVALUATIONS]],
+  ['fn_signaler_notation', ['T9', GATEWAY_EVALUATIONS]],
+  ['fn_ajouter_message_litige', ['T8', GATEWAY_LITIGES]],
+  ['fn_soumettre_reclamation', ['T8', GATEWAY_RECLAMATIONS]],
+  ['fn_lister_copies_bulletins', ['T10', GATEWAY_BULLETINS]],
+  ['fn_signaler_copie_bulletin', ['T10', GATEWAY_BULLETINS]],
+  ['fn_pool_urgence_missions_pour_soignant', ['T11', GATEWAY_POOL]],
+  ['fn_toggle_pool_urgence', ['T11', GATEWAY_POOL]],
+  ['fn_toggle_pool_urgence_sms', ['T11', GATEWAY_POOL]],
+  ['fn_mes_exclusions_recues', ['T11', GATEWAY_EXCLUSIONS]],
+  ['fn_retirer_exclusion', ['T11', GATEWAY_EXCLUSIONS]],
+  ['fn_exclure_utilisateur', ['T11', GATEWAY_EXCLUSIONS]],
+  ['fn_obtenir_mes_parrainages', ['T6', GATEWAY_PARRAINAGE]],
+  ['fn_appliquer_parrainage', ['T6', GATEWAY_PARRAINAGE]],
+  ['fn_lister_conversations_messagerie', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_interlocuteurs_conversations', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_marquer_messages_lus', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_messages_non_lus', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_typing_start', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_typing_stop', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_update_presence', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_est_bloque', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_bloquer_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_debloquer_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_signaler_utilisateur', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_user_id_pour_etablissement', ['T7a', GATEWAY_MESSAGERIE]],
+  ['fn_obtenir_conversation', ['T7a', GATEWAY_MESSAGERIE]],
 ]);
 /** RPC suivies en `lot: 4` qui ne sont ni partagées ni reclassées : les 41 propres au lot. */
 const propresLot4 = rpcs => rpcs.filter(r => r.lot === 4 && !LOT4_PARTAGEES.includes(r.name) && !LOT4_RECLASSEES.includes(r.name));
@@ -377,10 +420,13 @@ test('Lot 4 — CONTRATS : chaque fiche cite toutes les réponses littérales, c
     if (partagee) assert.equal(doc.split('\n').filter(l => l === `## ${name}`).length, 1, `${name} : fiche en double (fusion avec le T0 du lot 2 : voir sa fiche)`);
     const fiche = partagee ? sousSection(section(doc, `${name}\n`), 'Usage du lot 4') : section(doc, `${name}\n`);
     const consommee = LOT4_CONSOMMEES.get(name);
-    const statut = partagee ? '- **Statut natif (lot 4)** : à venir (lot 4, T8)'
+    // Partagée (`fn_ouvrir_litige_rate_limited`) : consommée par T8 du lot 4 (type `AUTRE`), l'entrée de `RPC_SUIVIES`
+    // restant celle du lot 2 ; sa gateway du lot 4 l'appelle par son littéral.
+    const statut = partagee ? `- **Statut natif (lot 4)** : consommée (lot 4, T8) par \`${GATEWAY_LITIGES.split('/Sources/')[1]}\``
       : consommee ? `- **Statut natif** : consommée (lot 4, ${consommee[0]}) par \`${consommee[1].split('/Sources/')[1]}\``
         : '- **Statut natif** : à venir (lot 4';
     assert.ok(fiche.includes(statut), `${name} : statut natif lot 4 absent (${statut})`);
+    if (partagee) assert.ok(read(GATEWAY_LITIGES).includes(`"${name}"`), `${name} : littéral absent de ${GATEWAY_LITIGES}`);
     for (const { body } of corpsConfrontes(schema, name)) {
       for (const message of messagesSql(body)) {
         total++;
@@ -779,7 +825,8 @@ function sourcesSwiftLivrees() {
 /** Ports du lot 4 encore non câblés : `DemoWorldTests.portsEnAttenteLot4`, lu dans le test Swift. */
 function portsEnAttenteLot4() {
   const tests = read('ios-native/Packages/JoleneCore/Tests/JoleneCoreTests/DemoWorldTests.swift');
-  const bloc = /static let portsEnAttenteLot4 = \[([\s\S]*?)\]/.exec(tests);
+  // Liste vide (tous les ports câblés, intégration de la vague D) : `static let portsEnAttenteLot4: [String] = []`.
+  const bloc = /static let portsEnAttenteLot4(?:: \[String\])? = \[([\s\S]*?)\]/.exec(tests);
   assert.ok(bloc, 'DemoWorldTests.portsEnAttenteLot4 introuvable');
   return [...bloc[1].matchAll(/"(\w+)"/g)].map(m => m[1]);
 }
@@ -834,6 +881,54 @@ test('Lot 4 T1c — m6 : aucun abonnement Realtime avant T7a (seul point : Realt
     const ou = sources.filter(s => s.code.includes(appel)).map(s => s.chemin);
     assert.deepEqual(ou, [], `${appel} présent avant T7a (port realtime encore dans portsEnAttenteLot4)`);
   }
+});
+
+// Lot 4 T3b (LOT4_PLAN §3 T3b, correction 17, D26) : le quiz du web active le pool urgence par un UPDATE direct de
+// `soignants.disponible_urgence`, sans le contrôle documentaire ni le consentement de `fn_toggle_pool_urgence`. Gap
+// verrouillé : le quiz natif ne porte pas cette question, et aucun code Swift livré n'écrit cette colonne autrement que
+// par la RPC du pool urgence (T11). Jumelle Swift : `SwipeSourcesAppTests` (JoleneCore).
+test('Lot 4 T3b — aucun appel natif ne modifie soignants.disponible_urgence hors fn_toggle_pool_urgence', () => {
+  const sources = sourcesSwiftLivrees();
+  assert.ok(sources.length > 300, `${sources.length} sources Swift livrées lues`);
+  const duPool = chemin => chemin.includes('/PoolUrgence/') || chemin.includes('DemoPoolUrgenceGateway')
+    || chemin.endsWith('Models/PoolUrgence.swift');
+  const lecture = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Profil/ValidationProfil.swift';
+  const interdits = 'ios-native/Packages/JoleneCore/Sources/JoleneCore/Profil/ModificationProfil.swift';
+  // La colonne n'est nommée que là où elle est lue (validation du profil) ou interdite (paramètres jamais envoyés).
+  const colonne = sources.filter(s => s.code.includes('disponible_urgence') && !duPool(s.chemin)).map(s => s.chemin).sort();
+  assert.deepEqual(colonne, [interdits, lecture].sort(), '`disponible_urgence` nommée hors de la lecture du profil et de la liste des interdits');
+  const parametre = sources.filter(s => s.code.includes('"p_disponible_urgence"')).map(s => s.chemin);
+  assert.deepEqual(parametre, [interdits], '`p_disponible_urgence` hors de `ModificationProfil.parametresInterdits`');
+  const modification = sources.find(s => s.chemin === interdits).code;
+  const autorises = /parametresAutorises: \[String\] = \[([\s\S]*?)\]/.exec(modification);
+  const refuses = /parametresInterdits: \[String\] = \[([\s\S]*?)\]/.exec(modification);
+  assert.ok(autorises && refuses, 'listes des paramètres de fn_modifier_mon_profil introuvables');
+  assert.ok(!autorises[1].includes('urgence'), 'un paramètre « urgence » est autorisé pour fn_modifier_mon_profil');
+  for (const p of ['"p_disponible_urgence"', '"p_urgence_rayon_km"', '"p_ville_urgence"']) {
+    assert.ok(refuses[1].includes(p), `${p} absent des paramètres interdits`);
+  }
+  // Aucune écriture PostgREST de `soignants` ne porte une colonne du pool (une écriture directe existe : préférences SMS).
+  for (const s of sources.filter(x => x.code.includes('from("soignants")') && /\.(update|upsert|insert)\(/.test(x.code))) {
+    for (const col of ['disponible_urgence', 'urgence_rayon_km', 'ville_urgence']) {
+      assert.ok(!s.code.includes(col), `${s.chemin} : écriture de soignants qui touche à ${col}`);
+    }
+  }
+  // La RPC du pool n'est appelée que par sa gateway (aucune avant T11), jamais par le swipe ni par son quiz.
+  const toggle = sources.filter(s => s.code.includes('"fn_toggle_pool_urgence"')).map(s => s.chemin);
+  assert.deepEqual(toggle.filter(c => !duPool(c)), [], '`fn_toggle_pool_urgence` appelée hors de la gateway du pool urgence');
+  const swipe = sources.filter(s => s.chemin.includes('/Swipe/') || s.chemin.includes('/Screens/Explorer/') || s.chemin.endsWith('DemoSwipeGateway.swift'));
+  assert.ok(swipe.length >= 12, `${swipe.length} sources du swipe lues`);
+  for (const s of swipe) {
+    assert.ok(!s.code.includes('disponible_urgence') && !s.code.includes('fn_toggle_pool_urgence'), `${s.chemin} : le swipe touche au pool urgence`);
+  }
+  const quiz = sources.find(s => s.chemin === 'ios-native/Jolene/Screens/Explorer/QuizPreferencesSheet.swift');
+  assert.ok(quiz, 'QuizPreferencesSheet.swift absent');
+  assert.ok(quiz.code.includes('"swipe-quiz-pool-urgence"'), 'renvoi vers l écran Pool urgence absent du quiz');
+  assert.ok(!/urgence/i.test(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Swipe/QuizSwipe.swift')
+    .split('\n').filter(l => /Option\(|questionH|questionR|questionT/.test(l)).join('\n')), 'une question ou une option du quiz parle d urgence');
+  // Témoin : la garde voit une écriture directe ajoutée dans une gateway.
+  const temoin = codeSwift('try await client.from("soignants").update(["disponible_urgence": true]).eq("id", value: id) // quiz');
+  assert.ok(temoin.includes('from("soignants")') && /\.update\(/.test(temoin) && temoin.includes('disponible_urgence'));
 });
 
 test('Lot 4 T1c — fixtures démo : un module par domaine, collisions et noms hors motif refusés', async () => {

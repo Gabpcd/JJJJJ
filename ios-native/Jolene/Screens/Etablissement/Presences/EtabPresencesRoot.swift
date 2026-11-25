@@ -1,16 +1,17 @@
 import SwiftUI
 import JoleneCore
 
-/// Racine de l'onglet Présences de l'espace établissement, posée par T2a avec un contenu provisoire ;
-/// remplie par T8 seule (validation, note, lot, contestation, clôture). Identifiant provisoire :
-/// `placeholder-etab-presences` (T8 migre les assertions de `DemoEtabSessionTests`).
+/// Racine de l'onglet Présences de l'espace établissement, posée par T2a, remplie par T8 (B9) : présences à valider,
+/// en cours, validées et en alerte (`PresencesEtabScreen`) ; les présences d'une mission sont la destination
+/// `.presencesMission` du registre (`EtabDestinations.swift`). Identifiant : `etab-presences-screen` (T8, remplace
+/// `placeholder-etab-presences`).
 struct EtabPresencesRoot: View {
     @ObservedObject var session: SessionStore
     let snapshot: EtablissementSessionSnapshot
+    /// Lot 5, T8 : onglet `?tab=` porté par un lien vers la page (T2b).
+    var demande = DemandeOngletPresences()
 
     var body: some View {
-        PlaceholderScreen(titre: "Présences", identifier: "placeholder-etab-presences",
-                          description: "La validation des présences arrive dans une prochaine version de l'application.",
-                          etat: "Disponible au lot 5")
+        PresencesEtabScreen(session: session, snapshot: snapshot, demande: demande)
     }
 }

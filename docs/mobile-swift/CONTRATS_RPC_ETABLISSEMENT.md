@@ -49,12 +49,12 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_lire_candidatures_mission_habilitee` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée | `42501` |
 | `fn_traiter_candidature_planning_v1` | consommée (T6) | 5 (T6) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | `P0001` ×3, `42501` ×3 (RBAC) |
 | `fn_contrat_signe_pour_pointage` | consommée (T7) | 5 (T7) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated | absente | `42501` |
-| `fn_valider_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
-| `fn_valider_presences_lot` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
-| `fn_contester_presence` | à venir | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
-| `fn_creer_notation_mission` | à venir | 5 (T8, best-effort) — partagée si le lot 2 la suit | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0001` |
-| `fn_declarer_fin_retroactive` | à venir | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501` ×3 (dont RBAC ×2), `23514` |
-| `fn_creer_mission_multi_jours_v4` | à venir | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
+| `fn_valider_presence` | consommée (T8) | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
+| `fn_valider_presences_lot` | consommée (T8) | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501`, `23503`, `P0001` ×4 |
+| `fn_contester_presence` | consommée (T8) | 5 (T8, B9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `42501` |
+| `fn_creer_notation_mission` | consommée (T8 ; entrée du lot 2) | 5 (T8, best-effort) — partagée, suivie par le lot 2 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0001` |
+| `fn_declarer_fin_retroactive` | consommée (T8) | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501` ×3 (dont RBAC ×2), `23514` |
+| `fn_creer_mission_multi_jours_v4` | consommée (T9) | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_audit_connexion` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -342,10 +342,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_
 
 ## fn_valider_presence
 
-- **Statut natif** : à venir (lot 5, T8 — **B9 paiements/escrow** : la validation déclenche
-  `trg_escrow_release_on_validation`, correction 6).
+- **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.valider` — **B9 paiements/escrow** : la
+  validation déclenche `trg_escrow_release_on_validation`, correction 6 ; merge sur accord explicite de Gabrielle).
 - **Usage** : validation unitaire après note 1-5 (D6) et relecture des créneaux.
-- **Signature SQL** (`supabase/schema/public.sql` l.65364) :
+- **Signature SQL** (`supabase/schema/public.sql` l.65852, dump re-baseliné le 23/11/2026) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") RETURNS "jsonb"
@@ -373,9 +373,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid"
 
 ## fn_valider_presences_lot
 
-- **Statut natif** : à venir (lot 5, T8 — **B9**).
+- **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.validerLot` — **B9**).
 - **Usage** : validation en lot des présences éligibles relues.
-- **Signature SQL** (`supabase/schema/public.sql` l.65459) :
+- **Signature SQL** (`supabase/schema/public.sql` l.65947) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[]) RETURNS "jsonb"
@@ -402,9 +402,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[])
 
 ## fn_contester_presence
 
-- **Statut natif** : à venir (lot 5, T8 — **B9** : `motif_litige` bloque la libération d'escrow, l.63177).
+- **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.contester` — **B9** : `motif_litige` bloque la
+  libération d'escrow, `fn_trg_escrow_release_check`).
 - **Usage** : contestation d'une présence « à valider » (non validée et validable), motif ≥ 3 caractères.
-- **Signature SQL** (`supabase/schema/public.sql` l.25802) :
+- **Signature SQL** (`supabase/schema/public.sql` l.26237) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") RETURNS "jsonb"
@@ -425,11 +426,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_presence"("p_presence_id" "uui
 
 ## fn_creer_notation_mission
 
-- **Statut natif** : à venir (lot 5, T8, best-effort après validation relue ; si le T0 du lot 2 la suit, entrée du
-  lot 2 et annotation `aussi_etablissement`).
+- **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.noter`, best-effort après validation relue ;
+  entrée du lot 2 dans `rpc-contracts.json`, annotation `aussi_etablissement`).
 - **Usage** : note 1-5 de l'établissement (`p_sens 'ETAB_VERS_SOIGNANT'`, quatre critères = la note, comme
   `NotationRapide.tsx`) ; écriture seulement, aucune lecture de `notations_missions` (D8).
-- **Signature SQL** (`supabase/schema/public.sql` l.27282) :
+- **Signature SQL** (`supabase/schema/public.sql` l.27717) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -451,10 +452,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "
 
 ## fn_declarer_fin_retroactive
 
-- **Statut natif** : à venir (lot 5, T8 — **B9**).
+- **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.cloturerSegment` — **B9**).
 - **Usage** : clôture rétroactive du segment ouvert, `p_raison` = texte du web, heure choisie dans
   [début du segment ouvert, maintenant] (D28 : le serveur n'interdit pas une heure future).
-- **Signature SQL** (`supabase/schema/public.sql` l.28664) :
+- **Signature SQL** (`supabase/schema/public.sql` l.29099) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text" DEFAULT 'Oubli de scan'::"text") RETURNS "jsonb"
@@ -470,7 +471,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id"
   horodatage_arrondi, validation_etab_requise, nouveau_code, nouveau_hmac, prochain_type_scan, numero_scan}`
   (l.28805) → `requiredString("creneau_effectif_id")` (correction 17). `nouveau_code` et `nouveau_hmac` (nouveau code
   de pointage) ne sont **jamais décodés, journalisés ni affichés** : le code est relu par `fn_etat_pointage_mission`
-  sous permission `pointage`.
+  sous permission `pointage`. Le dump re-baseliné le 23/11/2026 ne sert plus ces deux clés (retour l.29248-29256) ;
+  la gateway ne lit de toute façon que `creneau_effectif_id`, et de la relecture que `segment_ouvert`.
 - **Exceptions** :
   - `P0002` « Mission % introuvable ou dans un statut incompatible. » (`fn_declarer_fin_retroactive`, l.28687) →
     verbatim, `%` joker (identifiant de mission) ;
@@ -486,11 +488,20 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id"
   pas autorisé(e)… », alors que §2.7 associe « clôturer » à `pointage`. Le web a le même comportement. T8 n'affiche pas
   l'action de clôture sans les droits que le serveur exige (un membre `POINTAGE_ONLY` n'y a pas accès), ou l'affiche
   et rend ce refus verbatim ; décision consignée dans sa PR, aucune règle juridique en jeu.
+- **Décision de T8** : l'action suit la seule permission `pointage` **servie** (§2.7), sans table de rôles côté natif ;
+  un membre `POINTAGE_ONLY` voit donc « Clôturer le segment » et reçoit le refus 42501 du serveur, affiché mot pour mot,
+  suivi d'une relecture des permissions — le comportement du web (`DECISIONS_LOT5.md`, précisions T8). Heure future
+  refusée avant l'envoi par le modèle (`ClotureSegment`) et par la gateway (D28).
 - **Relecture** : `fn_etat_pointage_mission.segment_ouvert == false`.
 
 ## fn_creer_mission_multi_jours_v4
 
-- **Statut natif** : à venir (lot 5, T9 publication simple ou urgente, salariée, taux horaire, D8).
+- **Statut natif** : consommée (lot 5, T9 : `SupabaseEtabPublicationGateway.publier`, port `EtabPublicationPort` ;
+  publication simple ou urgente, salariée, taux horaire, D8). Une seule requête, aucun renvoi ; brouillon
+  structurellement invalide, profession `MEDECIN` ou liste de créneaux vide : refus avant tout appel. La charge est
+  `PublicationPayload` (JoleneCore) : ses seize clés sont comparées à la signature SQL de `rpc-contracts.json`
+  (`SupabaseEtabPublicationGatewayTests`). `{success:true, mission_id}` n'est jamais tenu pour confirmé : relecture
+  ci-dessous, sinon issue `.nonConfirmee(missionId)` (ni succès, ni renvoi).
 - **Usage** : 16 paramètres exacts (T9) : `p_type_contrat_recherche 'SALARIE'`, `p_mode_remuneration 'TAUX_HORAIRE'`,
   `p_retrocession_pct` NULL, `p_nature_tva_prestation` NULL, `p_specialite_medicale_requise` NULL,
   `p_accepte_internes false`, profession hors `MEDECIN`, `p_creneaux = [{debut,fin}]` ISO `Z`.
@@ -525,6 +536,10 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitul
 - **Relecture** : relire `missions` (id, statut `OUVERTE`, `nb_creneaux`, `debut_le`, `fin_le`,
   `type_contrat_recherche == SALARIE`) et `mission_creneaux` PREVISIONNEL : multiset `(debut, fin)` égal à l'envoi ;
   sinon erreur, jamais succès (le trigger libéral peut muter `TOUS → SALARIE` en silence, correction 7).
+  T9 : `missions` relue par `id` et `etablissement_id` confirmé, colonnes `id, etablissement_id, statut, nb_creneaux,
+  debut_le, fin_le, type_contrat_recherche` (aucun montant) ; créneaux par le pager exact de T5 ; comparaison par
+  **instants** (`PublicationRelecture.confirme` : le serveur rend `+00:00`, l'envoi porte `Z`), bornes `debut_le` /
+  `fin_le` comprises ; lecture en panne, ligne illisible ou d'un autre établissement → `.nonConfirmee`.
 
 ## fn_obtenir_conversation
 

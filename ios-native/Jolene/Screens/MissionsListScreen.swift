@@ -37,15 +37,17 @@ import JoleneDesign
 /// « Mes favoris » est une valeur de la pile d'Explorer (`FavorisRoute`) : l'étoile d'Explorer et le lien
 /// universel `/soignant/mes-favoris` (`MainTabView.presenter`, cible `.favoris`) ouvrent le même écran.
 ///
-/// Emplacement des actions d'Explorer (« Filtres », « Mes favoris », alerte rapide `explorer-alerte-rapide`) : « Filtres »
-/// reste seul à droite de la barre de navigation, et la cloche à gauche (zone vide à la racine d'Explorer), sur tous les
+/// Emplacement des actions d'Explorer (« Filtres », « Mes favoris », alerte rapide `explorer-alerte-rapide`, Messages
+/// `nav-messages`) : « Filtres » reste seul à droite de la barre de navigation en largeur régulière (Messages y passe alors
+/// en tête de la rangée de chips, après l'étoile : iOS 26.2, iPad portrait, run 45446351274, « Filtres » renvoyé dans le
+/// menu « Plus » par le bouton Messages), et la cloche à gauche (zone vide à la racine d'Explorer), sur tous les
 /// formats. En largeur régulière (iPad, portrait comme paysage), la barre d'onglets du haut occupe le centre de la barre
 /// de navigation : à 820 pt de large (iPad portrait, run 44425019039), il ne restait à droite que 162 pt, et « Filtres »
 /// et la cloche passaient dans le menu « Plus » (`OverflowBarButtonItem`) ; à gauche, la même largeur ne tient qu'une
 /// action avec marge : l'étoile y est donc posée en tête de la rangée de chips, hors de son défilement, qui a toute la
 /// largeur de l'écran. En largeur compacte (iPhone, iPad en partage d'écran), la barre d'onglets est en bas : l'étoile
-/// rejoint la cloche à gauche de la barre, et le titre reste centré entre une action à droite et deux à gauche, au lieu
-/// de trois à droite.
+/// rejoint la cloche à gauche de la barre, et Messages rejoint « Filtres » à droite : deux actions de chaque côté du
+/// titre.
 struct MissionRoute: Hashable {
     let id: String
 }
@@ -137,7 +139,13 @@ struct MissionsListScreen: View {
                 boutonFavoris
                     .modifier(ExplorerActions.Pastille())
                     .padding(.leading, JoleneSpacing.lg)
+                // Messages hors de la barre en largeur régulière : « Filtres » y reste seul à droite (`boutonMessages`).
+                BoutonMessagesRangee()
             }
+            // Icône calendrier du web (`RechercheMissions.tsx` l.309-316) : « Mes disponibilités » (L4-T5, décision d de
+            // l'intégration de la vague D).
+            ExplorerDisponibilitesButton()
+                .padding(.leading, ExplorerActions.dansLaRangeeDeChips(classeLargeur) ? JoleneSpacing.xs : JoleneSpacing.lg)
             FilterChipRow(identifier: "explorer-chips") {
                 ForEach(ExplorerFiltres.chipsRapides) { chip in
                     FilterChip(chip.titre, isSelected: model.filtres.estActif(chip), identifier: chip.identifiant) {

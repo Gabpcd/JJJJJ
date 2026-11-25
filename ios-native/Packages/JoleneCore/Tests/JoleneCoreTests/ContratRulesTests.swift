@@ -195,4 +195,45 @@ final class ContratRulesTests: XCTestCase {
             XCTAssertFalse(ContratRules.renduServeurADemander(contrat(statut: statut, type: "CDDU")), statut)
         }
     }
+
+    // MARK: - DPAE côté employeur (revue B8 des textes de la vague D, M6)
+
+    /// Statut et rappel DPAE du web (`ContratMission.tsx` l.644-655, l.826-829) : contrat salarié non annulé, expiré ni
+    /// refusé, côté établissement seulement ; textes repris mot pour mot (`TextesWeb.DPAE`, garde TL), champs lus comme
+    /// le web (`dpae_numero`, `dpae_effectuee`, `dpae_effectuee_le`), jamais écrits.
+    func testDPAECoteEmployeurCommeLeWeb() throws {
+        let page = try CompteVerbatimTests.lignes("src/pages/ContratMission.tsx")
+        XCTAssertTrue(page[645 - 1].contains("!['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut)"), page[645 - 1])
+        XCTAssertTrue(page[827 - 1].contains("!['ANNULE', 'EXPIRE', 'REFUSE'].includes(contrat.statut)"), page[827 - 1])
+        XCTAssertEqual(ContratRules.statutsSansDPAE, ["ANNULE", "EXPIRE", "REFUSE"])
+        for type in ["CDD", "CDDU", "VACATION", "SALARIE"] {
+            XCTAssertTrue(ContratRules.dpaeConcernee(contrat(type: type), partie: .etablissement), type)
+            XCTAssertFalse(ContratRules.dpaeConcernee(contrat(type: type), partie: .soignant), "\(type) : jamais côté soignant")
+        }
+        for type: String? in ["REMPLACEMENT_LIBERAL", "LIBERAL", nil] {
+            XCTAssertFalse(ContratRules.dpaeConcernee(contrat(type: type), partie: .etablissement), type ?? "nil")
+        }
+        for statut in ["ANNULE", "EXPIRE", "REFUSE"] {
+            XCTAssertFalse(ContratRules.dpaeConcernee(contrat(statut: statut), partie: .etablissement), statut)
+        }
+        var lu = contrat()
+        XCTAssertNil(ContratRules.dpaeNumeroEnregistre(lu))
+        lu.dpaeNumero = ""
+        XCTAssertNil(ContratRules.dpaeNumeroEnregistre(lu), "numéro vide : à déclarer")
+        lu.dpaeNumero = "AB12345678"
+        XCTAssertEqual(ContratRules.dpaeNumeroEnregistre(lu), "AB12345678")
+        XCTAssertFalse(ContratRules.rappelDPAEVisible(contrat(), partie: .etablissement), "rappel après la signature de l'établissement")
+        XCTAssertTrue(ContratRules.rappelDPAEVisible(contrat(etablissement: true), partie: .etablissement))
+        XCTAssertFalse(ContratRules.rappelDPAEVisible(contrat(soignant: true), partie: .soignant))
+        var effectuee = contrat(etablissement: true)
+        XCTAssertEqual(ContratRules.dpaeEffectueeTitre(effectuee), "✅ DPAE déclarée comme effectuée par l'établissement")
+        effectuee.dpaeEffectueeLe = "2026-11-03T09:00:00Z"
+        XCTAssertEqual(ContratRules.dpaeEffectueeTitre(effectuee), "✅ DPAE déclarée comme effectuée par l'établissement le 3 novembre 2026")
+        let json = #"{"id":"k","mission_id":"m","statut":"SIGNE_COMPLET","dpae_numero":"N1","dpae_effectuee":true,"dpae_effectuee_le":"2026-11-03T09:00:00Z"}"#
+        let decode = try JSONDecoder().decode(ContratDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(decode.dpaeNumero, "N1")
+        XCTAssertEqual(decode.dpaeEffectuee, true)
+        XCTAssertEqual(decode.dpaeEffectueeLe, "2026-11-03T09:00:00Z")
+        for colonne in ["dpae_numero", "dpae_effectuee", "dpae_effectuee_le"] { XCTAssertTrue(ContratDetail.colonnes.contains(colonne), colonne) }
+    }
 }

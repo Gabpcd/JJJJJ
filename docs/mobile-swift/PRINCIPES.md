@@ -75,6 +75,8 @@ preuve par assertions, HARD STOP sur tout wording juridique exposé à l'utilisa
   `Lot4/Supabase<Domaine>Factory.swift`), appelées une seule fois par `DemoLot4.cabler` et `SupabaseLot4.cabler` :
   chaque tranche ne touche que sa fabrique et sa ligne de `portsEnAttenteLot4`. Le port des évaluations reçues est le
   champ `evaluationsRecues` (aucun littéral Swift ne vaut exactement le nom d'une table de notations, garde-fou 18).
+  T12 ajoute un quatorzième champ, `serie` (`Ports/SeriePort.swift`, lecture et acceptation d'une série de missions,
+  précision 13 de `DECISIONS_LOT4.md`), câblé dans les deux mondes par sa fabrique dans la même PR.
 - Lot 5 (T1) : un **seul** champ additif de plus, `Gateways.etablissement`
   (`Ports/EtablissementGateways.swift`), qui regroupe les ports de l'espace établissement, non
   câblés par défaut (`Ports/Lot5Ports.swift`). Même règle de preuve, liste à part :

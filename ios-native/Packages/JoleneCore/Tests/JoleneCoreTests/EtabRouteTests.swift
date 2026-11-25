@@ -55,6 +55,7 @@ final class EtabRouteTests: XCTestCase {
             ("https://jolene.app/etablissement/tableau-de-bord/", .accueil),
             ("/etablissement/missions", .missions(statut: nil, periode: nil)),
             ("/etablissement/missions/creer", .publierMission),
+            ("/etablissement/missions/creer?dupliquer=", .publierMission),
             ("/etablissement/missions/m%201", .missionDetail(id: "m 1")),
             ("/etablissement/presences", .presences(onglet: nil)),
             ("/etablissement/presences/mission/m-2", .presencesMission(id: "m-2")),
@@ -113,10 +114,31 @@ final class EtabRouteTests: XCTestCase {
             XCTAssertEqual(cible.onglet, onglet)
             XCTAssertNil(cible.destination)
         }
-        for route: EtabRoute in [.publierMission, .presencesMission(id: "m"), .contrat(id: "c"), .contrats(statut: nil),
-                                 .messagerie(conversation: "conv")] {
-            XCTAssertEqual(route.presentation(canonique: canonique), .renvoiWeb(canonique), "\(route)")
-        }
+        XCTAssertEqual(EtabRoute.presencesMission(id: "m").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .presences, destination: .presencesMission(missionId: "m"))),
+                       "T8 livrée : les présences de la mission sont empilées sur l'onglet Présences")
+        XCTAssertEqual(EtabRoute.publierMission.presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .publication)),
+                       "T9 livrée : la publication est empilée sur l'onglet Missions")
+        XCTAssertEqual(EtabRoute.messagerie(conversation: "conv").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .messages, destination: .conversation(id: "conv"))),
+                       "T11 livrée : la conversation est empilée sur l'onglet Messages")
+        // T10 livrée : le contrat et la liste des contrats sont empilés sur l'onglet Missions.
+        XCTAssertEqual(EtabRoute.contrat(id: "c").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .contrat(id: "c"))))
+        XCTAssertEqual(EtabRoute.contrats(statut: "SIGNE_COMPLET").presentation(canonique: canonique),
+                       .naviguer(CibleEtablissement(onglet: .missions, destination: .contrats(statut: "SIGNE_COMPLET"))))
+    }
+
+    /// T9 (D8) : la duplication reste sur le web. Un lien `…/missions/creer?dupliquer=<id>` n'ouvre jamais le
+    /// formulaire natif, qui ne reprend aucune mission source ; sans identifiant, c'est une publication ordinaire.
+    func testDuplicationRenvoyeeAuWeb() throws {
+        let lien = "/etablissement/missions/creer?dupliquer=m-1&debut=2026-11-25T06%3A00%3A00Z"
+        let canonique = try XCTUnwrap(URL(string: "https://jolene.app\(lien)"))
+        let resolue = try XCTUnwrap(LinkRouter.etablissementDestination(link: lien))
+        XCTAssertEqual(resolue.route, .safari(canonique))
+        XCTAssertEqual(resolue.route.presentation(canonique: resolue.canonique), .renvoiWeb(canonique), "query conservée")
+        XCTAssertEqual(try route("/etablissement/missions/creer?source=mail"), .publierMission)
     }
 
     func testCiblesDesEcransEmpiles() {
@@ -128,14 +150,22 @@ final class EtabRouteTests: XCTestCase {
                        "/contrat/{id} : le contrat de l'espace établissement (T10), jamais l'écran soignant")
         XCTAssertEqual(EtabRoute.messagerie(conversation: "k").cible,
                        CibleEtablissement(onglet: .messages, destination: .conversation(id: "k")))
-        XCTAssertNil(EtabRoute.contrats(statut: nil).cible, "point d'ancrage de la liste choisi par T10")
+        XCTAssertEqual(EtabRoute.contrats(statut: nil).cible,
+                       CibleEtablissement(onglet: .missions, destination: .contrats(statut: nil)),
+                       "T10 : la liste des contrats est empilée sur l'onglet Missions (aucun onglet « Contrats », D13)")
+        XCTAssertEqual(EtabRoute.contrats(statut: "ANNULE").cible?.destination, .contrats(statut: "ANNULE"),
+                       "?statut= porté brut jusqu'à l'écran")
         // Aucune destination livrée avant sa tranche (une ligne par tranche dans `EtabDestination.ecranLivre`) : T5 a
         // livré le détail de mission.
         XCTAssertTrue(EtabDestination.detailMission(id: "m").ecranLivre, "T5")
         XCTAssertTrue(EtabDestination.candidatures(missionId: "m").ecranLivre, "T6")
         XCTAssertTrue(EtabDestination.pointage(missionId: "m").ecranLivre, "T7")
-        for destination: EtabDestination in [.presencesMission(missionId: "m"), .publication, .contrat(id: "c"),
-                                             .conversation(id: "k")] {
+        XCTAssertTrue(EtabDestination.presencesMission(missionId: "m").ecranLivre, "T8")
+        XCTAssertTrue(EtabDestination.publication.ecranLivre, "T9")
+        XCTAssertTrue(EtabDestination.contrat(id: "c").ecranLivre, "T10")
+        XCTAssertTrue(EtabDestination.contrats(statut: nil).ecranLivre, "T10")
+        XCTAssertTrue(EtabDestination.conversation(id: "k").ecranLivre, "T11")
+        for destination: EtabDestination in [] {
             XCTAssertFalse(destination.ecranLivre, destination.tranche)
         }
     }

@@ -165,6 +165,7 @@ public final class AiguillageLiens {
         case refusReinitialisation
         /// Lien d'inscription consommé hors de l'espace (intégration de T7) : confirmation (`/inscription/confirmer`) ou
         /// page `soignant` / `reprendre` / `completer` (T8), déposée par le coordinateur dans `BoiteLiensInscription` (lue par `RootView`).
+        /// Reste de L1-T10 : aussi le lien de réinitialisation du mot de passe (`/reset-password` hors `?code=`).
         case inscription(DestinationLien)
 
         public var description: String {
@@ -217,7 +218,9 @@ public final class AiguillageLiens {
             return .refusReinitialisation
         case .horsEspace(let lien):
             switch lien.destination {
-            case .confirmerInscription, .inscription: return .inscription(lien)
+            // Reste de L1-T10 : le lien `/reset-password` (`token_hash`, implicit, sans identifiants) suit le même
+            // chemin que la confirmation d'inscription, présenté au-dessus de tout état par `RootView`.
+            case .confirmerInscription, .inscription, .resetPassword: return .inscription(lien)
             default: return nil
             }
         case .renvoiWeb(let lien):

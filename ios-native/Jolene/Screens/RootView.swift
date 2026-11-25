@@ -58,6 +58,15 @@ private struct SessionRootView: View {
     @State private var inscription: EtapeInscription?
     /// Lot 3, T8 : message de la déconnexion locale d'une finalisation en attente, affiché à la connexion.
     @State private var messageConnexion: String?
+    /// Reste de L1-T10 : feuille « Mot de passe oublié ? » affichée.
+    @State private var demandeReinitialisation = false
+
+    /// Reste de L1-T10 : port de récupération du jeu de ports courant (relu une fois par écran). La session de
+    /// récupération n'est jamais celle de `SessionController` (client isolé, `SupabaseRecoveryGateway`).
+    private var recovery: FournisseurRecovery {
+        let controller = session.controller
+        return { await controller.gateways(for: await controller.epoch)?.recovery }
+    }
 
     var body: some View {
         Group {
@@ -82,8 +91,16 @@ private struct SessionRootView: View {
                 } else {
                     LoginScreen(email: $loginEmail, errorMessage: message ?? messageConnexion, isDemo: container.isDemo,
                                 retryRestore: session.canRetryRestore ? { await session.start() } : nil,
-                                creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) }) { email, password in
+                                creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) },
+                                motDePasseOublie: { demandeReinitialisation = true }) { email, password in
                         await session.signIn(email: email, password: password)
+                    }
+                    // Reste de L1-T10 : demande d'un lien de réinitialisation (« Mot de passe oublié ? »).
+                    .sheet(isPresented: $demandeReinitialisation) {
+                        ResetRequestSheet(email: loginEmail, port: recovery) { email in
+                            loginEmail = email
+                            demandeReinitialisation = false
+                        }
                     }
                 }
             case let .blocked(access) where OnboardingResolution.concerne(access):
@@ -104,6 +121,8 @@ private struct SessionRootView: View {
             case let .ready(snapshot):
                 MainTabView(container: container, session: session, snapshot: snapshot)
                     .id(snapshot.epoch)
+                    // Lot 4, T6 : avis de l'application du code de parrainage capté par lien (`ParrainageApplicateur`).
+                    .overlay(alignment: .top) { AvisParrainageVue(applicateur: container.liens.parrainage) }
             case let .readyEtablissement(snapshot):
                 // Lot 5 (T2a, D1) : espace établissement, reconstruit à chaque epoch.
                 EtablissementTabView(container: container, session: session, snapshot: snapshot)
@@ -127,6 +146,26 @@ private struct SessionRootView: View {
                 if confirme { Task { await session.ouvrirIdentiteInscription() } }
             }
         }
+        // Reste de L1-T10 : lien `/reset-password` présenté au-dessus de tout état (vue d'arrière-plan distincte : une
+        // seule présentation plein écran par vue). Mot de passe modifié → toute session ouverte dans l'app est fermée
+        // (le web renvoie vers la connexion, l.109 ; la déconnexion globale du web révoque aussi ses jetons serveur).
+        .background(
+            Color.clear.fullScreenCover(item: reinitialisation) { demande in
+                ResetPasswordScreen(port: recovery, credentials: demande.credentials) { modifie in
+                    liens.retirerReinitialisation()
+                    guard modifie else { return }
+                    if case .signedOut = session.state { return }
+                    Task { await session.signOut() }
+                }
+            }
+        )
+    }
+
+    /// Lien de réinitialisation déposé par le coordinateur ; le fermer le retire de la boîte.
+    private var reinitialisation: Binding<BoiteLiensInscription.Confirmation?> {
+        Binding(get: { liens.reinitialisation }, set: { nouvelle in
+            if nouvelle == nil { liens.retirerReinitialisation() }
+        })
     }
 
     /// Confirmation déposée par le coordinateur ; la fermer la retire de la boîte.

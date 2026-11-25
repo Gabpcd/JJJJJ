@@ -34,8 +34,9 @@ final class DemoEtabCandidaturesTests: JoleneUITestCase {
         ouvrirCandidatures(mission: "demo-etab-m01", intitule: "Démonstration · Candidatures à examiner")
         let cgv = element("etab-candidatures-cgv-lien")
         scrollTo(cgv, in: ecran)
-        XCTAssertEqual(cgv.value as? String, "https://jolene.app/cgv#art8", "lien neutre, mention verbatim non affichée")
-        XCTAssertFalse(element("etab-candidatures-cgv").exists, "mention CGV verbatim verrouillée (HARD STOP n°4)")
+        XCTAssertEqual(cgv.value as? String, "https://jolene.app/cgv#art8", "lien de la mention vers les CGV")
+        XCTAssertTrue(cgv.label.hasPrefix("Avant d’accepter un candidat, consultez les conditions de non-contournement"),
+                      "mention CGV art. 8 du web, mot pour mot (décision c) : \(cgv.label)")
         let etudiante = element("etab-candidature-web-demo-etab-m01-cand-3")
         scrollTo(etudiante, in: ecran)
         XCTAssertEqual(etudiante.value as? String, "https://jolene.app/etablissement/missions/demo-etab-m01",

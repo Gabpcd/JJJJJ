@@ -865,7 +865,7 @@ récemment. Réessayez plus tard. » (l.46687) ; `p_facture_id` NULL → délég
 
 ### Usage du lot 4 (T8, type `AUTRE`)
 
-- **Statut natif (lot 4)** : à venir (lot 4, T8). Aucun statut propre au lot 4 : l'entrée partagée garde celui du lot qui la suit (passage en `consommee` par la tranche T5b du lot 2, ou par T15 du lot 4 si l'entrée est la sienne).
+- **Statut natif (lot 4)** : consommée (lot 4, T8) par `JoleneSupabase/Litiges/SupabaseLitigesGateway.swift` (`ouvrir`, trois clés exactes, `p_type_litige = 'AUTRE'`, litige relu par son identifiant). Aucun statut propre au lot 4 dans `RPC_SUIVIES` : l'entrée partagée garde celui du lot qui la suit (`consommee`, `lot: 2`, tranche T5b du lot 2).
 - **Usage prévu** : Ouverture d'un litige de type `AUTRE` sur une mission `EN_COURS` ou `TERMINEE` assignée au soignant (missions contestables = celles-ci moins celles déjà en litige, web l.137-146). L'app appelle **uniquement** la signature canonique à 3 arguments nommés (`p_mission_id`, `p_type_litige = 'AUTRE'`, `p_motif`), équivalente au wrapper déprécié à 2 arguments que le web appelle encore (`LitigesSoignant.tsx` l.172) ; fiche « Surcharges ».
 - **Contrat de réponse** : 3 arguments (l.46379) : succès `{success:true, litige_id, est_informatif, facture_id}` (l.46551-46556), `litige_id` exigé (`requiredString`) puis relecture de `litiges` par id ; refus `{error}` **sans** `success` (HTTP 200), affichés verbatim (`RPCResponse.leverSiErreur`) : `'Accès refusé'` (l.46400, non authentifié ou compte inactif), `'Le motif doit contenir entre 10 et 2 000 caractères.'` (l.46405), `'Mission introuvable'` (l.46416), `"Vous n'êtes pas partie prenante de cette mission."` (l.46432), `'Un litige de ce type est déjà ouvert pour cette mission.'` (l.46447), `'Trop de litiges ouverts récemment. Réessayez plus tard.'` (l.46469, `rate_limit_litiges_par_heure`, défaut 3), et deux refus inatteignables avec `AUTRE` : `'Aucune facture contestable (ÉMISE, EN RETARD ou PAYÉE) pour cette mission.'` (l.46488, types facture), `'Fenêtre de contestation fermée pour ce type de litige. Contactez le support.'` (l.46518 ; la fenêtre de `AUTRE` est toujours ouverte, `fn_fenetre_contestation_ouverte` l.36596). Wrapper à 2 arguments (l.46354) : `'Accès refusé'` puis délégation en `AUTRE`. Effets : trigger `dec_litige_48h` (l.75396) sans `RAISE`, audit `LITIGE_OUVERTURE` serveur.
 - **Exemple de réponse STAGING** : **obligatoire** dans le run T14 (plan l.209 : litige ouvert et relu ; D20).
@@ -2470,7 +2470,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
 Ajoutée par la tranche T0 du lot 4 (`docs/mobile-swift/LOT4_PLAN.md` §3 T0, décisions
 `docs/mobile-swift/DECISIONS_LOT4.md`) : quarante-deux RPC consommées par le lot 4, soit **quarante et une
 RPC** propres au lot 4, suivies en `a_venir`, `lot: 4`, dans l'ordre des tranches (T3a swipe, T4 filtres,
-T5 disponibilités, T6 parrainage, T8 litiges et réclamations, T9 score et évaluations, T7a/T7b messagerie,
+T5 disponibilités, T6 parrainage, T8 litiges et réclamations, T9 score et évaluations, T7a messagerie (gateway entière ; écrans en T7b),
 T10 bulletins, T11 pool urgence et exclusions), et une RPC partagée avec le lot 2,
 `fn_ouvrir_litige_rate_limited` (`RPC_PARTAGEES_LOT4`, précision 10 des décisions) : une seule entrée dans
 `RPC_SUIVIES`, celle du T0 du lot 2 (`lot: 2`) quand il est fusionné, `a_venir`, `lot: 4` à défaut ; une
@@ -2525,40 +2525,40 @@ concernée à jour **dans la même PR**.
 | `fn_creer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_modifier_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 | `fn_supprimer_filtre_sauvegarde` | consommée lot 4 (T4) | 4 (T4) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_definir_disponibilite` | à venir | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_obtenir_mes_parrainages` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_appliquer_parrainage` | à venir | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_ouvrir_litige_rate_limited` | à venir | partagée : lot 2 (T5b) si son T0 est fusionné, sinon 4 ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
-| `fn_ajouter_message_litige` | à venir | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_soumettre_reclamation` | à venir | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mon_breakdown_actuel` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_evenements_score` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_evolution_score_soignant` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_lister_notations_recues` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_creer_reclamation_score` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_notations_recues_avec_stats` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_signaler_notation` | à venir | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_lister_conversations_messagerie` | à venir | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | absente |
-| `fn_interlocuteurs_conversations` | à venir | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
-| `fn_marquer_messages_lus` | à venir | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
-| `fn_messages_non_lus` | à venir | 4 (T7b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
-| `fn_typing_start` | à venir | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
-| `fn_typing_stop` | à venir | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
-| `fn_update_presence` | à venir | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
-| `fn_est_bloque` | à venir | 4 (T7b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_bloquer_utilisateur` | à venir | 4 (T7b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_debloquer_utilisateur` | à venir | 4 (T7b) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
-| `fn_signaler_utilisateur` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_user_id_pour_etablissement` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
-| `fn_obtenir_conversation` | à venir | 4 (T7b) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
-| `fn_lister_copies_bulletins` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
-| `fn_signaler_copie_bulletin` | à venir | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
-| `fn_pool_urgence_missions_pour_soignant` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_pool_urgence` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_toggle_pool_urgence_sms` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_mes_exclusions_recues` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_retirer_exclusion` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
-| `fn_exclure_utilisateur` | à venir | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_definir_disponibilite` | consommée lot 4 (T5) | 4 (T5) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_obtenir_mes_parrainages` | consommée lot 4 (T6) | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_appliquer_parrainage` | consommée lot 4 (T6) | 4 (T6) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_ouvrir_litige_rate_limited` | consommée lot 2 (T5b) et lot 4 (T8) | partagée : entrée du lot 2 (T5b) ; usage lot 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE (2 et 3 arguments ; la 4 arguments est hors manifeste) | authenticated, service_role | union de surcharges (lue `null`) |
+| `fn_ajouter_message_litige` | consommée lot 4 (T8) | 4 (T8) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_soumettre_reclamation` | consommée lot 4 (T8) | 4 (T8) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mon_breakdown_actuel` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_evenements_score` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_evolution_score_soignant` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_lister_notations_recues` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_creer_reclamation_score` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_notations_recues_avec_stats` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_signaler_notation` | consommée lot 4 (T9) | 4 (T9) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_lister_conversations_messagerie` | consommée lot 4 (T7a) | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | absente |
+| `fn_interlocuteurs_conversations` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
+| `fn_marquer_messages_lus` | consommée lot 4 (T7a) | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
+| `fn_messages_non_lus` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
+| `fn_typing_start` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
+| `fn_typing_stop` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
+| `fn_update_presence` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated | déclarée |
+| `fn_est_bloque` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_bloquer_utilisateur` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_debloquer_utilisateur` | consommée lot 4 (T7a) | 4 (T7a) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente |
+| `fn_signaler_utilisateur` | consommée lot 4 (T7a) | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_user_id_pour_etablissement` | consommée lot 4 (T7a) | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée |
+| `fn_obtenir_conversation` | consommée lot 4 (T7a) | 4 (T7a) | MIXTE_TENANT_ADMIN | authenticated | déclarée |
+| `fn_lister_copies_bulletins` | consommée lot 4 (T10) | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
+| `fn_signaler_copie_bulletin` | consommée lot 4 (T10) | 4 (T10) | hors manifeste — classée RPC_UTILISATEUR_AUTH_INTERNE (classement manuel) | authenticated | absente |
+| `fn_pool_urgence_missions_pour_soignant` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_pool_urgence` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_toggle_pool_urgence_sms` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_mes_exclusions_recues` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_retirer_exclusion` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
+| `fn_exclure_utilisateur` | consommée lot 4 (T11) | 4 (T11) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée |
 
 ## Lot 4 — lecture des exceptions PostgREST et des réponses edge
 
@@ -2605,7 +2605,7 @@ tableau.
   `p_creneaux_confirmes` exact (`CreneauxConfirmes.pourAction`, golden du lot 1 T2). Les refus propres à la
   RPC (planning à reconfirmer, conflit, repos de 11 h) précèdent la délégation et sont décrits dans sa fiche.
 - **`SWIPE_LIKE`** (❤️, T3a, **consommée** : verrou levé dans `SupabaseCandidatureGateway` et `DemoCandidatureGateway`,
-  `URGENCE` reste verrouillée jusqu'à T11) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
+  `URGENCE` consommée par T11 : verrou levé dans les deux mêmes gateways) : délègue à `fn_enregistrer_swipe(p_mission_id, 'LIKE', p_choix_contrat)` ; la
   réponse est celle de `fn_enregistrer_swipe` — `{ok:true, …, candidature_id, choix_contrat}`,
   **pas de `success`** — et ses refus `{ok:false, …}` (fiche `fn_enregistrer_swipe`). `choix_requis` →
   `ChoixContratSheet` → nouvel appel `SWIPE_LIKE` avec `p_choix_contrat` ; planning à reconfirmer → relecture
@@ -2773,8 +2773,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_supprimer_filtre_sauvegarde"("p_id" "uui
 
 ## fn_definir_disponibilite
 
-- **Statut natif** : à venir (lot 4, T5).
-- **Usage prévu** : Grille de 4 semaines depuis le lundi courant (Europe/Paris), créneaux `JOURNEE` et `NUIT` comme le web, jours passés désactivés ; bascule **sans état optimiste** puis relecture PostgREST `disponibilites_soignant` (RLS `dispos_soignant_select` l.77827).
+- **Statut natif** : consommée (lot 4, T5) par `JoleneSupabase/Disponibilites/SupabaseDisponibilitesGateway.swift`, appelée par `DisponibilitesModel` (JoleneCore, écran `/soignant/disponibilites`).
+- **Usage prévu** : Grille de 4 semaines depuis le lundi courant (Europe/Paris), créneaux `JOURNEE` et `NUIT` comme le web, jours passés désactivés ; bascule **sans état optimiste** puis relecture PostgREST `disponibilites_soignant` (RLS `dispos_soignant_select` l.77827). Livré (T5) : la gateway relit la semaine civile du jour basculé (`select=jour,creneau`, `soignant_id` = identité de la session, du lundi au dimanche) et la rend au modèle ; la lecture de l'écran est `jour >= <jour Paris>`, comme le web. Un jour passé ou hors de la grille n'est jamais envoyé ; une erreur de transport est réconciliée par relecture, sans renvoi.
 - **Signature SQL** (`supabase/schema/public.sql` l.29712) :
 
 ```sql
@@ -2791,7 +2791,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_definir_disponibilite"("p_jour" "date", 
 
 ## fn_obtenir_mes_parrainages
 
-- **Statut natif** : à venir (lot 4, T6).
+- **Statut natif** : consommée (lot 4, T6) par `JoleneSupabase/Parrainage/SupabaseParrainageGateway.swift`, appelée par `ParrainageModel` (JoleneCore, écran Parrainage) ; relue après chaque application acceptée (`mon_parrain` non nul). Montants et seuil serveur lus, jamais affichés (T6-HS).
 - **Usage prévu** : Écran Parrainage : filleuls et progression, gains, prime et seuil **serveur** (`fn_param_num('prime_parrainage_eur', 25)`, `fn_param_num('seuil_gmv_parrainage_eur', 500)`, l.45954-45955), `mon_parrain`. Code et `badge_ambassadeur` lus par PostgREST `soignants`.
 - **Signature SQL** (`supabase/schema/public.sql` l.45947) :
 
@@ -2809,7 +2809,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_mes_parrainages"() RETURNS "json
 
 ## fn_appliquer_parrainage
 
-- **Statut natif** : à venir (lot 4, T6).
+- **Statut natif** : consommée (lot 4, T6) par `JoleneSupabase/Parrainage/SupabaseParrainageGateway.swift`, appelée par `ParrainageApplication` (JoleneCore) depuis `ParrainageApplicateur` (premier `.ready` qui suit la capture) ; `p_code` toujours à la forme du web, message serveur de succès jamais affiché.
 - **Usage prévu** : Application d'un code capté par Universal Link (`?ref=` / `?parrain=`, fenêtre de 30 jours, codes `ETB-` ignorés) au premier `.ready` qui suit la capture (D14), une seule fois par userId et code.
 - **Signature SQL** (`supabase/schema/public.sql` l.19059) :
 
@@ -2827,7 +2827,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_appliquer_parrainage"("p_code" "text") R
 
 ## fn_ajouter_message_litige
 
-- **Statut natif** : à venir (lot 4, T8).
+- **Statut natif** : consommée (lot 4, T8) par `JoleneSupabase/Litiges/SupabaseLitigesGateway.swift` (`ajouterMessage` : `message_id` exigé, fil relu qui le contient), appelée par `LitigeFilModel` (JoleneCore).
 - **Usage prévu** : Fil d'un litige : ajout d'un message de 10 caractères au moins ; champ masqué si le litige est résolu (`estResolu`, golden T2). Lecture du fil par PostgREST `messages_litige` (RLS `pol_messages_litige_select` l.79349). Accords amiables et clôture : renvoi web (D9).
 - **Signature SQL** (`supabase/schema/public.sql` l.16835) :
 
@@ -2845,7 +2845,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_ajouter_message_litige"("p_litige_id" "u
 
 ## fn_soumettre_reclamation
 
-- **Statut natif** : à venir (lot 4, T8).
+- **Statut natif** : consommée (lot 4, T8) par `JoleneSupabase/Reclamations/SupabaseReclamationsGateway.swift` (`soumettre` : `id` exigé, ligne relue par cet identifiant ; `23514` → libellé générique du web), appelée par `ReclamationsModel` (JoleneCore).
 - **Usage prévu** : Réclamation générale (onglet `?tab=reclamations` de `/soignant/litiges`) : catégorie dans la liste fermée du web (`MISSION`, `PAIEMENT`, `TECHNIQUE`, `COMPORTEMENT`, `AUTRE`, `MesReclamations.tsx` l.22-28), sujet, détails, mission optionnelle. Liste par PostgREST `reclamations` (RLS `reclamations_select_own` l.79820).
 - **Signature SQL** (`supabase/schema/public.sql` l.57403) :
 
@@ -2863,7 +2863,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_soumettre_reclamation"("p_categorie" "te
 
 ## fn_mon_breakdown_actuel
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Page « Mon score » : dernier calcul `scoring_breakdown` du soignant.
 - **Signature SQL** (`supabase/schema/public.sql` l.44525) :
 
@@ -2881,7 +2881,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mon_breakdown_actuel"() RETURNS "jsonb"
 
 ## fn_mes_evenements_score
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Événements de score des 12 derniers mois (`p_limit = 20` comme le web) ; base de la contestation (`fn_creer_reclamation_score`).
 - **Signature SQL** (`supabase/schema/public.sql` l.41672) :
 
@@ -2899,7 +2899,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_evenements_score"("p_limit" integer 
 
 ## fn_evolution_score_soignant
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Graphique d’évolution de « Mon score » (`GraphiqueEvolutionScore`, `PageScoreSoignant.tsx` l.166), `p_limit = 6` comme le web (`GraphiqueEvolutionScore.tsx` l.27).
 - **Signature SQL** (`supabase/schema/public.sql` l.35523) :
 
@@ -2917,7 +2917,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_evolution_score_soignant"("p_limit" inte
 
 ## fn_lister_notations_recues
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Notations reçues affichées sur « Mon score » ; lecture double-aveugle (fiche « Jamais `notations_missions` … »).
 - **Signature SQL** (`supabase/schema/public.sql` l.40284) :
 
@@ -2935,7 +2935,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_notations_recues"("p_limit" integ
 
 ## fn_creer_reclamation_score
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Score/SupabaseScoreGateway.swift`.
 - **Usage prévu** : Contestation d'un événement `contestable` : `p_evenement_type = 'SOIGNANT'`, motif parmi `URGENCE_MEDICALE`, `DEUIL`, `FORCE_MAJEURE`, `ERREUR_JOLENE`, `CONTEXTE_PARTICULIER`, `AUTRE`, texte de 20 caractères au moins ; **`p_justificatif_storage_path` n'est jamais envoyé** (D10 : données de santé, `docs/CONFORMITE.md` §1.2, garde-fou 8 ; sous-ligne « justificatif : renvoi web assumé »).
 - **Signature SQL** (`supabase/schema/public.sql` l.27482) :
 
@@ -2953,7 +2953,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_reclamation_score"("p_evenement_id
 
 ## fn_mes_notations_recues_avec_stats
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift`.
 - **Usage prévu** : Écran Évaluations : statistiques globales, évolution sur 6 mois (Swift Charts), filtres période (`TOUT`, `3M`, `6M`, `12M`), note minimale et établissement, pagination de 20 (`p_limit = 20`, `p_offset`), lecture seule (édition non portée, D11) ; lecture double-aveugle (fiche dédiée).
 - **Signature SQL** (`supabase/schema/public.sql` l.42039) :
 
@@ -2971,7 +2971,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_notations_recues_avec_stats"("p_peri
 
 ## fn_signaler_notation
 
-- **Statut natif** : à venir (lot 4, T9).
+- **Statut natif** : consommée (lot 4, T9) par `JoleneSupabase/Evaluations/SupabaseEvaluationsGateway.swift`.
 - **Usage prévu** : Signalement d'une notation reçue, motif de 10 caractères au moins côté app (web `EvaluationsSoignant.tsx` l.458).
 - **Signature SQL** (`supabase/schema/public.sql` l.56216) :
 
@@ -2989,7 +2989,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_signaler_notation"("p_notation_id" "uuid
 
 ## fn_lister_conversations_messagerie
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Liste des conversations : pagination keyset par 100 comme le web (`PageMessagerie.tsx` l.184-216), onglets actives et archivées (`archived_at`), arrêt si le curseur ne change pas ; relue sur INSERT `messages_chat` d'une conversation inconnue (pas d'abonnement `conversations`).
 - **Signature SQL** (`supabase/schema/public.sql` l.39736) :
 
@@ -3007,7 +3007,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_conversations_messagerie"("p_avan
 
 ## fn_interlocuteurs_conversations
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Noms et avatars des interlocuteurs des conversations chargées (100 identifiants au plus par appel, une page).
 - **Signature SQL** (`supabase/schema/public.sql` l.38738) :
 
@@ -3025,7 +3025,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_interlocuteurs_conversations"("p_convers
 
 ## fn_marquer_messages_lus
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : À l'ouverture du fil puis à chaque INSERT entrant fil ouvert (web l.381, l.404), suivi d'une relecture du badge `fn_messages_non_lus`.
 - **Signature SQL** (`supabase/schema/public.sql` l.41278) :
 
@@ -3043,7 +3043,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_marquer_messages_lus"("p_conversation_id
 
 ## fn_messages_non_lus
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Badge du bouton Messages de la barre de navigation (correction 19, `src/hooks/useMessagesNonLus.ts` l.13, l.38) ; relu au premier plan, après chaque `fn_marquer_messages_lus` et à chaque INSERT entrant.
 - **Signature SQL** (`supabase/schema/public.sql` l.42496) :
 
@@ -3061,7 +3061,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_messages_non_lus"() RETURNS integer
 
 ## fn_typing_start
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Indicateur de saisie tant que le fil est ouvert ; arrêt par `fn_typing_stop`.
 - **Signature SQL** (`supabase/schema/public.sql` l.64354) :
 
@@ -3079,7 +3079,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_typing_start"("p_conversation_id" "uuid"
 
 ## fn_typing_stop
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Fin de l’indicateur de saisie (envoi, champ vidé, fil fermé).
 - **Signature SQL** (`supabase/schema/public.sql` l.64391) :
 
@@ -3097,7 +3097,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_typing_stop"("p_conversation_id" "uuid")
 
 ## fn_update_presence
 
-- **Statut natif** : à venir (lot 4, T7a).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Battement de présence toutes les 30 s tant que le fil est visible (web `useConversationRealtime.ts` l.42, l.191-210) ; le premier battement part **après** le `subscribeWithError()` réussi du canal du fil (signal du pair STAGING, T14).
 - **Signature SQL** (`supabase/schema/public.sql` l.64443) :
 
@@ -3115,7 +3115,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_update_presence"() RETURNS "void"
 
 ## fn_est_bloque
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : État du bouton « Bloquer / Débloquer » de l'interlocuteur (`autre_id`, masqué pour Jolene), comme le web `PageMessagerie.tsx` l.703-712.
 - **Signature SQL** (`supabase/schema/public.sql` l.34695) :
 
@@ -3133,7 +3133,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_est_bloque"("p_cible_id" "uuid") RETURNS
 
 ## fn_bloquer_utilisateur
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Blocage de l'interlocuteur (Apple 1.2) ; textes de la feuille repris verbatim du web (`BloquerUtilisateur.tsx` l.36-63), relecture HARD STOP n°4.
 - **Signature SQL** (`supabase/schema/public.sql` l.20927) :
 
@@ -3151,7 +3151,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_bloquer_utilisateur"("p_cible_id" "uuid"
 
 ## fn_debloquer_utilisateur
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Déblocage de l’interlocuteur.
 - **Signature SQL** (`supabase/schema/public.sql` l.28068) :
 
@@ -3169,7 +3169,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_debloquer_utilisateur"("p_cible_id" "uui
 
 ## fn_signaler_utilisateur
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : « Signaler » depuis la messagerie (ajout natif assumé, Apple 1.2) et depuis le détail de mission (correction 20) : cible = `etablissement_id` de la conversation ou de la mission avec `p_cible_type = 'ETABLISSEMENT'` (comme `DetailMissionSoignant.tsx` l.1175), catégories et textes du web (`SignalerUtilisateur.tsx` l.6-45), motif de 10 caractères au moins, `p_mission_id` quand il existe.
 - **Signature SQL** (`supabase/schema/public.sql` l.56275) :
 
@@ -3187,7 +3187,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_signaler_utilisateur"("p_cible_id" "uuid
 
 ## fn_user_id_pour_etablissement
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Première étape de « Écrire à l'établissement » depuis le détail d'une mission `ASSIGNEE`, `EN_COURS`, `TERMINEE`, `ABSENCE` ou `LITIGE` (correction 20, D25, `src/hooks/useOuvrirConversation.ts` l.10-16) : résout l'interlocuteur opérationnel de l'établissement.
 - **Signature SQL** (`supabase/schema/public.sql` l.64699) :
 
@@ -3205,7 +3205,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_user_id_pour_etablissement"("p_etablisse
 
 ## fn_obtenir_conversation
 
-- **Statut natif** : à venir (lot 4, T7b).
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift`.
 - **Usage prévu** : Seconde étape : `fn_obtenir_conversation(p_autre_id, p_mission_id)` retrouve ou crée le fil de la mission (`ChatConversation.tsx` l.125-145), puis `.secondaire(.messagerie(conversationId:))`. La création libre de conversation reste exclue (D8) : l'app n'appelle jamais sans `p_mission_id`.
 - **Signature SQL** (`supabase/schema/public.sql` l.45620) :
 
@@ -3223,7 +3223,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 
 ## fn_lister_copies_bulletins
 
-- **Statut natif** : à venir (lot 4, T10).
+- **Statut natif** : consommée (lot 4, T10) par `JoleneSupabase/Bulletins/SupabaseBulletinsGateway.swift`, appelée par `BulletinsModel` (JoleneCore : liste, relecture après un signalement ou un 410 `COPIE_RETIREE`).
 - **Usage prévu** : Liste des copies officielles déposées par l'employeur (Revenus › Bulletins, composant monté `CopiesBulletinsListe.tsx`), appelée sans paramètre ; filtre employeur côté app quand plusieurs établissements (l.25-27). Les simulations de paie restent un renvoi web (D12).
 - **Signature SQL** (`supabase/schema/public.sql` l.39838) :
 
@@ -3241,7 +3241,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_lister_copies_bulletins"("p_etablissemen
 
 ## fn_signaler_copie_bulletin
 
-- **Statut natif** : à venir (lot 4, T10).
+- **Statut natif** : consommée (lot 4, T10) par `JoleneSupabase/Bulletins/SupabaseBulletinsGateway.swift`, appelée par `BulletinsModel` (JoleneCore : feuille de signalement, succès annoncé après relecture).
 - **Usage prévu** : Signalement d'une copie, feuille « Quelle erreur souhaitez-vous signaler ? » aux trois motifs du web (`DESTINATAIRE`, `CONTENU`, `AUTRE` ; `copiesBulletins.ts` l.10, `CopiesBulletinsListe.tsx` l.15, l.87-90).
 - **Signature SQL** (`supabase/schema/public.sql` l.56182) :
 
@@ -3259,7 +3259,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_signaler_copie_bulletin"("p_copie_id" "u
 
 ## fn_pool_urgence_missions_pour_soignant
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.etat`, appelée par `PoolUrgenceModel`.
 - **Usage prévu** : Écran Pool urgence : état (actif, rayon, SMS) et missions urgentes éligibles dans le rayon ; relu après chaque bascule et après une acceptation `URGENCE` (`statut_candidature`).
 - **Signature SQL** (`supabase/schema/public.sql` l.47819) :
 
@@ -3277,7 +3277,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_pool_urgence_missions_pour_soignant"() R
 
 ## fn_toggle_pool_urgence
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.basculer`, appelée par `PoolUrgenceModel` (interrupteur et rayon).
 - **Usage prévu** : Activation et rayon (curseur 5-50 km comme le web, `PoolUrgenceToggle.tsx` l.164-165), `p_creneaux = []` (web l.65-69) ; texte d'engagement du pool repris verbatim (l.229-230, relecture HARD STOP n°4). Seule voie native d'écriture de `soignants.disponible_urgence` (D26, correction 17).
 - **Signature SQL** (`supabase/schema/public.sql` l.61516) :
 
@@ -3295,7 +3295,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_pool_urgence"("p_actif" boolean, 
 
 ## fn_toggle_pool_urgence_sms
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/PoolUrgence/SupabasePoolUrgenceGateway.swift` — `SupabasePoolUrgenceGateway.basculerSMS`, appelée par `PoolUrgenceModel`.
 - **Usage prévu** : Opt-in SMS du pool (description verbatim du web, `PoolUrgenceToggle.tsx` l.184-187).
 - **Signature SQL** (`supabase/schema/public.sql` l.61567) :
 
@@ -3313,7 +3313,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_toggle_pool_urgence_sms"("p_actif" boole
 
 ## fn_mes_exclusions_recues
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.recues`, appelée par `ExclusionsModel`.
 - **Usage prévu** : Onglet « reçues » de `/soignant/exclusions`. Les exclusions **envoyées** sont lues par PostgREST `exclusions` (`exclu_par = auth.uid()`, RLS `pol_exclusion_select` l.79211), noms via `fn_etablissements_safe`.
 - **Signature SQL** (`supabase/schema/public.sql` l.41730) :
 
@@ -3331,7 +3331,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_exclusions_recues"() RETURNS "jsonb"
 
 ## fn_retirer_exclusion
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.retirer`, appelée par `ExclusionsModel`.
 - **Usage prévu** : Retrait d'une exclusion envoyée. Le paramètre est l'`exclu_id` (l'établissement exclu), **pas** l'id de la ligne (l.54888-54891).
 - **Signature SQL** (`supabase/schema/public.sql` l.54875) :
 
@@ -3349,7 +3349,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_retirer_exclusion"("p_exclu_id" "uuid") 
 
 ## fn_exclure_utilisateur
 
-- **Statut natif** : à venir (lot 4, T11).
+- **Statut natif** : consommée (lot 4, T11) par `JoleneSupabase/Exclusions/SupabaseExclusionsGateway.swift` — `SupabaseExclusionsGateway.exclure`, appelée par `ExclusionsModel` (MissionExclusionButton du détail de mission).
 - **Usage prévu** : « Ne plus travailler ensemble » depuis le détail de mission (correction 20, D25, `BoutonExclusion.tsx` l.53-75, textes verbatim, relecture HARD STOP n°4) : `p_exclu_id` = `etablissement_id`, `p_type = 'SOIGNANT'` (type de l'auteur), motif optionnel.
 - **Signature SQL** (`supabase/schema/public.sql` l.35556) :
 
@@ -3367,7 +3367,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_exclure_utilisateur"("p_exclu_id" "uuid"
 
 ## Edge `messagerie-validate`
 
-- **Statut natif** : à venir (lot 4, T7a/T7b). Pas une RPC : `supabase/functions/messagerie-validate/index.ts`, seul chemin d'envoi d'un message (`MessageriePort.envoyer`). `fn_envoyer_message` n'a aucun GRANT client (`REVOKE ALL … FROM PUBLIC`, `public.sql` l.82619, sans GRANT) et `fn_envoyer_message_valide` est réservée à l'edge (COMMENT l.33094, appel en service_role l.297-308) : garde-fou 19 de `tests/non-regression/guards.sh`.
+- **Statut natif** : consommée (lot 4, T7a) par `JoleneSupabase/Messagerie/SupabaseMessagerieGateway.swift` (`envoyer`, `issueEnvoi`) ; écran en T7b. Pas une RPC : `supabase/functions/messagerie-validate/index.ts`, seul chemin d'envoi d'un message (`MessageriePort.envoyer`). `fn_envoyer_message` n'a aucun GRANT client (`REVOKE ALL … FROM PUBLIC`, `public.sql` l.82619, sans GRANT) et `fn_envoyer_message_valide` est réservée à l'edge (COMMENT l.33094, appel en service_role l.297-308) : garde-fou 19 de `tests/non-regression/guards.sh`.
 - **Transport** : `POST`, corps `{conversation_id, content}`, en-tête `Authorization: Bearer <access_token utilisateur>`. `supabase/config.toml` l.183-184 : `verify_jwt = false` (vérification dans la fonction par `auth.getUser`, classe `USER_OR_ADMIN_CUSTOM` de `supabase/EDGE_AUTH_MANIFEST.json` l.73) ; comme pour `delete-account`, l'app ne suppose rien de la Gateway et traite tout 401 comme un refus. Limite edge de 60 envois par minute et par compte (`applyRateLimit`, l.79), complétée par le quota SQL durable de `fn_envoyer_message_valide`. L'anti-fuite bloque coordonnées et liens tant que la mission liée n'est ni `ASSIGNEE`, ni `EN_COURS`, ni `TERMINEE` (l.155-171).
 - **Codes HTTP et corps** — liste exhaustive des réponses de `index.ts` (la garde relit le fichier et échoue si un statut ou un code manque ici) :
   - **200** `{success:true, message_id}` (l.340-343) → relecture de la ligne `messages_chat` par `message_id`, puis affichage ; l'INSERT Realtime du même id est ignoré (dédoublonnage par id). Un 200 sans `message_id` est un refus `REPONSE_ENVOI_INVALIDE` comme sur le web (`src/lib/messagerieEnvoi.ts` l.70-80) → `nonConfirme` et relecture du fil.
@@ -3378,10 +3378,11 @@ CREATE OR REPLACE FUNCTION "public"."fn_exclure_utilisateur"("p_exclu_id" "uuid"
   - **409** `CONVERSATION_ARCHIVEE` (l.132-137) → composeur désactivé après relecture de la liste.
   - **413** `CONTENT_TOO_LARGE` — `{success:false, error, max:4000}` (l.103-108 ; `MAX_CONTENT_LENGTH` l.27, clé `max`) : impossible si le composeur borne la saisie à 4 000 caractères (compteur affiché dès 3 500).
   - **429** `RATE_LIMIT` (l.79-84 limite edge ; l.311-316 quota SQL, exception `P0001` « Trop de messages »).
-  - **500** `INTERNAL_ERROR` — `{success:false, error, message}` (l.344-347).
-  - **503** `AUTORISATION_INDISPONIBLE` (l.139-145) ; `ENVOI_INDISPONIBLE` (l.317-321).
+  - **500** `INTERNAL_ERROR` — `{success:false, error, message}` (l.344-347) → `nonConfirme` : l'exception peut suivre l'insertion, son issue est inconnue ; `message` (détail technique) n'est jamais affiché.
+  - **503** `AUTORISATION_INDISPONIBLE` (l.139-145, avant toute insertion) → `refuse(code:, message:)` ; `ENVOI_INDISPONIBLE` (l.317-321, l'appel d'insertion a échoué sans issue connue) → `nonConfirme`.
   - Tous les refus ont la forme `{success:false, error:<code>}`, plus les clés indiquées.
   - Hors fonction : une erreur de plateforme (passerelle, délai) peut renvoyer un autre statut ou un corps non JSON → `nonConfirme`.
+  - **Traitement natif (T7a, `SupabaseMessagerieGateway.issueEnvoi`)** : `message` de l'issue = texte serveur s'il est rédigé (erreur métier relayée en 403), sinon repli générique déjà porté (`MessagerieRepli.message`) ; le code machine est rendu dans `code` (`CodeEnvoi`), jamais affiché, et traduit en libellé du web par l'écran (T7b). Refus restitués en `refuse(code:)` : `BAD_REQUEST`, `CONTENT_EMPTY`, `CONVERSATION_NON_AUTORISEE`, `ENVOI_REFUSE`, `CONVERSATION_ARCHIVEE`, `CONTENT_TOO_LARGE`, `RATE_LIMIT`, `AUTORISATION_INDISPONIBLE`, et tout code relayé en 403. Tout autre code, statut ou corps → `nonConfirme`. Une coupure réseau ou un délai dépassé lève une erreur réseau, que le modèle (`FilModel`) traite en `nonConfirme` : fil relu, aucun renvoi.
 - **Règle app** : bouton désactivé pendant l'appel (verrou synchrone, web `InputMessage.tsx` l.52-55) ; texte saisi conservé sur tout refus ; délai dépassé ou statut inattendu = `nonConfirme` puis relecture du fil, **aucun renvoi automatique** (D8) ; un flux Realtime n'est jamais une preuve d'envoi. Contenu des messages jamais journalisé (`policy.redact`).
 - **Preuve STAGING** : **obligatoire** dans le run T14 — message envoyé par l'app et reçu en Realtime par le pair établissement, puis l'inverse (plan l.209, D20) ; contenus alphabétiques (pas de faux positif anti-fuite).
 
@@ -3412,7 +3413,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_exclure_utilisateur"("p_exclu_id" "uuid"
 - **Canaux et RLS** : liste — canal `messagerie-liste-<uid>`, `postgresChange(InsertAction, table: "messages_chat")` sans filtre, la RLS `pol_msg_select` (`public.sql` l.79371, `fn_conversation_accessible(conversation_id)`) ne laisse passer que les messages visibles par le JWT ; fil — canal `chat-conv-<id>` avec le filtre `.eq("conversation_id", id)` ; saisie — canal `typing-<id>`, INSERT/UPDATE/DELETE `typing_status` (RLS `pol_typing_status_select` l.79758) ; présence — canal `presence-<autre>`, `presence_status` (RLS `pol_presence_status_select` l.79528).
 - **Cycle de vie** : client `client.realtimeV2` (SDK `Sources/Supabase/SupabaseClient.swift` l.139) ; abonnement au premier plan seulement (`scenePhase == .active`) par `subscribeWithError()` (SDK `RealtimeChannelV2.swift` l.231) ; à chaque passage « rejoint » après coupure : relecture du fil depuis le dernier `cree_le` connu et relecture de la liste ; un canal retiré ou fermé par le serveur ne rejoint plus jamais (SDK l.224-226) → nouveau canal et relecture ; arrière-plan → `removeAllChannels()` (aucun `UIBackgroundModes`, plan §4.5) ; retour au premier plan → réabonnement et relecture ; changement d'epoch d'identité → `fermerTout()` avant toute nouvelle session ; le jeton suit le rafraîchissement (`realtimeV2.setAuth`, `SupabaseClient.swift` l.519). `fn_update_presence` toutes les 30 s tant que le fil est visible, premier battement après le `subscribeWithError()` réussi du canal du fil.
 - **Règles** : un flux n'est jamais une preuve d'envoi (relecture par `message_id`) ; dédoublonnage par id ; badge = `fn_messages_non_lus()` relu, jamais la somme des `non_lus` d'une page.
-- **Preuve** : STAGING bidirectionnelle obligatoire (T14, pair établissement `scripts/mobile/staging-lot4-peer.mjs`) ; appareil physique pour premier plan, arrière-plan, retour et coupure réseau (`RECETTE_DEVICE_LOT4.md`).
+- **Implémentation (T7a)** : `JoleneSupabase/Realtime/SupabaseRealtimeGateway.swift` (un canal par sujet, partagé entre ses lecteurs, retiré quand le dernier part ; flux déclarés avant `subscribeWithError()` ; état par canal `etat(conversationId:)`, ajout additif au port ; présence : ligne courante lue après chaque abonnement ; saisie : pas de lecture initiale, l'indicateur suit le prochain changement) et `JoleneCore/Messagerie/CycleRealtime.swift` (phases de scène, epoch, badge). Canal fermé par le serveur : le SDK ne le signale pas autrement que par son retrait du client, contrôlé toutes les 5 s ; un canal resté désabonné 30 s (erreur de canal sans reconnexion) est remplacé de la même façon ; un abonnement en échec est repris à 2, 5, 15 puis 30 s tant qu'un lecteur écoute.
+- **Preuve** : par test sur transport simulé (`SupabaseRealtimeGatewayTests`, `RealtimeLifecycleTests`, `FilModelTests`) pour l'ordre et les règles ; **aucun serveur Realtime n'est joint par ces tests** — STAGING bidirectionnelle obligatoire (T14, pair établissement `scripts/mobile/staging-lot4-peer.mjs`) ; appareil physique pour premier plan, arrière-plan, retour et coupure réseau (`RECETTE_DEVICE_LOT4.md`).
 
 ## Jamais `notations_missions` / `evaluations` / `evaluations_publiees` côté natif
 

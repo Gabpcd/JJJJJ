@@ -1,0 +1,127 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "presences": [
+    {
+      "id": "demo-etab-p04",
+      "mission_id": "demo-etab-m04",
+      "soignant_id": "demo-soignant",
+      "distance_etablissement_m": 35,
+      "perimetre_gps_valide": true,
+      "alerte_teleportation": false,
+      "arrivee_mock_detected": false,
+      "depart_mock_detected": false,
+      "valide_par_etablissement": false,
+      "valide_le": null,
+      "motif_litige": null,
+      "missions": {
+        "id": "demo-etab-m04",
+        "intitule": "Démonstration · Nuit en cours",
+        "service": "Médecine polyvalente",
+        "debut_le": "2026-11-01T23:00:00.000Z",
+        "fin_le": "2026-11-02T07:00:00.000Z",
+        "nb_creneaux": 1,
+        "etablissement_id": "demo-etab-1"
+      }
+    },
+    {
+      "id": "demo-etab-p06",
+      "mission_id": "demo-etab-m06",
+      "soignant_id": "demo-soignant",
+      "distance_etablissement_m": 35,
+      "perimetre_gps_valide": true,
+      "alerte_teleportation": false,
+      "arrivee_mock_detected": false,
+      "depart_mock_detected": false,
+      "valide_par_etablissement": false,
+      "valide_le": null,
+      "motif_litige": null,
+      "missions": {
+        "id": "demo-etab-m06",
+        "intitule": "Démonstration · Mission active",
+        "service": "Soins de suite",
+        "debut_le": "2026-11-01T06:00:00.000Z",
+        "fin_le": "2026-11-03T14:00:00.000Z",
+        "nb_creneaux": 2,
+        "etablissement_id": "demo-etab-1"
+      }
+    },
+    {
+      "id": "demo-etab-p07",
+      "mission_id": "demo-etab-m07",
+      "soignant_id": "demo-soignant",
+      "distance_etablissement_m": 35,
+      "perimetre_gps_valide": true,
+      "alerte_teleportation": false,
+      "arrivee_mock_detected": false,
+      "depart_mock_detected": false,
+      "valide_par_etablissement": false,
+      "valide_le": null,
+      "motif_litige": null,
+      "missions": {
+        "id": "demo-etab-m07",
+        "intitule": "Démonstration · Présence à valider",
+        "service": "Médecine polyvalente",
+        "debut_le": "2026-10-31T06:00:00.000Z",
+        "fin_le": "2026-10-31T14:00:00.000Z",
+        "nb_creneaux": 1,
+        "etablissement_id": "demo-etab-1"
+      }
+    },
+    {
+      "id": "demo-etab-p08",
+      "mission_id": "demo-etab-m08",
+      "soignant_id": "demo-soignant-etab-2",
+      "distance_etablissement_m": 420,
+      "perimetre_gps_valide": false,
+      "alerte_teleportation": false,
+      "arrivee_mock_detected": false,
+      "depart_mock_detected": false,
+      "valide_par_etablissement": false,
+      "valide_le": null,
+      "motif_litige": null,
+      "missions": {
+        "id": "demo-etab-m08",
+        "intitule": "Démonstration · Présence hors zone",
+        "service": "Soins de suite",
+        "debut_le": "2026-10-30T06:00:00.000Z",
+        "fin_le": "2026-10-30T14:00:00.000Z",
+        "nb_creneaux": 1,
+        "etablissement_id": "demo-etab-1"
+      }
+    }
+  ],
+  "effectifs": [
+    {
+      "id": "demo-etab-m04-seg-1",
+      "mission_id": "demo-etab-m04",
+      "debut": "2026-11-01T23:58:00.000Z",
+      "fin": null,
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-etab-m06-seg-1",
+      "mission_id": "demo-etab-m06",
+      "debut": "2026-11-01T06:02:00.000Z",
+      "fin": "2026-11-01T14:01:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-etab-m07-effectif-1",
+      "mission_id": "demo-etab-m07",
+      "debut": "2026-10-31T06:01:00.000Z",
+      "fin": "2026-10-31T14:03:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    },
+    {
+      "id": "demo-etab-m08-effectif-1",
+      "mission_id": "demo-etab-m08",
+      "debut": "2026-10-30T06:04:00.000Z",
+      "fin": "2026-10-30T13:58:00.000Z",
+      "est_pause": false,
+      "type_creneau": "EFFECTIF"
+    }
+  ]
+}

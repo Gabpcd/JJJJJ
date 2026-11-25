@@ -28,6 +28,7 @@ public enum DemoEspace: Equatable, Sendable {
 /// T6 : `-JOLENE_DEMO_PLANNING_MODIFIE 1` (première acceptation répondue `PLANNING_MODIFIE_RECONFIRMER`).
 /// T7 : `-JOLENE_POLL_INTERVAL <s>` (cadence de relecture du code de pointage, au moins `CodeRotatifModel.cadenceMinimale`,
 /// au plus la cadence nominale : une valeur illisible, plus lente ou non finie garde la cadence nominale).
+/// T12 : `-JOLENE_DEMO_SECTEUR_PUBLIC 1` (établissement servi comme relevant du secteur public).
 public enum DemoEspaceLancement {
     public static let argumentEspace = "-JOLENE_DEMO_ESPACE"
     public static let argumentRole = "-JOLENE_DEMO_ROLE_ETAB"
@@ -35,6 +36,7 @@ public enum DemoEspaceLancement {
     public static let argumentBlocage = "-JOLENE_DEMO_BLOCAGE"
     public static let argumentPlanningModifie = "-JOLENE_DEMO_PLANNING_MODIFIE"
     public static let argumentCadencePointage = "-JOLENE_POLL_INTERVAL"
+    public static let argumentSecteurPublic = "-JOLENE_DEMO_SECTEUR_PUBLIC"
 
     public static func espace(arguments: [String]) -> DemoEspace {
         guard valeur(argumentEspace, dans: arguments)?.lowercased() == "etablissement" else { return .soignant }
@@ -49,6 +51,7 @@ public enum DemoEspaceLancement {
            cadence >= CodeRotatifModel.cadenceMinimale, cadence < CodeRotatifModel.cadenceNominale {
             configuration.cadencePointage = cadence
         }
+        configuration.secteurPublic = valeur(argumentSecteurPublic, dans: arguments) == "1"
         return .etablissement(configuration)
     }
 
@@ -98,7 +101,8 @@ public extension DemoWorld {
         // Report sur main (lot 3, T7) : l'inscription démo partage l'authentification servie (mêmes `store`/`comptes`).
         gateways.inscription = DemoInscriptionGateway(auth: auth)
         gateways.role = DemoRoleEspaceGateway(identite: identite)
-        gateways.etablissement = DemoEtablissementWorld.gateways(configuration: configuration, identite: identite)
+        gateways.etablissement = DemoEtablissementWorld.gateways(configuration: configuration, identite: identite,
+                                                                messagerie: gateways.messagerie as? DemoMessagerieGateway)
         return gateways
     }
 }

@@ -253,7 +253,7 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
     @State private var retenue: Retenue?
 
     /// - Parameters:
-    ///   - identifier: conteneur du paquet (`swipe-deck`).
+    ///   - identifier: conteneur du paquet (`swipe-deck`) ; vide : aucun conteneur, posé par l'écran (`ConteneurPaquet`).
     ///   - cardIdentifierPrefix: préfixe de la carte du dessus, suivi de l'identifiant de l'élément (`swipe-card-<id>`).
     ///   - cardAccessibility: `.combine` (un élément, défaut) ou `.contain` (enfants identifiés conservés).
     public init(_ items: [Item], identifier: String = SwipeDeckIdentifiers.deck,
@@ -305,8 +305,24 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
         .onChange(of: isBusy) { occupe in
             if !occupe { retenue = nil }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(identifier)
+        .modifier(ConteneurPaquet(identifier: identifier))
+    }
+
+    /// Conteneur d'accessibilité du paquet. Identifiant vide : aucun conteneur, l'écran pose le sien autour du paquet ET
+    /// d'un autre élément. Un conteneur `.contain` dont la carte du dessus est l'unique enfant l'absorbe : la carte perd
+    /// son identifiant `swipe-card-<id>` (run 45446351274 et simulateur iOS 18.6, dernière carte du paquet, quand les
+    /// cartes de fond ne sont plus là pour faire nombre).
+    private struct ConteneurPaquet: ViewModifier {
+        let identifier: String
+
+        @ViewBuilder
+        func body(content: Content) -> some View {
+            if identifier.isEmpty {
+                content
+            } else {
+                content.accessibilityElement(children: .contain).accessibilityIdentifier(identifier)
+            }
+        }
     }
 
     /// Carte de rang `depth` : le dessus suit le doigt et porte geste, identifiant et actions d'accessibilité ;
@@ -316,6 +332,9 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
         let style = SwipeCardGesture.backgroundStyle(depth: depth)
         let decalage = dessus ? decalageAffiche(item) : 0
         return card(item)
+            // Contenu d'une carte de fond masqué à la source : posé seulement après `.accessibilityElement`, le masquage
+            // laissait encore ses boutons exposés (simulateur iOS 18.6).
+            .accessibilityHidden(!dessus)
             .overlay(alignment: .topLeading) { indicateur(.candidater, dx: decalage) }
             .overlay(alignment: .topTrailing) { indicateur(.passer, dx: decalage) }
             // Rotation autour du centre de la carte, puis translation (`translate(dx) rotate(θ)` du web).
@@ -326,7 +345,9 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
             .opacity(style.opacity)
             .highPriorityGesture(glisser(item), including: dessus && !isBusy ? .all : .subviews)
             .allowsHitTesting(dessus)
-            .accessibilityElement(children: cardAccessibility == .combine ? .combine : .contain)
+            // Carte de fond : un seul élément (`.ignore`), masqué. `.accessibilityHidden` posé sur un conteneur `.contain`
+            // laissait ses enfants exposés (boutons « Voir le détail » des cartes de fond relevés sur simulateur iOS 18.6).
+            .accessibilityElement(children: dessus ? (cardAccessibility == .combine ? .combine : .contain) : .ignore)
             .accessibilityHidden(!dessus)
             .accessibilityIdentifier(dessus ? cardIdentifier(for: item) : "")
             .accessibilityActions {

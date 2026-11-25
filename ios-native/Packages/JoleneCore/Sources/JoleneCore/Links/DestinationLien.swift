@@ -60,10 +60,23 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
     /// quelle, sinon `.safari(canonique)`.
     public var destination: JoleneRoute {
         guard route.isNative, !Self.ecranNatifLivre(route) else { return route }
+        // Lot 4 (L4-T10) : la route de Revenus des bulletins (`?tab=bulletins`, alias `bulletins-paie`) a pour destination
+        // l'écran des copies officielles une fois livré, copie visée (`?copie=`) comprise ; la table de `LinkRouter`
+        // n'est pas touchée.
+        if case .revenus(section: .bulletins) = route {
+            let ecran = EcranSecondaire.bulletins(copieId: Self.copieVisee(canonique))
+            if Self.ecranNatifLivre(.secondaire(ecran)) { return .secondaire(ecran) }
+        }
         // Lot 4 (L4-T1) : swipe et score gardent l'écran natif qu'ils ouvraient avant d'avoir leur route
         // (Explorer, hub du compte) jusqu'à la livraison de leur tranche.
         if case .secondaire(let ecran) = route, let repli = ecran.repliAvantLivraison { return repli }
         return .safari(canonique)
+    }
+
+    /// `?copie=` du lien des bulletins (identifiant jamais journalisé), nil s'il est absent ou vide.
+    static func copieVisee(_ canonique: URL) -> String? {
+        let valeur = URLComponents(url: canonique, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "copie" }?.value
+        return (valeur ?? "").isEmpty ? nil : valeur
     }
 
     /// Destination dans l'app pour une route native (`false` pour une route externe) : `true` veut
@@ -75,7 +88,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .connexion, .accueil, .explorer, .missionDetail:
             return true                                  // lots 0 et 1 : écrans présents sur la base
         case .resetPassword:
-            return false                                 // reset natif non livré (reliquat L1-T10) ; `?code=` refusé par `DeepLinkIntent` (option B)
+            return true                                  // reste de L1-T10 — `ResetPasswordScreen` (hors espace : `BoiteLiensInscription`) ; `?code=` refusé par `DeepLinkIntent` (option B)
         case .confirmerInscription:
             return true                                  // T7 — `ConfirmationInscriptionScreen` (hors espace : `BoiteLiensInscription`)
         case .missions:
@@ -83,7 +96,7 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
         case .favoris:
             return true                                  // L1-T4b — `MesFavorisScreen`, empilé sur l'onglet Explorer
         case .serieDetail:
-            return false                                 // renvoi web assumé (décision 11 du lot 1) ; natif au lot 4
+            return true                                  // L4-T12 — `SerieDetailScreen` (report de la décision 11 du lot 1), drapeau `ios_natif_serie_actif`
         case .revenus(section: .apercu):
             return true                                  // T12 — RevenusScreen (onglet Revenus)
         case .monCompte:
@@ -113,27 +126,27 @@ public struct DestinationLien: Equatable, Sendable, CustomStringConvertible, Cus
             return true                                  // L2-T10 — `ContratScreen`, `CertificatRoute` (T9a), drapeau `ios_natif_contrats_actif`
         // Lot 4 — une ligne par écran, passée à `true` par sa seule tranche (L4-T1c, revue B8 de #1159, m4).
         case .secondaire(.swipe):
-            return false                                 // T3b — vue Swipe d'Explorer (repli `.explorer` jusque-là)
+            return true                                  // T3b — vue Swipe d'Explorer (`SwipeModeView`, jamais un écran empilé)
         case .secondaire(.recherches):
             return true                                  // T4 — `RecherchesScreen` (hub « Recherche & disponibilité »), alerte rapide d'Explorer
         case .secondaire(.disponibilites):
-            return false                                 // T5 — disponibilités
+            return true                                  // T5 — `DisponibilitesScreen` (atteint par lien, push ou centre : aucune entrée dans le hub web)
         case .secondaire(.parrainage):
-            return false                                 // T6 — parrainage
+            return true                                  // T6 — `ParrainageScreen` (hub du compte, entrée « Parrainage »)
         case .secondaire(.messagerie):
-            return false                                 // T7b — messagerie
+            return true                                  // T7b — `MessagerieScreen` (bouton Messages de la barre, fil d'une mission)
         case .secondaire(.litiges):
-            return false                                 // T8 — litiges et réclamations (deux onglets, deux coupe-circuits)
+            return true                                  // T8 — `LitigesScreen` (hub « Suivi »), deux onglets, deux coupe-circuits
         case .secondaire(.evaluations):
-            return false                                 // T9 — évaluations reçues
+            return true                                  // T9 — `EvaluationsScreen` (évaluations reçues, signalement)
         case .secondaire(.score):
-            return false                                 // T9 — mon score (repli `.monCompte` jusque-là)
+            return true                                  // T9 — `ScoreScreen` (mon score, contestation d'un événement)
         case .secondaire(.bulletins):
-            return false                                 // T10 — copies officielles (avec la destination de `.revenus(.bulletins)`)
+            return true                                  // T10 — `BulletinsScreen` (copies officielles), destination de `.revenus(.bulletins)`
         case .secondaire(.poolUrgence):
-            return false                                 // T11 — pool urgence
+            return true                                  // T11 — pool urgence
         case .secondaire(.exclusions):
-            return false                                 // T11 — établissements exclus
+            return true                                  // T11 — établissements exclus
         case .secondaire(.serie):
             return false                                 // T12 — jamais routée ainsi (`LinkRouter` rend `.serieDetail`, ligne ci-dessus)
         case .safari, .etablissement:

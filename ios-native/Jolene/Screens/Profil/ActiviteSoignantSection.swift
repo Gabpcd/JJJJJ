@@ -26,14 +26,32 @@ struct ActiviteSoignantSection: View {
     }
 }
 
-/// « Documents & protection » du hub web (`MonCompteSoignant.tsx` l.80-89 : Passer en libéral, Attestation d'heures,
-/// Prévoyance, selon le type d'exercice et la profession) — **stub de L4-T1c**, remplacé par T13 (renvois web assumés
-/// de `LOT4_PLAN.md` §1.3) sans retoucher `ProfileScreen`. Ne rend rien avant T13.
+/// « Documents & protection » du hub web (`MonCompteSoignant.tsx` l.80-89), L4-T13 (intégration de la vague D, décision
+/// f) : renvois web assumés de `LOT4_PLAN.md` §1.3, table `RenvoisWebLot4.entreesDocumentsProtection` — « Prévoyance »
+/// seule, la ligne que le web montre à tous ; « Passer en libéral » et « Attestation d'heures » dépendent de
+/// l'éligibilité au libéral, règle juridique jamais recalculée en natif (voir `RenvoisWebLot4`). Chaque ligne présente sa
+/// page web par le présentateur `.safari` (`SFSafariViewController`, double `renvoi-web-demo` en démo), jamais
+/// `openURL` ; sans présentateur, la section ne rend rien (jamais un bouton sans effet).
+///
+/// Identifiants : `hub-renvoi-<clé>` (valeur = URL présentée).
 struct RenvoisWebHubSection: View {
     @ObservedObject var session: SessionStore
     let snapshot: SessionSnapshot
+    @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
 
     var body: some View {
-        EmptyView()
+        if let presentateurRenvoiWeb, !RenvoisWebLot4.entreesDocumentsProtection.isEmpty {
+            Section {
+                ForEach(RenvoisWebLot4.entreesDocumentsProtection, id: \.identifiant) { entree in
+                    Button { presentateurRenvoiWeb.presenter(.safari(entree.url)) } label: {
+                        Label(entree.libelle, systemImage: "safari")
+                    }
+                    .accessibilityIdentifier(entree.identifiant)
+                    .accessibilityValue(entree.url.absoluteString)
+                }
+            } header: {
+                Text(RenvoisWebLot4.titreDocumentsProtection)
+            }
+        }
     }
 }

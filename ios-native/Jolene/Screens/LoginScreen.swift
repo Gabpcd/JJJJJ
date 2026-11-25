@@ -16,6 +16,9 @@ struct LoginScreen: View {
     let isDemo: Bool
     var retryRestore: (() async -> Void)? = nil
     var creerCompte: (() -> Void)? = nil
+    /// Reste de L1-T10 : « Mot de passe oublié ? » (`login-forgot`, `PageConnexion.tsx` l.339-346) ouvre la demande
+    /// de lien (`ResetRequestSheet`, présentée par la racine).
+    var motDePasseOublie: (() -> Void)? = nil
     let submit: (String, String) async -> Void
 
     @State private var password = ""
@@ -75,6 +78,19 @@ struct LoginScreen: View {
                         }
                         .disabled(isSubmitting)
                         .accessibilityIdentifier("login-create-account")
+                    }
+                    if let motDePasseOublie {
+                        Button {
+                            focusedField = nil
+                            motDePasseOublie()
+                        } label: {
+                            Text(ReinitialisationTextes.motDePasseOublie)
+                                .font(JoleneFont.callout)
+                                .foregroundStyle(JoleneColor.rose700)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("login-forgot")
                     }
                 }
                 .padding(JoleneSpacing.xl)

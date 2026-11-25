@@ -1,0 +1,120 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "conversations": [
+    {
+      "id": "demo-etab-conv-001",
+      "participant_1_id": "demo-soignant",
+      "participant_2_id": "demo-etablissement",
+      "mission_id": "demo-etab-m04",
+      "etablissement_id": "demo-etab-1",
+      "soignant_id": "demo-soignant",
+      "cree_le": "2026-10-30T00:00:00.000Z",
+      "archived_at": null,
+      "autre_id": "demo-soignant",
+      "mission_intitule": "Démonstration · Nuit en cours",
+      "mission_statut": "ASSIGNEE"
+    },
+    {
+      "id": "demo-etab-conv-002",
+      "participant_1_id": "demo-soignant-etab-2",
+      "participant_2_id": "demo-etablissement",
+      "mission_id": "demo-etab-m08",
+      "etablissement_id": "demo-etab-1",
+      "soignant_id": "demo-soignant-etab-2",
+      "cree_le": "2026-10-30T00:00:00.000Z",
+      "archived_at": "2026-10-31T00:00:00.000Z",
+      "autre_id": "demo-soignant-etab-2",
+      "mission_intitule": "Démonstration · Présence hors zone",
+      "mission_statut": "TERMINEE"
+    }
+  ],
+  "interlocuteurs": [
+    {
+      "conversation_id": "demo-etab-conv-001",
+      "participant_id": "demo-soignant",
+      "prenom": "Camille",
+      "nom": "Démo",
+      "avatar_url": null,
+      "est_jolene": false
+    },
+    {
+      "conversation_id": "demo-etab-conv-002",
+      "participant_id": "demo-soignant-etab-2",
+      "prenom": "Alex",
+      "nom": "Fictif",
+      "avatar_url": null,
+      "est_jolene": false
+    }
+  ],
+  "presences": [
+    {
+      "user_id": "demo-soignant",
+      "status": "ONLINE",
+      "last_seen_at": "2026-11-01T23:59:00.000Z"
+    },
+    {
+      "user_id": "demo-soignant-etab-2",
+      "status": "OFFLINE",
+      "last_seen_at": "2026-10-30T00:00:00.000Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": "demo-etab-message-001",
+      "conversation_id": "demo-etab-conv-001",
+      "auteur_id": "demo-soignant",
+      "contenu": "Bonjour, je confirme ma présence pour la nuit.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-11-01T19:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-message-002",
+      "conversation_id": "demo-etab-conv-001",
+      "auteur_id": "demo-etab-collegue",
+      "contenu": "Bonjour, l'équipe de nuit vous accueillera à l'accueil principal.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-11-01T20:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-message-003",
+      "conversation_id": "demo-etab-conv-001",
+      "auteur_id": "demo-soignant",
+      "contenu": "Merci, faut-il un badge pour entrer ?",
+      "lu": false,
+      "est_admin": false,
+      "cree_le": "2026-11-01T23:20:00.000Z"
+    },
+    {
+      "id": "demo-etab-message-004",
+      "conversation_id": "demo-etab-conv-001",
+      "auteur_id": "demo-soignant",
+      "contenu": "Je peux arriver un peu en avance si besoin.",
+      "lu": false,
+      "est_admin": false,
+      "cree_le": "2026-11-01T23:25:00.000Z"
+    },
+    {
+      "id": "demo-etab-message-005",
+      "conversation_id": "demo-etab-conv-002",
+      "auteur_id": "demo-etablissement",
+      "contenu": "Merci pour votre mission.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-10-27T00:00:00.000Z"
+    },
+    {
+      "id": "demo-etab-message-006",
+      "conversation_id": "demo-etab-conv-002",
+      "auteur_id": "demo-soignant-etab-2",
+      "contenu": "Merci à vous, bonne continuation.",
+      "lu": true,
+      "est_admin": false,
+      "cree_le": "2026-10-27T00:10:00.000Z"
+    }
+  ],
+  "reponse_demo": {
+    "contenu": "Bien reçu, merci."
+  }
+}

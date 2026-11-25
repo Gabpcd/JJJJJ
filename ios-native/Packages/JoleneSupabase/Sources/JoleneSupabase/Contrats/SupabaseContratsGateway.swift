@@ -40,9 +40,11 @@ public struct SupabaseContratsGateway: ContratsPort {
     static let exceptionsSignature: Set<String> = ["23514"]
     static let codeHashChange = "HASH_DOCUMENT_CHANGE"
 
-    private let client: SupabaseClient
-    private let clock: any ClockPort
-    private let projet: URL
+    // Internes (et non privés) : l'extension de l'espace établissement les réemploie (lot 5, T10,
+    // `Etablissement/SupabaseEtabContratsGateway.swift`).
+    let client: SupabaseClient
+    let clock: any ClockPort
+    let projet: URL
 
     /// - Parameter projet: URL du projet (défaut : celle du stockage du client, `https://<ref>.supabase.co/storage/v1`),
     ///   seule source de la garde STAGING de l'admission de recette.
@@ -278,7 +280,7 @@ public struct SupabaseContratsGateway: ContratsPort {
         enum CodingKeys: String, CodingKey { case id, hashDocument = "hash_document" }
     }
 
-    private func empreinteActuelle(contratId: String) async throws -> String? {
+    func empreinteActuelle(contratId: String) async throws -> String? {
         let lignes: [LigneEmpreinte]
         do {
             lignes = try await client.from(Self.table)
@@ -296,7 +298,7 @@ public struct SupabaseContratsGateway: ContratsPort {
     }
 
     /// Rendu serveur de l'original (corps `{contrat_id}` seulement) : un appel, refus restitué verbatim.
-    private func demanderRendu(contratId: String) async throws {
+    func demanderRendu(contratId: String) async throws {
         let options = FunctionInvokeOptions(method: .post, body: ["contrat_id": contratId])
         let reponse: RPCResponse
         do {
@@ -314,7 +316,7 @@ public struct SupabaseContratsGateway: ContratsPort {
     }
 
     /// Octets de l'original Storage. Objet absent ou refusé (400/404) : motif d'intégrité ; transport : erreur.
-    private func telecharger(_ chemin: String) async throws -> Data {
+    func telecharger(_ chemin: String) async throws -> Data {
         do {
             return try await client.storage.from(Self.bucket).download(path: chemin)
         } catch let erreur as StorageError {
@@ -345,13 +347,18 @@ public struct SupabaseContratsGateway: ContratsPort {
     }
 
     private func verifierSession(_ context: MissionReadContext) async throws {
+        try await verifierSession(userId: context.userId)
+    }
+
+    /// Session du compte affiché exigée avant une mutation (soignant, ou membre de l'établissement au lot 5).
+    func verifierSession(userId: String) async throws {
         let session: Session
         do {
             session = try await client.auth.session
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: SupabaseErrorMapping.unauthorizedMessage)
         }
-        guard Self.meme(session.user.id.uuidString, context.userId) else {
+        guard Self.meme(session.user.id.uuidString, userId) else {
             throw JoleneError(.unauthorized, SupabaseErrorMapping.unauthorizedMessage)
         }
     }
@@ -359,7 +366,7 @@ public struct SupabaseContratsGateway: ContratsPort {
     // MARK: - Outils
 
     /// Lecture complémentaire en échec : `nil`, sauf session expirée et annulation, propagées.
-    private static func complementIndisponible<T>(_ error: Error) throws -> T? {
+    static func complementIndisponible<T>(_ error: Error) throws -> T? {
         if error is CancellationError { throw error }
         let erreur = SupabaseErrorMapping.map(error, fallback: MessagesContrats.indisponible)
         if erreur.kind == .unauthorized || erreur.kind == .cancelled { throw erreur }
@@ -367,7 +374,7 @@ public struct SupabaseContratsGateway: ContratsPort {
     }
 
     /// Identifiants UUID comparés sans casse (Postgres les rend en minuscules, `UUID.uuidString` en majuscules).
-    private static func meme(_ a: String?, _ b: String) -> Bool {
+    static func meme(_ a: String?, _ b: String) -> Bool {
         guard let a else { return false }
         return a.lowercased() == b.lowercased()
     }

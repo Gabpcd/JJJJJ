@@ -43,9 +43,12 @@ final class RulesCopieBulletinValidationTests: XCTestCase {
     /// La ligne validée devient le modèle `CopieBulletin` (employeur = `etablissement_nom`), champ pour champ.
     func testLigneValideeDevientLeModele() throws {
         let copies = try CopieBulletinValidation.valider(.tableau([.objet(Self.ligne)]))
-        XCTAssertEqual(copies, [CopieBulletin(id: "10000000-0000-4000-8000-000000000001", employeurNom: "Employeur de test",
+        XCTAssertEqual(copies, [CopieBulletin(id: "10000000-0000-4000-8000-000000000001",
+                                              etablissementId: "10000000-0000-4000-8000-000000000002",
+                                              employeurNom: "Employeur de test",
                                               periodeDebut: "2026-09-01", periodeFin: "2026-09-30", statut: .remplacee,
-                                              tailleOctets: 256, sha256: String(repeating: "a", count: 64),
+                                              version: 2, publieLe: "2026-09-29T12:00:00.123456+00:00",
+                                              motifRemplacement: .contenu, tailleOctets: 256, sha256: String(repeating: "a", count: 64),
                                               missionIds: ["10000000-0000-4000-8000-000000000004"], signalee: true)])
         XCTAssertTrue(CopieBulletinValidation.telechargeable(copies[0].statut))
         XCTAssertFalse(CopieBulletinValidation.telechargeable(.retiree))

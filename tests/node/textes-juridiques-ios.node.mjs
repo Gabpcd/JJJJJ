@@ -113,18 +113,26 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
   // Lot 5, tranche T0 (LOT5_PLAN §2.9, D30) : textes de l'espace établissement, même mécanisme.
   const lot5 = ['src/components/BandeauBlocageAuto.tsx', 'src/components/FormulaireMission.tsx',
     'src/components/ListeCandidatures.tsx', 'src/pages/DashboardEtablissement.tsx'];
+  // Lot 4, tranche T10 (LOT4_PLAN §3 T10) : copies officielles des bulletins — mention de l'employeur et avertissement
+  // de retrait (HARD STOP), libellés de la liste, messages de la bibliothèque, titre du partage.
+  const lot4 = ['src/components/CopiesBulletins.tsx', 'src/components/CopiesBulletinsListe.tsx',
+    'src/lib/copiesBulletins.ts', 'src/lib/copiesBulletinsPartageNatif.ts', 'src/pages/BulletinsPaie.tsx'];
   assert.deepEqual([...fichiers].sort(), [
     'src/components/AccesEtablissement.tsx', // T9a : erreur de chargement de la liste des contrats
     'src/components/BandeauHorsLigne.tsx', // T4b : bandeau hors ligne de la page Présences
     'src/components/BandeauOubliDepart.tsx', // T5a : action du bandeau d'oubli de départ (Accueil)
+    'src/components/BandeauRappelDPAE.tsx', // revue B8 des textes de la vague D (M6) : rappel DPAE de l'employeur
     'src/components/BandeauSansGPS.tsx',
+    'src/components/BoutonExclusion.tsx', // L4-T11 : « Ne plus travailler ensemble » (HARD STOP)
     'src/components/CarteProposition.tsx', // L1-T6b : réponse à une proposition (revue B8 m7)
     'src/components/CertificatSignature.tsx',
     'src/components/ChoixContratDialog.tsx', // L1-T6b : choix du contrat (revue B8 m7)
     'src/components/ConsentementGPS.tsx',
     'src/components/Countdown72hSignature.tsx',
+    'src/components/DPAEStatus.tsx', // revue B8 des textes de la vague D (M6) : statut DPAE de l'employeur
     'src/components/NotationRapide.tsx', // T5a : feuille de notation rapide
     'src/components/PanneauContestation.tsx',
+    'src/components/PoolUrgenceToggle.tsx', // L4-T11 : consentement du pool urgence, SMS compris (HARD STOP)
     'src/components/SignerContratOtp.tsx',
     'src/components/WidgetAllerPointer.tsx', // T5a : widget « Aller pointer » (Accueil)
     'src/components/planning/RecapitulatifCandidatureDialog.tsx', // L1-T6b : récapitulatif et phrases d'engagement (HARD STOP)
@@ -135,6 +143,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/components/pointage/PointageRotatifSoignant.tsx',
     'src/components/profil-soignant/SectionPreferences.tsx',
     'src/components/soignant/ModaleAnnulationCandidature.tsx', // L1-T7 : annulation d'une candidature retenue
+    'src/components/swipe/VueSwipeMissions.tsx', // L4-T3b : feuille « première candidature » de la vue Swipe (HARD STOP)
     'src/pages/CertificatSignaturePage.tsx',
     'src/pages/ContratMission.tsx',
     'src/pages/DetailMissionSoignant.tsx', // T5a : points d'entrée du détail d'une mission
@@ -144,7 +153,7 @@ test('TL : chaque constante de TextesWeb.swift et de LibellesWeb.swift est le te
     'src/pages/MesDocuments.tsx',
     'src/pages/PageStripeConnect.tsx', // L3-T14a (revue B8 de #1144, m1) : cartes contractuelles de Stripe Connect
     'src/pages/PresencesSoignant.tsx',
-  ].concat(lot5).sort());
+  ].concat(lot5, lot4).sort());
 });
 
 // Textes exigés par LOT2_PLAN v2 §3 « TL », item par item, par NOM de constante (les lignes du
@@ -230,6 +239,18 @@ const EXIGES = {
   'src/components/FormulaireMission.tsx': [
     'PublicationEtablissement.optionSalarieLibelle', 'PublicationEtablissement.optionSalarieDescription',
   ],
+  // Lot 4, T3b (LOT4_PLAN §3 T3b, HARD STOP n°4) : feuille « première candidature » de la vue Swipe, l.540-563
+  // (titre, description, paragraphe d'acceptation en quatre morceaux, deux puces, « Pas maintenant », confirmation).
+  'src/components/swipe/VueSwipeMissions.tsx': [
+    'PremiereCandidature.titre', 'PremiereCandidature.description', 'PremiereCandidature.acceptationDirecte',
+    'PremiereCandidature.acceptationSiCas', 'PremiereCandidature.acceptationConfirmee',
+    'PremiereCandidature.acceptationCompteSurToi', 'PremiereCandidature.retraitLibre',
+    'PremiereCandidature.annulationTardive', 'PremiereCandidature.pasMaintenant', 'PremiereCandidature.confirmer',
+  ],
+  // Lot 4, T10 (LOT4_PLAN §3 T10, HARD STOP n°4) : mention de l'employeur en tête des copies officielles
+  // (CopiesBulletins.tsx l.44) et avertissement de retrait d'un signalement « DESTINATAIRE » (CopiesBulletinsListe.tsx l.90).
+  'src/components/CopiesBulletins.tsx': ['CopiesBulletins.mentionEmployeur'],
+  'src/components/CopiesBulletinsListe.tsx': ['CopiesBulletins.avertissementRetrait'],
 };
 
 // Libellés et textes repris en plus du blueprint (revues fraîches de TL), pour que les écrans du

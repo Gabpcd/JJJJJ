@@ -79,6 +79,16 @@ final class TextesWebTests: XCTestCase {
             "TextesWeb.Candidature.mentionAccepter",
             // L1-T7 : confirmation de l'annulation sans candidature (`DetailMissionSoignant.tsx` l.916).
             "TextesWeb.Annulation.participationAnnulee",
+            // L4-T3b : feuille « première candidature » de la vue Swipe (`VueSwipeMissions.tsx` l.540-553), portée
+            // d'engagement reprise à l'identique (HARD STOP n°4) ; le vouvoiement passera d'abord par le web.
+            "TextesWeb.PremiereCandidature.titre",
+            "TextesWeb.PremiereCandidature.acceptationDirecte",
+            "TextesWeb.PremiereCandidature.acceptationCompteSurToi",
+            "TextesWeb.PremiereCandidature.retraitLibre",
+            "TextesWeb.PremiereCandidature.annulationTardive",
+            // L4-T11 : consentement du pool urgence (`PoolUrgenceToggle.tsx` l.111, l.229-230), repris à l'identique.
+            "TextesWeb.PoolUrgence.disponibleDescription",
+            "TextesWeb.PoolUrgence.engagementDebut",
         ]
         let marques: Set<String> = ["tu", "te", "toi", "ton", "ta", "tes", "t"]
         for entree in Self.tousLesTextes {
@@ -181,6 +191,12 @@ final class TextesWebTests: XCTestCase {
         }
     }
 
+    /// Revue B8 des textes de la vague D (M6) : rappel DPAE « effectuée », date suivie comme le web (`BandeauRappelDPAE.tsx` l.25).
+    func testDPAEEffectueeLeCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.DPAE.effectueeLe(dateFormatee: "3 novembre 2026"),
+                       "✅ DPAE déclarée comme effectuée par l'établissement le 3 novembre 2026")
+    }
+
     func testAttestationSigneeLeCommeLeRenduWeb() {
         XCTAssertEqual(TextesWeb.AttestationSante.signeeLe(dateFormatee: "2 novembre 2026"),
                        "✅ Attestation signée le 2 novembre 2026")
@@ -278,6 +294,25 @@ final class TextesWebTests: XCTestCase {
         XCTAssertEqual(TextesWeb.StripeConnect.salarieEtapeConfirmation, "Tu confirmes la réception dans Mes gains")
     }
 
+    /// Lot 4, T3b : feuille « première candidature » de la vue Swipe (`VueSwipeMissions.tsx` l.540-563, HARD STOP n°4,
+    /// portée d'engagement) : paragraphe rendu par React (gras, texte, gras, texte), deux puces dans l'ordre du web,
+    /// tutoiement du web conservé.
+    func testPremiereCandidatureCommeLeRenduWeb() {
+        let feuille = TextesWeb.PremiereCandidature.self
+        XCTAssertEqual(feuille.acceptation, "L'établissement peut t'accepter directement — si c'est le cas, la mission est confirmée : il compte sur toi auprès de ses patients.")
+        XCTAssertEqual(feuille.engagements, [feuille.retraitLibre, feuille.annulationTardive])
+        XCTAssertEqual(feuille.titre, "Ta première candidature 🎉")
+        XCTAssertEqual(feuille.description, "Ici, candidater est un engagement — pas un simple like.")
+        XCTAssertEqual(feuille.retraitLibre, "Tu peux retirer ta candidature librement tant qu'elle n'est pas acceptée.")
+        XCTAssertEqual(feuille.annulationTardive, "Après acceptation, une annulation tardive impacte ton score de fiabilité.")
+        XCTAssertEqual(feuille.pasMaintenant, "Pas maintenant")
+        XCTAssertEqual(feuille.confirmer, "J'ai compris — envoyer ma candidature")
+        for cle in ["titre", "description", "acceptationDirecte", "acceptationSiCas", "acceptationConfirmee",
+                    "acceptationCompteSurToi", "retraitLibre", "annulationTardive", "pasMaintenant", "confirmer"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == "PremiereCandidature." + cle }, cle)
+        }
+    }
+
     /// Annulation (lot 1, T7 ; `ModaleAnnulationCandidature.tsx` l.129-132) : « Score impacté » seulement pour des points
     /// serveur négatifs ; 0 ou absent (`Number(result?.points ?? 0)`) → « Candidature annulée. ».
     func testAnnulationCommeLeRenduWeb() {
@@ -292,5 +327,42 @@ final class TextesWebTests: XCTestCase {
                     "participationAnnulee", "ouiAnnuler"] {
             XCTAssertTrue(catalogue.contains { $0.cle == "Annulation." + cle }, cle)
         }
+    }
+
+    /// Revue B8 des textes de la vague D (M1) : « Acceptation 1-clic, validation étab sous 1h. » (`PoolUrgenceSoignant.tsx`
+    /// l.136) promet un délai qu'aucun mécanisme serveur ne garantit, comme le « sous 72h » du score : la constante reste
+    /// verbatim pour suivre le web, l'écran n'affiche que la première phrase, dérivée sans réécriture.
+    func testSousTitreDuPoolUrgenceSansPromesseDeDelai() throws {
+        XCTAssertEqual(PoolUrgenceTextes.sousTitre,
+                       "Missions de remplacement de dernière minute correspondant à votre profil. Acceptation 1-clic, validation étab sous 1h.")
+        XCTAssertEqual(PoolUrgenceTextes.sousTitreAffiche,
+                       "Missions de remplacement de dernière minute correspondant à votre profil.")
+        XCTAssertTrue(PoolUrgenceTextes.sousTitre.hasPrefix(PoolUrgenceTextes.sousTitreAffiche), "dérivé, jamais réécrit")
+        XCTAssertNil(PoolUrgenceTextes.sousTitreAffiche.range(of: #"\d+\s*h\b|sous "#, options: .regularExpression))
+        var racine = URL(fileURLWithPath: #filePath)
+        for _ in 0..<5 { racine.deleteLastPathComponent() }
+        let ecran = try String(contentsOf: racine.appendingPathComponent("Jolene/Screens/Secondaires/PoolUrgence/PoolUrgenceScreen.swift"),
+                               encoding: .utf8)
+        XCTAssertTrue(ecran.contains("PoolUrgenceTextes.sousTitreAffiche"))
+        XCTAssertFalse(ecran.contains("PoolUrgenceTextes.sousTitre)"), "la phrase du délai n'est jamais rendue")
+    }
+
+    /// Pool urgence (lot 4, T11 ; `PoolUrgenceToggle.tsx` l.228-231) : texte d'engagement du web gardé verbatim pour la garde
+    /// des textes ; l'écran affiche `PoolUrgenceTextes.engagementAffiche`, sans la promesse « +10 points de fiabilité »
+    /// (précision 17 de `DECISIONS_LOT4.md`).
+    func testEngagementDuPoolUrgenceCommeLeRenduWeb() {
+        XCTAssertEqual(TextesWeb.PoolUrgence.engagement,
+                       "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser. Chaque mission urgence terminée te rapporte +10 points de fiabilité.")
+        for cle in ["PoolUrgence.disponible", "PoolUrgence.disponibleDescription", "PoolUrgence.smsTitre",
+                    "PoolUrgence.smsDescription", "PoolUrgence.avantageFiabilite", "PoolUrgence.engagementDebut",
+                    "PoolUrgence.engagementPoints", "PoolUrgence.engagementFin", "Exclusion.bouton", "Exclusion.titre",
+                    "Exclusion.effet", "Exclusion.confirmer", "Exclusion.enregistree"] {
+            XCTAssertTrue(catalogue.contains { $0.cle == cle }, cle)
+        }
+        XCTAssertEqual(PoolUrgenceTextes.engagementAffiche,
+                       "En activant le pool d'urgence, tu acceptes d'être contacté(e) pour des remplacements de dernière minute dans ton rayon. Tu restes libre de refuser.")
+        XCTAssertTrue(TextesWeb.PoolUrgence.engagementDebut.hasPrefix(PoolUrgenceTextes.engagementAffiche.dropLast()),
+                      "dérivé du texte verbatim, jamais réécrit")
+        XCTAssertFalse(PoolUrgenceTextes.engagementAffiche.contains("points"))
     }
 }

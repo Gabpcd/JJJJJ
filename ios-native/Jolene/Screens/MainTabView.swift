@@ -118,7 +118,8 @@ struct MainTabView: View {
             NavigationStack(path: $cheminExplorer) {
                 // Lot 2 T5a (revue fraîche, m6) : changement d'onglet transmis au détail d'une mission.
                 MissionsListScreen(session: session, snapshot: snapshot) { selection = $0 }
-                    .boutonMessages() // lot 4, T1c (stub jusqu'à T7b)
+                    // Largeur régulière : Messages dans la rangée de chips, « Filtres » seul à droite (`boutonMessages`).
+                    .boutonMessages(explorer: true) // lot 4, T1c (stub jusqu'à T7b)
             }
             .tabItem { Label("Explorer", systemImage: "magnifyingglass") }
             .tag(Tab.explorer)
@@ -185,7 +186,7 @@ struct MainTabView: View {
         .environment(\.mediaDemo, container.mediaDemo) // L1-T7 : justificatif d'annulation (détail d'une mission)
         // Lot 4, T1c : contexte des écrans secondaires (emplacements du détail de mission, d'Explorer et de la barre).
         .environment(\.contexteSecondaire, contexteSecondaire)
-        .onDisappear { FichierContratTemporaire.effacerTout() } // lot 2 T9a : copies de contrats effacées au changement d'epoch
+        .onDisappear { FichiersTemporairesSensibles.purger() } // lot 2 T9a, revue B8 sécurité (vague D, m6) : copies de contrats et de bulletins effacées au changement d'epoch
         // Lot 1, T5 : ajout au calendrier (Accueil et Mes missions), une instance par session prête.
         .ajoutCalendrier(container: container, userId: snapshot.user.id)
         // Fond de carte (`carteTuiles`) : injecté à la racine par `RootView` (revue T4a), hérité ici.

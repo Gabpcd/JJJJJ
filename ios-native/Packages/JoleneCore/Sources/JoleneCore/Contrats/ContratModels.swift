@@ -150,7 +150,7 @@ public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
     public static let colonnes = ["id", "mission_id", "soignant_id", "etablissement_id", "numero_contrat", "type_contrat", "statut",
                                   "mode_signature", "contenu_html", "hash_document", "storage_path", "contenu_html_rendu_le",
                                   "signature_soignant", "signature_soignant_le", "signature_etablissement",
-                                  "signature_etablissement_le", "cree_le"]
+                                  "signature_etablissement_le", "cree_le", "dpae_numero", "dpae_effectuee", "dpae_effectuee_le"]
     public static var selection: String { colonnes.joined(separator: ",") }
 
     public var id: String
@@ -170,6 +170,10 @@ public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
     public var soignantId: String?
     public var etablissementId: String?
     public var modeSignature: String?
+    /// Suivi DPAE lu comme le web (`ContratMission.tsx` l.651, l.828 ; revue B8 des textes de la vague D, M6), jamais écrit.
+    public var dpaeNumero: String?
+    public var dpaeEffectuee: Bool?
+    public var dpaeEffectueeLe: String?
     /// Contexte relu à part (jamais décodé de la ligne).
     public var mission: MissionContrat?
     public var etablissementNom: String?
@@ -180,7 +184,8 @@ public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
                 signatureSoignant: Bool? = nil, signatureEtablissement: Bool? = nil, signatureSoignantLe: String? = nil,
                 signatureEtablissementLe: String? = nil, creeLe: String? = nil, numeroContrat: String? = nil,
                 soignantId: String? = nil, etablissementId: String? = nil, modeSignature: String? = nil,
-                mission: MissionContrat? = nil, etablissementNom: String? = nil, estCompteTest: Bool = false) {
+                mission: MissionContrat? = nil, etablissementNom: String? = nil, estCompteTest: Bool = false,
+                dpaeNumero: String? = nil, dpaeEffectuee: Bool? = nil, dpaeEffectueeLe: String? = nil) {
         self.id = id; self.missionId = missionId; self.statut = statut; self.typeContrat = typeContrat
         self.contenuHtml = contenuHtml; self.hashDocument = hashDocument; self.storagePath = storagePath
         self.contenuHtmlRenduLe = contenuHtmlRenduLe; self.signatureSoignant = signatureSoignant
@@ -188,10 +193,12 @@ public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
         self.signatureEtablissementLe = signatureEtablissementLe; self.creeLe = creeLe; self.numeroContrat = numeroContrat
         self.soignantId = soignantId; self.etablissementId = etablissementId; self.modeSignature = modeSignature
         self.mission = mission; self.etablissementNom = etablissementNom; self.estCompteTest = estCompteTest
+        self.dpaeNumero = dpaeNumero; self.dpaeEffectuee = dpaeEffectuee; self.dpaeEffectueeLe = dpaeEffectueeLe
     }
 
     enum CodingKeys: String, CodingKey {
         case id, statut
+        case dpaeNumero = "dpae_numero", dpaeEffectuee = "dpae_effectuee", dpaeEffectueeLe = "dpae_effectuee_le"
         case missionId = "mission_id"
         case typeContrat = "type_contrat"
         case contenuHtml = "contenu_html"
@@ -228,6 +235,9 @@ public struct ContratDetail: Codable, Equatable, Sendable, Identifiable {
         soignantId = c.tolerant(String.self, .soignantId)
         etablissementId = c.tolerant(String.self, .etablissementId)
         modeSignature = c.tolerant(String.self, .modeSignature)
+        dpaeNumero = c.tolerant(String.self, .dpaeNumero)
+        dpaeEffectuee = c.tolerant(Bool.self, .dpaeEffectuee)
+        dpaeEffectueeLe = c.tolerant(String.self, .dpaeEffectueeLe)
         mission = nil
         etablissementNom = nil
         estCompteTest = false

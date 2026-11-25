@@ -266,6 +266,44 @@ public enum SwipeOutcome: Equatable, Sendable {
     case refuse(code: String?, message: String)
 }
 
+/// Avis rendus par `fn_enregistrer_swipe` avec un ❤️ confirmé (`{ok:true, …, docs_a_completer, warning}`), portés par
+/// T3b (revue B8 de #1165, m3) : `CandidatureOutcome.confirmed` du lot 1 ne les transporte pas.
+public struct AvisSwipeLike: Equatable, Sendable {
+    /// `warning` du contrôle de planning (`fn_conflit_planning_soignant`), texte du serveur affiché tel quel, non
+    /// bloquant (`toast.warning(result.warning)` du web) ; `nil` sans avertissement.
+    public var avertissement: String?
+    /// `docs_a_completer` : les documents exigés pour le contrat retenu ne sont pas tous valides.
+    public var documentsACompleter: Bool
+
+    public init(avertissement: String? = nil, documentsACompleter: Bool = false) {
+        let texte = avertissement?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.avertissement = texte.isEmpty ? nil : texte
+        self.documentsACompleter = documentsACompleter
+    }
+
+    /// Rien à montrer : ni avertissement ni documents à compléter.
+    public var estVide: Bool { avertissement == nil && !documentsACompleter }
+}
+
+/// Issue d'un ❤️ et ses avis (`nil` : port sans avis, ou issue autre qu'une candidature confirmée).
+public struct IssueSwipeLike: Equatable, Sendable {
+    public var issue: CandidatureOutcome
+    public var avis: AvisSwipeLike?
+
+    public init(issue: CandidatureOutcome, avis: AvisSwipeLike? = nil) {
+        self.issue = issue; self.avis = avis
+    }
+}
+
+/// Port de candidature qui rend aussi les avis du ❤️ (T3b). Les gateways des deux mondes s'y conforment
+/// (`DemoCandidatureGateway`, `SupabaseCandidatureGateway` : gardes `Lot4WiringSwipeTests`) ; `SwipeModel` passe par
+/// lui quand le port de la session le propose, sinon par `CandidaturePort.confirmer(.swipeLike)` sans avis. Même
+/// contrat que `confirmer` : planning exact, succès relu, refus verbatim, aucun renvoi automatique.
+public protocol CandidatureSwipePort: CandidaturePort {
+    func confirmerSwipeLike(missionId: String, creneaux: [CreneauConfirmePayload], choixContrat: String?,
+                            context: MissionReadContext) async throws -> IssueSwipeLike
+}
+
 /// Issue du retrait après ❤️ (`fn_retirer_candidature`), prouvée par relecture : candidature absente.
 public enum RetraitOutcome: Equatable, Sendable {
     case retiree

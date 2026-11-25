@@ -1,0 +1,67 @@
+{
+  "fixed_now": "2026-11-02T00:00:00.000Z",
+  "soignant": {
+    "code_parrainage": "JOLENE-DEMO",
+    "badge_ambassadeur": false
+  },
+  "mes_parrainages": {
+    "filleuls": [
+      {
+        "id": "demo-parrainage-003",
+        "filleul_id": "demo-filleul-003",
+        "prenom": "Lina",
+        "statut": "INSCRIT",
+        "cree_le": "2026-10-31T00:00:00.000Z",
+        "filleul_active_le": null,
+        "commission_cumulee_filleul": 0,
+        "gmv_cumule_filleul": 0,
+        "reste_gmv_avant_prime": 500,
+        "seuil_gmv": 500,
+        "seuil_atteint": false,
+        "prime_versee_le": null,
+        "premiere_mission_le": null,
+        "bonus_heures": 0
+      },
+      {
+        "id": "demo-parrainage-002",
+        "filleul_id": "demo-filleul-002",
+        "prenom": "Hugo",
+        "statut": "EN_ATTENTE",
+        "cree_le": "2026-10-27T00:00:00.000Z",
+        "filleul_active_le": null,
+        "commission_cumulee_filleul": 0,
+        "gmv_cumule_filleul": 0,
+        "reste_gmv_avant_prime": 500,
+        "seuil_gmv": 500,
+        "seuil_atteint": false,
+        "prime_versee_le": null,
+        "premiere_mission_le": null,
+        "bonus_heures": 0
+      },
+      {
+        "id": "demo-parrainage-001",
+        "filleul_id": "demo-filleul-001",
+        "prenom": "Inès",
+        "statut": "VALIDE",
+        "cree_le": "2026-10-13T00:00:00.000Z",
+        "filleul_active_le": "2026-10-21T00:00:00.000Z",
+        "commission_cumulee_filleul": 0,
+        "gmv_cumule_filleul": 180,
+        "reste_gmv_avant_prime": 320,
+        "seuil_gmv": 500,
+        "seuil_atteint": false,
+        "prime_versee_le": null,
+        "premiere_mission_le": "2026-10-21T00:00:00.000Z",
+        "bonus_heures": 0
+      }
+    ],
+    "total_gains_eur": 0,
+    "nb_primes_versees": 0,
+    "prime_eur": 25,
+    "seuil_gmv_eur": 500,
+    "mon_parrain": null
+  },
+  "parrains": {
+    "DEMO-XYZ": "Camille"
+  }
+}

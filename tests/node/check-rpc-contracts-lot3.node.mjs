@@ -809,7 +809,8 @@ test('ios-swift-ci.yml : éclats UI du lot 3 — chaque classe dans un seul écl
   // ne pouvant pas la recevoir sous 20 min.
   const eclats = new Map([
     ['lot3-compte', ['DemoLiensLot3Tests', 'DemoCompteLot3Tests']],
-    ['lot3-push', ['DemoPushTests']],
+    // Reste de L1-T10 : `DemoReinitialisationTests` (récupération du mot de passe) rejoint cet éclat léger.
+    ['lot3-push', ['DemoPushTests', 'DemoReinitialisationTests']],
     // Stabilité de la CI (23/11/2026) : `DemoProfilTests` sort de cet éclat (23 à 30 min mesurées) vers l'éclat
     // « lot3-profil » du job `ui-lot1`, vérifié plus bas et par `ios-swift-ci-eclats.node.mjs`.
     ['lot3-notifications', ['DemoNotificationsTests', 'DemoPreferencesTests']],

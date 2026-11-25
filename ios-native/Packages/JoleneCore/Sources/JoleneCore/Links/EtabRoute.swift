@@ -12,7 +12,7 @@ import Foundation
 /// |---|---|
 /// | `/etablissement/tableau-de-bord`, alias `/etablissement/dashboard` (`Navigate`) | `.accueil` |
 /// | `/etablissement/missions` (`?statut=`, `?periode=` tels que reçus, `ListeMissions.tsx` l.48-50) | `.missions` |
-/// | `/etablissement/missions/creer` | `.publierMission` |
+/// | `/etablissement/missions/creer` (avec `?dupliquer=` : renvoi web, D8) | `.publierMission` |
 /// | `/etablissement/missions/{id}` | `.missionDetail(id:)` |
 /// | `/etablissement/presences` (`?tab=` tel que reçu, `PresencesEtablissement.tsx` l.56) | `.presences(onglet:)` |
 /// | `/etablissement/presences/mission/{id}` | `.presencesMission(id:)` |
@@ -43,8 +43,8 @@ public enum EtabRoute: Equatable, Sendable, CustomStringConvertible {
         return true
     }
 
-    /// Onglet et écran empilé dans l'espace établissement ; nil pour un renvoi web, et pour la liste des contrats
-    /// tant que T10 n'a pas choisi son point d'ancrage dans la coquille (aucun onglet « Contrats », D13).
+    /// Onglet et écran empilé dans l'espace établissement ; nil pour un renvoi web. La liste des contrats (T10) est
+    /// empilée sur l'onglet Missions, d'où s'ouvrent les contrats (aucun onglet « Contrats » dans la barre, D13).
     public var cible: CibleEtablissement? {
         switch self {
         case .accueil: return CibleEtablissement(onglet: .accueil)
@@ -53,7 +53,7 @@ public enum EtabRoute: Equatable, Sendable, CustomStringConvertible {
         case let .missionDetail(id): return CibleEtablissement(onglet: .missions, destination: .detailMission(id: id))
         case let .presences(onglet): return CibleEtablissement(onglet: .presences, ongletPresences: onglet)
         case let .presencesMission(id): return CibleEtablissement(onglet: .presences, destination: .presencesMission(missionId: id))
-        case .contrats: return nil                                                              // T10
+        case let .contrats(statut): return CibleEtablissement(onglet: .missions, destination: .contrats(statut: statut)) // T10
         case let .contrat(id): return CibleEtablissement(onglet: .missions, destination: .contrat(id: id))
         case let .messagerie(conversation):
             return CibleEtablissement(onglet: .messages, destination: conversation.map { .conversation(id: $0) })
@@ -147,10 +147,10 @@ extension EtabDestination {
         case .detailMission: return true         // T5
         case .candidatures: return true          // T6
         case .pointage: return true              // T7
-        case .presencesMission: return false     // T8
-        case .publication: return false          // T9
-        case .contrat: return false              // T10
-        case .conversation: return false         // T11
+        case .presencesMission: return true      // T8
+        case .publication: return true           // T9
+        case .contrat, .contrats: return true    // T10
+        case .conversation: return true          // T11
         }
     }
 }
@@ -174,7 +174,10 @@ extension LinkRouter {
         switch path {
         case "/etablissement/tableau-de-bord", "/etablissement/dashboard": return .accueil
         case "/etablissement/missions": return .missions(statut: parametres.get("statut"), periode: parametres.get("periode"))
-        case "/etablissement/missions/creer": return .publierMission
+        // T9 (D8) : la duplication (`?dupliquer=<id>`, `Boolean(searchParams.get('dupliquer'))` de
+        // `FormulaireMission.tsx` l.334) reste sur le web ; le formulaire natif ne reprend aucune mission source.
+        case "/etablissement/missions/creer":
+            return (parametres.get("dupliquer") ?? "").isEmpty ? .publierMission : .safari(canonique)
         case "/etablissement/presences": return .presences(onglet: parametres.get("tab"))
         case "/etablissement/contrats": return .contrats(statut: parametres.get("statut"))
         // Alias `Navigate` (`src/App.tsx` l.424, l.434) : la redirection ne reprend pas la query du lien.

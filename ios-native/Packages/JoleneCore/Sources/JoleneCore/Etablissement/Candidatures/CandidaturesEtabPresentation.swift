@@ -5,11 +5,11 @@ import Foundation
 /// navigation, sans qualification juridique. Les refus du serveur (`[CODE DU TRAVAIL]`, cadre étudiant, paiement,
 /// planning) ne sont jamais écrits ici : ils viennent verbatim de l'issue de la gateway.
 ///
-/// **HARD STOP n°4, non affiché** : la mention CGV art. 8 du web (l.390-398) est verbatim dans
-/// `TextesWeb.CandidaturesEtablissement`, verrouillée jusqu'à la validation d'écran de Gabrielle
-/// (`contrats-etablissement-ios.node.mjs`, liste `VALIDES` vide). D'ici là, l'écran ne montre qu'un lien de navigation
-/// neutre vers la page des CGV (`cgvLienNeutre`), sans en résumer le contenu. Non portés (D10) : badges « hors
-/// profession », statuts d'internat, case du cadre étudiant, régime d'exercice du profil, notes.
+/// **HARD STOP n°4, affiché** : la mention CGV art. 8 du web (l.390-398), déjà affichée telle quelle sur le web, est
+/// rendue mot pour mot depuis `TextesWeb.CandidaturesEtablissement` (décision c de l'intégration de la vague D,
+/// `DECISIONS_LOT5.md` ; liste `VALIDES` de `contrats-etablissement-ios.node.mjs`), son lien vers la page des CGV
+/// (`urlCgv`). Non portés (D10) : badges « hors profession », statuts d'internat, case du cadre étudiant, régime
+/// d'exercice du profil, notes.
 public enum CandidaturesEtabPresentation {
     // MARK: - Libellés repris du web (non juridiques)
 
@@ -70,8 +70,6 @@ public enum CandidaturesEtabPresentation {
     public static let renvoiWebAcceptation = "L'acceptation de cette candidature se fait sur jolene.app, où une nouvelle connexion peut vous être demandée."
     /// Bouton du renvoi vers la facturation après un refus de paiement (message serveur verbatim au-dessus).
     public static let voirFacturation = "Voir sur jolene.app"
-    /// Lien neutre vers les CGV, en attendant la mention verbatim validée (HARD STOP n°4).
-    public static let cgvLienNeutre = "Conditions générales de vente sur jolene.app"
     /// Issue non confirmée par la relecture (PRINCIPES §3 : jamais un succès supposé).
     public static let nonConfirmee = "La décision n'a pas pu être confirmée par une relecture. Vérifiez les candidatures avant de recommencer."
     /// La candidature relue n'est plus en attente : la liste relue la range parmi les traitées.

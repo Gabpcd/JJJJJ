@@ -14,15 +14,21 @@ final class SecondairesLot4Tests: XCTestCase {
 
     // MARK: - Verrous m6 (revue B8 de #1146)
 
-    /// Aucun branchement de la capture du parrainage avant T6 : `estLivree` figé à `false`, aucun code capturé quel que
-    /// soit le lien, et le verrou bascule avec le port `parrainage` (une seule PR, T6, livre les deux).
+    /// Le verrou de la capture du parrainage bascule avec le port `parrainage` (une seule PR, T6, livre les deux) : avant
+    /// T6, aucun code capturé quel que soit le lien ; depuis T6, la forme exacte du web (`ParrainageCaptureTests`).
     func testCaptureDuParrainageVerrouilleeAvantT6() throws {
         let enAttente = DemoWorldTests.portsEnAttenteLot4.contains("parrainage")
         XCTAssertEqual(ParrainageCapture.estLivree, !enAttente,
                        "T6 livre ensemble ParrainageCapture (estLivree) et le port parrainage (portsEnAttenteLot4)")
         XCTAssertEqual(VerrousLot4.parrainageBranche, ParrainageCapture.estLivree)
         XCTAssertEqual(DemoWorld.gateways().parrainage is UnwiredPort, enAttente)
-        guard enAttente else { return }
+        guard enAttente else {
+            let lien = try XCTUnwrap(URL(string: "https://jolene.app/inscription/soignant?ref=abcd1234"))
+            XCTAssertEqual(VerrousLot4.codeParrainageACapturer(depuis: lien), "ABCD1234", "T6 livrée : capture par le verrou")
+            let horsForme = try XCTUnwrap(URL(string: "https://jolene.app/inscription/soignant?ref=%3Cscript%3E"))
+            XCTAssertNil(VerrousLot4.codeParrainageACapturer(depuis: horsForme), "code hors forme ignoré")
+            return
+        }
         for lien in ["https://jolene.app/inscription/soignant?ref=ABCD1234",
                      "https://jolene.app/soignant/tableau-de-bord?parrain=XYZ-1234",
                      "https://jolene.app/?ref=abcd1234"] {
@@ -47,12 +53,25 @@ final class SecondairesLot4Tests: XCTestCase {
     /// Écrans livrés par leur tranche (ligne de `DestinationLien.ecranNatifLivre` passée à `true`) ; tous les autres gardent
     /// leur renvoi web actuel. Chaque tranche d'écran ajoute le sien ici.
     static let livres: [EcranSecondaire] = [
+        .swipe, // T3b (vue de l'onglet Explorer, jamais un écran empilé)
         .recherches, // T4
+        .disponibilites, // T5
+        .serie(id: "s 1"), // T12 (ligne `.serieDetail` de `ecranNatifLivre`)
+        .evaluations, .score, // T9
+        .litiges(onglet: nil, litigeId: nil), // T8 — onglet Litiges
+        .litiges(onglet: .reclamations, litigeId: nil), // T8 — onglet Réclamations (coupe-circuit propre)
+        .bulletins(copieId: nil), .bulletins(copieId: "b1"), // T10
+        .poolUrgence, .exclusions, // T11
+        .parrainage, // T6
+        .messagerie(conversationId: nil), .messagerie(conversationId: "c1"), // T7b
     ]
+
+    /// Écran livré quels que soient ses paramètres (identifiant de litige…) : comparé par son nom de coupe-circuit (T8).
+    static func livre(_ ecran: EcranSecondaire) -> Bool { livres.contains { $0.nom == ecran.nom } }
 
     func testSeulsLesEcransDesTranchesLivreesSontLivres() {
         for ecran in Self.tous {
-            XCTAssertEqual(ecran.estLivre, Self.livres.contains(ecran), "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
+            XCTAssertEqual(ecran.estLivre, Self.livre(ecran), "\(ecran) : renvoi web actuel gardé jusqu'à sa tranche")
         }
     }
 
@@ -76,7 +95,7 @@ final class SecondairesLot4Tests: XCTestCase {
         for ecran in Self.tous {
             let url = try XCTUnwrap(ecran.urlWeb, "\(ecran)")
             let lien = try XCTUnwrap(DestinationLien(url: url), "\(ecran)")
-            if Self.livres.contains(ecran) {
+            if Self.livre(ecran) {
                 XCTAssertEqual(CibleNotification(lien), .secondaire(ecran), "\(ecran) : écran livré")
                 continue
             }
@@ -129,23 +148,40 @@ final class SecondairesLot4Tests: XCTestCase {
     // MARK: - Entrées du hub
 
     func testEntreesDuHubSuiventLeWebEtNeMontrentQueLesEcransLivres() {
-        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sections(livre: Self.livres.contains),
+        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sections(livre: Self.livre),
                        "entrées natives des seuls écrans livrés, renvois web inchangés pour les autres")
-        XCTAssertEqual(EntreesHubLot4.sections(), [EntreesHubLot4.Section(titre: "Recherche & disponibilité", entrees: [
-            EntreesHubLot4.Entree(ecran: .recherches, libelle: "Recherches sauvegardées"),
-        ])], "T4 : « Recherches sauvegardées » dans « Recherche & disponibilité » (MonCompteSoignant.tsx l.94-96)")
+        XCTAssertEqual(EntreesHubLot4.sections(), EntreesHubLot4.sectionsWeb + EntreesHubLot4.sectionsBarreLaterale,
+                       "T4, T11 : « Recherches sauvegardées », « Établissements exclus » (MonCompteSoignant.tsx l.94-97) ; "
+                       + "T6 : « Parrainage », section sans titre (l.103) ; T8 : « Litiges & contestations » sous « Suivi » (l.107-109) ; "
+                       + "T11, T9 : « Pool urgence », « Mon score » (BarreNavigation.tsx l.60, l.68), « Mes évaluations »")
         let toutes = EntreesHubLot4.sections(livre: { _ in true })
-        XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb)
-        XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi"], "MonCompteSoignant.tsx l.94, l.107")
+        XCTAssertEqual(toutes, EntreesHubLot4.sectionsWeb + EntreesHubLot4.sectionsBarreLaterale)
+        XCTAssertEqual(toutes.map(\.titre), ["Recherche & disponibilité", nil, "Suivi", "Missions", "Activité"],
+                       "MonCompteSoignant.tsx l.94, l.107 ; BarreNavigation.tsx l.55, l.65")
         XCTAssertEqual(toutes.flatMap(\.entrees).map(\.libelle),
-                       ["Recherches sauvegardées", "Établissements exclus", "Parrainage", "Litiges & contestations"],
-                       "MonCompteSoignant.tsx l.96-97, l.103, l.109")
+                       ["Recherches sauvegardées", "Établissements exclus", "Parrainage", "Litiges & contestations",
+                        "Pool urgence", "Mon score", "Mes évaluations"],
+                       "MonCompteSoignant.tsx l.96-97, l.103, l.109 ; BarreNavigation.tsx l.60, l.68 ; EvaluationsSoignant.tsx l.58")
         XCTAssertEqual(toutes.flatMap(\.entrees).map(\.identifiant),
-                       ["hub-recherches", "hub-exclusions", "hub-parrainage", "hub-litiges"])
+                       ["hub-recherches", "hub-exclusions", "hub-parrainage", "hub-litiges", "hub-pool_urgence", "hub-score",
+                        "hub-evaluations"])
         let seulementParrainage = EntreesHubLot4.sections(livre: { $0 == .parrainage })
         XCTAssertEqual(seulementParrainage, [EntreesHubLot4.Section(titre: nil, entrees: [
             EntreesHubLot4.Entree(ecran: .parrainage, libelle: "Parrainage"),
         ])], "section vide retirée")
+    }
+
+    /// Décision d de l'intégration de la vague D : tout écran livré a un point d'entrée dans l'interface (hub, ou point
+    /// nommé hors du hub) ; un écran sans point d'entrée est listé explicitement (`nil`), jamais oublié.
+    func testChaqueEcranLivreAUnPointDEntreeOuEstListe() {
+        let dansLeHub = Set(EntreesHubLot4.sections().flatMap(\.entrees).map(\.ecran.nom))
+        for ecran in Self.livres {
+            XCTAssertTrue(dansLeHub.contains(ecran.nom) || EntreesHubLot4.pointsDEntreeHorsHub.keys.contains(ecran.nom),
+                          "\(ecran.nom) : écran livré sans point d'entrée ni exemption listée")
+        }
+        XCTAssertTrue(dansLeHub.isDisjoint(with: EntreesHubLot4.pointsDEntreeHorsHub.keys), "un seul point d'entrée nommé")
+        XCTAssertEqual(EntreesHubLot4.pointsDEntreeHorsHub.filter { $0.value == nil }.map(\.key), [.serie],
+                       "seul le détail de série reste sans point d'entrée dans l'interface (lien, push, centre)")
     }
 }
 

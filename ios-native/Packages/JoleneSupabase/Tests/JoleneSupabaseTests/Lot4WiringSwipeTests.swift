@@ -12,4 +12,11 @@ final class Lot4WiringSwipeTests: XCTestCase {
         XCTAssertFalse(gateways.unwiredPorts.contains("swipe"))
         XCTAssertFalse(DemoWorld.gateways().unwiredPorts.contains("swipe"))
     }
+
+    /// T3b : le ❤️ rend ses avis (`warning`, `docs_a_completer`) dans les deux mondes ; un port de candidature qui ne
+    /// se conformerait plus à `CandidatureSwipePort` les perdrait en silence (`SwipeModel` retomberait sur `confirmer`).
+    func testLePortDeCandidatureRendLesAvisDuLikeDansLesDeuxMondes() {
+        XCTAssertTrue(SupabaseGateways.make(client: TestClient.make()).candidature is any CandidatureSwipePort)
+        XCTAssertTrue(DemoWorld.gateways().candidature is any CandidatureSwipePort)
+    }
 }

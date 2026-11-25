@@ -272,8 +272,10 @@ final class RevenusPresentationTests: XCTestCase {
     func testRenvoisWebCanoniques() throws {
         XCTAssertEqual(RevenusPresentation.renvoiWeb(RevenusPresentation.lienFactures),
                        .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/mes-gains?tab=factures"))))
-        XCTAssertEqual(RevenusPresentation.renvoiWeb(RevenusPresentation.lienBulletins),
-                       .safari(try XCTUnwrap(URL(string: "https://jolene.app/soignant/mes-gains?tab=bulletins"))))
+        // L4-T10 : « Paie » ouvre l'écran natif des copies officielles (simulations en renvoi web depuis cet écran).
+        XCTAssertNil(RevenusPresentation.renvoiWeb(RevenusPresentation.lienBulletins), "copies officielles natives depuis L4-T10")
+        let bulletins = try XCTUnwrap(DestinationLien(link: RevenusPresentation.lienBulletins))
+        XCTAssertEqual(CibleNotification(bulletins), .secondaire(.bulletins(copieId: nil)))
         // L2-T10 : le détail des présences d'une mission est natif (`navigate('/soignant/presences/mission/${m.id}')`,
         // l.705) : plus de renvoi web, la ligne ouvre `DetailPresencesScreen` par sa cible de l'espace.
         XCTAssertNil(RevenusPresentation.renvoiWeb(RevenusPresentation.lienPresences(missionId: "m-1")),

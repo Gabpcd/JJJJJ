@@ -15,16 +15,23 @@ import JoleneDesign
 /// `etab-mission-planning` (+ `-creneau-<n>`, `-summary`), `etab-mission-planning-incomplet`,
 /// `etab-mission-planning-indisponible`, `etab-mission-soignant` (+ `-nom`, `-attente`, `-indisponible`,
 /// `-error`, `-retry`), `etab-mission-lien-{candidatures|pointage|presences|contrat|message}`,
-/// `etab-mission-web-{modifier|annuler|dupliquer}`, `etab-mission-historique`, `etab-mission-refresh-error`.
+/// `etab-mission-web-{modifier|annuler|dupliquer}`, `etab-mission-historique`, `etab-mission-refresh-error`,
+/// `etab-mission-contact-erreur` (T11 : ouverture de la conversation refusée).
 struct EtabMissionDetailScreen: View {
     @StateObject private var model: EtabMissionDetailModel
     private let snapshot: EtablissementSessionSnapshot
     @Environment(\.presentateurRenvoiWeb) private var presentateurRenvoiWeb
+    /// Lot 5 (T11) : « Contacter le soignant » (`fn_obtenir_conversation`), puis fil empilé.
+    @ObservedObject private var session: SessionStore
+    @StateObject private var contact: ContactSoignantModel
+    @State private var conversationOuverte: String?
 
     init(missionId: String, session: SessionStore, snapshot: EtablissementSessionSnapshot) {
         self.snapshot = snapshot
+        self.session = session
         _model = StateObject(wrappedValue: EtabMissionDetailModel(missionId: missionId, controller: session.controller,
                                                                   snapshot: snapshot))
+        _contact = StateObject(wrappedValue: ContactSoignantModel(controller: session.controller, snapshot: snapshot))
     }
 
     var body: some View {
@@ -53,6 +60,16 @@ struct EtabMissionDetailScreen: View {
         .navigationTitle("Mission")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.charger() }
+        .navigationDestination(isPresented: conversationPresentee) {
+            if let conversationOuverte {
+                EtabDestinationEcran(destination: .conversation(id: conversationOuverte), snapshot: snapshot, session: session,
+                                     ecrans: session.ecransEtablissement)
+            }
+        }
+    }
+
+    private var conversationPresentee: Binding<Bool> {
+        Binding(get: { conversationOuverte != nil }, set: { if !$0 { conversationOuverte = nil } })
     }
 
     // MARK: - Contenu
@@ -219,6 +236,9 @@ struct EtabMissionDetailScreen: View {
         if !liens.isEmpty {
             carteSection {
                 VStack(alignment: .leading, spacing: JoleneSpacing.xs) {
+                    if let erreur = contact.erreur {
+                        InlineNotice(erreur, tone: .error, identifier: "etab-mission-contact-erreur")
+                    }
                     ForEach(liens) { lien in
                         switch lien.cible {
                         case let .ecran(destination):
@@ -232,6 +252,20 @@ struct EtabMissionDetailScreen: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier(lien.identifiant)
                             .accessibilityValue(url.absoluteString)
+                        case let .contactSoignant(missionId, soignantId):
+                            // T11 : conversation de la mission obtenue (ou créée) par le serveur, puis fil empilé.
+                            Button {
+                                Task {
+                                    if let id = await contact.ouvrir(missionId: missionId, soignantId: soignantId) {
+                                        conversationOuverte = id
+                                    }
+                                }
+                            } label: {
+                                ligneLien(lien.titre, detail: lien.detail, web: false)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(contact.enCours)
+                            .accessibilityIdentifier(lien.identifiant)
                         }
                     }
                 }
