@@ -47,7 +47,8 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
         let curseur = app.sliders["pool-rayon"]
         scrollTo(curseur, in: ecran, downward: false)
         require("Le curseur du rayon est atteignable") { self.visible(curseur) }
-        curseur.adjust(toNormalizedSliderPosition: CGFloat(15 - 5) / CGFloat(50 - 5))
+        // Geste puis pas d'accessibilité jusqu'à 15 km (le geste seul a posé 14 km, run 45527404765).
+        reglerCurseur(curseur, sur: 15, minimum: 5, maximum: 50)
         require("Le rayon 15 km est relu", timeout: 20) {
             self.element("pool-rayon-valeur").label.contains("15 km")
                 && !self.element("pool-mission-\(Attendus.lointaine)").exists
