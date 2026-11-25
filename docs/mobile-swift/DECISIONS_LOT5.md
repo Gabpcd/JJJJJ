@@ -891,6 +891,31 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    l'xcresult ; la publication native d'une mission (étape (e) du blueprint) n'est pas jouée ; les assertions relatives
    sur `journaux_audit` (`PRESENCE_VALIDATION`, `MISSION_CREATION`) et la notification `PRESENCE_VALIDEE` ne sont pas
    relues. Chacun est un ajout possible à la tranche, sans changer son verrou.
+10. **Corrections de la revue fraîche de #1183 (25/11/2026)** :
+    - M1 (nettoyage non reprenable en CI) : le manifeste disparaît avec le runner hébergé et les identifiants de la
+      cohorte sont aléatoires ; « manifeste conservé pour reprise » était faux. Reprise par étiquette :
+      `staging-lot5-fixture.mjs nettoyer_run` (`LOT5_NETTOYER_RUN`), exposé par l'entrée `nettoyer_run` du workflow
+      (job « reprise », mêmes garde-fous : main, SHA relu, `native-staging-auth`, concurrence partagée). La cohorte est
+      retrouvée par le nom exact `RECETTE-L5-<run>` de l'établissement, par les adresses
+      `recette-l5-{e1,s1}-<run>@example.invalid` et par les métadonnées Auth du run ; refus avant tout appel réseau si
+      l'étiquette n'a pas la forme attendue, refus sans suppression si plus d'un établissement ou d'un soignant
+      correspond, si une ligne n'est pas un compte TEST, si une identité Auth est d'un autre run, d'un autre rôle ou
+      d'une autre adresse, ou si un profil diverge de son compte Auth. Aucun secret publié : l'étiquette (identifiant et
+      tentative du run GitHub) est affichée par le résumé et par l'erreur, qui disent désormais « reprise : relancer
+      ios-swift-lot5-staging.yml avec l'entrée nettoyer_run=<run> ».
+    - m2 (tables enfants) : la liste écrite à la main est remplacée par `GRAPHE_NETTOYAGE`, fermeture des clés
+      étrangères du dump vers `missions`, `etablissements` et `soignants` (83 tables, enfants `CASCADE` compris pour
+      leurs propres enfants restrictifs, hors `SET NULL`/`SET DEFAULT` et auto-références). Le nettoyage collecte les
+      identifiants des parents vers les enfants puis supprime des enfants vers les parents. Le test Node recalcule la
+      fermeture depuis `supabase/schema/public.sql` et échoue à la moindre différence (régénération hors réseau :
+      `node scripts/mobile/staging-lot5-fixture.mjs graphe`) ; il vérifie aussi, indépendamment, chaque FK restrictive
+      et l'ordre des suppressions. Le contrôle des dépendances inconnues reste en place (dérive du STAGING vers le dump).
+    - m3 (notifications) : les notifications des missions du run sont comptées et supprimées quel que soit leur
+      destinataire (`id_ressource`), en plus de celles de la cohorte.
+    - m1 (QR) : le QR est décodé en plein écran, comme `DemoEtabPointageTests` ; le code du plein écran est comparé à la
+      même empreinte serveur.
+    - m4 (aucune approbation imposée par `native-staging-auth`) : constat consigné au point 7, inchangé.
+    - m5 (textes en attente visibles en STAGING) : voir « En attente », point 4, précisé ce jour.
 
 ## En attente de Gabrielle
 
@@ -904,11 +929,21 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
 3. **B5b** (facultative, B9 SECURITY DEFINER) : accord ou refus explicite (visibilité du code de pointage, des
    finances et des identifiants Stripe par permission ; refus d'une heure de fin future ; refus de contester une
    présence validée).
-4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR), hors textes de la liste validée :
-   absence de case « cadre étudiant » et renvoi web (T6) ; publication native limitée au salariat (T9, restriction
-   d'un mode d'exercice) ; absence native de l'alerte de requalification (D27) et des statuts d'internat (D10, D25) ;
-   libellé du taux repris du web (« Taux horaire brut * (€/h) », `FormulaireMission.tsx` l.917, affiché) ; tout texte
-   ajouté après la liste.
+4. **Validations HARD STOP n°4** (écran, captures et texte source dans la PR), hors textes de la liste validée.
+   Précisé le 25/11/2026 (revue de #1183, m5) : la validation du 24/11 porte sur des **textes** ; elle ne tranche ni les
+   choix de périmètre ci-dessous, ni le seul texte affiché qui n'y figure pas. Restent donc, à soumettre à la fondatrice
+   avant l'ouverture en production (T14), visibles en STAGING depuis T13 :
+   - **choix sans texte nouveau** (règles exposées à l'utilisateur) : publication native limitée au salariat (T9,
+     restriction d'un mode d'exercice ; les autres types passent par le renvoi « Autres options » / « Cette option se
+     configure sur jolene.app. », textes du groupe E) ; absence de la case « cadre étudiant » et renvoi web neutre de
+     l'acceptation (T6, « Accepter sur jolene.app ») ; absence native de l'alerte de requalification en CDI (D27) et
+     des statuts d'internat (D10, D25) ;
+   - **un texte affiché hors de la liste validée** : « Taux horaire brut * (€/h) »
+     (`ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement/Publication/PublicationPresentation.swift`
+     l.44, source `src/components/FormulaireMission.tsx` l.917), libellé du champ de rémunération de l'écran de
+     publication (salarié : « brut » qualifie la rémunération du contrat de travail) ; repris mot pour mot du web,
+     mais absent des groupes A à E ;
+   - tout texte ajouté après la liste.
    **Textes validés le 24/11/2026** (plus en attente) : la liste de la revue B8 du tour 2 (section 6, groupes A à E),
    validée explicitement par la fondatrice (« Oui, je valide », point 1 de l'intégration de la vague D) : statut et
    rappel DPAE de l'écran contrat, avis du plancher du taux, renvoi « Contester cette présence », mention de signature
