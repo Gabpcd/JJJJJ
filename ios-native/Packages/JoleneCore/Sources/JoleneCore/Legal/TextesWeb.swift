@@ -6,7 +6,7 @@ import Foundation
 //
 // Ce fichier ne porte QUE des textes soumis au HARD STOP n°4 (validation : décisions déléguées du
 // 8 novembre 2026, docs/mobile-swift/DECISIONS_LOT2.md, tranche L2-TJ, par délégation explicite de
-// Gabrielle) : les textes listés par le
+// la fondatrice) : les textes listés par le
 // blueprint v2 (§3 TL) et ceux qui citent un texte de loi, énoncent un droit, une obligation, un
 // délai, un effet contractuel ou une preuve, ou formulent un consentement, une attestation, une
 // acceptation ou une signature (y compris le bouton qui accomplit l'acte), plus les fragments de
@@ -22,13 +22,13 @@ import Foundation
 // d'un caractère sur chaque constante. Un texte web modifié fait rougir la garde ; un texte inchangé
 // qui s'est seulement déplacé dans son fichier est toléré avec un avertissement (réannotation par
 // `node scripts/mobile/check-textes-juridiques-ios.mjs --corriger-lignes`). Aucune reformulation ici :
-// un changement de wording part d'abord sur le web, puis dans une PR HARD STOP validée par Gabrielle.
+// un changement de wording part d'abord sur le web, puis dans une PR HARD STOP validée par la fondatrice.
 //
 // Les valeurs (dates, empreintes, durées, compteurs) ne sont jamais des gabarits dans un texte : les
 // fonctions ci-dessous les assemblent comme le rendu React. Le code web de chaque assemblage
 // (conditions, ordre, séparateurs) est ancré par son contenu dans scripts/mobile/textes-web-ios-rendus.json :
 // s'il change, la garde rougit en nommant la fonction à relire. Les rendus exacts sont assertés par
-// TextesWebTests et listés pour Gabrielle (`--liste`).
+// TextesWebTests et listés pour la fondatrice (`--liste`).
 
 /// Entrée du catalogue des textes (clé « Groupe.constante », texte verbatim du web).
 public struct EntreeTexteWeb: Sendable, Hashable {
@@ -375,7 +375,7 @@ public enum TextesWeb {
 
         /// Types de contrat qui reçoivent la mention « Contrat salarié écrit » (`TYPES_CONTRAT_SALARIES` de
         /// `src/lib/typesContrat.ts`, lu par `estContratSalarie` depuis #1123 ; auparavant `TYPES_CONTRAT_MENTION_SALARIEE`,
-        /// #1122 : CDDU et VACATION sont des contrats salariés, mention validée par Gabrielle le 08/11/2026, HARD
+        /// #1122 : CDDU et VACATION sont des contrats salariés, mention validée par la fondatrice le 08/11/2026, HARD
         /// STOP n°4). Comparaison exacte (`Array.includes`), lue par `ContratRules.mentionPiedDePage`.
         // source-ensemble: src/lib/typesContrat.ts:25
         public static let typesMentionSalariee: Set<String> = [
@@ -854,7 +854,7 @@ public enum TextesWeb {
     }
 
     /// Phrases d'engagement de la candidature (lot 1, T6b ; revue B8 P2, décision par délégation du coordinateur) :
-    /// reprises à l'identique du web, tutoiement compris (HARD STOP n°4 : aucun texte nouveau, validation de Gabrielle
+    /// reprises à l'identique du web, tutoiement compris (HARD STOP n°4 : aucun texte nouveau, validation de la fondatrice
     /// requise). Récapitulatif : candidature retirable (POSTULER), acceptation immédiate (ACCEPTER, PROPOSITION) ;
     /// mention sous « ★ Accepter cette mission ».
     public enum Candidature {
@@ -869,7 +869,7 @@ public enum TextesWeb {
     }
 
     /// Feuille « première candidature » de la vue Swipe (lot 4, T3b, `LOT4_PLAN.md` §3 T3b ; HARD STOP n°4 : portée
-    /// d'engagement, reprise à l'identique de `VueSwipeMissions.tsx` l.540-563, en attente de la relecture de Gabrielle).
+    /// d'engagement, reprise à l'identique de `VueSwipeMissions.tsx` l.540-563, en attente de la relecture de la fondatrice).
     /// Affichée une seule fois par compte, après le récapitulatif exact et avant le premier ❤️ envoyé
     /// (`ParcoursCandidatureSwipe`). Tutoiement du web conservé verbatim : le vouvoiement passera d'abord par le web.
     /// Le paragraphe d'acceptation est rendu par React en quatre morceaux (deux passages en gras) : `acceptation`.
@@ -932,7 +932,7 @@ public enum TextesWeb {
     }
 
     /// Annulation d'une participation (lot 1, T7, HARD STOP n°4 : textes de consentement, de données de santé, de
-    /// pénalité et de score repris verbatim du web, en attente de la validation de Gabrielle). Modale de candidature
+    /// pénalité et de score repris verbatim du web, en attente de la validation de la fondatrice). Modale de candidature
     /// (`ModaleAnnulationCandidature.tsx`) et confirmation sans candidature (`DetailMissionSoignant.tsx` l.891-917,
     /// l.1630-1645). Le minuteur de rétractation et le message de pénalité de la confirmation (barèmes recopiés côté
     /// client, contredits par le serveur, décision 4 de `LOT1_PLAN.md`) ne sont pas repris. Tutoiement du web conservé
@@ -977,7 +977,7 @@ public enum TextesWeb {
     }
 
     /// Copies officielles des bulletins (lot 4, T10, `docs/mobile-swift/LOT4_PLAN.md` §3 T10 ; HARD STOP n°4 : textes
-    /// repris verbatim du web, en attente de la relecture de Gabrielle). Mention affichée en tête de la liste : les PDF
+    /// repris verbatim du web, en attente de la relecture de la fondatrice). Mention affichée en tête de la liste : les PDF
     /// sont déposés par l'employeur, Jolene ne les établit pas, et une copie ne vaut pas preuve de paiement. Avertissement
     /// affiché avant la confirmation d'un signalement « Ce document ne me concerne pas » : `fn_signaler_copie_bulletin`
     /// retire alors la copie (`statut = 'RETIREE'`), sans retour possible depuis l'app. Les autres libellés de l'écran
@@ -991,7 +991,7 @@ public enum TextesWeb {
     }
 
     /// Pool urgence et exclusions (lot 4, T11, HARD STOP n°4 : consentement aux alertes du pool, dont les SMS, et
-    /// confirmation de l'exclusion, repris verbatim du web, tutoiement compris, en attente de la validation de Gabrielle).
+    /// confirmation de l'exclusion, repris verbatim du web, tutoiement compris, en attente de la validation de la fondatrice).
     /// Écart arbitré (décision b de l'intégration de la vague D, `DECISIONS_LOT4.md` précision 17) : la promesse
     /// « +10 points de fiabilité » (`PoolUrgenceToggle.tsx` l.215, l.230) suit le trigger legacy `dec_bonus_urgence`, alors
     /// que le score v2 applique un bonus de 5 (`LOT4_PLAN.md` §3 T11) : ni `avantageFiabilite` ni la dernière phrase de

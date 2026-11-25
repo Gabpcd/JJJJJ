@@ -14,7 +14,7 @@ import JoleneDesign
 /// l'espace, `contexteSecondaire`), ou leur renvoi web tant que l'écran n'est pas livré ; rendu seulement si la cible
 /// est présentable : jamais un bouton sans effet.
 /// Point d'extension T5b : le panneau de contestation d'une présence non validée (l.728-738) se monte sous la grille,
-/// après le go HARD STOP n°4 de Gabrielle (Q9).
+/// après le go HARD STOP n°4 de la fondatrice (Q9).
 struct PresenceHistoriqueRow: View {
     let ligne: LigneHistoriquePresence
     let mission: MissionDeLigne

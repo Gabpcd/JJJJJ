@@ -6,7 +6,7 @@ import Foundation
 /// (`fn_annuler_candidature_soignant`, `fn_annuler_mission_soignant`), affichés après la confirmation. Le minuteur de
 /// rétractation du web (`AnnulationCandidatureTimer.tsx`, barème recopié côté client) et le message de pénalité de la
 /// confirmation sans candidature (`DetailMissionSoignant.tsx` l.1634-1641 : -25 / -15 / -8, contredit par le serveur :
-/// -8 seulement à moins de 24 h) ne sont pas portés : écart consigné hors lot (décision 4), textes listés pour Gabrielle
+/// -8 seulement à moins de 24 h) ne sont pas portés : écart consigné hors lot (décision 4), textes listés pour la fondatrice
 /// (HARD STOP n°4). Ces fonctions disent seulement quel parcours ouvrir, quand le formulaire est complet et ce qu'une
 /// relecture doit montrer pour qu'une annulation soit annoncée (PRINCIPES §3).
 public enum AnnulationRules {
@@ -19,7 +19,7 @@ public enum AnnulationRules {
 
     /// Motifs PROPOSÉS par l'app, dans l'ordre du web (`MOTIFS`, `ModaleAnnulationCandidature.tsx` l.33-40), **sans
     /// « 🏥 Urgence médicale »** (`URGENCE_MEDICALE`, l.35) : décision 4 amendée de `LOT1_PLAN.md` §7, application de la décision
-    /// de Gabrielle du 09/07/2026 (`docs/CONFORMITE.md` §1.4, l.69-72 : un motif de santé générique n'est pas stocké, le
+    /// de la fondatrice du 09/07/2026 (`docs/CONFORMITE.md` §1.4, l.69-72 : un motif de santé générique n'est pas stocké, le
     /// seul fait d'être malade étant une donnée de santé, RGPD art. 9). Le serveur l'admet encore et l'écrit dans
     /// `candidatures`, `evenements_score_soignant` et `journaux_audit` (`motifsServeur`) : correction web et serveur dans
     /// une PR B9 / HARD STOP séparée. Aucun texte de remplacement.

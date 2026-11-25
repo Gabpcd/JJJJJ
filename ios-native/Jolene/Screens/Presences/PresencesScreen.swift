@@ -10,7 +10,7 @@ import JoleneDesign
 /// Onglets dans l'ordre du web (À venir, Actives, Aujourd'hui, Historique ; `?tab=` aux valeurs exactes du web, porté
 /// par la route de T10 avec `?filtre=a_valider`). Onglet Aujourd'hui : blocs de pointage puis « Présences validées
 /// récemment » ; Actives : blocs des missions EN_COURS ; Historique : bandeau « à valider » (`TextesWeb.Presences`,
-/// verbatim, texte HARD STOP n°4 de TL en attente de la validation de Gabrielle) quand le lien le demande, puis les
+/// verbatim, texte HARD STOP n°4 de TL en attente de la validation de la fondatrice) quand le lien le demande, puis les
 /// lignes. T4b : bandeaux hors ligne (`HorsLigneBandeau`) et sans GPS (`BandeauSansGpsView`) en tête, retour du
 /// consentement, services des zones de pointage (`ServicesPointage` : consentement GPS de la page, état du réseau suivi
 /// par `Appareil.reseau`, relecture de l'instantané après un pointage enregistré, m1). Exclus : notation (T5a).

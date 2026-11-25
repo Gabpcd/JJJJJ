@@ -57,7 +57,7 @@ public enum CompteSuppression {
     }
 
     /// Textes de l'écran. Ceux du web sont repris **mot pour mot, en tutoiement** (HARD STOP n°4 :
-    /// wording RGPD non revalidé par Gabrielle) ; leur égalité avec la source web est gardée par
+    /// wording RGPD non revalidé par la fondatrice) ; leur égalité avec la source web est gardée par
     /// `CompteSuppressionVerbatimTests`. Seuls les textes de l'écran de fin, propres au natif, sont vouvoyés.
     public enum Textes {
         /// En-tête de la section (l.153).

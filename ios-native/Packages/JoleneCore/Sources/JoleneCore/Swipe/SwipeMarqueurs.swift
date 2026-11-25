@@ -23,7 +23,7 @@ public struct SwipeMarqueurs: Sendable {
     /// Vue affichée sans préférence mémorisée. **Écart assumé avec le web**, qui ouvre Explorer sur « Swipe »
     /// (`vueInitiale` de `useMemoireExploration.ts`) : Explorer natif garde la liste du lot 1 tant que le soignant n'a
     /// pas choisi « Swipe » (ou suivi un lien vers le swipe), puis mémorise son choix. Décision produit à trancher par
-    /// Gabrielle (`LOT4_PLAN.md`, écart de T3b) : changer cette valeur suffit.
+    /// la fondatrice (`LOT4_PLAN.md`, écart de T3b) : changer cette valeur suffit.
     public static let vueParDefaut: VueExplorer = .liste
     static let marque = "1"
 
