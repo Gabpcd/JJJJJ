@@ -1174,8 +1174,8 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
 
 ## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
 
-Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`b4df9e1b`). La PR n'est pas mergeable tant que le
-parcours STAGING n'est pas vert et que la PR #1188 (corrections juridiques du point 4) n'est pas mergée.
+Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`570df5db`, après le merge de #1188, corrections
+juridiques du point 4). La PR n'est pas mergeable tant que le parcours STAGING n'est pas vert.
 
 1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
    staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
@@ -1228,8 +1228,8 @@ parcours STAGING n'est pas vert et que la PR #1188 (corrections juridiques du po
      - « Le libellé “Taux horaire brut * (€/h)” est conservé » ;
      - « “Plafond légal 48 h/semaine” : le garder tel quel ».
      Les trois autres points (taux minimal de 12,31 €/h, refusé en dessous ; référence DPAE L1221-10 ; mentions
-     « Signature électronique simple (art. 1366-1367 Code civil) ») sont appliqués par la PR #1188 : **T14 ne se merge
-     pas avant #1188.** Restent hors validation : le règlement eIDAS (non relu à la source), l'articulation entre la
+     « Signature électronique simple (art. 1366-1367 Code civil) ») sont appliqués par la PR #1188, mergée sur `main`
+     (`570df5db`) avant T14 ; les textes affichés sont ceux de `main`. Restent hors validation : le règlement eIDAS (non relu à la source), l'articulation entre la
      fenêtre de signature de 72 h et la transmission du CDD (L1242-13), les CGU, le modèle de contrat et le mandat de
      facturation, qui ne sont pas modifiés. Sources : corps de la PR, section « Juridique — HARD STOP n°4 ».
      Textes `[juridique]` affichés à l'établissement (revue de #1190, M3) : chacun est rattaché dans le corps de la PR
@@ -1327,4 +1327,4 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
 11. **T14 (ouverture en production)** : validation juridique obtenue le 25/11/2026 (section T14, point 4) ; go de
-    merge après le parcours STAGING vert et le merge de #1188.
+    merge après le parcours STAGING vert (#1188, prérequis, est mergée).
