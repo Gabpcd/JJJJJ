@@ -99,8 +99,8 @@ public actor SessionController {
         let absencesConfirmees: Int
     }
 
-    /// Espace établissement : fermé par défaut (fail-closed), ouvert par `AppContainer` en démo et, depuis T13, en
-    /// staging (`OuvertureEspaceEtablissement.pour(mode:)`) ; la production reste fermée jusqu'à T14.
+    /// Espace établissement : fermé par défaut (fail-closed), ouvert par `AppContainer` en démo, en staging (T13) et en
+    /// production (T14) par la seule table `OuvertureEspaceEtablissement.pour(mode:)`.
     private let ouvertureEtablissement: OuvertureEspaceEtablissement
 
     public init(gateways: Gateways, resolutionTimeout: TimeInterval = SessionController.defaultResolutionTimeout,

@@ -145,8 +145,8 @@ public enum DeepLinkIntent: Equatable, Sendable, CustomStringConvertible, Custom
 /// `LinkRouter.etablissementDestination` — onglet ou écran livré de cet espace, sinon renvoi web ; un lien soignant y
 /// est un renvoi web, jamais un écran soignant ; `/contrat/{id}` y est le contrat de l'espace établissement. Dans l'espace
 /// soignant, un lien établissement reste un renvoi web (inchangé). Sans espace, un lien établissement n'est mémorisé que
-/// si l'espace établissement est ouvrable dans ce lancement (`OuvertureEspaceEtablissement` : démo et staging, production
-/// à T14) ; si la session s'arrête ensuite sur un refus (`.blocked`), ce lien redevient le renvoi web d'avant le lot 5
+/// si l'espace établissement est ouvrable dans ce lancement (`OuvertureEspaceEtablissement` : démo, staging depuis T13,
+/// production depuis T14) ; si la session s'arrête ensuite sur un refus (`.blocked`), ce lien redevient le renvoi web d'avant le lot 5
 /// (`sessionRefusee()`, point m1 de la revue B8 de #1147, corrigé par T13).
 ///
 /// Écart consigné (comme les taps, revue L3-T5 m12) : un lien reçu sur l'écran de connexion après une déconnexion

@@ -57,10 +57,10 @@ public enum EspaceResolution {
     }
 }
 
-/// Ouverture de l'espace établissement natif par mode de lancement (report sur main du 18/11/2026, puis T13 du
-/// 24/11/2026). Les drapeaux `ios_natif_etab_*_actif` (D14, migration D-FLAGS) valent 1 et sont lus fail-open : ils
-/// coupent un écran, jamais l'espace entier. Sans ce verrou, un compte établissement réel ouvrirait en production une
-/// coquille dont aucun écran n'a encore été recetté contre un vrai serveur. Fermé, l'espace rend exactement le refus
+/// Ouverture de l'espace établissement natif par mode de lancement (report sur main du 18/11/2026, T13 du 24/11/2026,
+/// puis T14 du 25/11/2026). Les drapeaux `ios_natif_etab_*_actif` (D14, migration D-FLAGS) valent 1 et sont lus
+/// fail-open : ils coupent un écran, jamais l'espace entier. `.ferme` reste le défaut du contrôleur et de l'aiguillage
+/// des liens (fail-closed) : seule cette table ouvre l'espace. Fermé, l'espace rend exactement le refus
 /// d'avant le lot 5 (`MobileAccess.validate` : `.unsupportedRole(<rôle>)`, écran « Espace non disponible », renvoi
 /// jolene.app), sans aucun appel établissement.
 public enum OuvertureEspaceEtablissement: Equatable, Sendable {
@@ -69,13 +69,16 @@ public enum OuvertureEspaceEtablissement: Equatable, Sendable {
 
     /// Démo : ouvert (recette XCUITest `-JOLENE_DEMO_ESPACE etablissement`). Staging : ouvert depuis T13, pour la
     /// recette contre le serveur de test (`StagingEtabParcoursTests`, workflow `ios-swift-lot5-staging.yml`).
-    /// Production : fermé jusqu'à T14, qui l'ouvre après la preuve STAGING ; chaque ouverture est une ligne de cette
-    /// table et un test, consignés dans `DECISIONS_LOT5.md`.
+    /// Production : ouvert par T14 (`DECISIONS_LOT5.md`, section T14), dont le merge exige la preuve STAGING verte, la
+    /// validation juridique de la fondatrice (HARD STOP n°4) et les sept drapeaux à 1 en production. Chaque ouverture ou
+    /// fermeture est une ligne de cette table et un test ; la garde `etablissement` de la soumission App Store
+    /// (`scripts/mobile/ios-native-app-store.mjs`) refuse un build dont la production serait refermée. En Release, le
+    /// mode vient de l'Info.plist seulement (`JoleneEnvironment.load`) : aucune surcharge ne choisit la ligne lue.
     public static func pour(mode: JoleneMode) -> OuvertureEspaceEtablissement {
         switch mode {
         case .demo: return .ouvert
         case .staging: return .ouvert
-        case .production: return .ferme
+        case .production: return .ouvert
         }
     }
 }

@@ -265,7 +265,7 @@ final class SessionControllerEtablissementTests: XCTestCase {
                        file: file, line: line)
     }
 
-    /// Défaut du contrôleur (fail-closed, configuration de production jusqu'à T14) : restauration.
+    /// Défaut du contrôleur (fail-closed ; production fermée jusqu'à T14, `.ferme` reste le défaut après) : restauration.
     func testEspaceFermeParDefautRendLeRefusDAvantLeLot5SansAppelEtablissement() async {
         let fixture = EtabFixture()
         let state = await SessionController(gateways: fixture.gateways()).start()
@@ -329,26 +329,30 @@ final class SessionControllerEtablissementTests: XCTestCase {
         XCTAssertNil(store.ecransEtablissement.epochCharge)
     }
 
-    /// T13 (24/11/2026) : staging ouvert pour la recette contre le serveur de test ; la production reste fermée
-    /// jusqu'à T14 (`DECISIONS_LOT5.md`, section T13).
+    /// T13 (24/11/2026) : staging ouvert pour la recette contre le serveur de test ; T14 (25/11/2026) : production
+    /// ouverte (`DECISIONS_LOT5.md`, sections T13 et T14). Refermer la production fait échouer ce test, la garde Node
+    /// (`tests/node/contrats-etablissement-ios.node.mjs`) et la garde `etablissement` de la soumission App Store.
     func testOuvertureParModeDeLancement() {
         XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .demo), .ouvert)
         XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .staging), .ouvert, "T13 : recette STAGING")
-        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .production), .ferme, "production fermée jusqu'à T14")
+        XCTAssertEqual(OuvertureEspaceEtablissement.pour(mode: .production), .ouvert, "T14 : production ouverte")
     }
 
-    /// T13 : avec l'ouverture de STAGING (`pour(mode: .staging)`), un compte établissement confirmé par le serveur reçoit
-    /// l'espace établissement ; avec celle de la production (`pour(mode: .production)`), le même compte reçoit le refus
-    /// d'avant le lot 5, sans aucun appel établissement.
-    func testStagingOuvreLEspaceEtLaProductionLeRefuse() async {
-        let staging = EtabFixture()
-        let ouvert = await SessionController(gateways: staging.gateways(),
-                                             espaceEtablissement: .pour(mode: .staging)).start()
-        guard case .readyEtablissement = ouvert else { return XCTFail("staging : espace établissement attendu, reçu \(ouvert)") }
-        let production = EtabFixture()
-        let ferme = await SessionController(gateways: production.gateways(),
-                                            espaceEtablissement: .pour(mode: .production)).start()
-        await Self.verifierRefusDAvantLeLot5(ferme, log: production.log)
+    /// T14 : avec la table de production (`pour(mode: .production)`), comme avec celle de STAGING, un compte
+    /// établissement confirmé par le serveur reçoit l'espace établissement ; un contrôleur fermé (`.ferme`, défaut
+    /// fail-closed) rend au même compte le refus d'avant le lot 5, sans aucun appel établissement.
+    func testStagingEtProductionOuvrentLEspaceLeVerrouFermeLeRefuse() async {
+        for mode in [JoleneMode.staging, .production] {
+            let fixture = EtabFixture()
+            let ouvert = await SessionController(gateways: fixture.gateways(),
+                                                 espaceEtablissement: .pour(mode: mode)).start()
+            guard case .readyEtablissement = ouvert else {
+                return XCTFail("\(mode) : espace établissement attendu, reçu \(ouvert)")
+            }
+        }
+        let fermee = EtabFixture()
+        let ferme = await SessionController(gateways: fermee.gateways(), espaceEtablissement: .ferme).start()
+        await Self.verifierRefusDAvantLeLot5(ferme, log: fermee.log)
     }
 
     /// Second parcours STAGING (25/11/2026) : un même message de connexion couvre trois causes ; le diagnostic (DEBUG,
