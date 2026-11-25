@@ -218,10 +218,16 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        toucherSeConnecter(submit, "L'espace établissement STAGING est prêt", timeout: 90) {
-            self.tabBarExists && self.containerVisible(self.element("etab-accueil-screen"))
+        // Second parcours STAGING (25/11/2026) : l'attente s'arrête aussi sur un refus de connexion, qui est alors nommé
+        // avec son diagnostic DEBUG (`login-error`, valeur d'accessibilité : étape et nature de l'échec, sans secret).
+        let erreur = element("login-error")
+        toucherSeConnecter(submit, "L'espace établissement STAGING est prêt, ou la connexion est refusée", timeout: 90) {
+            (self.tabBarExists && self.containerVisible(self.element("etab-accueil-screen"))) || erreur.exists
         }
-        XCTAssertFalse(element("login-error").exists, "aucune erreur de connexion")
+        if erreur.exists {
+            XCTFail("Connexion STAGING refusée : « \(erreur.label) » — diagnostic : \((erreur.value as? String) ?? "absent")")
+            return
+        }
     }
 
     private func ouvrirMissions(filtre: String, carte id: String) {

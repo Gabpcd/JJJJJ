@@ -59,6 +59,10 @@ public final class SessionStore: ObservableObject {
     /// Lot 3, T4 : vrai pendant `signOut()` (désactivation du token jusqu'à 2,5 s, puis révocation) ; un
     /// second appel est ignoré et l'écran bloqué montre l'attente sur « Se déconnecter ».
     @Published public private(set) var deconnexionEnCours = false
+    /// DEBUG seulement (toujours nil en Release) : diagnostic technique de la dernière connexion refusée
+    /// (`SessionController.diagnostic`), lu par la valeur d'accessibilité de `login-error` pour les XCUITest STAGING.
+    /// Jamais affiché, jamais journalisé ; ni adresse, ni mot de passe, ni jeton.
+    @Published public private(set) var diagnosticConnexion: String?
     public let controller: SessionController
     /// Lot 3, T4 : coordinateur push (nil sans push, doubles de test du lot 1).
     public let push: PushCoordinator?
@@ -127,6 +131,9 @@ public final class SessionStore: ObservableObject {
         state = .loading
         canRetryRestore = false
         state = await preparerEtablissement(await controller.signIn(email: email, password: password), relire: true)
+        #if DEBUG
+        diagnosticConnexion = await controller.diagnostic
+        #endif
     }
 
     /// Relecture du périmètre établissement après un refus de droit (`accesRefuse`, lot 5 T2a) : une

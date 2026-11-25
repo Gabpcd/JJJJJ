@@ -92,7 +92,8 @@ private struct SessionRootView: View {
                     LoginScreen(email: $loginEmail, errorMessage: message ?? messageConnexion, isDemo: container.isDemo,
                                 retryRestore: session.canRetryRestore ? { await session.start() } : nil,
                                 creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) },
-                                motDePasseOublie: { demandeReinitialisation = true }) { email, password in
+                                motDePasseOublie: { demandeReinitialisation = true },
+                                diagnostic: session.diagnosticConnexion) { email, password in
                         await session.signIn(email: email, password: password)
                     }
                     // Reste de L1-T10 : demande d'un lien de réinitialisation (« Mot de passe oublié ? »).

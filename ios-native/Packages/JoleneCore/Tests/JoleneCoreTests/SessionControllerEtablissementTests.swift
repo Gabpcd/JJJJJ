@@ -351,6 +351,32 @@ final class SessionControllerEtablissementTests: XCTestCase {
         await Self.verifierRefusDAvantLeLot5(ferme, log: production.log)
     }
 
+    /// Second parcours STAGING (25/11/2026) : un même message de connexion couvre trois causes ; le diagnostic (DEBUG,
+    /// valeur d'accessibilité de `login-error`) nomme l'étape et la nature de l'échec, sans secret.
+    func testDiagnosticNommeLEtapeEtLaNatureDuRefus() async {
+        let jete = EtabFixture(permissions: [.failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))])
+        let controleur = jete.controller(espace: .ouvert)
+        let etat = await controleur.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        XCTAssertEqual(etat, .signedOut(message: SessionController.sessionCheckFailedMessage))
+        let diagnostic = await controleur.diagnostic
+        XCTAssertEqual(diagnostic, "permissions:unauthorized:Votre session a expiré. Reconnectez-vous.")
+        XCTAssertFalse(diagnostic?.contains("example.invalid") ?? true, "jamais l'adresse")
+        XCTAssertFalse(diagnostic?.contains("mot-de-passe") ?? true, "jamais le mot de passe")
+
+        let inactif = EtabFixture(permissions: [permissions(role: nil, etablissementId: nil, accordees: [], success: false)])
+        let autre = inactif.controller(espace: .ouvert)
+        _ = await autre.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        let perimetre = await autre.diagnostic
+        XCTAssertEqual(perimetre, "permissions:perimetre:compteInactif", "success:false de fn_mes_permissions_etab")
+
+        let ouvert = EtabFixture().controller(espace: .ouvert)
+        guard case .readyEtablissement = await ouvert.signIn(email: "membre-1@example.invalid", password: "mot-de-passe") else {
+            return XCTFail("espace établissement attendu")
+        }
+        let aucun = await ouvert.diagnostic
+        XCTAssertNil(aucun, "aucun diagnostic sur une connexion réussie")
+    }
+
     func testPortSessionNonCableNOuvreJamaisLEspace() async {
         var gateways = EtabFixture().gateways()
         gateways.etablissement = .nonCable
