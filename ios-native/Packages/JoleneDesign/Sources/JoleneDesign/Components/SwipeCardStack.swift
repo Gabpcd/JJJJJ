@@ -223,7 +223,9 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
     private let cardAccessibility: SwipeCardAccessibility
     private let isBusy: Bool
     private let onAction: (SwipeCardAction, Item) -> Void
-    private let card: (Item) -> Card
+    /// Contenu d'une carte et son rang (0 = dessus) : une carte de fond ne rend aucun contrôle (revue fraîche de la
+    /// vague D, M1, `DECISIONS_LOT4.md` précision 22 : ses boutons restaient exposés malgré le masquage).
+    private let card: (Item, Int) -> Card
 
     /// État du glissement en cours : remis à zéro par SwiftUI à la fin du geste **et** à son annulation
     /// (interruption système : « une interruption ne valide jamais une mission », `StackCards.tsx` l.121).
@@ -260,9 +262,22 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
                 cardIdentifierPrefix: String = SwipeDeckIdentifiers.cardPrefix,
                 cardAccessibility: SwipeCardAccessibility = .combine, isBusy: Bool = false,
                 onAction: @escaping (SwipeCardAction, Item) -> Void, @ViewBuilder card: @escaping (Item) -> Card) {
+        self.init(items, identifier: identifier, cardIdentifierPrefix: cardIdentifierPrefix,
+                  cardAccessibility: cardAccessibility, isBusy: isBusy, onAction: onAction,
+                  rangedCard: { item, _ in card(item) })
+    }
+
+    /// Variante qui passe à la carte son rang (0 = dessus) : une carte au contenu interactif (bouton de détail) ne doit
+    /// le construire que sur le dessus, `accessibilityHidden` ne retirant pas toujours ses boutons de l'arbre
+    /// (simulateur iOS 18.6, `DECISIONS_LOT4.md` précision 22).
+    public init(_ items: [Item], identifier: String = SwipeDeckIdentifiers.deck,
+                cardIdentifierPrefix: String = SwipeDeckIdentifiers.cardPrefix,
+                cardAccessibility: SwipeCardAccessibility = .combine, isBusy: Bool = false,
+                onAction: @escaping (SwipeCardAction, Item) -> Void,
+                @ViewBuilder rangedCard: @escaping (Item, Int) -> Card) {
         self.items = items; self.identifier = identifier; self.cardIdentifierPrefix = cardIdentifierPrefix
         self.cardAccessibility = cardAccessibility; self.isBusy = isBusy
-        self.onAction = onAction; self.card = card
+        self.onAction = onAction; self.card = rangedCard
     }
 
     /// Transmet `action` pour `item`, sauf pendant un appel serveur (`isBusy`) : point unique des gestes, des
@@ -331,7 +346,7 @@ public struct SwipeCardStack<Item: Identifiable, Card: View>: View {
         let dessus = depth == 0
         let style = SwipeCardGesture.backgroundStyle(depth: depth)
         let decalage = dessus ? decalageAffiche(item) : 0
-        return card(item)
+        return card(item, depth)
             // Contenu d'une carte de fond masqué à la source : posé seulement après `.accessibilityElement`, le masquage
             // laissait encore ses boutons exposés (simulateur iOS 18.6).
             .accessibilityHidden(!dessus)

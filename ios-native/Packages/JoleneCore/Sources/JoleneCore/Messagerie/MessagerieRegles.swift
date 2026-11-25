@@ -226,3 +226,79 @@ public final class DiffusionEtat<Valeur: Sendable & Equatable>: @unchecked Senda
         abonnes[id] = nil
     }
 }
+
+/// Horloge d'interface monotone (secondes depuis le démarrage de l'appareil) : mesure les fenêtres de l'interface,
+/// distincte de l'horloge métier (`contexte.maintenant()`), figée en démo (`FixedClock(DemoWorld.fixedNow)`). Injectable
+/// pour les tests (revue du delta de la PR #1185, majeur 1).
+public struct HorlogeInterface: Sendable {
+    public let maintenant: @Sendable () -> TimeInterval
+
+    public init(maintenant: @escaping @Sendable () -> TimeInterval) {
+        self.maintenant = maintenant
+    }
+
+    /// `ProcessInfo.systemUptime` : monotone, insensible aux changements d'heure, jamais figé en démo.
+    public static let systeme = HorlogeInterface { ProcessInfo.processInfo.systemUptime }
+}
+
+/// Suivi de la fin d'un fil de messages (`ConversationScreen`) quand la hauteur visible du fil change (clavier, rotation,
+/// Split View, taille du texte, composeur qui grandit) : le fil n'est ramené en bas que si sa fin était visible juste
+/// avant le changement, ou juste après un envoi de l'utilisateur. Un utilisateur qui relit l'historique garde sa position
+/// (revue fraîche de la PR #1185, mineur 1). L'insertion d'un message, elle, ramène toujours en bas.
+///
+/// État tenu ici, pas dans la vue (revue du delta, majeur 2) : la position du repère de fin et la hauteur visible sont
+/// mémorisées, et la visibilité de la fin est recalculée de ces deux valeurs à chaque décision. Elle ne dépend donc ni de
+/// l'ordre des `onAppear`, ni d'un déplacement du repère (fil court qui tient dans la zone). Le dernier envoi est daté sur
+/// l'horloge d'interface (`HorlogeInterface`), jamais sur l'horloge métier, figée en démo (majeur 1).
+public struct SuiviFinDuFil: Equatable, Sendable {
+    /// Marge (pt) sous le bas visible dans laquelle la fin du fil compte encore comme visible.
+    public static let tolerance: Double = 24
+    /// Fenêtre (s, horloge d'interface) après un envoi pendant laquelle un changement de hauteur suit la fin du fil : à
+    /// l'envoi, le clavier se ferme puis se rouvre (iPad paysage, simulateur iOS 18.6 : 83,5 → 480,5 → 83,5 pt en 0,1 s).
+    public static let fenetreApresEnvoi: TimeInterval = 2
+
+    /// Haut du repère de fin dans le repère de la zone de défilement ; nil tant qu'il n'est pas mesuré.
+    public private(set) var hautDuRepere: Double?
+    /// Hauteur visible de la zone ; 0 tant qu'elle n'est pas mesurée.
+    public private(set) var hauteurVisible: Double = 0
+    /// Dernier envoi de l'utilisateur, sur l'horloge d'interface.
+    public private(set) var dernierEnvoi: TimeInterval?
+
+    public init() {}
+
+    /// La fin du fil est visible : le haut du repère de fin est au-dessus du bas visible (tolérance comprise). Valeur
+    /// inconnue (repère non mesuré, hauteur 0) : non visible.
+    public static func finVisible(hautDuRepere: Double, hauteurVisible: Double) -> Bool {
+        hauteurVisible > 0 && hautDuRepere <= hauteurVisible + tolerance
+    }
+
+    /// Visibilité de la fin, recalculée des deux valeurs mémorisées.
+    public var finVisible: Bool {
+        guard let hautDuRepere else { return false }
+        return Self.finVisible(hautDuRepere: hautDuRepere, hauteurVisible: hauteurVisible)
+    }
+
+    /// Un envoi a eu lieu dans la fenêtre, à l'instant `instant` de l'horloge d'interface.
+    public func envoiRecent(a instant: TimeInterval) -> Bool {
+        guard let dernierEnvoi else { return false }
+        let ecart = instant - dernierEnvoi
+        return ecart >= 0 && ecart < Self.fenetreApresEnvoi
+    }
+
+    /// Le repère de fin a été mesuré (apparition ou déplacement).
+    public mutating func repere(_ haut: Double) { hautDuRepere = haut }
+
+    /// Première mesure de la hauteur visible : aucune décision.
+    public mutating func hauteurMesuree(_ hauteur: Double) { hauteurVisible = hauteur }
+
+    /// L'utilisateur envoie un message à l'instant `instant` de l'horloge d'interface.
+    public mutating func envoi(a instant: TimeInterval) { dernierEnvoi = instant }
+
+    /// La hauteur visible change : décide du suivi avec l'état d'AVANT le changement (fin visible avec l'ancienne hauteur,
+    /// ou envoi récent), puis retient la nouvelle hauteur. Hauteur encore inconnue : retenue sans décision.
+    public mutating func hauteurChangee(_ nouvelle: Double, a instant: TimeInterval) -> Bool {
+        let suivre = hauteurVisible > 0 && (finVisible || envoiRecent(a: instant))
+        hauteurVisible = nouvelle
+        return suivre
+    }
+}

@@ -621,6 +621,36 @@ class JoleneUITestCase: XCTestCase {
         }
     }
 
+    /// Amène un curseur à pas entiers (`Slider(step: 1)`) sur la valeur `cible`, lue dans sa valeur d'accessibilité
+    /// (premier nombre de « 15 km ») : un `adjust(toNormalizedSliderPosition:)` vise la position de `cible`, puis, si la
+    /// valeur lue diffère, le geste est rejoué en décalant la position visée de l'écart observé (`(cible - lue) / plage`),
+    /// six gestes au plus, chaque reprise consignée (`consignerRejeu`). XCUITest n'offre pas `increment` sur iOS. Le geste
+    /// seul ne suffit pas : run 45527404765, UI lot 1 sur les trois formats,
+    /// `DemoPoolUrgenceTests.testActiverRayonPuisAccepterEtChoixDeContrat`, `adjust` à 0,222 (15 km sur 5-50 km, environ
+    /// 14,6 pt par km sur 656 pt) a posé « 14 km », alors que le même code tombait sur 15 km au run précédent. La valeur
+    /// atteinte et sa relecture restent prouvées par l'appelant ; rien n'est forcé si la valeur n'est pas lisible.
+    func reglerCurseur(_ slider: XCUIElement, sur cible: Int, minimum: Int, maximum: Int,
+                       file: StaticString = #filePath, line: UInt = #line) {
+        require("Le curseur est atteignable", file: file, line: line) { self.visible(slider) && slider.isEnabled }
+        let plage = CGFloat(maximum - minimum)
+        var position = CGFloat(cible - minimum) / plage
+        let attente = "Le curseur \(slider.identifier) est à \(cible)"
+        for geste in 1...6 {
+            slider.adjust(toNormalizedSliderPosition: min(1, max(0, position)))
+            guard let lue = valeurEntiere(slider), lue != cible, geste < 6 else { return }
+            position += CGFloat(cible - lue) / plage
+            consignerRejeu(attente, issue: "valeur lue \(lue) après le geste \(geste)/6 : position visée corrigée à "
+                           + String(format: "%.3f", position), file: file, line: line)
+        }
+    }
+
+    /// Premier nombre entier de la valeur d'accessibilité d'un élément (« 14 km » → 14), nil s'il n'y en a pas.
+    private func valeurEntiere(_ element: XCUIElement) -> Int? {
+        guard let texte = element.value as? String else { return nil }
+        let chiffres = texte.drop(while: { !$0.isNumber }).prefix(while: \.isNumber)
+        return Int(chiffres)
+    }
+
     /// Un glissement du pouce du curseur jusqu'au-delà de l'extrémité gauche de sa piste (`dragSliderPastMinimum`).
     private func glisserAuDelaDuMinimum(_ slider: XCUIElement) {
         let frame = slider.frame

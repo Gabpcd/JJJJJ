@@ -446,14 +446,21 @@ final class DemoSwipeTests: JoleneUITestCase {
         XCTAssertEqual(element("explorer-vue-liste").label, "Liste")
     }
 
-    /// « Voir le détail » de la carte du dessus `id`, cherché DANS cette carte : les cartes de fond exposent encore leur
-    /// propre bouton à XCUITest (défaut d'accessibilité de `SwipeCardStack` relevé sur simulateur iOS 18.6, non corrigé),
-    /// et la première correspondance globale de `swipe-detail` est celle d'une carte de fond, que l'on ne peut toucher.
+    /// « Voir le détail » de la carte du dessus `id`, cherché dans cette carte, et SEUL `swipe-detail` de l'écran : une
+    /// carte de fond ne rend plus son bouton (revue fraîche de la vague D, M1, `DECISIONS_LOT4.md` précision 22 ; avant
+    /// le correctif, XCUITest voyait un `swipe-detail` par carte visible, simulateur iOS 18.6). Le test échoue si un
+    /// bouton de carte de fond redevient exposé.
     private func toucherDetail(de id: String, file: StaticString = #filePath, line: UInt = #line) {
         let bouton = element("swipe-card-\(id)").descendants(matching: .any).matching(identifier: "swipe-detail").firstMatch
         require("« Voir le détail » de la carte \(id) est atteignable", file: file, line: line) {
             self.visible(bouton) && bouton.isEnabled
         }
+        let exposes = app.descendants(matching: .any).matching(identifier: "swipe-detail").count
+        XCTAssertEqual(exposes, 1, "un seul « Voir le détail » exposé (carte du dessus) ; \(exposes) trouvés : bouton d'une carte "
+                       + "de fond exposé à l'accessibilité", file: file, line: line)
+        let libelles = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Voir le détail")).count
+        XCTAssertEqual(libelles, 1, "« Voir le détail » d'une carte de fond exposé (\(libelles) libellés) : le contenu des cartes "
+                       + "de fond doit rester hors de l'arbre d'accessibilité", file: file, line: line)
         bouton.tap()
     }
 

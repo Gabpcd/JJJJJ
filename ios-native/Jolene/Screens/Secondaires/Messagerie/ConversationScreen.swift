@@ -31,12 +31,23 @@ struct ConversationScreen: View {
     @State private var envoiLocal = false
     @State private var signalementOuvert = false
     @State private var confirmationSignalement: String?
+    /// Défilement vers la fin du fil en attente (un seul à la fois : le plus récent remplace le précédent).
+    @State private var defilementFin: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduireAnimations
+    /// Position du repère de fin, hauteur visible et dernier envoi : décident du suivi de la fin quand la hauteur change
+    /// (`SuiviFinDuFil`, JoleneCore). Le dernier envoi est daté sur l'horloge d'interface, jamais sur l'horloge métier
+    /// (figée en démo).
+    /// Boîte non observée : la position du repère change à chaque image d'un défilement, sans rendre l'écran.
+    @State private var boiteSuivi = BoiteSuiviFinDuFil()
+    private let horlogeInterface: HorlogeInterface
     /// Dernier type détecté : la feuille garde son texte pendant sa fermeture.
     @State private var typeAntiFuite: DetectedType?
     private let moderation: ModerationConversation
 
-    init(conversation: ConversationAffichee, contexte: ContexteEcranMessagerie, cycle: CycleRealtime, surIndisponible: @escaping () -> Void) {
+    init(conversation: ConversationAffichee, contexte: ContexteEcranMessagerie, cycle: CycleRealtime,
+         horlogeInterface: HorlogeInterface = .systeme, surIndisponible: @escaping () -> Void) {
         self.conversation = conversation
+        self.horlogeInterface = horlogeInterface
         self.contexte = contexte
         self.cycle = cycle
         self.surIndisponible = surIndisponible
@@ -152,63 +163,120 @@ struct ConversationScreen: View {
 
     // MARK: - Messages
 
+    /// Repère de fin du fil, hors de la pile paresseuse : sa position est exacte dès la mise en page, contrairement à
+    /// celle d'une ligne de `LazyVStack` qui vient d'arriver (position estimée).
+    private static let finDuFil = "chat-fin-du-fil"
+
     private var messages: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: JoleneSpacing.sm) {
-                    switch fil.etat {
-                    case .chargement:
-                        SkeletonCard(identifier: "chat-chargement")
-                    case .echec:
-                        VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
-                            InlineNotice(MessagerieTextes.echecFil, tone: .error, identifier: "chat-erreur")
-                            JoleneButton(MessagerieTextes.reessayerFil, style: .secondary) { Task { await fil.relire() } }
-                                .accessibilityIdentifier("chat-erreur-reessayer")
-                        }
-                    case .pret where fil.messages.isEmpty:
-                        VStack(spacing: JoleneSpacing.sm) {
-                            Image(systemName: "bubble.left").font(.system(size: 28)).foregroundStyle(JoleneColor.bubblegum)
-                                .accessibilityHidden(true)
-                            Text(MessagerieTextes.filVide).font(JoleneFont.callout).foregroundStyle(JoleneColor.bubblegum)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, JoleneSpacing.xl)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("chat-vide")
-                    case .pret:
-                        ForEach(fil.messages) { message in
-                            if equipe(message) {
-                                // Lot 5 (T11) : message d'un collègue de l'équipe, du côté de l'établissement (web l.763-767).
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text(MessagerieTextes.equipeEtablissement)
-                                        .font(JoleneFont.caption.weight(.semibold))
-                                        .foregroundStyle(JoleneColor.bubblegum)
-                                        .accessibilityIdentifier("chat-equipe-\(message.id)")
-                                    bulle(message)
+                VStack(spacing: 0) {
+                    LazyVStack(spacing: JoleneSpacing.sm) {
+                        switch fil.etat {
+                        case .chargement:
+                            SkeletonCard(identifier: "chat-chargement")
+                        case .echec:
+                            VStack(alignment: .leading, spacing: JoleneSpacing.sm) {
+                                InlineNotice(MessagerieTextes.echecFil, tone: .error, identifier: "chat-erreur")
+                                JoleneButton(MessagerieTextes.reessayerFil, style: .secondary) { Task { await fil.relire() } }
+                                    .accessibilityIdentifier("chat-erreur-reessayer")
+                            }
+                        case .pret where fil.messages.isEmpty:
+                            VStack(spacing: JoleneSpacing.sm) {
+                                Image(systemName: "bubble.left").font(.system(size: 28)).foregroundStyle(JoleneColor.bubblegum)
+                                    .accessibilityHidden(true)
+                                Text(MessagerieTextes.filVide).font(JoleneFont.callout).foregroundStyle(JoleneColor.bubblegum)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, JoleneSpacing.xl)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("chat-vide")
+                        case .pret:
+                            ForEach(fil.messages) { message in
+                                if equipe(message) {
+                                    // Lot 5 (T11) : message d'un collègue de l'équipe, du côté de l'établissement (web l.763-767).
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(MessagerieTextes.equipeEtablissement)
+                                            .font(JoleneFont.caption.weight(.semibold))
+                                            .foregroundStyle(JoleneColor.bubblegum)
+                                            .accessibilityIdentifier("chat-equipe-\(message.id)")
+                                        bulle(message)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .id(message.id)
+                                } else {
+                                    bulle(message).id(message.id)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                                .id(message.id)
-                            } else {
-                                bulle(message).id(message.id)
                             }
                         }
+                        if fil.saisieInterlocuteur {
+                            TypingIndicator(identifier: "chat-typing-bulle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id("chat-typing-bulle")
+                        }
                     }
-                    if fil.saisieInterlocuteur {
-                        TypingIndicator(identifier: "chat-typing-bulle")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id("chat-typing-bulle")
-                    }
+                    .padding(JoleneSpacing.md)
+                    .frame(maxWidth: 760)
+                    .frame(maxWidth: .infinity)
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.finDuFil)
+                        .accessibilityHidden(true)
+                        .background(GeometryReader { repere in
+                            Color.clear
+                                .onAppear { boiteSuivi.etat.repere(Double(repere.frame(in: .named(Self.finDuFil)).minY)) }
+                                .onChange(of: repere.frame(in: .named(Self.finDuFil)).minY) { haut in boiteSuivi.etat.repere(Double(haut)) }
+                        })
                 }
-                .padding(JoleneSpacing.md)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
             }
+            .coordinateSpace(name: Self.finDuFil)
             .accessibilityIdentifier("chat-messages")
-            .onChange(of: fil.messages.last?.id) { dernier in
-                guard let dernier else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(dernier, anchor: .bottom) }
-            }
-            .onAppear { if let dernier = fil.messages.last?.id { proxy.scrollTo(dernier, anchor: .bottom) } }
+            // Fin du fil gardée visible à chaque message inséré (pas seulement quand le dernier change) et quand la hauteur
+            // visible change (clavier), une fois l'animation du clavier finie. Run 45527404765 (`DemoMessagerieTests`,
+            // `DemoEtabMessagerieTests`, iPad paysage ; reproduit et instrumenté sur iOS 18.6) : à l'envoi, le clavier se
+            // ferme puis se rouvre (zone visible 83,5 → 480,5 → 83,5 pt en 0,1 s) ; le défilement demandé pendant cette
+            // animation était écrasé par l'évitement du clavier, et la réponse démo, insérée par le flux avant la relecture
+            // du message envoyé (dernier identifiant inchangé), restait sous le bas visible, jamais rendue par la pile
+            // paresseuse. Le repère de fin, hors de la pile, a une position exacte. Un changement de hauteur ne ramène en
+            // bas que si la fin était visible avant, ou juste après un envoi (`SuiviFinDuFil`) : l'historique relu garde
+            // sa position (revue fraîche de la PR #1185, mineur 1).
+            .onChange(of: Self.signature(fil.messages)) { _ in defilerEnBas(proxy, apres: Self.delaiApresMessage) }
+            .background(GeometryReader { zone in
+                Color.clear
+                    .onAppear { boiteSuivi.etat.hauteurMesuree(Double(zone.size.height)) }
+                    .onChange(of: zone.size.height) { hauteur in
+                        if boiteSuivi.etat.hauteurChangee(Double(hauteur), a: horlogeInterface.maintenant()) {
+                            defilerEnBas(proxy, apres: Self.delaiApresClavier)
+                        }
+                    }
+            })
+            // Ouverture : sans animation, au tour suivant de la boucle principale (mise en page faite). Un `scrollTo`
+            // immédiat dans `onAppear` rendait le bouton « Confirmer » du blocage inopérant (iPhone, iOS 18.6, 3 sur 3).
+            .onAppear { defilerEnBas(proxy, apres: Self.delaiApresMessage, anime: false) }
+            .onDisappear { defilementFin?.cancel() }
+        }
+    }
+
+
+    /// Nombre de messages et dernier identifiant : change à toute insertion, en fin de fil ou avant le dernier.
+    private static func signature(_ messages: [MessageChat]) -> String {
+        "\(messages.count)|\(messages.last?.id ?? "")"
+    }
+
+    /// Délai avant de défiler : un tour de boucle après un message (mise en page faite), la fin de l'animation du clavier
+    /// (0,25 s chez UIKit, marge comprise) après un changement de hauteur visible.
+    private static let delaiApresMessage: UInt64 = 0
+    private static let delaiApresClavier: UInt64 = 400_000_000
+
+    /// Amène la fin du fil en bas de la zone visible après `apres` nanosecondes ; une demande plus récente remplace celle
+    /// en attente (la dernière mise en page l'emporte).
+    private func defilerEnBas(_ proxy: ScrollViewProxy, apres delai: UInt64, anime: Bool = true) {
+        defilementFin?.cancel()
+        let animation: Animation? = anime && !reduireAnimations ? .easeOut(duration: 0.2) : nil
+        defilementFin = Task { @MainActor in
+            if delai > 0 { try? await Task.sleep(nanoseconds: delai) } else { await Task.yield() }
+            guard !Task.isCancelled else { return }
+            withAnimation(animation) { proxy.scrollTo(Self.finDuFil, anchor: .bottom) }
         }
     }
 
@@ -261,6 +329,7 @@ struct ConversationScreen: View {
     /// et relu, sinon le texte saisi reste.
     private func envoyer() {
         envoiLocal = true
+        boiteSuivi.etat.envoi(a: horlogeInterface.maintenant())
         let contenu = MessageComposer.trimmed(texte)
         Task {
             let confirme = await fil.envoyer(contenu)
@@ -282,3 +351,11 @@ struct ConversationScreen: View {
         }
     }
 }
+
+/// État du suivi de la fin du fil (`SuiviFinDuFil`) tenu par référence : ses mises à jour (à chaque image d'un
+/// défilement) ne provoquent aucun rendu ; seules les décisions de défilement agissent.
+@MainActor
+private final class BoiteSuiviFinDuFil {
+    var etat = SuiviFinDuFil()
+}
+
