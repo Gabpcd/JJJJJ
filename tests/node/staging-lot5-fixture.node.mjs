@@ -388,11 +388,23 @@ test('GRAPHE_NETTOYAGE = fermeture des clés étrangères du dump vers la cohort
   // Le SQL supprime chaque table retenue, enfants d abord, avant les racines.
   const m = manifeste('graphe', new Date('2026-11-24T10:00:00.000Z'));
   const sql = sqlNettoyer(m);
-  const positions = tables.map(t => sql.indexOf(NON_SUPPRIMABLES[t.table]
-    ? `-- ${t.table} : non supprimable` : `DELETE FROM public.${t.table} x WHERE`));
-  assert.ok(positions.every(p => p > 0), 'une suppression (ou un saut nommé, table non supprimable) par table retenue');
+  const positions = tables.map(t => sql.indexOf(NON_SUPPRIMABLES[t.table] ? `-- ${t.table} : non supprimable`
+    : t.liens.every(l => l.cascade) ? `-- ${t.table} : supprimée par cascade` : `DELETE FROM public.${t.table} x WHERE`));
+  assert.ok(positions.every(p => p > 0), 'une suppression (ou un saut nommé : non supprimable, cascade) par table retenue');
+  // Le marqueur de cascade suit le dump : `*` si et seulement si la FK est ON DELETE CASCADE.
+  for (const [, enfant, colonne, parent, reste] of dump.matchAll(re)) {
+    const t = tables.find(x => x.table === enfant);
+    const l = t?.liens.find(x => x.colonne === colonne && x.parent === parent);
+    if (l) assert.equal(l.cascade, /ON DELETE CASCADE/.test(reste), `${enfant}.${colonne} → ${parent} : cascade`);
+  }
+  // Une table toute en cascade n'a de lien que vers des racines ou des tables qui partent avant elle.
+  const sansSuppression = tables.filter(t => t.liens.every(l => l.cascade)).map(t => t.table);
+  assert.ok(sansSuppression.includes('mission_creneaux') && sansSuppression.includes('documents_soignants'), sansSuppression.join(','));
   for (const t of Object.keys(NON_SUPPRIMABLES)) assert.doesNotMatch(sql, new RegExp(`DELETE FROM public\\.${t}\\b`), `${t} jamais supprimée`);
-  for (const t of tables) for (const l of t.liens.filter(l => !RACINES_COHORTE.includes(l.parent))) {
+  for (const t of tables) for (const l of t.liens.filter(l => !RACINES_COHORTE.includes(l.parent) && !l.cascade)) {
+    if (NON_SUPPRIMABLES[t.table] || NON_SUPPRIMABLES[l.parent]) continue;
+    const parent = tables.find(x => x.table === l.parent);
+    if (parent.liens.every(x => x.cascade)) continue; // parent supprimé par cascade, après ses enfants explicites
     assert.ok(positions[rang.get(t.table)] < positions[rang.get(l.parent)], `${t.table} supprimée avant ${l.parent}`);
   }
   assert.ok(Math.max(...positions) < sql.indexOf('DELETE FROM public.missions WHERE ctid'), 'enfants avant les missions');

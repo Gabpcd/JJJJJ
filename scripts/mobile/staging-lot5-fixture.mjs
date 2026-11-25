@@ -192,7 +192,7 @@ const authDuRun = (m, qui, role) => `u.id = ${uuid(m[qui].id)} AND u.email = ${q
 export function sqlPreparer(m) {
   const e = m.etablissement, s = m.soignant;
   return `${entete(m)}DO $l5_seed$
-DECLARE v_code text; v_essais integer := 0;
+DECLARE v_etat record;
 BEGIN
   IF auth.uid() IS NOT NULL OR auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Contexte service requis (L5)'; END IF;
   IF NOT EXISTS (SELECT 1 FROM auth.users u WHERE ${authDuRun(m, 'etablissement', 'ETABLISSEMENT')}
@@ -253,19 +253,23 @@ BEGIN
   VALUES (${uuid(m.m1.creneauId)}, ${uuid(m.m1.id)}, ${q(m.m1.debut)}::timestamptz, ${q(m.m1.fin)}::timestamptz, false, 1, 'PREVISIONNEL'),
          (${uuid(m.m2.creneauId)}, ${uuid(m.m2.id)}, ${q(m.m2.debut)}::timestamptz, ${q(m.m2.fin)}::timestamptz, false, 1, 'PREVISIONNEL');
 
-  -- Code de pointage : six chiffres, unique parmi les missions actives (même règle que fn_scanner_code_pointage).
-  LOOP
-    v_code := lpad(floor(random() * 1000000)::text, 6, '0');
-    EXIT WHEN NOT EXISTS (SELECT 1 FROM public.missions WHERE code_pointage_actif = v_code AND statut IN ('ASSIGNEE', 'EN_COURS'));
-    v_essais := v_essais + 1;
-    IF v_essais > 50 THEN RAISE EXCEPTION 'Code de pointage L5 introuvable'; END IF;
-  END LOOP;
+  -- Assignation par l'aide de test seule (CLAUDE.md, jamais d'UPDATE direct). Le code de pointage n'est PAS fourni :
+  -- trg_zz_geler_mission (fn_geler_mission_a_assignation) gèle la mission au passage OUVERTE → ASSIGNEE et génère alors
+  -- code_pointage_actif, prochain_type_scan et nb_scans, en écrasant toute valeur passée (premier run STAGING, 25/11/2026).
+  -- Le code est relu ensuite (sqlCode), jamais fixé ici.
   PERFORM public.fn_test_update_mission(${uuid(m.m2.id)}, jsonb_build_object('statut', 'ASSIGNEE',
-    'soignant_assigne_id', ${q(s.id)}, 'type_contrat_applique', 'SALARIE', 'code_pointage_actif', v_code,
-    'prochain_type_scan', 'OUVERTURE', 'nb_scans', 0));
-  IF NOT EXISTS (SELECT 1 FROM public.missions WHERE id = ${uuid(m.m2.id)} AND statut = 'ASSIGNEE'
-       AND soignant_assigne_id = ${uuid(s.id)} AND type_contrat_applique = 'SALARIE' AND code_pointage_actif = v_code) THEN
-    RAISE EXCEPTION 'Assignation de M2 non appliquée (fn_test_update_mission)';
+    'soignant_assigne_id', ${q(s.id)}, 'type_contrat_applique', 'SALARIE'));
+  SELECT statut::text AS statut, soignant_assigne_id, type_contrat_applique::text AS contrat, code_pointage_actif AS code,
+         prochain_type_scan, fige_le INTO v_etat
+    FROM public.missions WHERE id = ${uuid(m.m2.id)};
+  IF v_etat.statut IS DISTINCT FROM 'ASSIGNEE' OR v_etat.soignant_assigne_id IS DISTINCT FROM ${uuid(s.id)}
+     OR v_etat.contrat IS DISTINCT FROM 'SALARIE' OR coalesce(v_etat.code, '') !~ '^[0-9]{6}$'
+     OR v_etat.prochain_type_scan IS DISTINCT FROM 'OUVERTURE' THEN
+    -- Champ par champ, sans jamais recopier le code.
+    RAISE EXCEPTION 'Assignation de M2 non appliquée (fn_test_update_mission) : statut %, soignant attendu %, contrat %, code %, prochain scan %, gel %',
+      v_etat.statut, v_etat.soignant_assigne_id IS NOT DISTINCT FROM ${uuid(s.id)}, v_etat.contrat,
+      CASE WHEN coalesce(v_etat.code, '') ~ '^[0-9]{6}$' THEN 'six chiffres' ELSE 'absent ou invalide' END,
+      v_etat.prochain_type_scan, v_etat.fige_le IS NOT NULL;
   END IF;
 
   -- Contrat déjà signé, inséré côté service : aucun OTP, aucun SMS (le compte TEST coupe aussi e-mail et push).
@@ -322,7 +326,7 @@ export function sqlVerifier(m) {
  * clés étrangères du dump `supabase/schema/public.sql` vers une racine ou vers une table déjà retenue, hors `SET NULL` /
  * `SET DEFAULT` (la ligne enfant survit) et hors auto-références. Les enfants `CASCADE` sont retenus aussi : leurs propres
  * enfants restrictifs doivent partir avant eux. Ordre : parents avant enfants (les suppressions se font en sens inverse).
- * Format : `table:colonne>parent,…`. Liste PROUVÉE, pas écrite à la main : `tests/node/staging-lot5-fixture.node.mjs`
+ * Format : `table:colonne>parent,…`, `*` final pour un lien `ON DELETE CASCADE`. Liste PROUVÉE, pas écrite à la main : `tests/node/staging-lot5-fixture.node.mjs`
  * la recalcule depuis le dump et échoue à la moindre différence (régénérer avec `node … graphe`).
  */
 export const GRAPHE_NETTOYAGE = [
@@ -330,12 +334,12 @@ export const GRAPHE_NETTOYAGE = [
   'assurance_config:etablissement_id>etablissements',
   'assurances_mission:etablissement_id>etablissements,mission_id>missions',
   'attestations_heures_externes:soignant_id>soignants',
-  'badges_soignant:soignant_id>soignants',
+  'badges_soignant:soignant_id>soignants*',
   'bfa_suivi:etablissement_id>etablissements',
   'calendar_events_sync:mission_id>missions',
   'candidatures:mission_id>missions,soignant_id>soignants',
   'chorus_pro_config:etablissement_id>etablissements',
-  'codes_secours_mission:mission_id>missions',
+  'codes_secours_mission:mission_id>missions*',
   'conformite_travail:mission_id>missions,soignant_id>soignants',
   'contrats_mission:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
   'contrats_service_signatures:etablissement_id>etablissements',
@@ -344,51 +348,51 @@ export const GRAPHE_NETTOYAGE = [
   'conversions_liberal:soignant_id>soignants',
   'copies_bulletins_paie:etablissement_id>etablissements,soignant_id>soignants',
   'cotisations_sociales:mission_id>missions,soignant_id>soignants',
-  'credits_etablissement:etablissement_id>etablissements',
-  'documents_soignants:soignant_id>soignants',
+  'credits_etablissement:etablissement_id>etablissements*',
+  'documents_soignants:soignant_id>soignants*',
   'equipes:etablissement_id>etablissements',
-  'escrow_etablissement_etat:etablissement_id>etablissements',
+  'escrow_etablissement_etat:etablissement_id>etablissements*',
   'etablissement_preuve_audit:etablissement_id>etablissements',
   'evaluations:mission_id>missions',
   'factures_honoraires:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
-  'favoris_soignant_etab:etablissement_id>etablissements,soignant_id>soignants',
-  'heures_externes_soignants:soignant_id>soignants',
+  'favoris_soignant_etab:etablissement_id>etablissements*,soignant_id>soignants*',
+  'heures_externes_soignants:soignant_id>soignants*',
   'historique_blocages_etablissements:etablissement_id>etablissements',
-  'invitations_etablissement:etablissement_id>etablissements',
-  'mandats_facturation_signatures:soignant_id>soignants',
-  'matching_preferences_soignant:soignant_id>soignants',
-  'matching_scores:mission_id>missions,soignant_id>soignants',
-  'membres_etablissement:etablissement_id>etablissements',
+  'invitations_etablissement:etablissement_id>etablissements*',
+  'mandats_facturation_signatures:soignant_id>soignants*',
+  'matching_preferences_soignant:soignant_id>soignants*',
+  'matching_scores:mission_id>missions*,soignant_id>soignants*',
+  'membres_etablissement:etablissement_id>etablissements*',
   'messages_mission:mission_id>missions',
-  'mission_creneaux:mission_id>missions',
+  'mission_creneaux:mission_id>missions*',
   'mission_series:etablissement_id>etablissements',
-  'missions_sauvegardees:mission_id>missions,soignant_id>soignants',
-  'notations_missions:mission_id>missions',
-  'notifications_notation_j1:mission_id>missions',
+  'missions_sauvegardees:mission_id>missions*,soignant_id>soignants*',
+  'notations_missions:mission_id>missions*',
+  'notifications_notation_j1:mission_id>missions*',
   'paiements_escrow:etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
   'paiements_mission:etablissement_id>etablissements,mission_id>missions',
-  'parcours_liberal_soignants:soignant_id>soignants',
-  'parrainages_etablissements:filleul_etab_id>etablissements,parrain_etab_id>etablissements',
-  'pings_gps_mission:mission_id>missions',
+  'parcours_liberal_soignants:soignant_id>soignants*',
+  'parrainages_etablissements:filleul_etab_id>etablissements*,parrain_etab_id>etablissements*',
+  'pings_gps_mission:mission_id>missions*',
   'presences:mission_id>missions,soignant_id>soignants',
-  'prevoyance_liste_attente:soignant_id>soignants',
-  'qr_codes_mission:mission_id>missions',
+  'prevoyance_liste_attente:soignant_id>soignants*',
+  'qr_codes_mission:mission_id>missions*',
   'rappels_contrat_travail:mission_id>missions',
   'reclamations:mission_id>missions',
   'reclamations_scoring:mission_id>missions,soignant_id>soignants',
-  'scoring_breakdown:soignant_id>soignants',
+  'scoring_breakdown:soignant_id>soignants*',
   'souscriptions_prevoyance:soignant_id>soignants',
-  'streaks_soignant:soignant_id>soignants',
+  'streaks_soignant:soignant_id>soignants*',
   'stripe_connect_onboarding:soignant_id>soignants',
   'suivi_conversion_3200h:soignant_id>soignants',
-  'super_swipes_quota:soignant_id>soignants',
-  'swipes:mission_id>missions,soignant_id>soignants',
-  'cessions_creance:facture_honoraire_id>factures_honoraires,soignant_id>soignants',
+  'super_swipes_quota:soignant_id>soignants*',
+  'swipes:mission_id>missions*,soignant_id>soignants*',
+  'cessions_creance:facture_honoraire_id>factures_honoraires*,soignant_id>soignants',
   'chorus_submissions:invoice_id>factures_honoraires',
-  'equipe_membres:equipe_id>equipes',
+  'equipe_membres:equipe_id>equipes*',
   'escrow_exposition_releases:etablissement_id>etablissements,paiement_escrow_id>paiements_escrow',
   'escrow_release_queue:mission_id>missions,paiement_escrow_id>paiements_escrow',
-  'factor_advances:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
+  'factor_advances:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires*,mission_id>missions,soignant_id>soignants',
   'factures:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions',
   'factures_honoraires_documents:facture_honoraire_id>factures_honoraires',
   'heures_externes:document_id>documents_soignants,soignant_id>soignants',
@@ -396,15 +400,15 @@ export const GRAPHE_NETTOYAGE = [
   'messages_chat:conversation_id>conversations',
   'paiements_soignant:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,mission_id>missions,soignant_id>soignants',
   'partages_rib:contrat_id>contrats_mission,document_rib_id>documents_soignants,etablissement_id>etablissements,mission_id>missions,soignant_id>soignants',
-  'pauses_presence:presence_id>presences,soignant_id>soignants',
-  'scans_pointage:creneau_effectif_id>mission_creneaux,mission_id>missions',
+  'pauses_presence:presence_id>presences*,soignant_id>soignants',
+  'scans_pointage:creneau_effectif_id>mission_creneaux*,mission_id>missions',
   'shifts:equipe_id>equipes,etablissement_id>etablissements',
   'signalements_copies_bulletins:copie_id>copies_bulletins_paie',
-  'signatures_contrats:contrat_id>contrats_mission',
+  'signatures_contrats:contrat_id>contrats_mission*',
   'stripe_refunds_queue:avoir_id>factures_honoraires,facture_origine_id>factures_honoraires,paiement_escrow_id>paiements_escrow',
-  'typing_status:conversation_id>conversations',
-  'litiges:etablissement_id>etablissements,mission_id>missions,paiement_soignant_id>paiements_soignant,presence_id>presences,soignant_id>soignants',
-  'shift_affectations:mission_id>missions,shift_id>shifts',
+  'typing_status:conversation_id>conversations*',
+  'litiges:etablissement_id>etablissements*,mission_id>missions,paiement_soignant_id>paiements_soignant,presence_id>presences,soignant_id>soignants*',
+  'shift_affectations:mission_id>missions,shift_id>shifts*',
   'stripe_transfers:etablissement_id>etablissements,facture_honoraire_id>factures_honoraires,facture_id>factures,mission_id>missions,soignant_id>soignants',
   'bulletins_paie:etablissement_id>etablissements,litige_id>litiges,mission_id>missions,soignant_id>soignants',
   'factures_honoraires_rectifications:facture_honoraire_id>factures_honoraires,litige_id>litiges',
@@ -435,14 +439,17 @@ export function grapheNettoyage(dump) {
     for (const t of prets) { ordre.push(t); places.add(t); }
     reste = reste.filter(t => !places.has(t));
   }
-  return ordre.map(t => `${t}:${[...new Set(entrants.get(t).map(l => `${l.colonnes[0]}>${l.parent}`))].sort().join(',')}`);
+  return ordre.map(t => `${t}:${[...new Set(entrants.get(t).map(l => `${l.colonnes[0]}>${l.parent}${l.action === 'CASCADE' ? '*' : ''}`))].sort().join(',')}`);
 }
 
 /** Lecture de `GRAPHE_NETTOYAGE` : `[{ table, liens: [{ colonne, parent }] }]`, dans l'ordre parents → enfants. */
 export function lireGraphe(graphe = GRAPHE_NETTOYAGE) {
   return graphe.map(ligne => {
     const [table, reste] = ligne.split(':');
-    return { table, liens: reste.split(',').map(l => { const [colonne, parent] = l.split('>'); return { colonne, parent }; }) };
+    return { table, liens: reste.split(',').map(l => {
+      const [colonne, cible] = l.split('>');
+      return { colonne, parent: cible.replace(/\*$/, ''), cascade: cible.endsWith('*') };
+    }) };
   });
 }
 
@@ -461,6 +468,9 @@ export const NON_SUPPRIMABLES = {
   mandats_facturation_signatures: 'trg_preserver_preuve_mandat_facturation (durée de rétention)',
 };
 
+/** Tables supprimées avant toutes les autres (déclencheur qui en dépend ; aucune table du graphe ne les référence). */
+export const SUPPRIMER_D_ABORD = ['candidatures'];
+
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 /** SQL de collecte (parents → enfants) puis de suppression (enfants → parents) de la fermeture, sur la table `l5_ids`. */
 function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
@@ -475,8 +485,16 @@ function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
   // Une table non supprimable n'est jamais touchée. Ailleurs, si une ligne est retenue par une clé étrangère (parent
   // d'un résidu non supprimable), elle est conservée seule : suppression ligne par ligne, seul le refus de clé
   // étrangère (23503) est rattrapé ; tout autre refus (déclencheur, droit) fait échouer la transaction.
-  const suppression = [...tables].reverse().map(t => NON_SUPPRIMABLES[t.table]
+  // `candidatures` d'abord : dec_verrouiller_planning_candidatures refuse de supprimer un créneau PREVISIONNEL tant
+  // qu'une candidature est en attente (banc SQL local, 25/11/2026) ; aucune table du graphe ne dépend de candidatures.
+  const ordre = [...tables].reverse().sort((a, b) => (SUPPRIMER_D_ABORD.includes(b.table) ? 1 : 0) - (SUPPRIMER_D_ABORD.includes(a.table) ? 1 : 0));
+  // Une table dont tous les liens sont `CASCADE` part avec ses parents : la supprimer d'abord ferait jouer ses
+  // déclencheurs avec un parent encore présent (fn_protect_creneaux_si_facture refuse un créneau PREVISIONNEL d'une
+  // mission gelée, banc SQL local, 25/11/2026), alors que la cascade est l'effet normal de la suppression du parent.
+  const suppression = ordre.map(t => NON_SUPPRIMABLES[t.table]
     ? `  -- ${t.table} : non supprimable (${NON_SUPPRIMABLES[t.table]}), compté par sqlResidus.`
+    : t.liens.every(l => l.cascade)
+    ? `  -- ${t.table} : supprimée par cascade avec ses parents (${t.liens.map(l => l.parent).join(', ')}).`
     : `  BEGIN
     DELETE FROM public.${t.table} x WHERE ${condition(t.liens)};
   EXCEPTION WHEN foreign_key_violation THEN
@@ -599,7 +617,9 @@ SELECT true AS nettoye;`;
 /** Objets marqués du run, lecture seule : tous à 0 après `nettoyer`. `journaux_audit` (immuable) n'est pas compté. */
 export function sqlCompter(m) {
   const e = m.etablissement ?? {}, s = m.soignant ?? {};
-  const lesMissions = `(SELECT coalesce(array_agg(id), '{}') FROM public.missions WHERE etablissement_id = ${u(e.id)}
+  // `ARRAY(sous-requête)` : un tableau (vide si rien), jamais `ANY((SELECT array_agg …))`, qui compare chaque LIGNE de
+  // la sous-requête (ici un tableau) à un uuid (42883, premier run STAGING du 25/11/2026).
+  const lesMissions = `ARRAY(SELECT id FROM public.missions WHERE etablissement_id = ${u(e.id)}
       OR id = ANY(${missions(m)}) OR left(intitule, ${debutIntitule(m.marker).length}) = ${q(debutIntitule(m.marker))})`;
   return `SELECT
   (SELECT count(*)::integer FROM auth.users WHERE id = ANY(${ids(m)}) OR raw_app_meta_data->>'load_fixture_run' = ${q(m.runId)}
