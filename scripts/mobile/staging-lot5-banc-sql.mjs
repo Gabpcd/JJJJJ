@@ -180,6 +180,18 @@ SELECT set_config('request.jwt.claim.sub', '${sub}', true), set_config('request.
 ${sql}
 COMMIT;`;
 
+/**
+ * Rôle `authenticated` et JWT simulé, au niveau de la session (pas d'une transaction) : la requête qui suit est
+ * validée tout de suite (une écriture RPC reste écrite) et ses lignes sont relues ; `FIN_UTILISATEUR` rétablit le rôle
+ * de connexion. Même effet sur PGlite (session persistante) et sur psql (une session par étape).
+ */
+const commeUtilisateur = sub => `SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '${sub}', false), set_config('request.jwt.claim.role', 'authenticated', false),
+  set_config('request.jwt.claims', '{"sub":"${sub}","role":"authenticated"}', false);`;
+const FIN_UTILISATEUR = `RESET ROLE;
+SELECT set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claim.role', '', false),
+  set_config('request.jwt.claims', '', false);`;
+
 /** Comptes Auth du run tels que l'API d'administration les crée (`preparer`). */
 const sqlAuth = m => [['etablissement', 'ETABLISSEMENT'], ['soignant', 'SOIGNANT']].map(([qui, role]) =>
   `INSERT INTO auth.users (id, email, email_confirmed_at, raw_app_meta_data, role, aud)
@@ -209,17 +221,16 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
   await pas('comptes Auth', sqlAuth(m));
   const [prep] = await pas('préparation (sqlPreparer)', sqlPreparer(m));
   if (prep?.prepare !== true) throw new Error('Banc L5 : préparation non confirmée.');
-  // Pré-vol de la session établissement (second parcours STAGING) : les trois lectures de SessionController sous le JWT
-  // d'E1, contrôlées par la même fonction que le script.
-  const [session] = await pas('session établissement d E1 (pré-vol)', `SELECT
-    set_config('request.jwt.claim.sub', '${m.etablissement.id}', false), set_config('request.jwt.claim.role', 'authenticated', false),
-    set_config('request.jwt.claims', '{"sub":"${m.etablissement.id}","role":"authenticated"}', false);
+  // Pré-vol de la session établissement (second parcours STAGING) : les trois lectures de SessionController sous le
+  // rôle `authenticated` et le JWT d'E1 (revue de #1187, m5 : GRANT du dump réellement éprouvés, plus de superutilisateur),
+  // contrôlées par la même fonction que le script.
+  const [session] = await pas('session établissement d E1 (pré-vol, rôle authenticated)', `${commeUtilisateur(m.etablissement.id)}
   SELECT public.fn_get_my_role() AS role, public.fn_mes_permissions_etab(NULL) AS permissions,
     public.fn_mon_etablissement_complet() AS profil;`);
-  await pas('fin du JWT simulé', `SELECT set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claim.role', '', false),
-    set_config('request.jwt.claims', '', false);`);
+  await pas('fin du rôle authenticated (pré-vol)', FIN_UTILISATEUR);
   const lire = v => (typeof v === 'string' ? JSON.parse(v) : v);
-  controlerSessionEtablissement(m, { role: lire(session?.role), permissions: lire(session?.permissions), profil: lire(session?.profil) });
+  controlerSessionEtablissement(m, { role: { corps: lire(session?.role) }, permissions: { corps: lire(session?.permissions) },
+    profil: { corps: lire(session?.profil) } }, 'banc');
   await pas('candidature de S1 (fn_postuler_mission sous JWT)', sousJwt(m.soignant.id,
     `SELECT public.fn_postuler_mission('${m.m1.id}'::uuid, '${m.marker}', 'SALARIE');`));
   const candidatures = await pas('relecture de la candidature (sqlCandidature)', sqlCandidature(m));
@@ -227,16 +238,17 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
     throw new Error(`Banc L5 : candidature EN_ATTENTE attendue, relu ${JSON.stringify(candidatures)}.`);
   }
   m.candidatureId = candidatures[0].id;
-  // Acceptation par E1 telle que l'app l'envoie (SupabaseEtabCandidaturesGateway : créneaux relus tels quels, D26) :
-  // documents du salarié, passerelle de paiement (FACTURE_MENSUELLE), planning, contrat créé.
-  const [acceptation] = await pas('acceptation de la candidature par E1 (fn_traiter_candidature_planning_v1 sous JWT)', `SELECT
-    set_config('request.jwt.claim.sub', '${m.etablissement.id}', false), set_config('request.jwt.claim.role', 'authenticated', false),
-    set_config('request.jwt.claims', '{"sub":"${m.etablissement.id}","role":"authenticated"}', false);
-  SELECT public.fn_traiter_candidature_planning_v1('${m.candidatureId}'::uuid, 'ACCEPTEE',
-    (SELECT jsonb_agg(jsonb_build_object('debut', to_jsonb(c.debut) #>> '{}', 'fin', to_jsonb(c.fin) #>> '{}') ORDER BY c.debut)
-       FROM public.mission_creneaux c WHERE c.mission_id = '${m.m1.id}' AND c.type_creneau = 'PREVISIONNEL'), NULL) AS r;`);
-  await pas('fin du JWT simulé (acceptation)', `SELECT set_config('request.jwt.claim.sub', '', false),
-    set_config('request.jwt.claim.role', '', false), set_config('request.jwt.claims', '', false);`);
+  // Acceptation par E1 telle que l'app l'envoie (SupabaseEtabCandidaturesGateway : créneaux relus tels quels, D26),
+  // sous le rôle `authenticated` (revue de #1187, m5) : documents du salarié, passerelle de paiement
+  // (FACTURE_MENSUELLE), planning, contrat créé. Les créneaux sont relus avant, hors du rôle, comme une lecture préalable.
+  const [creneaux] = await pas('créneaux de M1 relus (banc)', `SELECT coalesce(jsonb_agg(jsonb_build_object('debut',
+    to_jsonb(c.debut) #>> '{}', 'fin', to_jsonb(c.fin) #>> '{}') ORDER BY c.debut), '[]'::jsonb) AS liste
+    FROM public.mission_creneaux c WHERE c.mission_id = '${m.m1.id}' AND c.type_creneau = 'PREVISIONNEL';`);
+  const liste = JSON.stringify(typeof creneaux?.liste === 'string' ? JSON.parse(creneaux.liste) : creneaux?.liste).replaceAll("'", "''");
+  const [acceptation] = await pas('acceptation de la candidature par E1 (fn_traiter_candidature_planning_v1, rôle authenticated)',
+    `${commeUtilisateur(m.etablissement.id)}
+  SELECT public.fn_traiter_candidature_planning_v1('${m.candidatureId}'::uuid, 'ACCEPTEE', '${liste}'::jsonb, NULL) AS r;`);
+  await pas('fin du rôle authenticated (acceptation)', FIN_UTILISATEUR);
   const issue = typeof acceptation?.r === 'string' ? JSON.parse(acceptation.r) : acceptation?.r;
   if (!issue || issue.success === false || issue.error) {
     throw new Error(`Banc L5 : acceptation refusée par le serveur : ${JSON.stringify(issue)}.`);

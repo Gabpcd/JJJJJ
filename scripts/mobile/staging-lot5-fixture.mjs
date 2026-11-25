@@ -696,24 +696,60 @@ export const COMPTES = ['auth', 'etablissements', 'soignants', 'missions', 'cren
   'scans', 'notations', 'documents', 'notifications', 'membres', 'conversations', 'escrow', 'preferences'];
 
 /**
- * Pré-vol de la session établissement : ce que `SessionController` attend des trois RPC pour ouvrir l'espace d'E1
- * (rôle servi, périmètre confirmé avec les permissions du parcours, profil du même établissement). Lève un message
- * qui nomme l'écart, sans recopier de jeton ni d'adresse.
+ * Clé du pré-vol : celle que reçoit l'app (`JOLENE_STAGING_PUBLISHABLE_KEY`, posée par l'étape `acces` dans
+ * `GITHUB_ENV`, donc présente dans l'environnement de `preparer`), sinon la clé publishable de la Management API (même
+ * source que `acces`), sinon la clé anon, que l'app n'emploie jamais (dit dans le journal). Jamais la valeur.
  */
-export function controlerSessionEtablissement(doc, { role, permissions, profil }) {
-  const ecarts = [];
+export function choisirCleApp(env, { publishable, anon }) {
+  const app = env.JOLENE_STAGING_PUBLISHABLE_KEY;
+  if (/^sb_publishable_[A-Za-z0-9_-]{16,}$/.test(app ?? '')) return { cle: app, origine: "de l'app (JOLENE_STAGING_PUBLISHABLE_KEY)" };
+  if (publishable) return { cle: publishable, origine: 'publishable de la Management API (même source que celle de l app)' };
+  return { cle: anon, origine: "anon (l'app ne l'emploie pas : écart possible avec son geste)" };
+}
+
+const decrireEchec = (fonction, e) => `${fonction} : HTTP ${e.http}${e.code ? `, code ${e.code}` : ''} — ${e.message}`;
+
+/**
+ * Pré-vol de la session établissement, à la manière de `SessionController` (`RoleResolution`, `EspaceResolution`,
+ * `resolveEtablissement`). Deux listes :
+ *   - « refus que l'app aurait aussi subi » : échec HTTP de fn_mes_permissions_etab ou du profil, `success:false`,
+ *     rôle ou établissement absents, rôle d'équipe inconnu, établissement différent du candidat ou du profil ;
+ *   - « contrôle plus strict que l'app » : rôle serveur différent d'ADMIN_ETABLISSEMENT/E1 (l'app se replie sur le
+ *     rôle signé), permissions du parcours absentes, nom du profil différent du marqueur, échec de fn_get_my_role.
+ * Lève un message qui nomme chaque écart (statut HTTP, code brut), sans jeton ni adresse. Entrées : `{ corps }` ou
+ * `{ echec: { http, code, message } }` par RPC.
+ */
+export function controlerSessionEtablissement(doc, { role, permissions, profil }, origineCle = 'non précisée') {
+  const bloquants = [], stricts = [];
   const e1 = doc.etablissement.id;
-  if (role?.role !== 'ADMIN_ETABLISSEMENT' || role?.etablissement_id !== e1) {
-    ecarts.push(`fn_get_my_role : rôle ${JSON.stringify(role?.role ?? null)}, établissement ${role?.etablissement_id === e1 ? 'E1' : 'autre ou absent'}`);
+  // Rôles d'équipe que l'app sert (`RoleEtab`) ; tout autre est « non servi » (`EspaceResolution.perimetre`).
+  const ROLES = ['PROPRIETAIRE', 'ADMIN_GROUPE', 'RH', 'POINTAGE_ONLY', 'LECTURE_SEULE'];
+  if (role?.echec) stricts.push(`${decrireEchec('fn_get_my_role', role.echec)} (l'app se replie sur le rôle signé)`);
+  else if (role?.corps?.role !== 'ADMIN_ETABLISSEMENT' || role?.corps?.etablissement_id !== e1) {
+    const r = role?.corps?.role;
+    const lisible = ['ADMIN_ETABLISSEMENT', 'ETABLISSEMENT'].includes(r);
+    (lisible ? stricts : bloquants).push(`fn_get_my_role : rôle ${JSON.stringify(r ?? null)}, établissement `
+      + `${role?.corps?.etablissement_id === e1 ? 'E1' : 'autre ou absent'}${lisible ? '' : " (l'app n'ouvre aucun espace établissement)"}`);
   }
-  if (permissions?.success !== true) ecarts.push(`fn_mes_permissions_etab : success ${JSON.stringify(permissions?.success ?? null)} (compte inactif ou sans session)`);
-  else if (permissions?.role !== 'PROPRIETAIRE' || permissions?.etablissement_id !== e1) {
-    ecarts.push(`fn_mes_permissions_etab : rôle ${JSON.stringify(permissions?.role ?? null)}, établissement ${permissions?.etablissement_id === e1 ? 'E1' : 'autre ou absent'}`);
+  const p = permissions?.corps;
+  if (permissions?.echec) bloquants.push(decrireEchec('fn_mes_permissions_etab', permissions.echec));
+  else if (p?.success !== true) bloquants.push(`fn_mes_permissions_etab : success ${JSON.stringify(p?.success ?? null)} (compte inactif ou sans session)`);
+  else if (!p?.role || !p?.etablissement_id) bloquants.push('fn_mes_permissions_etab : rôle ou établissement absent (aucun accès)');
+  else if (!ROLES.includes(p.role)) bloquants.push(`fn_mes_permissions_etab : rôle d'équipe non servi ${JSON.stringify(p.role)}`);
+  else if (p.etablissement_id !== e1) bloquants.push('fn_mes_permissions_etab : établissement différent de E1 (périmètre divergent)');
+  else {
+    if (p.role !== 'PROPRIETAIRE') stricts.push(`fn_mes_permissions_etab : rôle ${JSON.stringify(p.role)} au lieu de PROPRIETAIRE`);
+    const manquantes = ['missions', 'candidatures', 'contrats', 'pointage', 'lecture'].filter(c => p?.permissions?.[c] !== true);
+    if (manquantes.length) stricts.push(`fn_mes_permissions_etab : permissions absentes ${manquantes.join(', ')}`);
   }
-  const manquantes = ['missions', 'candidatures', 'contrats', 'pointage', 'lecture'].filter(c => permissions?.permissions?.[c] !== true);
-  if (permissions?.success === true && manquantes.length) ecarts.push(`fn_mes_permissions_etab : permissions absentes ${manquantes.join(', ')}`);
-  if (profil?.id !== e1 || profil?.nom !== doc.marker) ecarts.push('fn_mon_etablissement_complet : établissement ou nom différent de E1');
-  if (ecarts.length) throw new Error(`Session établissement d'E1 refusée par le serveur (pré-vol) :\n- ${ecarts.join('\n- ')}`);
+  if (profil?.echec) bloquants.push(decrireEchec('fn_mon_etablissement_complet', profil.echec));
+  else if (profil?.corps?.id !== e1) bloquants.push('fn_mon_etablissement_complet : établissement différent de E1 (périmètre divergent)');
+  else if (profil?.corps?.nom !== doc.marker) stricts.push('fn_mon_etablissement_complet : nom différent du marqueur du run');
+  if (!bloquants.length && !stricts.length) return;
+  const parties = [`Session établissement d'E1 refusée par le serveur (pré-vol, clé ${origineCle}) :`];
+  if (bloquants.length) parties.push(`refus que l'app aurait aussi subi :\n- ${bloquants.join('\n- ')}`);
+  if (stricts.length) parties.push(`contrôle plus strict que l'app (le parcours en a besoin) :\n- ${stricts.join('\n- ')}`);
+  throw new Error(parties.join('\n'));
 }
 
 /** Total des objets marqués ; une colonne absente ou non entière n'est jamais un zéro. */
@@ -775,7 +811,12 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     if (!r.ok) {
       // Seul un message métier borné est recopié (jamais de jeton ni d'en-tête).
       const message = typeof json?.message === 'string' ? json.message.slice(0, 200) : '';
-      throw new Error(`Requête L5 refusée (HTTP ${Number(r.status) || 0})${message ? ` : ${message}` : ''}.`);
+      // Code PostgREST ou Postgres brut (PGRST202, 42501…) : il départage droits, cache de schéma et erreur métier.
+      const code = typeof json?.code === 'string' && /^[A-Z0-9]{1,12}$/.test(json.code) ? json.code : '';
+      const erreur = new Error(`Requête L5 refusée (HTTP ${Number(r.status) || 0}${code ? `, code ${code}` : ''})${message ? ` : ${message}` : ''}.`);
+      erreur.http = Number(r.status) || 0;
+      erreur.code = code;
+      throw erreur;
     }
     return json;
   };
@@ -935,14 +976,24 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     }
     doc.candidatureId = candidatures[0].id;
     // Pré-vol de la session établissement de l'app (second parcours STAGING du 25/11/2026 : refus à la connexion) :
-    // les trois lectures que fait SessionController, sous le JWT d'E1 et avec la clé de l'app (publishable), lecture
-    // seule. Un écart ici arrête la préparation avec la cause serveur, avant le XCUITest.
+    // les trois lectures que fait SessionController, sous le JWT d'E1, avec la clé que reçoit l'app et le même corps,
+    // lecture seule. Chaque échec garde son statut HTTP et son code PostgREST ou Postgres brut. Un écart arrête la
+    // préparation avant le XCUITest, en distinguant ce que l'app aurait aussi refusé de ce qui n'est qu'un contrôle du
+    // script (revue de #1187, m4).
     const jwtE1 = await connecter('etablissement', anon);
+    const cleApp = choisirCleApp(env, { publishable, anon });
+    log(`Pré-vol de la session établissement d'E1 : clé ${cleApp.origine} (valeur masquée).`);
+    const lire = async (fonction, params) => {
+      try { return { corps: await rpc(fonction, params, cleApp.cle, jwtE1) }; } catch (e) {
+        return { echec: { http: e?.http ?? 0, code: e?.code ?? '', message: String(e?.message ?? e).slice(0, 240) } };
+      }
+    };
     controlerSessionEtablissement(doc, {
-      role: await rpc('fn_get_my_role', {}, publishable ?? anon, jwtE1),
-      permissions: await rpc('fn_mes_permissions_etab', { p_etablissement_id: null }, publishable ?? anon, jwtE1),
-      profil: await rpc('fn_mon_etablissement_complet', {}, publishable ?? anon, jwtE1),
-    });
+      // L'app appelle fn_get_my_role et fn_mon_etablissement_complet sans paramètre : supabase-swift envoie `{}`.
+      role: await lire('fn_get_my_role', {}),
+      permissions: await lire('fn_mes_permissions_etab', { p_etablissement_id: null }),
+      profil: await lire('fn_mon_etablissement_complet', {}),
+    }, cleApp.origine);
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);
