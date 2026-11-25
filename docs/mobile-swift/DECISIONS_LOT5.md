@@ -950,9 +950,14 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    rôle signé (exclu : `app_metadata.role = ETABLISSEMENT` donne un rôle provisoire), erreur levée par
    `fn_mes_permissions_etab`, ou réponse `success:false` de celle-ci (compte inactif ou sans session). Le profil, lu
    ensuite, aurait donné « Impossible de charger votre profil… ».
-2. **Ce qui est écarté** : sur le schéma du dépôt (banc SQL local), sous le JWT d'E1, les trois lectures de la session
-   rendent ce que l'app attend (rôle `ADMIN_ETABLISSEMENT` et E1, `PROPRIETAIRE` et E1 avec toutes les permissions, profil
-   d'E1) ; le décodage de cette forme est couvert par `SupabaseEtabSessionGatewayTests`. Drapeaux distants : lus après
+2. **Ce qui est écarté** : sur le schéma du dépôt (banc SQL local), sous le rôle `authenticated` et le JWT d'E1 (les
+   GRANT du dump sont donc éprouvés : une fonction réservée au rôle de service y est refusée), les trois lectures de la
+   session rendent ce que l'app attend (rôle `ADMIN_ETABLISSEMENT` et E1, `PROPRIETAIRE` et E1 avec toutes les
+   permissions, profil d'E1) ; le banc ne prouve rien du STAGING (données, droits, écarts au dump, Auth réel). Le décodage
+   de cette forme est couvert par `SupabaseEtabSessionGatewayTests`. En production (lecture seule du 25/11/2026), les six
+   fonctions de session (`fn_get_my_role`, `fn_mes_permissions_etab(uuid)`, `fn_mon_etablissement_complet`,
+   `fn_a_permission_etablissement(text,uuid)`, `fn_role_etablissement_courant(uuid)`, `fn_param_bool(text,boolean)`) sont
+   SECURITY DEFINER, exécutables par `authenticated` et refusées à `anon` ; la base STAGING n'a pas pu être lue. Drapeaux distants : lus après
    l'ouverture et fail-open, hors cause. Aucun écran intermédiaire n'a été montré.
 3. **Ce qui n'est pas prouvé** : laquelle des deux causes restantes (erreur levée ou `success:false`) a eu lieu sur le
    STAGING, et pourquoi. L'app native n'avait jamais été connectée au PostgREST du STAGING (`PORTE_LOT0.md` 1.1 : jamais
@@ -963,6 +968,14 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    déjà mappé, jamais d'adresse ni de secret) publié par `SessionStore.diagnosticConnexion` comme valeur d'accessibilité
    de `login-error`, jamais affiché ; le XCUITest s'arrête aussitôt sur un refus et le nomme ; (c) banc SQL : pré-vol et
    acceptation de la candidature par E1 exécutés sur le schéma du dépôt.
+5. **Revue de #1187 (six mineurs, traités avant le run)** : diagnostic publié avant l'état (m1) ; seul un `login-error`
+   portant un diagnostic de cette connexion arrête le XCUITest, qui s'arrête aussi sur un écran de refus d'espace (m2) ;
+   diagnostic, son calcul et sa valeur d'accessibilité sous `#if DEBUG` (m3) ; pré-vol avec la clé que reçoit l'app
+   (`JOLENE_STAGING_PUBLISHABLE_KEY`, présente dans l'environnement de `preparer` par `GITHUB_ENV` ; workflow inchangé),
+   clé employée dite sans valeur, statut HTTP et code PostgREST ou Postgres brut de chaque échec, écarts classés en
+   « refus que l'app aurait aussi subi » et « contrôle plus strict que l'app » (m4) ; banc sous `SET ROLE authenticated`
+   (m5) ; défaut de décodage nommé par sa clé (`JoleneError.detail`, hors égalité, jamais affiché ; diagnostic
+   `permissions:contract:<clé>`) (m6).
 
 ## En attente de Gabrielle
 
