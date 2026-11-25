@@ -345,7 +345,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_contrat_signe_pour_pointage"("p_mission_
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.valider` — **B9 paiements/escrow** : la
   validation déclenche `trg_escrow_release_on_validation`, correction 6 ; merge sur accord explicite de Gabrielle).
 - **Usage** : validation unitaire après note 1-5 (D6) et relecture des créneaux.
-- **Signature SQL** (`supabase/schema/public.sql` l.65852, dump re-baseliné le 23/11/2026) :
+- **Signature SQL** (`supabase/schema/public.sql` l.65940, dump re-baseliné le 23/11/2026) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid") RETURNS "jsonb"
@@ -375,7 +375,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presence"("p_presence_id" "uuid"
 
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.validerLot` — **B9**).
 - **Usage** : validation en lot des présences éligibles relues.
-- **Signature SQL** (`supabase/schema/public.sql` l.65947) :
+- **Signature SQL** (`supabase/schema/public.sql` l.66035) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[]) RETURNS "jsonb"
@@ -405,7 +405,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_valider_presences_lot"("p_ids" "uuid"[])
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.contester` — **B9** : `motif_litige` bloque la
   libération d'escrow, `fn_trg_escrow_release_check`).
 - **Usage** : contestation d'une présence « à valider » (non validée et validable), motif ≥ 3 caractères.
-- **Signature SQL** (`supabase/schema/public.sql` l.26237) :
+- **Signature SQL** (`supabase/schema/public.sql` l.26325) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_contester_presence"("p_presence_id" "uuid", "p_motif" "text") RETURNS "jsonb"
@@ -430,7 +430,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_contester_presence"("p_presence_id" "uui
   entrée du lot 2 dans `rpc-contracts.json`, annotation `aussi_etablissement`).
 - **Usage** : note 1-5 de l'établissement (`p_sens 'ETAB_VERS_SOIGNANT'`, quatre critères = la note, comme
   `NotationRapide.tsx`) ; écriture seulement, aucune lecture de `notations_missions` (D8).
-- **Signature SQL** (`supabase/schema/public.sql` l.27717) :
+- **Signature SQL** (`supabase/schema/public.sql` l.27805) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid", "p_sens" "text", "p_critere_1" integer, "p_critere_2" integer, "p_critere_3" integer, "p_critere_4" integer, "p_commentaire" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -455,7 +455,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "
 - **Statut natif** : consommée (lot 5, T8, `SupabaseEtabPresencesGateway.cloturerSegment` — **B9**).
 - **Usage** : clôture rétroactive du segment ouvert, `p_raison` = texte du web, heure choisie dans
   [début du segment ouvert, maintenant] (D28 : le serveur n'interdit pas une heure future).
-- **Signature SQL** (`supabase/schema/public.sql` l.29099) :
+- **Signature SQL** (`supabase/schema/public.sql` l.29187) :
 
 ```sql
 CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id" "uuid", "p_heure_fin" timestamp with time zone, "p_raison" "text" DEFAULT 'Oubli de scan'::"text") RETURNS "jsonb"
@@ -471,7 +471,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_declarer_fin_retroactive"("p_mission_id"
   horodatage_arrondi, validation_etab_requise, nouveau_code, nouveau_hmac, prochain_type_scan, numero_scan}`
   (l.28805) → `requiredString("creneau_effectif_id")` (correction 17). `nouveau_code` et `nouveau_hmac` (nouveau code
   de pointage) ne sont **jamais décodés, journalisés ni affichés** : le code est relu par `fn_etat_pointage_mission`
-  sous permission `pointage`. Le dump re-baseliné le 23/11/2026 ne sert plus ces deux clés (retour l.29248-29256) ;
+  sous permission `pointage`. Le dump re-baseliné le 23/11/2026 ne sert plus ces deux clés (retour l.29336-29344) ;
   la gateway ne lit de toute façon que `creneau_effectif_id`, et de la relecture que `segment_ouvert`.
 - **Exceptions** :
   - `P0002` « Mission % introuvable ou dans un statut incompatible. » (`fn_declarer_fin_retroactive`, l.28687) →
@@ -596,9 +596,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_obtenir_conversation"("p_autre_id" "uuid
 - **Fiche principale** : `CONTRATS_RPC_SOIGNANT.md` (lot 2).
 - **Usage établissement** (T7 polling 5 s écran visible et scène active, D23 ; T8 relecture `segment_ouvert`) :
   consommée par `SupabaseEtabPointageGateway.etat` (T7). Le dump re-baseliné ne sert plus `code_pointage_actif`
-  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35617-35620 : la restriction B5b est en place côté
+  qu'aux membres habilités au pointage (`v_peut_voir_code`, l.35705-35708 : la restriction B5b est en place côté
   serveur) ; le natif garde en plus le filtre `permissions.pointage` (aucune lecture sans elle, comme le web
-  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35604, l.35613) → bloc « Code de pointage
+  l.102-115). `{error:'Mission introuvable'|'Accès interdit'}` (l.35692, l.35701) → bloc « Code de pointage
   indisponible » avec le message serveur verbatim, aucune autre clé retenue ; décodage en liste blanche
   (`CodeRotatifRules.Etat`), aucune clé de la réponse du scanner lue.
 

@@ -25,7 +25,7 @@ public actor DemoEtabEtatCandidatures {
         return planningModifieEnAttente
     }
 
-    /// Acceptation (`fn_traiter_candidature`, l.62280-62290) : candidature acceptée, autres candidatures en attente de
+    /// Acceptation (`fn_traiter_candidature`, l.62368-62378) : candidature acceptée, autres candidatures en attente de
     /// la mission refusées, mission attribuée.
     func accepter(candidatureId: String, missionId: String, soignantId: String, autresEnAttente: [String]) {
         surcoucheCourante.statuts[candidatureId] = CandidaturesEtabRules.statutAcceptee
@@ -47,13 +47,13 @@ public actor DemoEtabEtatCandidatures {
 /// `fn_lire_candidatures_mission_habilitee`), aiguillage D25 avant tout traitement, planning confirmé comparé au
 /// planning de la fixture, issue jamais relue par la gateway (l'écran relit la lecture).
 public struct DemoEtabCandidaturesGateway: EtabCandidaturesPort {
-    /// `fn_lire_candidatures_mission_habilitee` (l.39979, l.39988, l.39999), texte serveur.
+    /// `fn_lire_candidatures_mission_habilitee` (l.40067, l.40076, l.40087), texte serveur.
     static let accesRefuse = "Mission indisponible ou accès refusé"
-    /// `fn_traiter_candidature_planning_v1_internal_20260810` (l.62472), texte serveur.
+    /// `fn_traiter_candidature_planning_v1_internal_20260810` (l.62560), texte serveur.
     static let candidatureIntrouvable = "Candidature introuvable."
-    /// `fn_traiter_candidature` (l.62222), texte serveur.
+    /// `fn_traiter_candidature` (l.62310), texte serveur.
     static let dejaTraitee = "Cette candidature a déjà été traitée."
-    /// `fn_traiter_candidature_planning_v1_internal_20260810` (l.62559), texte serveur.
+    /// `fn_traiter_candidature_planning_v1_internal_20260810` (l.62647), texte serveur.
     static let planningModifie = "Le planning a changé depuis son affichage. Vérifiez à nouveau toutes les dates et tous les horaires."
     static let codePlanningModifie = "PLANNING_MODIFIE_RECONFIRMER"
 

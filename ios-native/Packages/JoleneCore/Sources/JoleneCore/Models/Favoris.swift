@@ -83,7 +83,7 @@ public struct MissionSauvegardee: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// Élément de `fn_mes_favoris_etablissements` (jsonb_agg, `public.sql` l.42291-42302). Seul
+/// Élément de `fn_mes_favoris_etablissements` (jsonb_agg, `public.sql` l.42379-42390). Seul
 /// `etablissement_id` conditionne une action (retrait) ; `nom` est remplacé par celui de
 /// `fn_etablissements_safe` quand la ligne existe (`SupabaseFavorisGateway`).
 public struct EtablissementFavori: Codable, Equatable, Sendable, Identifiable {

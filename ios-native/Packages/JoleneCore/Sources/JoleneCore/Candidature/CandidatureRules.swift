@@ -57,9 +57,9 @@ public enum CandidatureRules {
     }
 
     /// Messages serveur exacts d'une mission sortie de l'état `OUVERTE` entre l'affichage et l'action
-    /// (revue B8 de T6a, m1) : forme 3 de `fn_confirmer_action_planning_v1` (`public.sql` l.24561-24565,
+    /// (revue B8 de T6a, m1) : forme 3 de `fn_confirmer_action_planning_v1` (`public.sql` l.24649-24653,
     /// verrou `FOR UPDATE`), sa variante sans point de `fn_accepter_mission` (l.5308) et de
-    /// `fn_finaliser_attribution_mission` (l.37171), et la course de l'attribution (l.37293). La branche
+    /// `fn_finaliser_attribution_mission` (l.37259), et la course de l'attribution (l.37381). La branche
     /// « `0 rows` / `déjà prise` » du web (`DetailMissionSoignant.tsx` l.807) n'est pas reprise : aucune
     /// fonction live n'émet ces textes, et `contains("0 rows")` reconnaissait aussi « 10 rows ».
     public static let messagesMissionDejaAttribuee: Set<String> = [

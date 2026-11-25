@@ -5,7 +5,7 @@ import Supabase
 /// `FiltresSauvegardesPort` (L4-T4), port de `PageRecherchesSauvegardees.tsx` et de l'alerte rapide de
 /// `RechercheMissions.tsx` (l.172-226). Quatre RPC SECURITY DEFINER, GRANT `authenticated` (`public.sql` l.83737,
 /// l.82694, l.84077, l.85499 ; manifeste `RPC_UTILISATEUR_AUTH_INTERNE`), identité `auth.uid()` lue en interne, sur la
-/// table `filtres_sauvegardes` (RLS `fs_*_own` et restrictive « compte actif », l.78405-78417, l.79081 ; jamais lue en
+/// table `filtres_sauvegardes` (RLS `fs_*_own` et restrictive « compte actif », l.78500-78512, l.79081 ; jamais lue en
 /// direct) :
 /// - `fn_lister_mes_filtres_sauvegardes(p_audience)` — toujours `SOIGNANT_RECHERCHE_MISSIONS` ; tableau trié par
 ///   `mis_a_jour_le` décroissant, `[]` sans session (l.40401) ; une réponse qui n'est pas un tableau lisible est une

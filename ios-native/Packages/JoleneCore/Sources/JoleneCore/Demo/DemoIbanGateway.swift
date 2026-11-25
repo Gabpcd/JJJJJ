@@ -20,7 +20,7 @@ public actor DemoIbanGateway: IbanPort {
     /// IBAN du RIB vérifié de la démo (exemple ISO 13616).
     public static let ibanRibDemo = "FR7630006000011234567890189"
     /// Refus du serveur portant un `error`, verbatim.
-    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32727
+    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32815
 
     private let scenario: Scenario
     private var etat: ConsultationIban
@@ -76,7 +76,7 @@ public actor DemoIbanGateway: IbanPort {
         return (prenom, nom)
     }
 
-    /// `btrim(regexp_replace(fn_normaliser_nom(x), '[^a-z0-9]+', ' ', 'g'))` (l.32708-32716), accents retirés par
+    /// `btrim(regexp_replace(fn_normaliser_nom(x), '[^a-z0-9]+', ' ', 'g'))` (l.32796-32804), accents retirés par
     /// repliement (le serveur translittère les seules lettres accentuées du français).
     static func normaliser(_ texte: String) -> String {
         let replie = texte.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()

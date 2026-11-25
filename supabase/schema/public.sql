@@ -9973,6 +9973,11 @@ DECLARE
   v_motif text;
   v_sujet text := NULLIF(btrim(COALESCE(p_sujet, '')), '');
   v_corps text := NULLIF(btrim(COALESCE(p_corps, '')), '');
+  -- Fiche d'appel : résultat noté par la fondatrice, lu dans p_motif.
+  v_resultat text := upper(btrim(COALESCE(p_motif, '')));
+  v_tache_id uuid;
+  v_consigne text;
+  v_prospect record;
 BEGIN
   IF auth.uid() IS NULL OR public.est_admin() IS NOT TRUE THEN
     RAISE EXCEPTION 'Accès admin requis' USING ERRCODE = '42501';
@@ -9998,31 +10003,85 @@ BEGIN
   IF v_sujet IS NOT NULL AND char_length(v_sujet) > 300 THEN
     RAISE EXCEPTION 'Sujet trop long';
   END IF;
+  -- Un appel ne se note pas sans son résultat (mêmes valeurs que « Actions du jour »).
+  IF v_action = 'MARQUER_ENVOYE' AND v_b.canal = 'TELEPHONE'
+     AND v_resultat NOT IN ('APPEL_REPONDU', 'SANS_REPONSE', 'INTERESSE', 'A_RAPPELER', 'PAS_INTERESSE', 'STOP') THEN
+    RAISE EXCEPTION 'Résultat d''appel requis : APPEL_REPONDU, SANS_REPONSE, INTERESSE, A_RAPPELER, PAS_INTERESSE ou STOP';
+  END IF;
 
   -- Joignabilité revérifiée à chaque validation et au constat d'envoi : une
   -- opposition, un refus d'emails ou une suppression de compte a pu arriver.
   -- Pas de RAISE ici : il annulerait le rejet, qui doit persister.
-  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.canal = 'EMAIL' THEN
-    v_motif := private.fn_growth_destinataire_bloque(
-      v_b.cible_type, v_b.cible_id, v_b.destinataire_email,
-      v_b.contexte->>'telephone', v_b.contexte->>'finess');
+  IF v_action IN ('VALIDER', 'MARQUER_ENVOYE') AND v_b.canal IN ('EMAIL', 'TELEPHONE') THEN
+    IF v_b.canal = 'TELEPHONE' THEN
+      -- Fiche d'appel. VALIDER est rejouable : l'écran le rappelle à chaque
+      -- demande d'appel, pour que rien ne soit composé sur une fiche périmée.
+      v_consigne := CASE WHEN v_action = 'VALIDER' THEN 'ne pas appeler' ELSE 'appel non enregistré au CRM' END;
+      SELECT btrim(p.email) AS email, p.telephone, p.statut_sourcing INTO v_prospect
+        FROM public.prospects_etablissements p WHERE p.finess = v_b.cible_id;
+      IF NOT FOUND OR v_b.cible_type <> 'PROSPECT_ETABLISSEMENT' THEN
+        v_motif := 'CIBLE_INVALIDE';
+      ELSE
+        -- Mêmes interdits que l'email, sans le motif MSSANTE.
+        v_motif := private.fn_growth_appel_bloque(v_b.cible_id, v_prospect.email, v_b.contexte->>'telephone');
+        -- Avant l'appel comme au constat, la cible doit encore se traiter depuis
+        -- cette fiche : ni écartée du sourcing, ni entrée au CRM, ni inscrite
+        -- (sinon noter un résultat réécrirait le suivi d'un contact existant).
+        IF v_motif IS NULL AND (
+             v_prospect.statut_sourcing = 'IGNORE'
+             OR EXISTS (SELECT 1 FROM public.sales_contacts sc WHERE sc.finess = v_b.cible_id)
+             OR EXISTS (SELECT 1 FROM public.etablissements e WHERE e.finess = v_b.cible_id)) THEN
+          v_motif := 'DEJA_SUIVI';
+        END IF;
+        IF v_motif IS NULL AND v_action = 'VALIDER' THEN
+          IF private.fn_growth_telephone_national(v_prospect.telephone) IS NULL THEN
+            v_motif := 'CIBLE_INVALIDE';
+          ELSIF private.fn_growth_telephone_national(v_prospect.telephone)
+                IS DISTINCT FROM private.fn_growth_telephone_national(v_b.contexte->>'telephone') THEN
+            -- Numéro modifié dans l'annuaire : la fiche le suit, et les
+            -- interdits sont relus sur le nouveau numéro.
+            UPDATE public.growth_brouillons
+               SET contexte = contexte || jsonb_build_object('telephone', btrim(v_prospect.telephone)), maj_le = now()
+             WHERE id = p_id;
+            v_motif := private.fn_growth_appel_bloque(v_b.cible_id, v_prospect.email, v_prospect.telephone);
+          END IF;
+        END IF;
+      END IF;
+    ELSE
+      v_consigne := 'aucun envoi possible';
+      v_motif := private.fn_growth_destinataire_bloque(
+        v_b.cible_type, v_b.cible_id, v_b.destinataire_email,
+        v_b.contexte->>'telephone', v_b.contexte->>'finess');
+    END IF;
     IF v_motif = 'COMPTE_SUPPRIME' THEN
       DELETE FROM public.growth_brouillons WHERE id = p_id;
       RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'SUPPRIME',
         'raison', 'Compte supprimé : brouillon effacé, aucun envoi possible');
+    ELSIF v_motif IN ('STOP', 'DEJA_SUIVI') AND v_b.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'
+          AND v_resultat IN ('PAS_INTERESSE', 'STOP') THEN
+      -- L'appel a eu lieu et l'établissement a refusé : ce refus s'enregistre
+      -- toujours (il protège), même si une opposition, un contact CRM ou une
+      -- inscription sont arrivés entre-temps.
+      v_motif := NULL;
     ELSIF v_motif IS NOT NULL THEN
       UPDATE public.growth_brouillons
          SET statut = 'REJETE', maj_le = now(),
              motif_rejet = CASE v_motif
                WHEN 'STOP' THEN 'Opposition (STOP) ou contact perdu'
                WHEN 'EMAILS_DESACTIVES' THEN 'Emails désactivés par le destinataire'
-               ELSE 'Destinataire invalide' END
+               WHEN 'DEJA_SUIVI' THEN 'Établissement déjà suivi au CRM, déjà inscrit ou écarté'
+               ELSE 'Destinataire invalide' END,
+             -- Un appel déjà passé garde son résultat sur la fiche, même refusé au CRM.
+             contexte = CASE WHEN v_b.canal = 'TELEPHONE' AND v_action = 'MARQUER_ENVOYE'
+                             THEN contexte || jsonb_build_object('resultat_appel', v_resultat)
+                             ELSE contexte END
        WHERE id = p_id;
       RETURN jsonb_build_object('success', false, 'id', p_id, 'statut', 'REJETE',
         'raison', CASE v_motif
-          WHEN 'STOP' THEN 'Contact en opposition (STOP) ou perdu : aucun envoi possible'
-          WHEN 'EMAILS_DESACTIVES' THEN 'Le destinataire a désactivé ces emails : aucun envoi possible'
-          ELSE 'Destinataire invalide : aucun envoi possible' END);
+          WHEN 'STOP' THEN 'Contact en opposition (STOP) ou perdu : ' || v_consigne
+          WHEN 'EMAILS_DESACTIVES' THEN 'Le destinataire a désactivé ces emails : ' || v_consigne
+          WHEN 'DEJA_SUIVI' THEN 'Établissement déjà suivi au CRM, déjà inscrit ou écarté : ' || v_consigne
+          ELSE 'Destinataire invalide : ' || v_consigne END);
     END IF;
   END IF;
 
@@ -10033,7 +10092,10 @@ BEGIN
   ELSIF v_action = 'VALIDER' THEN
     UPDATE public.growth_brouillons
        SET sujet = COALESCE(v_sujet, sujet), corps = COALESCE(v_corps, corps),
-           statut = 'VALIDE', valide_par = auth.uid(), valide_le = now(), maj_le = now()
+           statut = 'VALIDE', valide_par = auth.uid(), maj_le = now(),
+           -- Une fiche d'appel se revérifie à chaque demande d'appel : sa date de
+           -- validation reste celle de la première (elle ne gonfle pas l'entonnoir).
+           valide_le = CASE WHEN v_b.canal = 'TELEPHONE' AND v_b.valide_le IS NOT NULL THEN v_b.valide_le ELSE now() END
      WHERE id = p_id;
   ELSIF v_action = 'REJETER' THEN
     UPDATE public.growth_brouillons
@@ -10064,15 +10126,41 @@ BEGIN
            SET statut = 'ANNULEE', maj_le = now()
          WHERE contact_id = v_contact_id AND statut IN ('A_FAIRE', 'EN_COURS');
       END IF;
+    ELSIF v_b.canal = 'TELEPHONE' AND v_b.cible_type = 'PROSPECT_ETABLISSEMENT' THEN
+      -- Constat d'appel : fiche CRM silencieuse, tâche « premier appel », puis
+      -- le résultat est traité par la logique CRM existante (rappel programmé
+      -- dans « Actions du jour », STOP et « pas intéressé » définitifs).
+      v_crm := public.fn_admin_sourcing_ajouter_crm('ETABLISSEMENT', v_b.cible_id, v_b.score);
+      v_contact_id := (v_crm->>'contact_id')::uuid;
+      INSERT INTO public.sales_taches (
+        contact_id, type, canal, priorite, titre, echeance_le, sequence_etape, origine, idempotence_key
+      ) VALUES (
+        v_contact_id, 'PREMIER_CONTACT', 'TELEPHONE', 'NORMALE',
+        left('Premier appel — ' || COALESCE(v_b.destinataire_nom, v_b.cible_id), 200),
+        now(), 0, 'MANUEL', 'growth:appel:' || v_b.id
+      )
+      RETURNING id INTO v_tache_id;
+      PERFORM public.fn_admin_crm_effectuer_action(
+        v_tache_id, v_resultat, 'Fiche d''appel agent ' || v_b.id, NULL);
+      -- Un refus est aussi porté par le prospect lui-même (fn_admin_sourcing_ajouter_crm
+      -- vient de le passer en QUALIFIE) : l'opposition ne dépend pas du seul contact CRM.
+      IF v_resultat IN ('PAS_INTERESSE', 'STOP') THEN
+        UPDATE public.prospects_etablissements SET statut_sourcing = 'OPPOSITION' WHERE finess = v_b.cible_id;
+      END IF;
     END IF;
     UPDATE public.growth_brouillons
-       SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now()
+       SET statut = 'ENVOYE', envoye_par = auth.uid(), envoye_le = now(), maj_le = now(),
+           contexte = CASE WHEN v_b.canal = 'TELEPHONE'
+                           THEN contexte || jsonb_build_object('resultat_appel', v_resultat)
+                           ELSE contexte END
      WHERE id = p_id;
   END IF;
 
   SELECT * INTO v_b FROM public.growth_brouillons WHERE id = p_id;
   RETURN jsonb_build_object('success', true, 'id', v_b.id, 'statut', v_b.statut,
-    'contact_crm_id', v_contact_id);
+    'contact_crm_id', v_contact_id,
+    -- Numéro de la fiche après revérification : c'est lui que l'écran compose.
+    'telephone', v_b.contexte->>'telephone');
 END;
 $$;
 
@@ -70650,14 +70738,15 @@ CREATE TABLE IF NOT EXISTS "public"."growth_brouillons" (
     "valide_le" timestamp with time zone,
     "envoye_par" "uuid",
     "envoye_le" timestamp with time zone,
-    CONSTRAINT "growth_brouillons_agent_check" CHECK (("agent" = ANY (ARRAY['PROSPECTION_ETABLISSEMENT'::"text", 'POST_SOCIAL'::"text", 'MISSION_A_POURVOIR'::"text", 'REACTIVATION'::"text"]))),
-    CONSTRAINT "growth_brouillons_canal_check" CHECK (("canal" = ANY (ARRAY['EMAIL'::"text", 'LINKEDIN'::"text", 'FACEBOOK_GROUPE'::"text"]))),
+    CONSTRAINT "growth_brouillons_agent_check" CHECK (("agent" = ANY (ARRAY['PROSPECTION_ETABLISSEMENT'::"text", 'APPEL_ETABLISSEMENT'::"text", 'POST_SOCIAL'::"text", 'MISSION_A_POURVOIR'::"text", 'REACTIVATION'::"text"]))),
+    CONSTRAINT "growth_brouillons_canal_check" CHECK (("canal" = ANY (ARRAY['EMAIL'::"text", 'TELEPHONE'::"text", 'LINKEDIN'::"text", 'FACEBOOK_GROUPE'::"text"]))),
     CONSTRAINT "growth_brouillons_cible_type_check" CHECK (("cible_type" = ANY (ARRAY['PROSPECT_ETABLISSEMENT'::"text", 'CONTACT_CRM'::"text", 'SOIGNANT'::"text", 'ETABLISSEMENT'::"text", 'MISSION'::"text", 'PUBLIC'::"text"]))),
     CONSTRAINT "growth_brouillons_corps_check" CHECK ((("char_length"("corps") >= 1) AND ("char_length"("corps") <= 8000))),
     CONSTRAINT "growth_brouillons_email_destinataire" CHECK ((("canal" <> 'EMAIL'::"text") OR ("destinataire_email" IS NOT NULL))),
     CONSTRAINT "growth_brouillons_sequence_etape_check" CHECK ((("sequence_etape" >= 1) AND ("sequence_etape" <= 3))),
     CONSTRAINT "growth_brouillons_statut_check" CHECK (("statut" = ANY (ARRAY['BROUILLON'::"text", 'VALIDE'::"text", 'REJETE'::"text", 'ENVOYE'::"text", 'EXPIRE'::"text"]))),
-    CONSTRAINT "growth_brouillons_sujet_check" CHECK ((("sujet" IS NULL) OR ("char_length"("sujet") <= 300)))
+    CONSTRAINT "growth_brouillons_sujet_check" CHECK ((("sujet" IS NULL) OR ("char_length"("sujet") <= 300))),
+    CONSTRAINT "growth_brouillons_telephone_destinataire" CHECK ((("canal" <> 'TELEPHONE'::"text") OR (("cible_type" = 'PROSPECT_ETABLISSEMENT'::"text") AND ("cible_id" IS NOT NULL) AND ("regexp_replace"(COALESCE(("contexte" ->> 'telephone'::"text"), ''::"text"), '\D'::"text", ''::"text", 'g'::"text") ~ '^(0|330?|00330?)[1-9][0-9]{8}$'::"text"))))
 );
 
 
@@ -71713,11 +71802,17 @@ CREATE TABLE IF NOT EXISTS "public"."prospects_etablissements" (
     "dernier_controle_le" timestamp with time zone,
     "statut_sourcing" "text" DEFAULT 'A_QUALIFIER'::"text" NOT NULL,
     "ajoute_crm_le" timestamp with time zone,
+    "email_provenance" "jsonb",
+    CONSTRAINT "prospects_etab_email_provenance_forme" CHECK ((("email_provenance" IS NULL) OR (("jsonb_typeof"("email_provenance") = 'object'::"text") AND (COALESCE(("email_provenance" ->> 'email'::"text"), ''::"text") ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'::"text") AND (COALESCE(("email_provenance" ->> 'email'::"text"), ''::"text") !~ '[@.](mssante\.fr|apicrypt\.org)$'::"text") AND (COALESCE(("email_provenance" ->> 'source_code'::"text"), ''::"text") ~ '^[A-Z0-9_]{3,60}$'::"text") AND ((("email_provenance" ->> 'source_code'::"text") = 'SAISIE_MANUELLE'::"text") OR (COALESCE(("email_provenance" ->> 'source_url'::"text"), ''::"text") ~ '^https://'::"text")) AND (COALESCE(("email_provenance" ->> 'releve_le'::"text"), ''::"text") ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::"text")))),
     CONSTRAINT "prospects_etab_statut_sourcing_check" CHECK (("statut_sourcing" = ANY (ARRAY['A_QUALIFIER'::"text", 'QUALIFIE'::"text", 'IGNORE'::"text", 'OPPOSITION'::"text"])))
 );
 
 
 ALTER TABLE "public"."prospects_etablissements" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."prospects_etablissements"."email_provenance" IS 'Origine de l''adresse de contact quand elle vient d''un annuaire public ouvert : email (l''adresse décrite), source_code, source_url, source_publie_le, source_maj_le, releve_le, classe (FONCTION), remplace (ancienne adresse en messagerie fermée). Ne vaut que si email est encore l''adresse du prospect (private.fn_growth_email_source). source_code SAISIE_MANUELLE : code prévu pour une adresse saisie à la main, sans page source ; aucun écran ne le pose encore. NULL : adresse historique (FINESS, Annuaire Santé) ou saisie à la main.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."prospects_soignants" (
