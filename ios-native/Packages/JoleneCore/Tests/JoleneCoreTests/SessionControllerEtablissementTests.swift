@@ -375,6 +375,13 @@ final class SessionControllerEtablissementTests: XCTestCase {
         }
         let aucun = await ouvert.diagnostic
         XCTAssertNil(aucun, "aucun diagnostic sur une connexion réussie")
+
+        // Revue de #1187, m6 : un défaut de contrat nomme la clé fautive (`JoleneError.detail`), jamais sa valeur.
+        let contrat = EtabFixture(permissions: [.failure(JoleneError(.contract, "Réponse inattendue.", detail: "success"))])
+        let decodage = contrat.controller(espace: .ouvert)
+        _ = await decodage.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        let cle = await decodage.diagnostic
+        XCTAssertEqual(cle, "permissions:contract:success")
     }
 
     func testPortSessionNonCableNOuvreJamaisLEspace() async {

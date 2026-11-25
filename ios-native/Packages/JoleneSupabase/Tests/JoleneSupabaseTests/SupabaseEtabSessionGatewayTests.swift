@@ -97,6 +97,28 @@ final class SupabaseEtabSessionGatewayTests: XCTestCase {
         XCTAssertEqual(verbatim, JoleneError(.unknown, "Erreur inattendue"))
     }
 
+    /// Revue de #1187, m6 : un défaut de décodage garde la clé fautive en `detail` (jamais la valeur), pour le diagnostic
+    /// DEBUG ; le message montré reste celui du contrat.
+    func testDefautDeDecodageNommeLaCleSansSaValeur() async {
+        registry.add("POST", profilPath, respond: .json(200, #"{"nom":"Clinique secrète"}"#))
+        let erreur = await echec { _ = try await self.gateway().profil() }
+        XCTAssertEqual(erreur, JoleneError(.contract, SupabaseErrorMapping.contractMessage))
+        XCTAssertEqual(erreur?.detail, "id")
+        XCTAssertFalse(erreur?.detail?.contains("secrète") ?? true)
+        let melange = DecodingError.typeMismatch(Bool.self, .init(codingPath: [CleTest("permissions"), CleTest("pointage")],
+                                                                      debugDescription: "valeur"))
+        XCTAssertEqual(SupabaseEtabSessionGateway.cleFautive(melange), "permissions.pointage")
+        XCTAssertEqual(SupabaseEtabSessionGateway.cleFautive(JoleneError(.unknown, "x")), "corps")
+    }
+
+    private struct CleTest: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(_ valeur: String) { stringValue = valeur }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
     func testTransportReseauSessionEtContrat() async {
         registry.add("POST", permissionsPath, respond: .networkFailure())
         let reseau = await echec { _ = try await self.gateway().permissions(etablissementId: nil) }

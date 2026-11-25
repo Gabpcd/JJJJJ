@@ -39,15 +39,26 @@ public actor SessionController {
     /// Diagnostic technique de la dernière résolution d'identité (étape et nature de l'échec), jamais affiché :
     /// publié en DEBUG seulement, comme valeur d'accessibilité de `login-error`, pour qu'un XCUITest STAGING dise
     /// quelle étape a échoué (second parcours STAGING du lot 5, 25/11/2026 : un même message couvre trois causes).
-    /// Ne contient ni adresse, ni mot de passe, ni jeton : une étape, le type d'erreur et le message déjà mappé.
+    /// Ne contient ni adresse, ni mot de passe, ni jeton : une étape, le type d'erreur et, pour un défaut de contrat, la
+    /// clé fautive (`JoleneError.detail`), sinon le message déjà mappé. DEBUG seulement : rien n'est calculé en Release.
+    #if DEBUG
     public private(set) var diagnostic: String?
+    #endif
 
     private func noter(_ etape: String, _ error: Error) {
+        #if DEBUG
         if let jolene = error as? JoleneError {
-            diagnostic = "\(etape):\(jolene.kind):\(jolene.message.prefix(160))"
+            diagnostic = "\(etape):\(jolene.kind):\(jolene.detail ?? String(jolene.message.prefix(160)))"
         } else {
             diagnostic = "\(etape):\(type(of: error))"
         }
+        #endif
+    }
+
+    private func noter(_ texte: String?) {
+        #if DEBUG
+        diagnostic = texte
+        #endif
     }
     /// Lot 3, T4 (revue B8) : nombre d'absences de session **confirmées** depuis la création du contrôleur —
     /// restauration qui ne trouve aucune session (`restoreSession()` → nil) ou session effacée par le SDK
@@ -163,7 +174,7 @@ public actor SessionController {
         bumpEpoch()
         activeUserId = nil
         restoreRetryable = false
-        diagnostic = nil
+        noter(nil)
         currentState = .loading
         let signedInAt = currentEpoch
         let auth = configured.auth
@@ -393,7 +404,7 @@ public actor SessionController {
         guard currentEpoch == expected else { return nil }
         let perimetre = EspaceResolution.perimetre(candidat: role.etablissementId, permissions: reponse)
         guard case let .confirme(etablissementId, roleEtab, permissions) = perimetre else {
-            diagnostic = "permissions:perimetre:\(perimetre)"
+            noter("permissions:perimetre:\(perimetre)")
             return Self.etat(pour: perimetre)
         }
 

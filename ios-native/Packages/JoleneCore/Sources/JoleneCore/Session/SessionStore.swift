@@ -130,10 +130,15 @@ public final class SessionStore: ObservableObject {
         signalerUtilisateurCrash(nil) // lot 3, T15 (revue B8 n°1, M2) : ni l'identifiant d'une autre identité
         state = .loading
         canRetryRestore = false
-        state = await preparerEtablissement(await controller.signIn(email: email, password: password), relire: true)
+        #if DEBUG
+        diagnosticConnexion = nil
+        #endif
+        let resultat = await preparerEtablissement(await controller.signIn(email: email, password: password), relire: true)
+        // Diagnostic publié AVANT l'état : `login-error` n'apparaît jamais sans sa valeur (revue de #1187, m1).
         #if DEBUG
         diagnosticConnexion = await controller.diagnostic
         #endif
+        state = resultat
     }
 
     /// Relecture du périmètre établissement après un refus de droit (`accesRefuse`, lot 5 T2a) : une

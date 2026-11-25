@@ -32,14 +32,6 @@ struct LoginScreen: View {
 
     private enum Field { case email, password }
 
-    /// Valeur d'accessibilité de `login-error` : le diagnostic en DEBUG, rien en Release.
-    private var diagnosticAccessible: String {
-        #if DEBUG
-        return diagnostic ?? ""
-        #else
-        return ""
-        #endif
-    }
 
     private var canSubmit: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty && !password.isEmpty && !isSubmitting
@@ -69,7 +61,7 @@ struct LoginScreen: View {
                             .background(JoleneColor.rose100)
                             .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
                             .accessibilityIdentifier("login-error")
-                            .accessibilityValue(diagnosticAccessible)
+                            .modifier(DiagnosticConnexionDebug(diagnostic: diagnostic))
                     }
                     if let retryRestore {
                         JoleneButton("Réessayer sans mot de passe", style: .secondary, isLoading: isRetrying) {
@@ -158,5 +150,19 @@ struct LoginScreen: View {
             isSubmitting = false
             password = ""
         }
+    }
+}
+
+/// Valeur d'accessibilité DEBUG de `login-error` (diagnostic de la connexion refusée) ; en Release, la vue est rendue
+/// telle quelle, sans valeur posée (revue de #1187, m3).
+private struct DiagnosticConnexionDebug: ViewModifier {
+    let diagnostic: String?
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.accessibilityValue(diagnostic ?? "")
+        #else
+        content
+        #endif
     }
 }
