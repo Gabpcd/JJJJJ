@@ -2,7 +2,7 @@ import Foundation
 
 /// Confirmation de présence du monde démo (lot 1, T6c, `LOT1_PLAN.md` §2.7) : aucun réseau, horloge fixée, état en
 /// mémoire pour la session. Mêmes contrôles et mêmes textes que `fn_confirmer_presence_mission`
-/// (`supabase/schema/public.sql` l.24992-25012) : mission attribuée au profil fictif, statut `ASSIGNEE` ou `EN_COURS`,
+/// (`supabase/schema/public.sql` l.25080-25100) : mission attribuée au profil fictif, statut `ASSIGNEE` ou `EN_COURS`,
 /// puis `presence_confirmee_le` posé **dans l'acteur** (jamais par l'écran) et relu avant de répondre. Comme le serveur,
 /// aucune idempotence : chaque appel réécrit l'instant (l'écran masque le bouton après relecture).
 ///

@@ -44,7 +44,7 @@ public enum AnnulationRules {
         }
     }
 
-    /// Motifs admis par le serveur (`fn_annuler_candidature_soignant`, `public.sql` l.17945-17951 : `MOTIF_INVALIDE`
+    /// Motifs admis par le serveur (`fn_annuler_candidature_soignant`, `public.sql` l.18033-18039 : `MOTIF_INVALIDE`
     /// sinon), relus par le monde démo qui le simule ; l'app n'en propose que `Motif.allCases`.
     public static let motifsServeur: Set<String> = [
         "URGENCE_PERSONNELLE", "URGENCE_MEDICALE", "DEUIL", "PROBLEME_TRANSPORT", "CHANGEMENT_AVIS", "AUTRE",

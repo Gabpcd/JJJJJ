@@ -74,7 +74,7 @@ Livrer en natif, sur iPhone, iPad portrait et iPad paysage, les trois parcours t
 
 ### 1.2 Hors périmètre (explicitement)
 
-- **Système de pointage ①** : `fn_pointer_arrivee` l.47421, `fn_pointer_depart` l.47563, `fn_pointer_debut_pause` l.47529, `fn_pointer_fin_pause` l.47620, `fn_valider_scan_qr` l.65545, `fn_generer_qr_mission` l.37981, `fn_valider_code_secours` l.64991, `fn_codes_pointage_mission` l.23784, `qr-offline-queue.ts`, `horsLigne.ts`/`SyncHorsLigne.tsx` : jamais appelés par le Swift (garde, §3 T0). Sous réserve de §7 Q1.
+- **Système de pointage ①** : `fn_pointer_arrivee` l.47421, `fn_pointer_depart` l.47563, `fn_pointer_debut_pause` l.47529, `fn_pointer_fin_pause` l.47620, `fn_valider_scan_qr` l.65633, `fn_generer_qr_mission` l.37981, `fn_valider_code_secours` l.64991, `fn_codes_pointage_mission` l.23784, `qr-offline-queue.ts`, `horsLigne.ts`/`SyncHorsLigne.tsx` : jamais appelés par le Swift (garde, §3 T0). Sous réserve de §7 Q1.
 - Réponse, relance et clôture d'un litige (`fn_repondre_litige`, `fn_proposer_cloture_litige`) : lot 4 (renvoi web vers `/soignant/litiges`).
 - Récapitulatif financier de `DetailPresencesMission.tsx` l.705-800 (taux, bruts, IFM/ICP calculés côté client) : montants serveur jamais recalculés (PRINCIPES §3) ; lien vers Revenus (lot 3) ou renvoi web.
 - Onglet DPAE (`fn_mes_dpae` l.41603) et page Conformité (`conformite_travail`, `ConformiteSoignant.tsx`) : renvoi web, lot 4 (§7 Q16).

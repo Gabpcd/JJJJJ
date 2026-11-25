@@ -70,7 +70,7 @@ public enum IbanRules {
         "•••• •••• •••• •••• •••• \(last4)"
     }
 
-    /// Quatre derniers caractères de l'IBAN envoyé (`right(v_iban, 4)` du serveur, l.39941, sur la même valeur nettoyée).
+    /// Quatre derniers caractères de l'IBAN envoyé (`right(v_iban, 4)` du serveur, l.40029, sur la même valeur nettoyée).
     public static func quatreDerniers(_ iban: String) -> String {
         String(nettoyer(iban).suffix(4))
     }
@@ -117,7 +117,7 @@ public enum IbanTextes {
     /// `RIB_NON_CONCORDANT` qui n'ont pas d'`error` (TJ6, règle 2).
     public static let ribCorrespondant = "Téléversez puis faites vérifier le RIB correspondant."
     /// Texte nouveau (TJ6, règle 3) : `IDENTITE_VERIFIEE_REQUISE` (`identite_verifiee` et `coherence_identite =
-    /// 'COHERENT'`, `public.sql` l.39892-39897).
+    /// 'COHERENT'`, `public.sql` l.39980-39985).
     public static let identiteVerifieeRequise =
         "Faites d'abord vérifier votre identité, cohérente avec votre profil, depuis Mes documents."
     /// Texte nouveau (TJ6, règle 3) : `IDENTITE_COURANTE_REQUISE` (pièce d'identité `VERIFIE` dont les noms extraits

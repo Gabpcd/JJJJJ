@@ -11,7 +11,7 @@ import Foundation
 // structurels sont locaux (champs obligatoires, période, créneau manquant ou invalide, chevauchement).
 
 /// Mode de sélection d'une mission publiée (`p_mode_attribution`) : les deux valeurs que le serveur accepte
-/// (`fn_creer_mission_multi_jours`, `supabase/schema/public.sql` l.27344), dans l'ordre du web
+/// (`fn_creer_mission_multi_jours`, `supabase/schema/public.sql` l.27432), dans l'ordre du web
 /// (`FormulaireMission.tsx` l.969-984).
 public enum ModeAttributionPublication: String, CaseIterable, Sendable {
     case premierArrive = "PREMIER_ARRIVE"
@@ -46,7 +46,7 @@ public struct PublicationSaisie: Equatable, Sendable {
 public enum PublicationRules {
     /// Profession dont la publication reste sur le web (D8 : spécialité et choix d'accueil non portés).
     public static let professionRenvoyeeAuWeb = CandidaturesEtabRules.professionRenvoyeeAuWeb
-    /// `length(btrim(p_intitule)) < 3` est refusé par le serveur (l.27330).
+    /// `length(btrim(p_intitule)) < 3` est refusé par le serveur (l.27418).
     public static let intituleMinimum = 3
     /// Longueur maximale de l'intitulé du web (`FormulaireMission.tsx` l.680, `slice(0, 120)`).
     public static let intituleMaximum = 120

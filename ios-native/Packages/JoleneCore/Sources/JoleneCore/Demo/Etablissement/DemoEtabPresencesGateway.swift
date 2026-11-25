@@ -53,9 +53,9 @@ public struct DemoEtabPresencesGateway: EtabPresencesPort {
     /// Message neutre du refus RBAC, celui de `RPCInterception.messageRoleInsuffisant` (égalité gardée par
     /// `SupabaseEtabPresencesGatewayTests`).
     public static let roleInsuffisant = "Votre rôle dans cet établissement ne permet pas cette action."
-    // source: supabase/schema/public.sql l.65862, l.65961 (fn_valider_presence, fn_valider_presences_lot)
+    // source: supabase/schema/public.sql l.65950, l.66049 (fn_valider_presence, fn_valider_presences_lot)
     static let nonAutorise = "Non autorisé"
-    // source: supabase/schema/public.sql l.65872 (fn_valider_presence)
+    // source: supabase/schema/public.sql l.65960 (fn_valider_presence)
     static let presenceIntrouvable = "Présence introuvable"
     // source: supabase/schema/public.sql l.1253 (dec_bloquer_validation_presence_avant_fin_planning)
     static let avantFinPlanning = "La présence ne peut être validée avant la fin du dernier créneau planifié."
@@ -65,11 +65,11 @@ public struct DemoEtabPresencesGateway: EtabPresencesPort {
     static let pointageOuvert = "Un pointage est encore ouvert pour cette mission."
     // source: supabase/schema/public.sql l.1291
     static let aucunPointageTermine = "Aucun pointage terminé ne permet de valider cette présence."
-    // source: supabase/schema/public.sql l.26254 (fn_contester_presence)
+    // source: supabase/schema/public.sql l.26342 (fn_contester_presence)
     static let motifObligatoire = "Le motif est obligatoire (3 caractères min.)"
-    // source: supabase/schema/public.sql l.27794 (fn_creer_notation_mission)
+    // source: supabase/schema/public.sql l.27882 (fn_creer_notation_mission)
     static let missionNonTerminee = "Seules les missions TERMINEE peuvent être notées"
-    // source: supabase/schema/public.sql l.29139 (fn_declarer_fin_retroactive)
+    // source: supabase/schema/public.sql l.29227 (fn_declarer_fin_retroactive)
     static let clotureNonAutorisee = "Vous n'êtes pas autorisé(e) à déclarer une fin rétroactive sur cette mission."
     // source: supabase/schema/public.sql l.29152
     static let aucunSegmentOuvert = "Aucun créneau effectif ouvert à fermer pour cette mission."

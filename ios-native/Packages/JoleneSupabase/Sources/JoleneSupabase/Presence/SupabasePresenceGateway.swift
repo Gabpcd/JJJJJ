@@ -3,7 +3,7 @@ import JoleneCore
 import Supabase
 
 /// `PresencePort` sur Supabase (lot 1, T6c, `docs/mobile-swift/LOT1_PLAN.md` §3 T6c, décision 16), sous le JWT du
-/// soignant : `fn_confirmer_presence_mission(p_mission_id)` (`supabase/schema/public.sql` l.24992-25012).
+/// soignant : `fn_confirmer_presence_mission(p_mission_id)` (`supabase/schema/public.sql` l.25080-25100).
 ///
 /// Formes de réponse (HTTP 200) : `{success:true}` ; `{error:'Mission introuvable'}` (mission d'un autre soignant ou
 /// invisible, y compris sans session : `auth.uid()` NULL) ; `{error:"Cette mission n'est plus active."}` (statut hors

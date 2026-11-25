@@ -102,7 +102,7 @@ public struct CandidatureHabilitee: Equatable, Sendable, Identifiable {
     }
 }
 
-/// Objet `soignant` d'une candidature de la lecture habilitée (l.40017-40025), réduit à ce que l'écran affiche et à
+/// Objet `soignant` d'une candidature de la lecture habilitée (l.40105-40113), réduit à ce que l'écran affiche et à
 /// l'aiguillage du cadre étudiant (`est_etudiant`, `profession` : aiguillage seulement, le serveur décide,
 /// correction 19). Aucune note, aucun statut d'internat, aucun mode d'exercice.
 public struct CandidatHabilite: Equatable, Sendable, Identifiable {
