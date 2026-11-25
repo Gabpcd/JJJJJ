@@ -446,6 +446,21 @@ export function lireGraphe(graphe = GRAPHE_NETTOYAGE) {
   });
 }
 
+/**
+ * Tables du graphe dont un déclencheur interdit la suppression (conservation légale ou de preuve) dans le contexte du
+ * nettoyage (rôle de la Management API, `auth.uid()` nul) ; relu dans le dump, prouvé par
+ * `tests/node/staging-lot5-fixture.node.mjs`. Leurs lignes de la cohorte sont comptées AVANT toute suppression, jamais
+ * supprimées (aucun contournement de déclencheur) : elles restent comme résidu de test, avec leurs parents.
+ */
+export const NON_SUPPRIMABLES = {
+  bulletins_paie: 'trg_bp_no_delete (conservation 5 ans, art. L3243-4)',
+  factures: 'aa_garder_facture_imputation (facture liée à un avoir)',
+  factures_honoraires_documents: 'trg_preserver_document_facture_honoraires (durée de rétention)',
+  factures_honoraires_rectifications: 'trg_preserver_rectification_facture_honoraires (dix ans)',
+  invoice_audit_log: 'trg_ial_no_delete (traçabilité fiscale)',
+  mandats_facturation_signatures: 'trg_preserver_preuve_mandat_facturation (durée de rétention)',
+};
+
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 /** SQL de collecte (parents → enfants) puis de suppression (enfants → parents) de la fermeture, sur la table `l5_ids`. */
 function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
@@ -457,8 +472,54 @@ function sqlFermeture(graphe = GRAPHE_NETTOYAGE) {
   const condition = liens => liens.map(l => `x.${l.colonne} IN (SELECT id FROM l5_ids WHERE tbl = '${l.parent}')`).join(' OR ');
   const collecte = tables.filter(t => parents.has(t.table)).map(t =>
     `  INSERT INTO l5_ids SELECT '${t.table}', x.id FROM public.${t.table} x WHERE ${condition(t.liens)} ON CONFLICT DO NOTHING;`);
-  const suppression = [...tables].reverse().map(t => `  DELETE FROM public.${t.table} x WHERE ${condition(t.liens)};`);
+  // Une table non supprimable n'est jamais touchée. Ailleurs, si une ligne est retenue par une clé étrangère (parent
+  // d'un résidu non supprimable), elle est conservée seule : suppression ligne par ligne, seul le refus de clé
+  // étrangère (23503) est rattrapé ; tout autre refus (déclencheur, droit) fait échouer la transaction.
+  const suppression = [...tables].reverse().map(t => NON_SUPPRIMABLES[t.table]
+    ? `  -- ${t.table} : non supprimable (${NON_SUPPRIMABLES[t.table]}), compté par sqlResidus.`
+    : `  BEGIN
+    DELETE FROM public.${t.table} x WHERE ${condition(t.liens)};
+  EXCEPTION WHEN foreign_key_violation THEN
+    FOR v_ctid IN SELECT x.ctid FROM public.${t.table} x WHERE ${condition(t.liens)} LOOP
+      BEGIN DELETE FROM public.${t.table} WHERE ctid = v_ctid; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+    END LOOP;
+  END;`);
   return { collecte: collecte.join('\n'), suppression: suppression.join('\n') };
+}
+
+/**
+ * Lignes de la cohorte dans les tables non supprimables (lecture seule, AVANT le nettoyage) : chaîne de CTE des
+ * parents vers les enfants, limitée aux ancêtres de ces tables dans le graphe.
+ */
+export function sqlResidus(m, graphe = GRAPHE_NETTOYAGE) {
+  const e = m.etablissement ?? {}, s = m.soignant ?? {};
+  const tables = lireGraphe(graphe);
+  const parTable = new Map(tables.map(t => [t.table, t]));
+  const utiles = new Set();
+  const visiter = nom => {
+    if (utiles.has(nom) || !parTable.has(nom)) return;
+    utiles.add(nom);
+    for (const l of parTable.get(nom).liens) visiter(l.parent);
+  };
+  for (const nom of Object.keys(NON_SUPPRIMABLES)) visiter(nom);
+  const lesMissions = `SELECT id FROM public.missions WHERE etablissement_id = ${u(e.id)} OR id = ANY(${missions(m)})`;
+  const ctes = [`r_missions AS (${lesMissions})`, `r_etablissements AS (SELECT id FROM public.etablissements WHERE id = ${u(e.id)})`,
+    `r_soignants AS (SELECT id FROM public.soignants WHERE id = ${u(s.id)})`,
+    ...tables.filter(t => utiles.has(t.table)).map(t => `r_${t.table} AS (SELECT x.id FROM public.${t.table} x WHERE ${
+      t.liens.map(l => `x.${l.colonne} IN (SELECT id FROM r_${l.parent})`).join(' OR ')})`)];
+  const champs = Object.keys(NON_SUPPRIMABLES)
+    .map(t => `'${t}', (SELECT coalesce(jsonb_agg(id ORDER BY id), '[]'::jsonb) FROM r_${t})`).join(', ');
+  return `WITH ${ctes.join(',\n  ')}\nSELECT jsonb_build_object(${champs}) AS residus;`;
+}
+
+/** Résidus lus : `[[table, [ids…]], …]` des seules tables non vides ; une réponse illisible n'est jamais « aucun ». */
+export function lireResidus(ligne) {
+  const r = ligne?.residus;
+  if (!r || typeof r !== 'object') throw new Error('Résidus L5 illisibles : aucune suppression.');
+  return Object.keys(NON_SUPPRIMABLES).map(t => {
+    if (!Array.isArray(r[t]) || r[t].some(id => !UUID.test(String(id)))) throw new Error(`Résidus L5 illisibles (${t}) : aucune suppression.`);
+    return [t, r[t]];
+  }).filter(([, liste]) => liste.length);
 }
 
 /**
@@ -471,7 +532,7 @@ export function sqlNettoyer(m) {
   const fermeture = sqlFermeture();
   const lesMissions = `ARRAY(SELECT id FROM public.missions WHERE etablissement_id = ${u(e.id)} OR id = ANY(${missions(m)}))`;
   return `${entete(m)}DO $l5_clean$
-DECLARE v_missions uuid[]; v_ids uuid[] := ${ids(m)}; fk record; n bigint;
+DECLARE v_missions uuid[]; v_ids uuid[] := ${ids(m)}; fk record; n bigint; v_ctid tid;
 BEGIN
   IF auth.uid() IS NOT NULL OR auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Contexte service requis (L5)'; END IF;
   IF EXISTS (SELECT 1 FROM auth.users u WHERE u.id = ANY(v_ids) AND (u.raw_app_meta_data->>'load_fixture_run' IS DISTINCT FROM ${q(m.runId)}
@@ -507,7 +568,8 @@ ${fermeture.collecte}
   PERFORM set_config('jolene.sync_in_progress', 'true', true);
 ${fermeture.suppression}
 
-  -- Dépendance inconnue : refus nominatif, rien n'est supprimé (rollback de toute la transaction).
+  -- Dépendance inconnue (table absente du graphe, dérive du STAGING vers le dump) : refus nominatif, rien n'est
+  -- supprimé (rollback de toute la transaction). Les tables du graphe sont traitées ci-dessus.
   FOR fk IN SELECT c.conrelid::regclass AS enfant, c.confrelid::regclass AS parent, a.attname AS col
     FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
     WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND c.confdeltype NOT IN ('c', 'n', 'd')
@@ -515,6 +577,7 @@ ${fermeture.suppression}
       -- Parents supprimés juste après, dans cet ordre (missions → soignants → établissement) : une ligne étrangère qui les
       -- référencerait fait échouer leur DELETE, donc toute la transaction.
       AND c.conrelid NOT IN ('public.missions'::regclass, 'public.soignants'::regclass, 'public.etablissements'::regclass)
+      AND c.conrelid NOT IN (SELECT to_regclass('public.' || t) FROM unnest(ARRAY[${lireGraphe().map(t => q(t.table)).join(', ')}]) t)
       AND c.confrelid IN ('public.missions'::regclass, 'public.etablissements'::regclass, 'public.soignants'::regclass, 'auth.users'::regclass)
   LOOP
     EXECUTE format('SELECT count(*) FROM %s WHERE %I = ANY($1)', fk.enfant, fk.col)
@@ -522,9 +585,12 @@ ${fermeture.suppression}
     IF n > 0 THEN RAISE EXCEPTION 'Dépendance hors lot L5 : %.% → % (% ligne(s))', fk.enfant, fk.col, fk.parent, n; END IF;
   END LOOP;
 
-  DELETE FROM public.missions WHERE id = ANY(v_missions);
-  DELETE FROM public.soignants WHERE id = ${u(s.id)};
-  DELETE FROM public.etablissements WHERE id = ${u(e.id)};
+  -- Racines : une ligne encore référencée par un résidu non supprimable est conservée (refus 23503 seul rattrapé).
+  FOR v_ctid IN SELECT ctid FROM public.missions WHERE id = ANY(v_missions) LOOP
+    BEGIN DELETE FROM public.missions WHERE ctid = v_ctid; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+  END LOOP;
+  BEGIN DELETE FROM public.soignants WHERE id = ${u(s.id)}; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+  BEGIN DELETE FROM public.etablissements WHERE id = ${u(e.id)}; EXCEPTION WHEN foreign_key_violation THEN NULL; END;
 END $l5_clean$;
 COMMIT;
 SELECT true AS nettoye;`;
@@ -702,8 +768,11 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
 
   /** Nettoyage d'une cible (manifeste ou étiquette) ; tout échec nomme la reprise par étiquette. */
   const nettoyerCible = async cible => {
+    let residus = [];
     try {
       const { service } = await cles();
+      // Résidus non supprimables comptés AVANT toute suppression (déclencheurs de conservation, jamais contournés).
+      residus = lireResidus((await sql(sqlResidus(cible)))[0]);
       const [sortie] = await sql(sqlNettoyer(cible));
       if (sortie?.nettoye !== true) throw new Error('Nettoyage SQL L5 non confirmé.');
       for (const attendu of cible.auth) {
@@ -713,14 +782,29 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
         if (!u) continue;
         if (u.id !== attendu.id || u.email !== attendu.email || u.app_metadata?.load_fixture_run !== cible.runId
           || u.app_metadata?.load_fixture_kind !== KIND) throw new Error('Auth hors du run L5 : aucune suppression.');
-        await requete(url, { methode: 'DELETE', cle: service, corps: { should_soft_delete: false } });
+        try {
+          await requete(url, { methode: 'DELETE', cle: service, corps: { should_soft_delete: false } });
+        } catch (e) {
+          if (!residus.length) throw e; // sans résidu, un refus Auth reste une erreur à reprendre
+        }
       }
       const [ligne] = await sql(sqlCompter(cible));
       const etat = { ...Object.fromEntries(COMPTES.map(c => [c, ligne?.[c]])), total: totalMarques(ligne) };
+      if (residus.length) {
+        const n = residus.reduce((t, [, liste]) => t + liste.length, 0);
+        const restes = Object.entries(etat).filter(([c, v]) => c !== 'total' && v > 0).map(([c, v]) => `${c} ${v}`).join(', ');
+        const erreur = new Error(`Nettoyage L5 partiel (run ${cible.runId}) : ${n} ligne(s) non supprimable(s) dans `
+          + `${residus.map(([t]) => `${t} (${NON_SUPPRIMABLES[t]})`).join(', ')} : résidu de test conservé, identifiants `
+          + `${residus.map(([t, liste]) => `${t} ${liste.join(' ')}`).join(' ; ')}. Restent aussi les objets qu'il référence `
+          + `(${restes || 'aucun'}) ; le reste de la cohorte est supprimé. Une relance ne supprimera pas ce résidu.`);
+        erreur.residuConserve = true;
+        throw erreur;
+      }
       if (etat.total !== 0) throw new Error(`objets marqués restants ${JSON.stringify(etat)}`);
       log(`Nettoyage L5 prouvé (run ${cible.runId}) : 0 objet marqué (${COMPTES.join(', ')}) ; journaux_audit conservés (immuables).`);
       return etat;
     } catch (e) {
+      if (e?.residuConserve) throw e; // message exact : aucune reprise ne lève un déclencheur de conservation
       // Le manifeste disparaît avec le runner hébergé : la reprise passe par l'étiquette du run, jamais par lui.
       throw new Error(`Nettoyage L5 incomplet (run ${cible.runId}) : ${String(e?.message ?? e)} ; ${repriseDuRun(cible.runId)}.`);
     }

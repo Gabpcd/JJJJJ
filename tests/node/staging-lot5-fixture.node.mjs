@@ -9,7 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
-  debutIntitule,
+  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -31,7 +31,7 @@ function banc(t, surcharge = {}) {
   const b = {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
-    recherches: 0,
+    recherches: 0, residus: {},
     horloge: new Date('2026-11-24T10:00:00.000Z'),
   };
   // Recherche par étiquette : ce que le STAGING simulé contient pour le run, sans mot de passe.
@@ -63,6 +63,7 @@ function banc(t, surcharge = {}) {
       if (sql.includes('AS arrivee')) return rep(b.presence ? [b.presence] : []);
       if (sql.includes('AS candidature_statut')) return rep([b.relu]);
       if (sql.includes('AS auth;')) { b.recherches += 1; return rep([b.recherche()]); }
+      if (sql.includes('AS residus;')) return rep([{ residus: { ...Object.fromEntries(Object.keys(NON_SUPPRIMABLES).map(t => [t, []])), ...b.residus } }]);
       if (sql.includes('AS auth,')) {
         const ligne = b.reste ?? (b.seeded ? { ...ZERO, missions: 2, auth: b.users.size } : { ...ZERO, auth: b.users.size });
         return rep([ligne]);
@@ -290,7 +291,7 @@ test('SQL : contexte service, verrou consultatif, aucun contournement de déclen
   assert.doesNotMatch(seed, /'LIBERAL'/, 'aucune mission libérale : aucun escrow possible');
   assert.match(seed, /telephone_contact[\s\S]*NULL, true/, 'aucun téléphone de contact : aucun SMS');
   assert.match(clean, /Dépendance hors lot L5/);
-  assert.ok(clean.indexOf('Dépendance hors lot L5') < clean.indexOf('DELETE FROM public.missions WHERE id'), 'contrôle avant les parents');
+  assert.ok(clean.indexOf('Dépendance hors lot L5') < clean.indexOf('DELETE FROM public.missions WHERE ctid'), 'contrôle avant les parents');
   assert.match(clean, /load_cleanup_pending/);
   assert.match(sqlVerifier(m), /AS escrow_file/);
   assert.match(sqlCompter(m), /AS preferences;$/);
@@ -387,12 +388,14 @@ test('GRAPHE_NETTOYAGE = fermeture des clés étrangères du dump vers la cohort
   // Le SQL supprime chaque table retenue, enfants d abord, avant les racines.
   const m = manifeste('graphe', new Date('2026-11-24T10:00:00.000Z'));
   const sql = sqlNettoyer(m);
-  const positions = tables.map(t => sql.indexOf(`DELETE FROM public.${t.table} x WHERE`));
-  assert.ok(positions.every(p => p > 0), 'une suppression par table retenue');
+  const positions = tables.map(t => sql.indexOf(NON_SUPPRIMABLES[t.table]
+    ? `-- ${t.table} : non supprimable` : `DELETE FROM public.${t.table} x WHERE`));
+  assert.ok(positions.every(p => p > 0), 'une suppression (ou un saut nommé, table non supprimable) par table retenue');
+  for (const t of Object.keys(NON_SUPPRIMABLES)) assert.doesNotMatch(sql, new RegExp(`DELETE FROM public\\.${t}\\b`), `${t} jamais supprimée`);
   for (const t of tables) for (const l of t.liens.filter(l => !RACINES_COHORTE.includes(l.parent))) {
     assert.ok(positions[rang.get(t.table)] < positions[rang.get(l.parent)], `${t.table} supprimée avant ${l.parent}`);
   }
-  assert.ok(Math.max(...positions) < sql.indexOf('DELETE FROM public.missions WHERE id = ANY(v_missions)'), 'enfants avant les missions');
+  assert.ok(Math.max(...positions) < sql.indexOf('DELETE FROM public.missions WHERE ctid'), 'enfants avant les missions');
 });
 
 // MARK: - Notifications des missions du run (revue de #1183, m3)
@@ -415,4 +418,55 @@ test('m-A : l étiquette est comparée exactement (le run N-1 ne reconnaît pas 
     assert.ok(sql.includes("'RECETTE-L5-N-1 · '"));
     assert.doesNotMatch(sql, /left\(intitule, 14\)/, 'plus de comparaison au seul marqueur');
   }
+});
+
+test('m-B : chaque déclencheur de suppression du graphe est classé (non supprimable ou admis), relu dans le dump', () => {
+  const dump = readFileSync(new URL('../../supabase/schema/public.sql', import.meta.url), 'utf8');
+  const graphe = new Set(lireGraphe().map(t => t.table));
+  const declencheurs = [...dump.matchAll(/CREATE OR REPLACE TRIGGER "(\w+)" BEFORE [A-Z ]*DELETE[A-Z ]* ON "public"\."(\w+)"/g)]
+    .filter(([, , table]) => graphe.has(table));
+  // Admis : laissent passer le contexte du nettoyage (auth.uid() nul, request.jwt.claim.role service_role).
+  const ADMIS = new Set(['trg_p0_rbac_api_keys', 'trg_p0_rbac_candidatures', 'trg_p0_rbac_codes_secours', 'trg_p0_rbac_contrats_mission',
+    'trg_p0_rbac_contrats_travail', 'trg_bloquer_delete_doc_verifie', 'trg_invalider_preuve_siret_identite_delete',
+    'trg_p0_rbac_membres_etablissement', 'trg_dec_verrouiller_planning_candidatures', 'trg_protect_creneaux_facture',
+    'trg_p0_rbac_mission_series', 'trg_p0_rbac_presences', 'trg_p0_rbac_qr_codes', 'trg_p0_rbac_factures',
+    'trg_p0_rbac_paiements_soignant', 'trg_p0_rbac_partages_rib']);
+  const nonSupprimables = new Map(Object.entries(NON_SUPPRIMABLES).map(([t, raison]) => [raison.split(' ')[0], t]));
+  for (const [, nom, table] of declencheurs) {
+    assert.ok(ADMIS.has(nom) || nonSupprimables.get(nom) === table, `${table} : déclencheur ${nom} non classé`);
+  }
+  for (const [nom, table] of nonSupprimables) {
+    assert.ok(declencheurs.some(([, n, t]) => n === nom && t === table), `${table} : ${nom} absent du dump`);
+    assert.ok(graphe.has(table), `${table} : hors du graphe`);
+  }
+});
+
+test('m-B : résidus non supprimables comptés AVANT, jamais supprimés, reste nettoyé, message exact sans « relancer »', async t => {
+  const b = banc(t);
+  await b.run('preparer');
+  const ID = '3e9d5c81-4f50-4162-8dbe-0f9a8b7c6d5e';
+  b.residus = { bulletins_paie: [ID] };
+  b.reste = { ...ZERO, missions: 1, soignants: 1, etablissements: 1, auth: 0 };
+  await assert.rejects(b.run('nettoyer'), e => /Nettoyage L5 partiel \(run node-1\) : 1 ligne\(s\) non supprimable\(s\) dans bulletins_paie \(trg_bp_no_delete/.test(e.message)
+    && e.message.includes(`résidu de test conservé, identifiants bulletins_paie ${ID}`)
+    && e.message.includes('etablissements 1, soignants 1, missions 1') && !e.message.includes('nettoyer_run'));
+  const requetes = b.appels.map(a => a.corps?.query ?? '').filter(Boolean);
+  const iResidus = requetes.findIndex(q => q.includes('AS residus;')), iNettoyage = requetes.findIndex(q => q.includes('$l5_clean$'));
+  assert.ok(iResidus >= 0 && iResidus < iNettoyage, 'résidus comptés avant le nettoyage');
+  assert.equal(b.nettoye, true, 'le reste de la cohorte est nettoyé');
+  assert.throws(() => lireResidus({}), /illisibles/);
+  assert.throws(() => lireResidus({ residus: { ...Object.fromEntries(Object.keys(NON_SUPPRIMABLES).map(x => [x, []])), factures: ['pas-un-uuid'] } }), /illisibles \(factures\)/);
+  assert.deepEqual(lireResidus({ residus: Object.fromEntries(Object.keys(NON_SUPPRIMABLES).map(x => [x, []])) }), []);
+});
+
+test('m-B : SQL des résidus en lecture seule ; suppression ligne à ligne sur refus de clé étrangère seulement, aucun contournement', () => {
+  const m = manifeste('residus', new Date('2026-11-24T10:00:00.000Z'));
+  const r = sqlResidus(m);
+  assert.match(r, /^WITH r_missions AS/);
+  assert.doesNotMatch(r, /DELETE|UPDATE|INSERT|BEGIN/);
+  for (const t of Object.keys(NON_SUPPRIMABLES)) assert.ok(r.includes(`r_${t} AS (`) && r.includes(`'${t}', (SELECT`), t);
+  const clean = sqlNettoyer(m);
+  assert.doesNotMatch(clean, /session_replication_role|DISABLE TRIGGER|ALTER TABLE|SET LOCAL ROLE|SET ROLE/);
+  assert.doesNotMatch(clean, /EXCEPTION WHEN OTHERS/);
+  assert.match(clean, /EXCEPTION WHEN foreign_key_violation THEN/);
 });
