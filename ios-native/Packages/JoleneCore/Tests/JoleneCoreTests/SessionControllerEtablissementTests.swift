@@ -351,6 +351,79 @@ final class SessionControllerEtablissementTests: XCTestCase {
         await Self.verifierRefusDAvantLeLot5(ferme, log: production.log)
     }
 
+    /// Second parcours STAGING (25/11/2026) : un même message de connexion couvre trois causes ; le diagnostic (DEBUG,
+    /// valeur d'accessibilité de `login-error`) nomme l'étape et la nature de l'échec, sans secret.
+    func testDiagnosticNommeLEtapeEtLaNatureDuRefus() async {
+        let jete = EtabFixture(permissions: [.failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous."))])
+        let controleur = jete.controller(espace: .ouvert)
+        let etat = await controleur.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        XCTAssertEqual(etat, .signedOut(message: SessionController.sessionCheckFailedMessage))
+        let diagnostic = await controleur.diagnostic
+        XCTAssertEqual(diagnostic, "permissions:unauthorized:Votre session a expiré. Reconnectez-vous.")
+        XCTAssertFalse(diagnostic?.contains("example.invalid") ?? true, "jamais l'adresse")
+        XCTAssertFalse(diagnostic?.contains("mot-de-passe") ?? true, "jamais le mot de passe")
+
+        let inactif = EtabFixture(permissions: [permissions(role: nil, etablissementId: nil, accordees: [], success: false)])
+        let autre = inactif.controller(espace: .ouvert)
+        _ = await autre.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        let perimetre = await autre.diagnostic
+        XCTAssertEqual(perimetre, "permissions:perimetre:compteInactif", "success:false de fn_mes_permissions_etab")
+
+        let ouvert = EtabFixture().controller(espace: .ouvert)
+        guard case .readyEtablissement = await ouvert.signIn(email: "membre-1@example.invalid", password: "mot-de-passe") else {
+            return XCTFail("espace établissement attendu")
+        }
+        let aucun = await ouvert.diagnostic
+        XCTAssertNil(aucun, "aucun diagnostic sur une connexion réussie")
+
+        // Revue de #1187, m6 : un défaut de contrat nomme la clé fautive (`JoleneError.detail`), jamais sa valeur.
+        let contrat = EtabFixture(permissions: [.failure(JoleneError(.contract, "Réponse inattendue.", detail: "success"))])
+        let decodage = contrat.controller(espace: .ouvert)
+        _ = await decodage.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        let cle = await decodage.diagnostic
+        XCTAssertEqual(cle, "permissions:contract:success")
+
+        // Revue de #1187, r2 : un `success:false` porteur d'un message serveur le recopie, masqué et tronqué.
+        let uuid = "3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c"
+        let jeton = Self.jetonFabrique()
+        let brut = "Compte inactif pour \(uuid) (membre-1@example.invalid) jeton \(jeton)"
+        let refus = EtabFixture(permissions: [.success(PermissionsEtabResult(
+            success: false, role: nil, etablissementId: nil, permissions: .aucune, messageServeur: brut))])
+        let serveur = refus.controller(espace: .ouvert)
+        let etatRefus = await serveur.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        XCTAssertEqual(etatRefus, .signedOut(message: SessionController.sessionCheckFailedMessage), "comportement inchangé")
+        let message = await serveur.diagnostic
+        XCTAssertEqual(message, "permissions:refus:Compte inactif pour <uuid> (<adresse>) jeton <jeton>")
+        for secret in [uuid, "example.invalid", jeton, String(jeton.prefix(3)), "3f2b9c1e"] {
+            XCTAssertFalse(message?.contains(secret) ?? true, "jamais \(secret)")
+        }
+    }
+
+    /// Jeton en forme de JWT fabriqué à l'exécution : aucun littéral en forme de secret dans les sources.
+    private static func jetonFabrique() -> String {
+        let segment = { (texte: String) in
+            Data(texte.utf8).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return [segment(#"{"alg":"HS256"}"#), segment(#"{"sub":"x"}"#), segment("signature")].joined(separator: ".")
+    }
+
+    /// Revue de #1187, r2 : masquage avant troncature, 160 caractères au plus, jamais un fragment d'identifiant.
+    func testDiagnosticServeurMasqueAvantDeTronquer() {
+        let uuid = "3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c"
+        XCTAssertEqual(DiagnosticServeur.masquer(String(repeating: "a", count: 150) + " " + uuid),
+                       String(repeating: "a", count: 150) + " <uuid>")
+        XCTAssertEqual(DiagnosticServeur.masquer(String(repeating: "b", count: 200)), String(repeating: "b", count: 160) + "…")
+        XCTAssertFalse(DiagnosticServeur.masquer(String(repeating: "c", count: 155) + " " + uuid).contains("3f2b"))
+        let cle = ["sb", "publishable", "abcdefghijklmnop0123"].joined(separator: "_")
+        XCTAssertEqual(DiagnosticServeur.masquer("clé \(cle)\n  fin"), "clé <clé> fin")
+        // Le message serveur ne change jamais le résultat comparé.
+        XCTAssertEqual(PermissionsEtabResult(success: false, role: nil, etablissementId: nil, permissions: .aucune, messageServeur: "x"),
+                       PermissionsEtabResult(success: false, role: nil, etablissementId: nil, permissions: .aucune),
+                       "le message serveur est exclu de l'égalité")
+    }
+
     func testPortSessionNonCableNOuvreJamaisLEspace() async {
         var gateways = EtabFixture().gateways()
         gateways.etablissement = .nonCable

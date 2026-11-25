@@ -35,6 +35,43 @@ public actor SessionController {
     /// délai) alors que le SDK peut encore détenir une session : un nouvel appel à
     /// `start()` suffit, aucun mot de passe n'est requis.
     private var restoreRetryable = false
+
+    /// Diagnostic technique de la dernière résolution d'identité (étape et nature de l'échec), jamais affiché :
+    /// publié en DEBUG seulement, comme valeur d'accessibilité de `login-error`, pour qu'un XCUITest STAGING dise
+    /// quelle étape a échoué (second parcours STAGING du lot 5, 25/11/2026 : un même message couvre trois causes).
+    /// Ne contient ni adresse, ni mot de passe, ni jeton : une étape, le type d'erreur et, pour un défaut de contrat, la
+    /// clé fautive (`JoleneError.detail`), sinon le message mappé ou celui du serveur, masqué (`DiagnosticServeur`). DEBUG seulement : rien n'est calculé en Release.
+    #if DEBUG
+    public private(set) var diagnostic: String?
+    #endif
+
+    private func noter(_ etape: String, _ error: Error) {
+        #if DEBUG
+        if let jolene = error as? JoleneError {
+            diagnostic = "\(etape):\(jolene.kind):\(jolene.detail ?? DiagnosticServeur.masquer(jolene.message))"
+        } else {
+            diagnostic = "\(etape):\(type(of: error))"
+        }
+        #endif
+    }
+
+    private func noter(_ texte: String?) {
+        #if DEBUG
+        diagnostic = texte
+        #endif
+    }
+
+    /// Périmètre refusé : un `success:false` porteur d'un message serveur le recopie, masqué et tronqué
+    /// (`permissions:refus:<message>`, revue de #1187, r2) ; sinon le périmètre seul. DEBUG seulement.
+    private func noterPerimetre(_ perimetre: PerimetreEtablissement, _ reponse: PermissionsEtabResult) {
+        #if DEBUG
+        if !reponse.success, let message = reponse.messageServeur {
+            diagnostic = "permissions:refus:\(DiagnosticServeur.masquer(message))"
+        } else {
+            diagnostic = "permissions:perimetre:\(perimetre)"
+        }
+        #endif
+    }
     /// Lot 3, T4 (revue B8) : nombre d'absences de session **confirmées** depuis la création du contrôleur —
     /// restauration qui ne trouve aucune session (`restoreSession()` → nil) ou session effacée par le SDK
     /// (`AuthEvent.signedOut` avec une identité active). Seule cause, pour le push, d'une fin de session subie
@@ -149,6 +186,7 @@ public actor SessionController {
         bumpEpoch()
         activeUserId = nil
         restoreRetryable = false
+        noter(nil)
         currentState = .loading
         let signedInAt = currentEpoch
         let auth = configured.auth
@@ -158,6 +196,7 @@ public actor SessionController {
             user = try await bounded(timeout: resolutionTimeout) { try await auth.signIn(email: trimmedEmail, password: password) }
         } catch {
             guard signedInAt == currentEpoch else { return currentState }
+            noter("connexion", error)
             currentState = .signedOut(message: Self.signInMessage(for: error))
             return currentState
         }
@@ -283,6 +322,7 @@ public actor SessionController {
         do {
             reponse = try await bounded(timeout: resolutionTimeout) { try await session.permissions(etablissementId: nil) }
         } catch {
+            noter("permissions", error)
             return currentState
         }
         guard expected == currentEpoch, case let .readyEtablissement(courant) = currentState else { return currentState }
@@ -317,6 +357,7 @@ public actor SessionController {
         do {
             serverRole = try await bounded(timeout: resolutionTimeout) { try await rolePort.currentRole() }
         } catch {
+            noter("role", error) // repli sur le rôle signé ; l'étape suivante peut encore réussir
             guard currentEpoch == expected else { return nil }
             if provisional == nil {
                 return quiet ? nil : .signedOut(message: Self.sessionCheckFailedMessage)
@@ -368,12 +409,14 @@ public actor SessionController {
         do {
             reponse = try await bounded(timeout: resolutionTimeout) { try await session.permissions(etablissementId: nil) }
         } catch {
+            noter("permissions", error)
             guard currentEpoch == expected else { return nil }
             return quiet ? nil : .signedOut(message: Self.sessionCheckFailedMessage)
         }
         guard currentEpoch == expected else { return nil }
         let perimetre = EspaceResolution.perimetre(candidat: role.etablissementId, permissions: reponse)
         guard case let .confirme(etablissementId, roleEtab, permissions) = perimetre else {
+            noterPerimetre(perimetre, reponse)
             return Self.etat(pour: perimetre)
         }
 
@@ -381,6 +424,7 @@ public actor SessionController {
         do {
             profil = try await bounded(timeout: resolutionTimeout) { try await session.profil() }
         } catch {
+            noter("profil", error)
             guard currentEpoch == expected else { return nil }
             return quiet ? nil : .signedOut(message: Self.profileLoadFailedMessage)
         }

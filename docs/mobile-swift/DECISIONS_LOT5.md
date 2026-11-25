@@ -939,6 +939,54 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
       (parrainage dont E1 est filleul, favoris, conversations, scores de matching de S1) ; avec des identifiants neufs à
       chaque run, aucune n'est attendue.
 
+## Second parcours STAGING, refus à la connexion (run 45575772791, 25/11/2026)
+
+1. **Constat prouvé** (pièces de l'xcresult de la phase 1) : à l'échec, l'app affiche l'écran de connexion avec
+   `login-error` « Impossible de vérifier votre accès. Vérifiez votre connexion puis réessayez. »
+   (`SessionController.sessionCheckFailedMessage`) et le bouton « Se connecter » désactivé. L'enregistrement d'écran
+   montre « Chargement de votre espace » pendant environ 3 s après l'envoi, puis ce message : l'identifiant et le mot de
+   passe sont acceptés (sinon le message générique de connexion), le refus vient de la résolution de l'espace, pas d'un
+   délai (15 s par appel). Dans `SessionController`, ce texte n'a que trois origines : échec de `fn_get_my_role` sans
+   rôle signé (exclu : `app_metadata.role = ETABLISSEMENT` donne un rôle provisoire), erreur levée par
+   `fn_mes_permissions_etab`, ou réponse `success:false` de celle-ci (compte inactif ou sans session). Le profil, lu
+   ensuite, aurait donné « Impossible de charger votre profil… ».
+2. **Ce qui est écarté** : sur le schéma du dépôt (banc SQL local), sous le rôle `authenticated` et le JWT d'E1 (les
+   GRANT du dump sont donc éprouvés : une fonction réservée au rôle de service y est refusée), les trois lectures de la
+   session rendent ce que l'app attend (rôle `ADMIN_ETABLISSEMENT` et E1, `PROPRIETAIRE` et E1 avec toutes les
+   permissions, profil d'E1) ; le banc ne prouve rien du STAGING (données, droits, écarts au dump, Auth réel). Le décodage
+   de cette forme est couvert par `SupabaseEtabSessionGatewayTests`. En production (lecture seule du 25/11/2026), les six
+   fonctions de session (`fn_get_my_role`, `fn_mes_permissions_etab(uuid)`, `fn_mon_etablissement_complet`,
+   `fn_a_permission_etablissement(text,uuid)`, `fn_role_etablissement_courant(uuid)`, `fn_param_bool(text,boolean)`) sont
+   SECURITY DEFINER, exécutables par `authenticated` et refusées à `anon` ; la base STAGING n'a pas pu être lue. Drapeaux distants : lus après
+   l'ouverture et fail-open, hors cause. Aucun écran intermédiaire n'a été montré.
+3. **Ce qui n'est pas prouvé** : laquelle des deux causes restantes (erreur levée ou `success:false`) a eu lieu sur le
+   STAGING, et pourquoi. L'app native n'avait jamais été connectée au PostgREST du STAGING (`PORTE_LOT0.md` 1.1 : jamais
+   exécuté). Aucun journal de l'app n'est joint à l'xcresult.
+4. **Correctif en avant** : (a) pré-vol dans `staging-lot5-fixture.mjs preparer` : les trois lectures de la session
+   établissement sous le JWT d'E1, avec la clé publishable de l'app et le même corps ; un écart arrête la préparation avec
+   la cause serveur, avant le XCUITest ; (b) diagnostic DEBUG : `SessionController.diagnostic` (étape, nature, message
+   déjà mappé, jamais d'adresse ni de secret) publié par `SessionStore.diagnosticConnexion` comme valeur d'accessibilité
+   de `login-error`, jamais affiché ; le XCUITest s'arrête aussitôt sur un refus et le nomme ; (c) banc SQL : pré-vol et
+   acceptation de la candidature par E1 exécutés sur le schéma du dépôt.
+5. **Revue de #1187 (six mineurs, traités avant le run)** : diagnostic publié avant l'état (m1) ; seul un `login-error`
+   portant un diagnostic de cette connexion arrête le XCUITest, qui s'arrête aussi sur un écran de refus d'espace (m2) ;
+   diagnostic, son calcul et sa valeur d'accessibilité sous `#if DEBUG` (m3) ; pré-vol avec la clé que reçoit l'app
+   (`JOLENE_STAGING_PUBLISHABLE_KEY`, présente dans l'environnement de `preparer` par `GITHUB_ENV` ; workflow inchangé),
+   clé employée dite sans valeur, statut HTTP et code PostgREST ou Postgres brut de chaque échec, écarts classés en
+   « refus que l'app aurait aussi subi » et « contrôle plus strict que l'app » (m4) ; banc sous `SET ROLE authenticated`
+   (m5) ; défaut de décodage nommé par sa clé (`JoleneError.detail`, hors égalité, jamais affiché ; diagnostic
+   `permissions:contract:<clé>`) (m6).
+6. **Revue du delta de #1187 (r1, r2)** : r2, le refus en HTTP 200 (`{success:false, error}` ou `{error}`) n'est plus
+   classé sur une cause supposée : le pré-vol recopie, à côté de `HTTP 200`, le message `error` renvoyé par la fonction
+   (« sans message serveur » s'il n'y en a pas), et l'app le porte dans son diagnostic DEBUG
+   (`permissions:refus:<message>` pour un `success:false` ; `permissions:unknown:<message>` pour un `{error}` seul, déjà
+   recopié). Même règle des deux côtés (`messageServeur` du script, `DiagnosticServeur.masquer` de JoleneCore, sous
+   `#if DEBUG`) : jeton, clé, uuid et adresse masqués avant la troncature à 160 caractères, jamais un fragment
+   d'identifiant. Le message suit `PermissionsEtabResult.messageServeur`, hors égalité et hors encodage, jamais affiché ;
+   l'état de session est inchangé. r1, laissé tel quel : la clé fautive d'un défaut de décodage
+   (`JoleneError.detail`) est calculée aussi en Release, mais elle n'est lue que par le diagnostic, absent en Release ;
+   elle n'est donc jamais exposée.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.

@@ -192,10 +192,20 @@ public struct PermissionsEtabResult: Equatable, Sendable {
     public var role: RoleEtab?
     public var etablissementId: String?
     public var permissions: PermissionsEtab
+    /// Message `error` brut d'un refus `success:false` (revue de #1187, r2), posé par la passerelle, jamais décodé ici
+    /// ni affiché : seul le diagnostic DEBUG de la session le lit, masqué (`DiagnosticServeur`). Exclu de l'égalité et
+    /// de l'encodage, comme `JoleneError.detail`.
+    public var messageServeur: String?
 
-    public init(success: Bool, role: RoleEtab?, etablissementId: String?, permissions: PermissionsEtab) {
+    public init(success: Bool, role: RoleEtab?, etablissementId: String?, permissions: PermissionsEtab,
+                messageServeur: String? = nil) {
         self.success = success; self.role = role; self.etablissementId = etablissementId
         self.permissions = success && role != nil ? permissions : .aucune
+        self.messageServeur = messageServeur
+    }
+
+    public static func == (a: Self, b: Self) -> Bool {
+        a.success == b.success && a.role == b.role && a.etablissementId == b.etablissementId && a.permissions == b.permissions
     }
 }
 

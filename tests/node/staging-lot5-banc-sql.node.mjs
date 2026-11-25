@@ -49,7 +49,10 @@ test('moteur psql : seule la dernière instruction est relue (JSON), arrêt sur 
   assert.deepEqual(await m.executer('BEGIN; SET LOCAL a = 1; COMMIT; SELECT true AS ok;'), [{ ok: true }]);
   const script = appels[0].input;
   assert.ok(script.startsWith('\\o /dev/null\n'), script);
-  assert.ok(script.includes("\\o\nSELECT coalesce(json_agg(r), '[]') FROM (SELECT true AS ok) r;"), script);
+  assert.ok(script.includes("\\o\nSELECT coalesce(json_agg(l5_banc_ligne), '[]') FROM (SELECT true AS ok) l5_banc_ligne;"), script);
+  // Une colonne nommée comme un alias court ne masque jamais la ligne : alias réservé (job PostgreSQL 17 de #1187).
+  await m.executer('SELECT 1 AS r;');
+  assert.ok(appels.at(-1).input.includes('FROM (SELECT 1 AS r) l5_banc_ligne;'), appels.at(-1).input);
   assert.deepEqual(appels[0].args, ['-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-f', '-']);
   assert.deepEqual(await m.executer('DELETE FROM t;'), [], 'dernière instruction sans lignes');
   await assert.rejects(m.executer('SELECT boom;'), /ERROR:  boom/);

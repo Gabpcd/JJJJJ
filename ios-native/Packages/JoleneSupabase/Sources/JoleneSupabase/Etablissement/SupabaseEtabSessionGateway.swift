@@ -42,7 +42,10 @@ public struct SupabaseEtabSessionGateway: EtabSessionPort {
         guard reponse.raw.objectValue != nil, reponse.success != nil else {
             throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
         }
-        return try Self.decoder(PermissionsEtabResult.self, reponse)
+        var resultat = try Self.decoder(PermissionsEtabResult.self, reponse)
+        // Revue de #1187, r2 : le message d'un refus `success:false` suit le résultat pour le seul diagnostic DEBUG.
+        if !resultat.success { resultat.messageServeur = reponse.erreur }
+        return resultat
     }
 
     public func profil() async throws -> EtablissementProfil {
@@ -56,13 +59,27 @@ public struct SupabaseEtabSessionGateway: EtabSessionPort {
         return try Self.decoder(EtablissementProfil.self, reponse)
     }
 
-    /// Décodage tolérant du corps par le modèle de `JoleneCore` ; échec (clé exigée absente) → contrat.
+    /// Décodage tolérant du corps par le modèle de `JoleneCore` ; échec (clé exigée absente) → contrat. La clé fautive
+    /// (jamais sa valeur) est gardée en `detail`, pour le diagnostic DEBUG de la session (revue de #1187, m6).
     static func decoder<T: Decodable>(_ type: T.Type, _ reponse: RPCResponse) throws -> T {
         do {
             let donnees = try JSONEncoder().encode(reponse.raw)
             return try JSONDecoder().decode(T.self, from: donnees)
         } catch {
-            throw JoleneError(.contract, SupabaseErrorMapping.contractMessage)
+            throw JoleneError(.contract, SupabaseErrorMapping.contractMessage, detail: cleFautive(error))
         }
+    }
+
+    /// Clé d'un échec de décodage : clé absente, ou chemin de la valeur au mauvais type ; « corps » sinon.
+    static func cleFautive(_ error: Error) -> String {
+        let chemin: [CodingKey]
+        switch error as? DecodingError {
+        case let .keyNotFound(cle, contexte)?: chemin = contexte.codingPath + [cle]
+        case let .typeMismatch(_, contexte)?, let .valueNotFound(_, contexte)?, let .dataCorrupted(contexte)?:
+            chemin = contexte.codingPath
+        default: chemin = []
+        }
+        let cle = chemin.map(\.stringValue).joined(separator: ".")
+        return cle.isEmpty ? "corps" : cle
     }
 }

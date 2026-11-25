@@ -9,7 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
-  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule,
+  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -31,7 +31,7 @@ function banc(t, surcharge = {}) {
   const b = {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
-    recherches: 0, residus: {},
+    recherches: 0, residus: {}, sessionEtab: [], permissions: null,
     horloge: new Date('2026-11-24T10:00:00.000Z'),
   };
   // Recherche par étiquette : ce que le STAGING simulé contient pour le run, sans mot de passe.
@@ -82,6 +82,21 @@ function banc(t, surcharge = {}) {
     if (u.pathname === '/auth/v1/token') {
       const user = [...b.users.values()].find(x => x.email === corps.email && x.password === corps.password);
       return user ? rep({ access_token: `jwt-CANARI-${user.app_metadata.role}`, user: { id: user.id } }) : rep({ message: 'Invalid login' }, 400);
+    }
+    const e1 = () => [...b.users.values()].find(x => x.app_metadata.role === 'ETABLISSEMENT');
+    if (u.pathname === '/rest/v1/rpc/fn_get_my_role') {
+      b.sessionEtab.push({ rpc: 'role', apikey: opts.headers.apikey, auth: opts.headers.Authorization });
+      return rep({ user_id: e1().id, role: 'ADMIN_ETABLISSEMENT', etablissement_id: e1().id });
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_mes_permissions_etab') {
+      b.sessionEtab.push({ rpc: 'permissions', apikey: opts.headers.apikey, corps });
+      if (b.permissions === 'HTTP401') return rep({ code: 'PGRST301', message: 'JWT invalide' }, 401);
+      return rep(b.permissions ?? { success: true, role: 'PROPRIETAIRE', etablissement_id: e1().id, permissions: {
+        missions: true, candidatures: true, contrats: true, pointage: true, lecture: true, rh: true } });
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_mon_etablissement_complet') {
+      b.sessionEtab.push({ rpc: 'profil' });
+      return rep({ id: e1().id, nom: e1().app_metadata.load_fixture_run ? `RECETTE-L5-${e1().app_metadata.load_fixture_run}` : null });
     }
     if (u.pathname === '/rest/v1/rpc/fn_postuler_mission') {
       b.candidature = { id: '0b6a2f5e-1c2d-4e3f-9a8b-7c6d5e4f3a2b', statut: 'EN_ATTENTE' }; return rep({ success: true });
@@ -481,4 +496,88 @@ test('m-B : SQL des résidus en lecture seule ; suppression ligne à ligne sur r
   assert.doesNotMatch(clean, /session_replication_role|DISABLE TRIGGER|ALTER TABLE|SET LOCAL ROLE|SET ROLE/);
   assert.doesNotMatch(clean, /EXCEPTION WHEN OTHERS/);
   assert.match(clean, /EXCEPTION WHEN foreign_key_violation THEN/);
+});
+
+// MARK: - Second parcours STAGING (25/11/2026) : pré-vol de la session établissement (revue de #1187, m4)
+
+test('pré-vol : les trois lectures, sous le JWT d E1, avec la clé que reçoit l app ; la clé employée est dite, jamais montrée', async t => {
+  const b = banc(t, { JOLENE_STAGING_PUBLISHABLE_KEY: 'sb_publishable_CANARIcleDeLApp000000' });
+  await b.run('preparer');
+  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil']);
+  assert.ok(b.sessionEtab.every(x => !x.apikey || x.apikey === 'sb_publishable_CANARIcleDeLApp000000'), 'clé de l app');
+  assert.equal(b.sessionEtab[0].auth, 'Bearer jwt-CANARI-ETABLISSEMENT', 'JWT d E1');
+  assert.deepEqual(b.sessionEtab[1].corps, { p_etablissement_id: null }, 'même corps que SupabaseEtabSessionGateway');
+  assert.ok(b.logs.includes("Pré-vol de la session établissement d'E1 : clé de l'app (JOLENE_STAGING_PUBLISHABLE_KEY) (valeur masquée)."));
+  assert.doesNotMatch(lignesPubliques(b), /CANARIcleDeLApp/);
+  // Sans la clé de l'app : la publishable de la Management API, puis l'anon (dite comme écart).
+  assert.match(choisirCleApp({}, { publishable: 'sb_publishable_x', anon: 'a' }).origine, /Management API/);
+  assert.match(choisirCleApp({}, { anon: 'a' }).origine, /l'app ne l'emploie pas/);
+  assert.match(choisirCleApp({ JOLENE_STAGING_PUBLISHABLE_KEY: 'pas-une-cle' }, { anon: 'a' }).origine, /anon/);
+});
+
+test('pré-vol : un refus arrête la préparation, nomme l écart, son statut HTTP et son code brut', async t => {
+  for (const [permissions, motif] of [
+    [{ success: false, role: null, permissions: {} }, /refus que l'app aurait aussi subi :\n- fn_mes_permissions_etab : success false/],
+    [{ success: true, role: null, etablissement_id: null, permissions: {} }, /refus que l'app aurait aussi subi :\n- fn_mes_permissions_etab : rôle ou établissement absent/],
+    [{ success: true, role: 'PROPRIETAIRE', etablissement_id: 'x', permissions: {} }, /périmètre divergent/],
+    ['HTTP401', /fn_mes_permissions_etab : HTTP 401, code PGRST301/]]) {
+    const b = banc(t);
+    b.permissions = permissions;
+    await assert.rejects(b.run('preparer'), e => /Session établissement d'E1 refusée par le serveur \(pré-vol, clé /.test(e.message) && motif.test(e.message));
+    assert.equal(existsSync(b.env.LOT5_XCUITEST_JSON), false, 'aucune entrée de XCUITest');
+  }
+});
+
+test('pré-vol : contrôles plus stricts que l app classés à part', () => {
+  const doc = { etablissement: { id: 'e1' }, marker: 'M' };
+  const ok = { role: { corps: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'e1' } },
+    permissions: { corps: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1', permissions: { missions: true, candidatures: true, contrats: true, pointage: true, lecture: true } } },
+    profil: { corps: { id: 'e1', nom: 'M' } } };
+  assert.doesNotThrow(() => controlerSessionEtablissement(doc, ok));
+  // Repli sur le rôle signé, permissions absentes, nom : l'app ouvrirait l'espace, le parcours non.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok,
+    role: { echec: { http: 404, code: 'PGRST202', message: 'x' } },
+    permissions: { corps: { ...ok.permissions.corps, permissions: {} } }, profil: { corps: { id: 'e1', nom: 'autre' } } }),
+  e => !/refus que l'app aurait aussi subi/.test(e.message) && /contrôle plus strict que l'app/.test(e.message)
+    && /fn_get_my_role : HTTP 404, code PGRST202/.test(e.message) && /permissions absentes missions, candidatures, contrats, pointage, lecture/.test(e.message)
+    && /nom différent du marqueur/.test(e.message));
+  // Rôle serveur non établissement : l'app n'ouvre aucun espace (bloquant) ; rôle legacy ETABLISSEMENT : strict seulement.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, role: { corps: { role: 'INCONNU' } } }), /refus que l'app aurait aussi subi :\n- fn_get_my_role : rôle "INCONNU"/);
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, role: { corps: { role: 'ETABLISSEMENT', etablissement_id: null } } }),
+    e => /contrôle plus strict/.test(e.message) && !/refus que l'app/.test(e.message));
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, permissions: { corps: { ...ok.permissions.corps, role: 'PLANNING' } } }), /rôle d'équipe non servi "PLANNING"/);
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { echec: { http: 500, code: '42883', message: 'y' } } }), /fn_mon_etablissement_complet : HTTP 500, code 42883/);
+});
+
+test('pré-vol (revue de #1187, r2) : un refus en HTTP 200 recopie le message de la fonction, masqué et tronqué', () => {
+  const doc = { etablissement: { id: 'e1' }, marker: 'M' };
+  const ok = { role: { corps: { role: 'ADMIN_ETABLISSEMENT', etablissement_id: 'e1' } },
+    permissions: { corps: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1', permissions: { missions: true, candidatures: true, contrats: true, pointage: true, lecture: true } } },
+    profil: { corps: { id: 'e1', nom: 'M' } } };
+  const uuid = '3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c';
+  // Jeton et clé fabriqués à l'exécution : aucun littéral en forme de secret dans les sources (scanner de secrets).
+  const segment = (objet) => Buffer.from(JSON.stringify(objet)).toString('base64url');
+  const jwt = [segment({ alg: 'HS256' }), segment({ sub: 'x' }), Buffer.from('signature').toString('base64url')].join('.');
+  const cle = ['sb', 'publishable', 'abcdefghijklmnop0123'].join('_');
+  const brut = `Compte inactif pour ${uuid} (membre-1@example.invalid) jeton ${jwt} clé ${cle}`;
+  const message = (corps) => { try { controlerSessionEtablissement(doc, { ...ok, permissions: { corps } }); } catch (e) { return e.message; } return ''; };
+  const m = message({ success: false, error: brut });
+  assert.match(m, /refus que l'app aurait aussi subi :\n- fn_mes_permissions_etab : success false, HTTP 200, message serveur « Compte inactif pour <uuid> \(<adresse>\) jeton <jeton> clé <clé> »/);
+  for (const secret of [uuid, 'example.invalid', jwt, jwt.slice(0, 3), cle, cle.slice(0, 15), '3f2b9c1e']) assert.ok(!m.includes(secret), `jamais ${secret}`);
+  // `{error}` seul (sans success) : même statut et même message ; un corps sans message le dit.
+  assert.match(message({ error: 'Etablissement introuvable' }), /success null, HTTP 200, message serveur « Etablissement introuvable »/);
+  assert.match(message({ success: false }), /success false, HTTP 200, sans message serveur/);
+  // Masquage avant troncature : 160 caractères au plus, jamais un fragment d'uuid.
+  const long = messageServeur(`${'a'.repeat(150)} ${uuid}`);
+  assert.equal(long, `${'a'.repeat(150)} <uuid>`);
+  assert.equal(messageServeur('b'.repeat(200)), `${'b'.repeat(160)}…`);
+  assert.equal(messageServeur(`${'c'.repeat(155)} ${uuid}`).includes('3f2b'), false);
+  // Profil et rôle en `{error}` HTTP 200 : nommés avec le message.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { corps: { error: `Etablissement ${uuid} introuvable` } } }),
+    /fn_mon_etablissement_complet : HTTP 200, message serveur « Etablissement <uuid> introuvable »/);
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, role: { corps: { error: 'Non authentifié' } } }),
+    e => /contrôle plus strict/.test(e.message) && /fn_get_my_role : HTTP 200, message serveur « Non authentifié »/.test(e.message));
+  // Un échec HTTP recopie aussi le message masqué.
+  assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { echec: { http: 400, code: 'P0001', message: `refus ${uuid}` } } }),
+    e => /HTTP 400, code P0001 — refus <uuid>/.test(e.message) && !e.message.includes(uuid));
 });

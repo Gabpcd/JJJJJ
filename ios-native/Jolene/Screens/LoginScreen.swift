@@ -19,6 +19,10 @@ struct LoginScreen: View {
     /// Reste de L1-T10 : « Mot de passe oublié ? » (`login-forgot`, `PageConnexion.tsx` l.339-346) ouvre la demande
     /// de lien (`ResetRequestSheet`, présentée par la racine).
     var motDePasseOublie: (() -> Void)? = nil
+    /// DEBUG seulement : diagnostic technique de la connexion refusée (`SessionStore.diagnosticConnexion`), posé comme
+    /// valeur d'accessibilité de `login-error` pour les XCUITest STAGING ; jamais affiché (second parcours STAGING du
+    /// lot 5, 25/11/2026).
+    var diagnostic: String? = nil
     let submit: (String, String) async -> Void
 
     @State private var password = ""
@@ -27,6 +31,7 @@ struct LoginScreen: View {
     @FocusState private var focusedField: Field?
 
     private enum Field { case email, password }
+
 
     private var canSubmit: Bool {
         !email.trimmingCharacters(in: .whitespaces).isEmpty && !password.isEmpty && !isSubmitting
@@ -56,6 +61,7 @@ struct LoginScreen: View {
                             .background(JoleneColor.rose100)
                             .clipShape(RoundedRectangle(cornerRadius: JoleneRadius.field))
                             .accessibilityIdentifier("login-error")
+                            .modifier(DiagnosticConnexionDebug(diagnostic: diagnostic))
                     }
                     if let retryRestore {
                         JoleneButton("Réessayer sans mot de passe", style: .secondary, isLoading: isRetrying) {
@@ -144,5 +150,19 @@ struct LoginScreen: View {
             isSubmitting = false
             password = ""
         }
+    }
+}
+
+/// Valeur d'accessibilité DEBUG de `login-error` (diagnostic de la connexion refusée) ; en Release, la vue est rendue
+/// telle quelle, sans valeur posée (revue de #1187, m3).
+private struct DiagnosticConnexionDebug: ViewModifier {
+    let diagnostic: String?
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.accessibilityValue(diagnostic ?? "")
+        #else
+        content
+        #endif
     }
 }

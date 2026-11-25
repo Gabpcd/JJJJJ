@@ -218,10 +218,26 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
         let submit = element("login-submit")
         require("Le bouton de connexion est activé") { submit.isEnabled }
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
-        toucherSeConnecter(submit, "L'espace établissement STAGING est prêt", timeout: 90) {
-            self.tabBarExists && self.containerVisible(self.element("etab-accueil-screen"))
+        // Second parcours STAGING (25/11/2026) : l'attente s'arrête aussi sur un refus de connexion, nommé avec son
+        // diagnostic DEBUG (`login-error`, valeur d'accessibilité : étape et nature de l'échec, sans secret), ou sur un
+        // écran de refus d'espace. Revue de #1187, m2 : seule une erreur portant un diagnostic compte — il n'est publié
+        // que par cette connexion, avant l'état (m1) ; une erreur déjà affichée avant l'envoi (restauration échouée) n'a
+        // pas de diagnostic et n'arrête rien.
+        let erreur = element("login-error")
+        let refuse = { erreur.exists && !((erreur.value as? String) ?? "").isEmpty }
+        let ecransDeRefus = ["access-blocked", "etab-scope-divergent", "etab-acces-refuse"]
+        toucherSeConnecter(submit, "L'espace établissement STAGING est prêt, ou la connexion est refusée", timeout: 90) {
+            (self.tabBarExists && self.containerVisible(self.element("etab-accueil-screen"))) || refuse()
+                || ecransDeRefus.contains { self.element($0).exists }
         }
-        XCTAssertFalse(element("login-error").exists, "aucune erreur de connexion")
+        if refuse() {
+            XCTFail("Connexion STAGING refusée : « \(erreur.label) » — diagnostic : \((erreur.value as? String) ?? "absent")")
+            return
+        }
+        if let ecran = ecransDeRefus.first(where: { element($0).exists }) {
+            XCTFail("Espace STAGING refusé : écran \(ecran) (« \(element(ecran).label) »)")
+            return
+        }
     }
 
     private func ouvrirMissions(filtre: String, carte id: String) {

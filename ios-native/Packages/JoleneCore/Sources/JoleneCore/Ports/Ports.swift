@@ -8,8 +8,18 @@ public struct JoleneError: Error, Equatable, Sendable, LocalizedError {
     }
     public var kind: Kind
     public var message: String
-    public init(_ kind: Kind, _ message: String) { self.kind = kind; self.message = message }
+    /// Précision technique, jamais affichée ni comparée (lot 5, second parcours STAGING) : par exemple la clé d'un
+    /// défaut de décodage, reprise par le diagnostic DEBUG de `SessionController`. Aucune valeur de donnée.
+    public var detail: String?
+    public init(_ kind: Kind, _ message: String, detail: String? = nil) {
+        self.kind = kind; self.message = message; self.detail = detail
+    }
     public var errorDescription: String? { message }
+
+    /// Égalité sur ce qui est montré (nature et message) ; `detail` n'en fait pas partie.
+    public static func == (gauche: JoleneError, droite: JoleneError) -> Bool {
+        gauche.kind == droite.kind && gauche.message == droite.message
+    }
 }
 
 public protocol ClockPort: Sendable {
