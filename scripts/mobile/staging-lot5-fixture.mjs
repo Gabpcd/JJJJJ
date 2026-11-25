@@ -192,7 +192,7 @@ const authDuRun = (m, qui, role) => `u.id = ${uuid(m[qui].id)} AND u.email = ${q
 export function sqlPreparer(m) {
   const e = m.etablissement, s = m.soignant;
   return `${entete(m)}DO $l5_seed$
-DECLARE v_code text; v_essais integer := 0;
+DECLARE v_etat record;
 BEGIN
   IF auth.uid() IS NOT NULL OR auth.role() IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'Contexte service requis (L5)'; END IF;
   IF NOT EXISTS (SELECT 1 FROM auth.users u WHERE ${authDuRun(m, 'etablissement', 'ETABLISSEMENT')}
@@ -253,19 +253,23 @@ BEGIN
   VALUES (${uuid(m.m1.creneauId)}, ${uuid(m.m1.id)}, ${q(m.m1.debut)}::timestamptz, ${q(m.m1.fin)}::timestamptz, false, 1, 'PREVISIONNEL'),
          (${uuid(m.m2.creneauId)}, ${uuid(m.m2.id)}, ${q(m.m2.debut)}::timestamptz, ${q(m.m2.fin)}::timestamptz, false, 1, 'PREVISIONNEL');
 
-  -- Code de pointage : six chiffres, unique parmi les missions actives (même règle que fn_scanner_code_pointage).
-  LOOP
-    v_code := lpad(floor(random() * 1000000)::text, 6, '0');
-    EXIT WHEN NOT EXISTS (SELECT 1 FROM public.missions WHERE code_pointage_actif = v_code AND statut IN ('ASSIGNEE', 'EN_COURS'));
-    v_essais := v_essais + 1;
-    IF v_essais > 50 THEN RAISE EXCEPTION 'Code de pointage L5 introuvable'; END IF;
-  END LOOP;
+  -- Assignation par l'aide de test seule (CLAUDE.md, jamais d'UPDATE direct). Le code de pointage n'est PAS fourni :
+  -- trg_zz_geler_mission (fn_geler_mission_a_assignation) gèle la mission au passage OUVERTE → ASSIGNEE et génère alors
+  -- code_pointage_actif, prochain_type_scan et nb_scans, en écrasant toute valeur passée (premier run STAGING, 25/11/2026).
+  -- Le code est relu ensuite (sqlCode), jamais fixé ici.
   PERFORM public.fn_test_update_mission(${uuid(m.m2.id)}, jsonb_build_object('statut', 'ASSIGNEE',
-    'soignant_assigne_id', ${q(s.id)}, 'type_contrat_applique', 'SALARIE', 'code_pointage_actif', v_code,
-    'prochain_type_scan', 'OUVERTURE', 'nb_scans', 0));
-  IF NOT EXISTS (SELECT 1 FROM public.missions WHERE id = ${uuid(m.m2.id)} AND statut = 'ASSIGNEE'
-       AND soignant_assigne_id = ${uuid(s.id)} AND type_contrat_applique = 'SALARIE' AND code_pointage_actif = v_code) THEN
-    RAISE EXCEPTION 'Assignation de M2 non appliquée (fn_test_update_mission)';
+    'soignant_assigne_id', ${q(s.id)}, 'type_contrat_applique', 'SALARIE'));
+  SELECT statut::text AS statut, soignant_assigne_id, type_contrat_applique::text AS contrat, code_pointage_actif AS code,
+         prochain_type_scan, fige_le INTO v_etat
+    FROM public.missions WHERE id = ${uuid(m.m2.id)};
+  IF v_etat.statut IS DISTINCT FROM 'ASSIGNEE' OR v_etat.soignant_assigne_id IS DISTINCT FROM ${uuid(s.id)}
+     OR v_etat.contrat IS DISTINCT FROM 'SALARIE' OR coalesce(v_etat.code, '') !~ '^[0-9]{6}$'
+     OR v_etat.prochain_type_scan IS DISTINCT FROM 'OUVERTURE' THEN
+    -- Champ par champ, sans jamais recopier le code.
+    RAISE EXCEPTION 'Assignation de M2 non appliquée (fn_test_update_mission) : statut %, soignant attendu %, contrat %, code %, prochain scan %, gel %',
+      v_etat.statut, v_etat.soignant_assigne_id IS NOT DISTINCT FROM ${uuid(s.id)}, v_etat.contrat,
+      CASE WHEN coalesce(v_etat.code, '') ~ '^[0-9]{6}$' THEN 'six chiffres' ELSE 'absent ou invalide' END,
+      v_etat.prochain_type_scan, v_etat.fige_le IS NOT NULL;
   END IF;
 
   -- Contrat déjà signé, inséré côté service : aucun OTP, aucun SMS (le compte TEST coupe aussi e-mail et push).
