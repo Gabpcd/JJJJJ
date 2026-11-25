@@ -1174,9 +1174,8 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
 
 ## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
 
-Branche `lot5/l5-t14-ouverture-production`, partie de `main` (`4466ed1c`). Préparée en local, sans push : la PR attend
-les trois preuves du point 4, dont la validation juridique de la fondatrice (HARD STOP n°4), qu'aucune revue de code ne
-remplace.
+Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`b4df9e1b`). La PR n'est pas mergeable tant que le
+parcours STAGING n'est pas vert et que la PR #1188 (corrections juridiques du point 4) n'est pas mergée.
 
 1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
    staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
@@ -1205,14 +1204,25 @@ remplace.
    forcé, fichiers absents, CLI sur un arbre extrait).
 4. **Preuves exigées avant merge** :
    - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6) sur le commit de `main` dont
-     part la PR. **État au 25/11/2026 : NON VERT.** Deux runs ont échoué ; un correctif est en cours dans une autre
-     branche. Aucun run de cette tranche.
-   - **Validation juridique explicite de la fondatrice** (HARD STOP n°4) sur les points instruits pour l'ouverture : les
-     cinq questions oui/non (publication native limitée au salariat ; acceptation d'un étudiant aide-soignant sur le
-     site seulement ; ouverture sans l'alerte de requalification ; missions de médecin sur le site seulement ; libellé
-     « Taux horaire brut * (€/h) ») et la question du plancher du taux salarié (11,65 €/h affiché et validé le 24/11,
-     inférieur au SMIC horaire brut de 12,31 € en vigueur depuis le 1er juin 2026 ; le serveur n'applique aucun
-     plancher). Sources et options : corps de la PR, section « Juridique — HARD STOP n°4 ». **Non obtenue.**
+     part la PR. **État au 25/11/2026 : TOUJOURS NON VERT.** Trois runs ont échoué. Le troisième (45677331174, `main`
+     `b95c84ff`) a nommé la cause côté app : le pré-vol serveur est passé, mais l'app reçoit « non autorisé » sur
+     `fn_mes_permissions_etab` juste après une connexion acceptée (diagnostic `permissions:unauthorized`). La cause est
+     en cours d'instruction dans une autre branche ; un défaut qui toucherait aussi la production n'est ni prouvé ni
+     exclu. **T14 ne se merge pas avant un parcours vert.**
+   - **Validation juridique de la fondatrice** (HARD STOP n°4) : **validé le 25/11/2026**. À une liste de neuf points
+     juridiques avec recommandations, la fondatrice a répondu « Oui, tout valider » (réponse rapportée par la session
+     de coordination, non relue ici). Pour T14, cela couvre, mot pour mot de la liste :
+     - « Dans l'app, un établissement ne publie que des missions salariées ; le libéral reste sur le site » ;
+     - « L'acceptation d'un étudiant aide-soignant se fait sur le site seulement » ;
+     - « L'iPhone ouvre sans l'alerte de requalification en CDI, qui est à réécrire d'abord sur le site » ;
+     - « Les missions de médecins et d'internat restent sur le site seulement » ;
+     - « Le libellé “Taux horaire brut * (€/h)” est conservé » ;
+     - « “Plafond légal 48 h/semaine” : le garder tel quel ».
+     Les trois autres points (taux minimal de 12,31 €/h, refusé en dessous ; référence DPAE L1221-10 ; mentions
+     « Signature électronique simple (art. 1366-1367 Code civil) ») sont appliqués par la PR #1188 : **T14 ne se merge
+     pas avant #1188.** Restent hors validation : le règlement eIDAS (non relu à la source), l'articulation entre la
+     fenêtre de signature de 72 h et la transmission du CDD (L1242-13), les CGU, le modèle de contrat et le mandat de
+     facturation, qui ne sont pas modifiés. Sources : corps de la PR, section « Juridique — HARD STOP n°4 ».
    - **Drapeaux** : les sept clés `ios_natif_etab_{accueil,missions,publier,presences,pointage,messages,compte}_actif`
      présentes et à 1 en production, et `fn_param_bool` exécutable par `authenticated`. Lues le 25/11/2026 par une
      requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
@@ -1270,5 +1280,5 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
    de `fn_generer_qr_mission` ; consigné dans `PORTE_LOT5.md` seulement avec son accord explicite.
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
-11. **T14 (ouverture en production)** : validation juridique explicite (cinq questions oui/non et plancher du taux
-    salarié face au SMIC, section T14, point 4) et go de merge après le parcours STAGING vert.
+11. **T14 (ouverture en production)** : validation juridique obtenue le 25/11/2026 (section T14, point 4) ; go de
+    merge après le parcours STAGING vert et le merge de #1188.
