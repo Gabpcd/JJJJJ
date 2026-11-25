@@ -16,6 +16,8 @@
  *      dump l'impose), puis la dernière définition de chaque fonction `private.*` qu'il référence, relue dans
  *      `supabase/migrations/` ; les instructions qui échouent faute d'objet hors du dépôt sont comptées, jamais
  *      ignorées en silence : le banc exige que toutes les tables et fonctions touchées par la cohorte soient chargées ;
+ *      enfin les lignes de `parametres_systeme` sans lesquelles un verrou du dump refuse tout (`PARAMETRES_REQUIS`),
+ *      relues dans la migration qui les pose ;
  *   3. le parcours complet de la cohorte avec le SQL EXACT du script : préparation (déclencheurs réels), candidature et
  *      scans sous JWT simulé, relectures, résidus, nettoyage par graphe, compte final à 0 ; puis une cohorte PARTIELLE
  *      (comptes Auth seuls, comme après l'échec du premier run) retrouvée par étiquette et nettoyée ; enfin une cohorte
@@ -139,6 +141,29 @@ export function objetsPrives(racine = RACINE) {
 }
 
 /**
+ * Paramètres sans lesquels un verrou du dump refuse toute écriture (fail-closed) : le dump ne porte pas de données,
+ * la ligne est relue dans la migration qui la pose (dernière insertion de la clé), jamais recopiée ici. Exemple :
+ * `taux_horaire_minimum_salarie`, sans lequel les déclencheurs `trg_zz_taux_minimum_salarie_*` (migration
+ * 20261125120000, entrés au dump au re-baseline du 25/11/2026) refusent toute mission SALARIE ou TOUS.
+ */
+export const PARAMETRES_REQUIS = ['taux_horaire_minimum_salarie'];
+
+export function parametresRequis(racine = RACINE, cles = PARAMETRES_REQUIS) {
+  const trouves = new Map();
+  const dossier = join(racine, 'supabase/migrations');
+  for (const fichier of readdirSync(dossier).filter(f => f.endsWith('.sql')).sort()) {
+    for (const brute of decouper(readFileSync(join(dossier, fichier), 'utf8'))) {
+      const instr = sansCommentairesDeTete(brute);
+      if (!/^INSERT\s+INTO\s+"?public"?\."?parametres_systeme"?\s*\(/i.test(instr)) continue;
+      for (const cle of cles) if (instr.includes(`'${cle}'`)) trouves.set(cle, instr);
+    }
+  }
+  const absents = cles.filter(c => !trouves.has(c));
+  if (absents.length) throw new Error(`Banc L5 : paramètre(s) requis introuvable(s) dans supabase/migrations : ${absents.join(', ')}`);
+  return [...trouves.values()];
+}
+
+/**
  * Charge le schéma : `executer(sql)` lève sur une erreur. Rend le nombre d'instructions et les échecs (par motif).
  */
 export async function charger(executer, { racine = RACINE, journal = () => {}, lot } = {}) {
@@ -149,7 +174,7 @@ export async function charger(executer, { racine = RACINE, journal = () => {}, l
   // (objets qui dépendent de public) ; corps de fonction non validés à la création, comme le dump l'impose.
   const instructions = [...decouper(SOCLE), 'SET check_function_bodies = false', 'SET search_path = public, extensions',
     ...prives.structure, ...prives.fonctions, ...dump, ...prives.structure, ...prives.fonctions,
-    'RESET check_function_bodies', 'SET search_path = public, extensions'];
+    ...parametresRequis(racine), 'RESET check_function_bodies', 'SET search_path = public, extensions'];
   const executerLot = lot ?? (async liste => {
     const echecs = [];
     let passe = 0;
@@ -165,9 +190,12 @@ export async function charger(executer, { racine = RACINE, journal = () => {}, l
   const [verif] = await executer(`SELECT
     (SELECT coalesce(json_agg(t), '[]') FROM unnest(ARRAY[${requis.map(t => `'${t}'`).join(', ')}]) t WHERE to_regclass(t) IS NULL) AS tables,
     (SELECT coalesce(json_agg(f), '[]') FROM unnest(ARRAY[${REQUIS.fonctions.map(f => `'${f}'`).join(', ')}]) f
-       WHERE NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = f)) AS fonctions;`);
+       WHERE NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = f)) AS fonctions,
+    (SELECT coalesce(json_agg(c), '[]') FROM unnest(ARRAY[${PARAMETRES_REQUIS.map(c => `'${c}'`).join(', ')}]::text[]) c
+       WHERE NOT EXISTS (SELECT 1 FROM public.parametres_systeme p WHERE p.cle = c)) AS parametres;`);
   const lire = v => (typeof v === 'string' ? JSON.parse(v) : v) ?? [];
-  const manquants = [...lire(verif?.tables), ...lire(verif?.fonctions).map(f => `${f}()`)];
+  const manquants = [...lire(verif?.tables), ...lire(verif?.fonctions).map(f => `${f}()`),
+    ...lire(verif?.parametres).map(c => `parametres_systeme.${c}`)];
   if (manquants.length) throw new Error(`Banc L5 : objets requis non chargés : ${manquants.join(', ')}`);
   return { instructions: instructions.length, passe, echecs };
 }

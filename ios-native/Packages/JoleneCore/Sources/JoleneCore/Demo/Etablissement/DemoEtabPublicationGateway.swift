@@ -66,7 +66,7 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
     static let messageIndisponible = "La création de la mission est temporairement indisponible."
     /// `fn_creer_mission_multi_jours` (l.27462), texte serveur.
     static let messagePasse = "La mission ne peut pas commencer dans le passé."
-    /// `fn_valider_creneaux_mission_json` (l.65708), texte serveur.
+    /// `fn_valider_creneaux_mission_json` (l.65723), texte serveur.
     static let messageAucunCreneau = "Ajoutez au moins un créneau travaillé."
 
     private let etat: DemoEtabEtatPublication
