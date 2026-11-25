@@ -603,7 +603,9 @@ SELECT true AS nettoye;`;
 /** Objets marqués du run, lecture seule : tous à 0 après `nettoyer`. `journaux_audit` (immuable) n'est pas compté. */
 export function sqlCompter(m) {
   const e = m.etablissement ?? {}, s = m.soignant ?? {};
-  const lesMissions = `(SELECT coalesce(array_agg(id), '{}') FROM public.missions WHERE etablissement_id = ${u(e.id)}
+  // `ARRAY(sous-requête)` : un tableau (vide si rien), jamais `ANY((SELECT array_agg …))`, qui compare chaque LIGNE de
+  // la sous-requête (ici un tableau) à un uuid (42883, premier run STAGING du 25/11/2026).
+  const lesMissions = `ARRAY(SELECT id FROM public.missions WHERE etablissement_id = ${u(e.id)}
       OR id = ANY(${missions(m)}) OR left(intitule, ${debutIntitule(m.marker).length}) = ${q(debutIntitule(m.marker))})`;
   return `SELECT
   (SELECT count(*)::integer FROM auth.users WHERE id = ANY(${ids(m)}) OR raw_app_meta_data->>'load_fixture_run' = ${q(m.runId)}
