@@ -2,7 +2,8 @@ import XCTest
 
 /// Pool urgence et exclusions (L4-T11) en démonstration, sur iPhone, iPad portrait et iPad paysage :
 /// - lien `/soignant/pool-urgence` → écran natif (fixture `demo-pool-urgence.json` : pool inactif, rayon 30 km) ;
-///   activer → rayon 15 km relu (la mission à 22 km sort du pool) ; texte d'engagement et SMS verbatim affichés ;
+///   activer → rayon réduit entre 9 et 21 km, la valeur atteinte relue exactement (la mission à 22 km sort du pool,
+///   celles à 4,2 et 8 km restent) ; texte d'engagement et SMS verbatim affichés ;
 /// - « J'accepte » → récapitulatif du planning exact → « Confirmer mon acceptation urgente » → statut « En attente de
 ///   validation étab » relu ; la mission au contrat `TOUS` demande un choix : message et bouton vers le détail ;
 /// - détail d'une mission démo → « Ne plus travailler ensemble » → confirmation → Profil › « Établissements exclus » :
@@ -14,6 +15,8 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
         static let proche = "demo-mission-001"
         static let tous = "demo-mission-urgence-tous"
         static let lointaine = "demo-mission-021"
+        /// Rayon accepté après le geste : au-dessus de 8 km (`tous`), au-dessous de 22 km (`lointaine`).
+        static let rayonPlage = 9...21
         static let missionDetail = "demo-mission-002"
         static let etablissementDetail = "demo-etab-2"
     }
@@ -43,16 +46,27 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
         XCTAssertTrue(element("pool-sms").exists)
         record("\(proofPrefix)-pool-actif")
 
-        // Rayon 15 km : envoyé à la fin du geste, puis relu.
+        // Rayon réduit : envoyé à la fin du geste, puis relu. La plage 9-21 km garde les missions à 4,2 et 8 km (acceptation
+        // et choix de contrat, plus bas) et retire celle à 22 km. Aucune valeur exacte n'est visée : sous iOS 26.2, le geste
+        // d'`adjust` n'est pas fidèle (run 45626727902, `reglerCurseur(_:dansLaPlage:)`). La valeur réellement atteinte N
+        // est exigée dans la plage, puis relue EXACTEMENT et tenue.
         let curseur = app.sliders["pool-rayon"]
         scrollTo(curseur, in: ecran, downward: false)
         require("Le curseur du rayon est atteignable") { self.visible(curseur) }
-        // Geste puis pas d'accessibilité jusqu'à 15 km (le geste seul a posé 14 km, run 45527404765).
-        reglerCurseur(curseur, sur: 15, minimum: 5, maximum: 50)
-        require("Le rayon 15 km est relu", timeout: 20) {
-            self.element("pool-rayon-valeur").label.contains("15 km")
-                && !self.element("pool-mission-\(Attendus.lointaine)").exists
+        let atteint = reglerCurseur(curseur, dansLaPlage: Attendus.rayonPlage, minimum: 5, maximum: 50)
+        guard let rayon = atteint, Attendus.rayonPlage.contains(rayon) else {
+            XCTFail("Le rayon atteint (\(atteint.map(String.init) ?? "illisible")) est entre 9 et 21 km")
+            return
         }
+        let relu = {
+            self.element("pool-rayon-valeur").label.hasSuffix(" \(rayon) km")
+                && self.valeurEntiere(curseur) == rayon
+                && !self.element("pool-mission-\(Attendus.lointaine)").exists
+                && self.element("pool-mission-\(Attendus.proche)").exists
+                && self.element("pool-mission-\(Attendus.tous)").exists
+        }
+        require("Le rayon \(rayon) km est relu", timeout: 20, condition: relu)
+        requireAbsence("Le rayon \(rayon) km reste relu (aucun recalage après la relecture)", pendant: 2) { !relu() }
         record("\(proofPrefix)-pool-rayon")
 
         // Acceptation rapide : récapitulatif du planning exact, statut relu.

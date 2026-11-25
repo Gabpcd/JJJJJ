@@ -248,11 +248,25 @@ final class DemoMessagerieTests: JoleneUITestCase {
         return ecran
     }
 
+    /// Retour arrière par le bouton retour de la barre, jamais par « le premier bouton d'une barre ». Ce premier bouton
+    /// n'est pas toujours le retour : en local (iOS 18.6, code de `main`),
+    /// `testArchiveeBlocageEtSignalement` touchait `nav-messages` au lieu du retour, et `messagerie-screen` restait affiché.
+    /// Ordre de choix : `BackButton` s'il est touchable, sinon le bouton touchable le plus à gauche des barres.
     private func retour(depuis identifiant: String) {
-        let back = app.navigationBars.buttons.firstMatch
-        require("Le bouton retour est disponible") { self.visible(back) }
-        back.tap()
+        let back = boutonRetour()
+        require("Le bouton retour est disponible") { back().map { self.visible($0) && $0.isHittable } ?? false }
+        back()?.tap()
         require("L'écran \(identifiant) est retiré") { !self.element(identifiant).exists }
+    }
+
+    private func boutonRetour() -> () -> XCUIElement? {
+        {
+            let nomme = self.app.navigationBars.buttons["BackButton"]
+            if nomme.exists, nomme.isHittable { return nomme }
+            return self.app.navigationBars.buttons.allElementsBoundByIndex
+                .filter { $0.exists && $0.isHittable && !$0.frame.isEmpty }
+                .min { $0.frame.minX < $1.frame.minX }
+        }
     }
 
     /// Conteneur de défilement : la `ScrollView` portant l'identifiant, sinon la première correspondance.
@@ -262,8 +276,21 @@ final class DemoMessagerieTests: JoleneUITestCase {
     }
 
     /// Profil remis à sa racine (la messagerie y est empilée), puis sentinelle réseau.
+    ///
+    /// Un fil quitté clavier ouvert est d'abord fermé par son retour. Sur iPhone, le clavier recouvre la barre d'onglets.
+    /// Run 45626727902 (main `be5b0d49`, iOS 26.2), `testSuiviDeLaFinDuFilClavierEnvoiEtHistoireRelue` :
+    /// - le toucher de l'onglet Profil (« person ») avait un point calculé {-1, -1} et tombait sous le clavier ;
+    /// - l'alerte système « Enable Dictation? » s'ouvrait, et le gestionnaire d'interruption par défaut touchait
+    ///   « About Siri, Dictation & Privacy… » ;
+    /// - le retour suivant n'avait plus d'effet, et `chat-screen` restait affiché (l.255).
+    /// En iPad portrait, les onglets sont hors du clavier et le même test passait.
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        if app.keyboards.firstMatch.exists, element("chat-screen").exists {
+            retour(depuis: "chat-screen")
+        }
+        let profil = tabButton("tab-profil", label: "Profil")
+        require("L'onglet Profil est touchable") { profil.isHittable && !self.app.keyboards.firstMatch.exists }
+        profil.tap()
         for ecran in ["chat-screen", "messagerie-screen"] where element(ecran).exists {
             retour(depuis: ecran)
         }
