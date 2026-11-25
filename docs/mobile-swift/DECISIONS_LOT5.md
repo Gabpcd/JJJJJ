@@ -916,6 +916,28 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
       même empreinte serveur.
     - m4 (aucune approbation imposée par `native-staging-auth`) : constat consigné au point 7, inchangé.
     - m5 (textes en attente visibles en STAGING) : voir « En attente », point 4, précisé ce jour.
+11. **Tour 2 de la revue de #1183 (25/11/2026)** :
+    - B1 : la pagination de `scripts/ci/wait-for-supabase-deploy.mjs` est retirée (revert). L'API compare ne sert les
+      fichiers qu'en page 1, 300 au plus ; `page`/`per_page` ne paginent que les commits, et le correctif aurait laissé
+      passer une migration au-delà du 300ᵉ fichier. Le faux rouge des pushes de 300 fichiers et plus reste un défaut
+      connu, suivi dans une PR dédiée.
+    - m-A : les intitulés des missions du run sont comparés sur leur début exact `RECETTE-L5-<run> · ` : le run `N-1` ne
+      reconnaît plus les missions de `N-10`.
+    - m-B : six tables du graphe ne sont pas supprimables dans le contexte du nettoyage (`NON_SUPPRIMABLES` :
+      `bulletins_paie`, `factures` liées à un avoir, `factures_honoraires_documents`,
+      `factures_honoraires_rectifications`, `invoice_audit_log`, `mandats_facturation_signatures`). Leurs lignes de la
+      cohorte sont comptées avant toute suppression et jamais supprimées ; le reste est nettoyé, et un parent encore
+      référencé est conservé. Le message nomme le résidu et ses identifiants, sans proposer de relance. Aucun
+      déclencheur n'est contourné. **Lecture du dump** : le parcours lui-même n'écrit dans aucune de ces tables
+      (acceptation salariée : candidature, mission, contrat, notifications ; scans : présence, créneaux effectifs,
+      scans ; validation : présence, note). Une seule voie y mène : le cron `auto-transitions-missions`
+      (`fn_auto_transitions_missions`, toutes les 10 min en production) passe M2 `EN_COURS` à `TERMINEE` quinze minutes
+      après la fin de son créneau, et `trg_auto_creer_bulletin_paie` crée alors un bulletin de paie (mission salariée).
+      Si ce cron est actif en STAGING et que la phase 2, les relectures et le nettoyage dépassent ces quinze minutes,
+      un bulletin de test restera, nommé par le message.
+    - m-C : la suppression descend de la cohorte. Elle emporte aussi les lignes d'autres comptes qui pointent vers elle
+      (parrainage dont E1 est filleul, favoris, conversations, scores de matching de S1) ; avec des identifiants neufs à
+      chaque run, aucune n'est attendue.
 
 ## En attente de Gabrielle
 
