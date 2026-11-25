@@ -1,6 +1,6 @@
 vi.mock('@/hooks/useRole', () => ({ useRole: () => ({ parcours: null }) }));
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FormulaireMission } from './FormulaireMission';
@@ -134,7 +134,7 @@ describe('FormulaireMission — parcours de création critique', () => {
     const etablissement = promesseControlee<ReponseRpc>();
     const modeExercice = promesseControlee<ReponseRpc>();
     mocks.rpc.mockImplementation((fonction: string) => {
-      if (fonction === 'fn_taux_horaire_minimum_salarie') return Promise.resolve({ data: 12.31, error: null });
+      if (fonction === 'fn_param_bool') return Promise.resolve({ data: false, error: null });
       if (fonction === 'fn_mon_etablissement_complet') {
         return etablissement.promise;
       }
@@ -225,7 +225,7 @@ describe('FormulaireMission — parcours de création critique', () => {
     const etablissement = promesseControlee<ReponseRpc>();
     const modeExercice = promesseControlee<ReponseRpc>();
     mocks.rpc.mockImplementation((fonction: string) => {
-      if (fonction === 'fn_taux_horaire_minimum_salarie') return Promise.resolve({ data: 12.31, error: null });
+      if (fonction === 'fn_param_bool') return Promise.resolve({ data: false, error: null });
       if (fonction === 'fn_mon_etablissement_complet') {
         return etablissement.promise;
       }
@@ -262,7 +262,7 @@ describe('FormulaireMission — parcours de création critique', () => {
 
   it('explique le verrou de vérification sans afficher le code serveur brut', async () => {
     mocks.rpc.mockImplementation((fonction: string) => {
-      if (fonction === 'fn_taux_horaire_minimum_salarie') return Promise.resolve({ data: 12.31, error: null });
+      if (fonction === 'fn_param_bool') return Promise.resolve({ data: false, error: null });
       if (fonction === 'fn_mon_etablissement_complet') {
         return Promise.resolve({ data: etablissementComplet, error: null });
       }
@@ -327,9 +327,14 @@ describe('FormulaireMission — parcours de création critique', () => {
 
   it('refuse un taux salarié sous le plancher lu au serveur avec le message exact, accepte le plancher', async () => {
     let plancher = 12.31;
+    let annonce = true;
     const appels: Record<string, unknown>[] = [];
     let refusServeur = false;
     mocks.rpc.mockImplementation((fonction: string, params?: Record<string, unknown>) => {
+      if (fonction === 'fn_param_bool') {
+        expect(params).toEqual({ p_cle: 'taux_horaire_minimum_salarie', p_defaut: false });
+        return Promise.resolve({ data: annonce, error: null });
+      }
       if (fonction === 'fn_taux_horaire_minimum_salarie') return Promise.resolve({ data: plancher, error: null });
       if (fonction === 'fn_mon_etablissement_complet') return Promise.resolve({ data: etablissementComplet, error: null });
       if (fonction === 'fn_mode_exercice') {
@@ -407,5 +412,21 @@ describe('FormulaireMission — parcours de création critique', () => {
     const champ2 = screen.getByLabelText(/Taux horaire (?:proposé|brut|des honoraires)/i);
     act(() => fireEvent.change(champ2, { target: { value: '12.31' } }));
     expect(await screen.findByText("Le taux horaire doit être d'au moins 12,50 €/h.")).toBeInTheDocument();
+    cleanup();
+
+    // Paramètre non annoncé (base sans la migration) : repli 12,31, la RPC de lecture n'est pas appelée.
+    annonce = false;
+    mocks.rpc.mockClear();
+    render(
+      <MemoryRouter initialEntries={['/etablissement/missions/creer']}>
+        <FormulaireMission />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_param_bool', expect.anything()));
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith('fn_mon_etablissement_complet'));
+    const champ3 = screen.getByLabelText(/Taux horaire (?:proposé|brut|des honoraires)/i);
+    act(() => fireEvent.change(champ3, { target: { value: '12.30' } }));
+    expect(await screen.findByText("Le taux horaire doit être d'au moins 12,31 €/h.")).toBeInTheDocument();
+    expect(mocks.rpc).not.toHaveBeenCalledWith('fn_taux_horaire_minimum_salarie');
   });
 });
