@@ -17,6 +17,10 @@ import JoleneDesign
 /// `swipe-urgent-<id>`, `swipe-paiement-rapide-<id>`, `swipe-planning-<id>`, `swipe-pourquoi-<id>`, `swipe-detail`.
 struct SwipeCarteView: View {
     let carte: CarteSwipe
+    /// Carte du dessus : seule à rendre le bouton « Voir le détail ». Sur une carte de fond, le même libellé est dessiné
+    /// sans contrôle et masqué à l'accessibilité (même apparence, rien d'atteignable par VoiceOver ni XCUITest ; revue
+    /// fraîche de la vague D, M1, `DECISIONS_LOT4.md` précision 22).
+    var dessus: Bool = true
     let ouvrirDetail: () -> Void
 
     private static let rayon: CGFloat = 24
@@ -64,17 +68,26 @@ struct SwipeCarteView: View {
                     .accessibilityIdentifier("swipe-pourquoi-\(carte.id)")
             }
             Spacer(minLength: 0)
-            Button(action: ouvrirDetail) {
-                Text(SwipeTextes.voirDetail)
-                    .font(JoleneFont.callout.weight(.semibold))
-                    .foregroundStyle(JoleneColor.rose800)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
+            if dessus {
+                Button(action: ouvrirDetail) {
+                    libelleDetail
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(SwipePresentation.libelleAccessibilite(carte))
+                .accessibilityIdentifier("swipe-detail")
+            } else {
+                libelleDetail.accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(SwipePresentation.libelleAccessibilite(carte))
-            .accessibilityIdentifier("swipe-detail")
         }
+    }
+
+    /// Libellé « Voir le détail », commun au bouton de la carte du dessus et à son dessin inerte sur une carte de fond.
+    private var libelleDetail: some View {
+        Text(SwipeTextes.voirDetail)
+            .font(JoleneFont.callout.weight(.semibold))
+            .foregroundStyle(JoleneColor.rose800)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     /// Pastille de score à gauche (rien sans score servi), urgence et paiement rapide à droite.

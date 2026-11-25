@@ -403,8 +403,9 @@ private struct SwipePaquetView: View {
                     .accessibilityIdentifier("swipe-restantes")
                 SwipeCardStack(cartes, identifier: "", cardAccessibility: .contain, isBusy: occupe, onAction: { action, carte in
                     agir(action, sur: carte.id)
-                }, card: { carte in
-                    SwipeCarteView(carte: carte) { ouvrirDetail(carte.id) }
+                }, rangedCard: { carte, rang in
+                    // Carte de fond : aucun bouton de détail rendu (M1, `DECISIONS_LOT4.md` précision 22).
+                    SwipeCarteView(carte: carte, dessus: rang == 0) { ouvrirDetail(carte.id) }
                 })
                 .frame(maxWidth: 440)
                 .padding(.horizontal, JoleneSpacing.lg)

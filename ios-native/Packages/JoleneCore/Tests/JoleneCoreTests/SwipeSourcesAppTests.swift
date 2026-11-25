@@ -244,6 +244,12 @@ final class SwipeSourcesAppTests: XCTestCase {
         // Run 45446351274 : le conteneur `swipe-deck` absorbait la carte du dessus quand elle était son unique enfant
         // (identifiant `swipe-card-<id>` perdu sur la dernière carte) ; il entoure désormais le compteur ET les cartes.
         XCTAssertTrue(explorer.contains(".accessibilityIdentifier(SwipeDeckIdentifiers.deck)"), "conteneur swipe-deck de la vue")
+        // M1 (revue fraîche de la vague D, `DECISIONS_LOT4.md` précision 22) : la carte reçoit son rang et seule la carte
+        // du dessus construit le bouton « Voir le détail » ; une carte de fond n'expose aucun contrôle.
+        XCTAssertTrue(explorer.contains("rangedCard: { carte, rang in"), "la vue passe son rang à la carte")
+        XCTAssertTrue(explorer.contains("SwipeCarteView(carte: carte, dessus: rang == 0)"), "bouton de détail réservé au dessus")
+        XCTAssertTrue(explorer.contains("if dessus {"), "carte de fond sans bouton de détail")
+        XCTAssertTrue(paquet.contains("return card(item, depth)"), "le paquet transmet le rang de chaque carte")
         XCTAssertTrue(explorer.contains("SwipeActionBar(isDisabled:"), "boutons équivalents des gestes (D22)")
     }
 
