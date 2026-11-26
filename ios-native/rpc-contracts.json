@@ -3026,6 +3026,28 @@
           "fonction": "fn_creer_mission_multi_jours_v4"
         }
       ]
+    },
+    {
+      "name": "fn_taux_horaire_minimum_salarie",
+      "statut": "consommee",
+      "lot": 5,
+      "types": null,
+      "sql": [
+        {
+          "signature": "fn_taux_horaire_minimum_salarie()",
+          "returns": "numeric",
+          "language": "sql",
+          "security": "DEFINER",
+          "volatility": "STABLE",
+          "search_path": "''"
+        }
+      ],
+      "grants": [
+        "authenticated",
+        "service_role"
+      ],
+      "manifeste": null,
+      "exceptions": []
     }
   ]
 }

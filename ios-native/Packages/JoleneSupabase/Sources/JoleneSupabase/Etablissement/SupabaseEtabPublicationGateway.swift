@@ -18,12 +18,14 @@ import Supabase
 ///   `.nonConfirmee`, jamais un succès. Une réponse sans `mission_id` exploitable est un refus de contrat ;
 /// - refus du verrou différé du taux horaire minimal (`P0001`, migration 20261125120000, levé à la validation de la
 ///   transaction, donc hors des exceptions extraites du dump pour la RPC) → `.refusee`, texte serveur mot pour mot ;
-/// - plancher lu au serveur : pas encore câblé ici (`tauxMinimumSalarie` par défaut du port, `nil` : la constante
-///   s'applique). La garde `check-rpc-contracts` exige qu'une RPC appelée par le Swift ait sa définition dans le dump
-///   (« le contrat n'est jamais tenu par types.ts seul ») : `fn_taux_horaire_minimum_salarie` y entrera à la
-///   re-baseline qui suit le merge de la migration 20261125120000, et la lecture sera câblée à ce moment-là.
+/// - plancher : `fn_taux_horaire_minimum_salarie()` (`supabase/schema/public.sql` l.61093, `RETURNS numeric`, `NULL` si
+///   le paramètre est absent ; GRANT `authenticated` l.85664), sous le JWT du membre. Fermé : `NULL`, valeur non
+///   numérique ou non positive → `PlancherTauxIndisponible` ; erreur PostgREST ou transport → erreur mappée. Aucune
+///   valeur de repli n'est rendue par la passerelle.
 public struct SupabaseEtabPublicationGateway: EtabPublicationPort {
     public static let rpc = "fn_creer_mission_multi_jours_v4"
+    /// Lecture du plancher du taux horaire salarié (fiche `CONTRATS_RPC_ETABLISSEMENT.md`).
+    public static let rpcTauxMinimum = "fn_taux_horaire_minimum_salarie"
     /// Exception du verrou différé (`private.fn_trg_verifier_taux_minimum_salarie`), `%` = montant du paramètre.
     /// Hors de `ListesBlanchesEtablissement.parRPC`, qui reste égale aux exceptions extraites du dump : ce refus est
     /// levé au COMMIT par un déclencheur de contrainte, pas par le corps de la RPC.
@@ -81,6 +83,22 @@ public struct SupabaseEtabPublicationGateway: EtabPublicationPort {
             return .nonConfirmee(missionId: missionId)
         }
         return .publiee(missionId: missionId)
+    }
+
+    public func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double {
+        try context.verifier()
+        let valeur: AnyJSON
+        do {
+            valeur = try await client.rpc(Self.rpcTauxMinimum).execute().value
+        } catch {
+            throw SupabaseErrorMapping.map(error, fallback: Self.fallback)
+        }
+        switch valeur {
+        case .null: throw PlancherTauxIndisponible("paramètre taux_horaire_minimum_salarie absent (NULL)")
+        case .integer(let n) where n > 0: return Double(n)
+        case .double(let d) where d.isFinite && d > 0: return d
+        default: throw PlancherTauxIndisponible("réponse illisible")
+        }
     }
 
     /// Colonnes relues sur `missions` après la création : celles que `PublicationRelecture` compare, sans aucun montant.

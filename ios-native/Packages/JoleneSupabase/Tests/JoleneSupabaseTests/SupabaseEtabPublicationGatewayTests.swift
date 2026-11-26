@@ -272,11 +272,38 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
             "la liste blanche extraite du dump reste inchangée")
     }
 
-    /// Lecture du plancher non câblée tant que le dump ne porte pas la RPC : aucune requête, la constante s'applique.
-    func testTauxMinimumNonLuAvantLaReBaseline() async {
-        let lu = await gateway().tauxMinimumSalarie(context: contexte())
-        XCTAssertNil(lu)
-        XCTAssertTrue(registry.requests(to: "/rest/v1/rpc/fn_param_bool").isEmpty)
+    /// Plancher lu par `fn_taux_horaire_minimum_salarie()` : une requête `POST` sans paramètre, sous le JWT ; nombre
+    /// entier ou réel rendu tel quel ; fermé sur `NULL`, valeur illisible ou non positive, et sur erreur serveur.
+    func testTauxMinimumLuAuServeurEtFerme() async throws {
+        let chemin = "/rest/v1/rpc/fn_taux_horaire_minimum_salarie"
+        registry.add("POST", chemin, respond: .json(200, "12.5"))
+        let lu = try await gateway().tauxMinimumSalarie(context: contexte())
+        XCTAssertEqual(lu, 12.5)
+        XCTAssertEqual(registry.requests(to: chemin).count, 1)
+        XCTAssertTrue(registry.requests(to: "/rest/v1/rpc/fn_param_bool").isEmpty, "aucune annonce : la RPC est au dump")
+
+        registry.reset()
+        registry.add("POST", chemin, respond: .json(200, "13"))
+        let entier = try await gateway().tauxMinimumSalarie(context: contexte())
+        XCTAssertEqual(entier, 13)
+
+        for corps in ["null", "0", "-1", #""12.5""#, "{}"] {
+            registry.reset()
+            registry.add("POST", chemin, respond: .json(200, corps))
+            do {
+                let valeur = try await gateway().tauxMinimumSalarie(context: contexte())
+                XCTFail("\(corps) : plancher \(valeur) au lieu d'un refus")
+            } catch {
+                XCTAssertTrue(error is PlancherTauxIndisponible, "\(corps) : \(error)")
+            }
+        }
+        for (statut, corps) in [(404, #"{"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function"}"#),
+                                (403, #"{"code":"42501","details":null,"hint":null,"message":"permission denied for function"}"#)] {
+            registry.reset()
+            registry.add("POST", chemin, respond: .json(statut, corps))
+            let erreur = await echec { _ = try await self.gateway().tauxMinimumSalarie(context: self.contexte()) }
+            XCTAssertNotNil(erreur, "HTTP \(statut) : erreur levée, jamais une valeur")
+        }
     }
 
     func testNonAuthentifieSessionJamaisUnRefusMetier() async throws {

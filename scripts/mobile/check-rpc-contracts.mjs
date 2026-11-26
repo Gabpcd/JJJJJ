@@ -279,6 +279,8 @@ export const RPC_SUIVIES_ETABLISSEMENT = [
   { name: 'fn_creer_notation_mission', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.noter
   { name: 'fn_declarer_fin_retroactive', statut: 'consommee', lot: 5 }, // T8 (B9) : SupabaseEtabPresencesGateway.cloturerSegment
   { name: 'fn_creer_mission_multi_jours_v4', statut: 'consommee', lot: 5 }, // T9 : SupabaseEtabPublicationGateway.publier
+  // Suivi de #1188 (migration 20261125120000, re-baseline #1193) : plancher du taux horaire salarié.
+  { name: 'fn_taux_horaire_minimum_salarie', statut: 'consommee', lot: 5 }, // SupabaseEtabPublicationGateway.tauxMinimumSalarie
   { name: 'fn_obtenir_conversation', statut: 'a_venir', lot: 5 },
 ];
 

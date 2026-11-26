@@ -80,10 +80,14 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
         self.horloge = horloge
     }
 
-    /// Plancher du monde démo : la constante (aucun réseau), après le même contrôle de contexte que l'envoi.
-    public func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? {
-        guard (try? DemoEtablissementWorld.verifier(context)) != nil else { return nil }
-        return PublicationRules.tauxMinimum
+    /// Valeur de fixture du paramètre serveur dans le monde démo (aucun réseau) : le repli du web repris par
+    /// `LibellesWeb.Publication.tauxMinimumHorsLiberal`, lié à la migration par la garde node du plancher.
+    public static let tauxMinimumFixture: Double = PublicationRules.tauxMinimum
+
+    /// Plancher du monde démo, après le même contrôle de contexte que l'envoi.
+    public func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double {
+        try DemoEtablissementWorld.verifier(context)
+        return Self.tauxMinimumFixture
     }
 
     public func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome {

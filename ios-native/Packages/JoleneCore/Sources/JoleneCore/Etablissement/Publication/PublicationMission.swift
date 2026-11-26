@@ -95,13 +95,6 @@ public enum PublicationRules {
         return valeur < minimum
     }
 
-    /// Plancher rendu par le serveur (`fn_taux_horaire_minimum_salarie`) : retenu s'il est fini et strictement positif,
-    /// sinon la constante (même règle que `normaliserTauxMinimumSalarie` du web).
-    public static func tauxMinimum(serveur: Double?) -> Double {
-        guard let serveur, serveur.isFinite, serveur > 0 else { return tauxMinimum }
-        return serveur
-    }
-
     /// Taux horaire saisi : chiffres, puis au plus deux décimales après une virgule ou un point (`step="0.01"` du web,
     /// l.921) ; `nil` pour toute autre saisie, pour zéro et pour un nombre négatif (« supérieur à zéro », l.27339).
     /// Le plancher (`tauxMinimum`) est appliqué par `champsInvalides`, pas ici.

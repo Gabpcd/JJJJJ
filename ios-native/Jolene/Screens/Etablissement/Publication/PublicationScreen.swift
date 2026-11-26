@@ -51,6 +51,7 @@ struct PublicationScreen: View {
         .navigationTitle(P.titreEcran)
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.chargerTauxMinimum() }
+        .refreshable { await model.chargerTauxMinimum() }
         .sheet(isPresented: recapPresente) {
             if let recap = model.recap {
                 RecapPublicationSheet(recap: recap, enCours: model.enCours,
