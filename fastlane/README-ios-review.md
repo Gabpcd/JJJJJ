@@ -45,20 +45,32 @@ an empty draft can be reused by deliver. Local metadata/API errors after success
 cancellation can still leave the old version developer-rejected; re-run only after
 resolving the reported error.
 
-Review notes (`fastlane/ios_review_notes.rb`, `IosReviewSubmission.enchainer!`): before
-this guard runs, a read-only pre-flight checks the editable version that deliver will use
-(`App#get_edit_app_store_version`). It must be the configured marketing version (another
-editable version, which deliver's `ensure_version!` would rename, stops the lane), with
-`demoAccountRequired` true and a non-empty demo account name and password, once the planned
-copy is applied. After this guard, the version is found or created (same request as
-`ensure_version!`). Only if its `appStoreReviewDetail` is missing or has no complete demo
-account, the review detail of the single distributed version is copied API to API: the demo
-account as a whole, then contacts and notes only where the target is empty; an existing demo
-account is never overwritten. The lock is replayed, then the `notes` attribute is patched:
-the block from `config/ios-review-notes-2.0.txt`, the separator line, then the previous notes.
-The lane never passes `app_review_information` to deliver, which would reset
-`demoAccountRequired`. No review detail value is ever printed. Details:
-`docs/mobile-swift/APP_STORE.md`.
+Review notes (`fastlane/ios_review_notes.rb`, `fastlane/ios_review_demo_account.rb`,
+`IosReviewSubmission.enchainer!`): before this guard runs, a pre-flight that writes nothing to
+Apple checks the editable version that deliver will use (`App#get_edit_app_store_version`).
+It must be the configured marketing version (another editable version, which deliver's
+`ensure_version!` would rename, stops the lane). The review detail that will be submitted
+(after the planned copy, if any) must carry demo credentials. They are signed in to
+production Supabase exactly like the native app (password grant, publishable `apikey`, no
+captcha), the role is read with `fn_get_my_role` (soignant or établissement only), and that
+session is revoked at once (`logout?scope=local`). The verified role picks the block,
+`config/ios-review-notes-2.0-soignant.txt` or `-etablissement.txt`. The same pre-flight alone
+runs in the `gardes` job, in both modes (`fastlane ios preflight_review_native`).
+
+After this guard, the version is found or created (same request as `ensure_version!`). Only
+if it has no demo credentials, the review detail of the single distributed version is
+copied API to API: credentials as a whole with `demoAccountRequired` set to true, then
+contacts and notes only where the target is empty; credentials already present are never
+overwritten. An unknown (`null`) `demoAccountRequired` next to present credentials is written
+true. The submitted detail must carry the credentials signed in at pre-flight. Then the
+`notes` attribute is patched: the block, the separator line
+`--- Notes from version 1.0.7 (previous hybrid app) ---`, then the previous notes, within
+3,900 UTF-16 units. The lane never passes `app_review_information` to deliver, which would
+reset `demoAccountRequired`. No review detail value is ever printed. Spaceship still logs
+request and response bodies to `$TMPDIR/spaceship*.log`: never run with `VERBOSE` or
+`--verbose`, never upload the temporary directory; the workflow deletes these logs. deliver
+deletes the review attachments of the detail on every submission (existing 2.240.1
+behaviour). Details: `docs/mobile-swift/APP_STORE.md`.
 
 Run offline checks with `ruby fastlane/ios_review_submission.test.rb` and
 `ruby fastlane/ios_review_notes.test.rb`. They require no Fastlane installation,

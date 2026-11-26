@@ -146,12 +146,15 @@ une décision à part (« En attente », n° 6).
   `config/mobile-release-notes-ios.txt`. Les captures, la description, les notes pour la revue, la
   confidentialité et la classification se saisissent dans App Store Connect.
   **Amendé le 26/11/2026** : personne ne peut se connecter au site App Store Connect. La lane écrit donc
-  aussi, par l'API, le seul champ « Notes » des informations pour la vérification : le bloc de
-  `config/ios-review-notes-2.0.txt` en tête, puis les notes existantes. Si la 2.0.0 n'a pas de compte de
-  démonstration complet, et seulement dans ce cas, elle copie d'API à API la fiche de la version distribuée
-  (compte de démonstration, puis contacts et notes là où la 2.0.0 est vide) ; une fiche existante n'est jamais
-  écrasée. Elle refuse de soumettre sans compte de démonstration complet (`APP_STORE.md`, section
-  « Notes pour la revue et compte de démonstration »).
+  aussi, par l'API, le champ « Notes » des informations pour la vérification : en tête, le bloc
+  `config/ios-review-notes-2.0-<rôle>.txt` du rôle vérifié du compte de démonstration, puis les notes
+  existantes. Si la 2.0.0 n'a pas d'identifiants de démonstration, et seulement dans ce cas, elle copie d'API à
+  API la fiche de la version distribuée (identifiants, puis contacts et notes là où la 2.0.0 est vide) ; des
+  identifiants présents ne sont jamais écrasés ; un `demoAccountRequired` inconnu (null) est écrit à true.
+  **Revue fraîche de #1197, M1 (décision du 26/11/2026)** : au pré-vol, y compris en mode `verifier`, le compte
+  de démonstration se connecte à Supabase de production comme l'app, son rôle est relu (soignant ou
+  établissement seulement), puis la session est révoquée ; la fiche soumise doit porter ces identifiants. La
+  lane refuse de soumettre sinon (`APP_STORE.md`, section « Notes pour la revue et compte de démonstration »).
 - **Texte des « Nouveautés »** : proposé dans le fichier, il annonce la reconnexion et la réactivation de
   Face ID (plan, l.225). Il est validé par la fondatrice à la revue de la PR ; ce n'est pas un texte
   juridique.

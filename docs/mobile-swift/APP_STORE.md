@@ -9,28 +9,32 @@ Gardes : `scripts/mobile/ios-native-app-store.mjs`, testées par `tests/node/ios
 Il soumet à la revue Apple un build de l'app `app.jolene` (App Store Connect `6774672845`) **déjà envoyé
 sur TestFlight** par `ios-native-testflight.yml` et déjà traité (`VALID`). Il active la publication
 progressive sur sept jours, écrit le champ « Nouveautés » fr-FR et place en tête du champ « Notes » des
-informations pour la vérification le bloc de `config/ios-review-notes-2.0.txt` (section « Notes pour la
-revue et compte de démonstration »).
+informations pour la vérification le bloc du rôle vérifié du compte de démonstration
+(`config/ios-review-notes-2.0-soignant.txt` ou `config/ios-review-notes-2.0-etablissement.txt`, section
+« Notes pour la revue et compte de démonstration »).
 
 Il ne fait **jamais** : de compilation, d'envoi de binaire, de modification des captures, de la
-description, de la confidentialité ou de la classification. Il n'écrase jamais un compte de démonstration
-existant : il ne copie la fiche de vérification de la version distribuée que si la 2.0.0 n'a pas de compte de
-démonstration complet. Il ne part jamais seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le
-déclenchent.
+description, de la confidentialité ou de la classification. Il n'écrase jamais des identifiants de
+démonstration présents : il ne copie la fiche de vérification de la version distribuée que si la 2.0.0 n'en a
+pas. Il ne part jamais seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le déclenchent.
 
-Deux modes : `verifier` (défaut) joue toutes les gardes en lecture seule et s'arrête avant la lane et
-avant le tag ; `soumettre` joue les mêmes gardes, puis soumet et pose le tag, et exige en plus la phrase de
-confirmation. Lancer d'abord en `verifier` : c'est la répétition à blanc de la soumission.
+**Pièces jointes de la fiche de vérification** (comportement de deliver 2.240.1, inchangé par ce workflow) : à
+chaque soumission, deliver supprime toutes les pièces jointes de la fiche (vidéo, document), faute de fichier
+fourni (`deliver/lib/deliver/upload_metadata.rb`, `review_attachment_file`). Une vidéo reprise de 1.0.7
+disparaît donc. Rien ne le signale au journal.
+
+Deux modes : `verifier` (défaut) joue toutes les gardes, dont le pré-vol des notes pour la revue (lane
+`preflight_review_native` : fiche lue, compte de démonstration connecté à la production puis déconnecté, notes
+composées et mesurées), sans rien écrire chez Apple, et s'arrête avant la soumission et le tag ;
+`soumettre` joue les mêmes gardes, puis soumet et pose le tag, et exige en plus la phrase de confirmation.
+Lancer d'abord en `verifier` : c'est la répétition à blanc de la soumission, fiche et compte compris.
 
 ## Avant de lancer
 
 1. **Aucun port en attente, dans aucun lot (1 à 5)**, sur `main` : les cinq listes
-   `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides. **Au 24/11/2026, ce n'est pas le
-   cas, et pas seulement pour les lots 4 et 5** : `portsEnAttenteLot1` contient encore `recovery`, la
-   réinitialisation native du mot de passe (« Mot de passe oublié ? », `SupabaseRecoveryGateway`,
-   `ResetPasswordScreen`), qui n'a de tranche ni au lot 1 ni au lot 3 (`DECISIONS_LOT3.md`, reste de
-   L1-T10). Tant que `recovery` n'est pas câblé, la garde `lots` refuse toute soumission ; c'est voulu.
-   Soumettre sans lui exigerait une décision écrite de la fondatrice et une PR qui modifie la garde.
+   `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides. Au 26/11/2026, c'est le cas : le
+   dernier, `recovery` (« Mot de passe oublié ? », reste de L1-T10), est câblé, et la garde `lots` passe sur
+   l'arbre de `main`. Un port remis en attente ferait refuser toute soumission ; c'est voulu.
 2. Un build a été envoyé **depuis ce `main`** par `ios-native-testflight.yml` (build 32 ou plus), **il y a
    moins de 14 jours** (rétention de l'artefact de provenance, garde `provenance`). Notez son numéro.
 3. Le dernier run de « iOS Swift — socle natif » (`ios-swift-ci.yml`) sur le commit dont ce build est issu
@@ -40,10 +44,9 @@ confirmation. Lancer d'abord en `verifier` : c'est la répétition à blanc de l
 4. Ce build a été recetté sur iPhone (`RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md`), dont les liens
    universels et le push de production.
 5. Les saisies d'App Store Connect sont faites (`LOT6_PLAN.md` §3) : fiche, confidentialité, classification,
-   captures. Le compte de démonstration soignant (« Connexion requise ») et, dans les notes, les identifiants
-   du compte établissement viennent de la version précédente : si la 2.0.0 n'en a pas, la lane les copie de la
-   version distribuée (1.0.7) ; si aucune des deux n'a de compte de démonstration complet, elle refuse de
-   soumettre (section « Notes pour la revue et compte de démonstration »).
+   captures. Le compte de démonstration (« Connexion requise ») et, dans les notes, les identifiants de l'autre
+   compte de revue viennent de la version précédente : si la 2.0.0 n'en a pas, la lane les copie de la version
+   distribuée (1.0.7). Le run `verifier` prouve que ce compte se connecte en production et sur quel rôle.
 6. `config/mobile-release-notes-ios.txt` contient le texte voulu pour « Nouveautés ».
 
 ## Lancer la soumission
@@ -60,13 +63,14 @@ GitHub → Actions → « iOS Swift — soumission App Store » → *Run workflo
 
 Trois jobs s'enchaînent :
 
-- `gardes` (Ubuntu, lecture seule) : toutes les gardes ci-dessous, puis un verdict posé seulement si
-  toutes ont réussi ; aucune de ses étapes n'est conditionnelle ;
+- `gardes` (Ubuntu, sans écriture chez Apple) : toutes les gardes ci-dessous, pré-vol des notes compris, puis
+  un verdict posé seulement si toutes ont réussi ; aucune de ses étapes n'est conditionnelle ;
 - `soumettre` (macOS 26), en mode `soumettre` et sur verdict des gardes seulement : lane
   `fastlane ios submit_native` ;
 - `consigner` (Ubuntu), après `soumettre` : tag `mobile-native-ios-N` sur le commit source du build.
 
 En mode `verifier`, `soumettre` et `consigner` sont ignorés : rien n'est écrit chez Apple ni dans le dépôt.
+Seule trace du pré-vol : une connexion du compte de démonstration à la production, aussitôt révoquée.
 
 Une seule soumission à la fois (groupe de concurrence `ios-native-app-store`, sans annulation).
 
@@ -86,29 +90,50 @@ et arrête le workflow avant toute écriture chez Apple. Aucune garde ne se dés
 | dépôt | Les gardes statiques du TestFlight (`TESTFLIGHT.md`) : production, chiffrement exempté, manifeste de confidentialité, icône, entitlements. | Voir `TESTFLIGHT.md`. |
 | `provenance` | `main` n'a pas avancé depuis le déclenchement ; un run réussi de `ios-native-testflight.yml`, lancé à la main depuis `main`, a produit l'artefact `ios-native-testflight-<N>-<commit>`, encore disponible ; ce commit appartient à l'historique de `main`. L'artefact est conservé **14 jours** (`retention-days` de `ios-native-testflight.yml`) : au-delà, le build ne se soumet plus, y compris pour une nouvelle soumission après un refus d'Apple, et le refus le dit (« a expiré », ou « introuvable » une fois purgé). | Relancer depuis le `main` courant. Artefact expiré ou purgé : refaire un envoi TestFlight et soumettre le nouveau build. |
 | `ci-ios` | Le dernier run de `ios-swift-ci.yml` sur le commit source exact, sur `main` (push ou déclenchement manuel ; état de sa dernière tentative), est terminé et réussi. Le refus nomme le commit et la conclusion lue. Aucun run sur ce commit : refus, jamais de repli sur un ancêtre. | Lancer `ios-swift-ci.yml` sur `main` à ce commit et attendre le vert, ou envoyer un nouveau build depuis un commit dont la CI iOS est verte. |
-| `lots` | Dans la source de ce commit, les cinq listes `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides : aucun port en attente, dans aucun lot. Lecture stricte : commentaires retirés, une seule déclaration, un tableau de noms entre guillemets et rien qui le prolonge (`+`, `.filter`, `as`…) ; sinon la liste est « illisible » et la garde refuse. | Câbler les ports (aujourd'hui `recovery`, lot 1, et ceux des lots 4 et 5), puis envoyer un nouveau build. |
+| `lots` | Dans la source de ce commit, les cinq listes `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides : aucun port en attente, dans aucun lot. Lecture stricte : commentaires retirés, une seule déclaration, un tableau de noms entre guillemets et rien qui le prolonge (`+`, `.filter`, `as`…) ; sinon la liste est « illisible » et la garde refuse. | Câbler le port nommé par le refus, puis envoyer un nouveau build. |
 | `etablissement` | Dans la même source : la table `OuvertureEspaceEtablissement.pour(mode:)` (`JoleneCore/Session/EspaceResolution.swift`) rend `.ouvert` pour `.production` (lot 5, T14). Lecture stricte : commentaires retirés, un seul `switch mode` fait de `case .x: return .ouvert/.ferme`, sans `default` ni `#if`, chaque cas de `JoleneMode` (lu dans `Environment.swift`) décidé une fois ; sinon la table est « illisible » et la garde refuse. Câblage (revue de #1190, M2 et m1) : chaque construction de `SessionController(` et de `DeepLinkCoordinator(` de la cible app est dans `AppContainer.swift`, hors de toute compilation conditionnelle (`#if`), et reçoit `espaceEtablissement: .pour(mode: environment.mode)` ; `.pour(mode: .demo)` n'est admis que pour le contrôleur de la branche `case .demo:` de `switch environment.mode` ; une construction sans l'argument (défaut `.ferme`) est refusée. Rôles (m2) : `EspaceResolution.espace` rend `.etablissement` et `UserRole.isNativelyServed` rend `true` pour `.adminEtablissement` et `.etablissementLegacy`. Limite : la garde lit ces sources, pas la résolution complète de la session ni le coupe-circuit distant `ios_natif_etab_espace_actif` (`DECISIONS_LOT5.md`, section T14) ; `SessionControllerEtablissementTests` couvre le reste en `swift test`. | Ne pas soumettre un build dont l'espace établissement est fermé en production : rouvrir par une PR consignée dans `DECISIONS_LOT5.md` (section T14). |
 | `apple-4.2` | Dans la même source : ports `dashboard`, `mesMissions`, `presence`, `pointage` câblés ; fichiers des écrans natifs du tableau de bord, de Mes missions et du pointage présents ; onglets `tab-accueil` et `tab-missions` de `MainTabView.swift` qui montent `AccueilScreen` et `MesMissionsScreen` (pour le pointage, seuls la présence de son fichier et l'appel de `fn_scanner_code_pointage` sont contrôlés, pas son montage) ; RPC `fn_dashboard_soignant_complet` et `fn_scanner_code_pointage` appelées par le client Swift ; aucune vue web à la racine de l'app. | Ne pas soumettre : Apple refuse un site réemballé (règle 4.2). |
 | `ota` | Aucun client de mise à jour à chaud (règle 2.5.2), cherché par nom dans les sources Swift de `Jolene/` et de `Packages/*/Sources`, **et** dans les `Package.swift`, `Package.resolved` et `project.yml` de `ios-native/` ; au moins un `Package.swift` et un `Package.resolved` doivent être lus. C'est une liste de noms interdits, pas une liste de dépendances admises. | Retirer la dépendance. |
 | backend | Le dernier déploiement Supabase de production est vert et couvre le backend de `main` (`delivery-plan-backend.mjs`). | Attendre ou réparer `deploy-supabase`. |
 | `build` | Dans App Store Connect : un seul build `N`, `VALID`, non expiré, `usesNonExemptEncryption = false`, version `2.0.0`, plateforme iOS ; version supérieure à 1.0.7, build supérieur à 24. | Attendre la fin du traitement, ou envoyer un nouveau build. |
+| compte de démonstration et notes | Lane `preflight_review_native` dans les gardes (les deux modes), puis de nouveau dans la lane de soumission, avant la garde « revue en cours » (`fastlane/ios_review_notes.rb`) : version modifiable `2.0.0`, ou aucune ; fiche lue (celle de la version distribuée si la 2.0.0 n'a pas d'identifiants) ; identifiants présents ; connexion à Supabase de production réussie, sur le rôle soignant ou établissement ; notes composées en 3 900 unités UTF-16 au plus. Détail : section « Notes pour la revue et compte de démonstration ». | Voir « Si le verrou refuse », dans cette section. |
 | revue en cours | Dans la lane (`fastlane/ios_review_submission.rb`) : version supérieure à la version en vente ; une soumission encore « en attente de revue » pour un build plus ancien est annulée puis remplacée ; une revue commencée (`IN_REVIEW`) n'est jamais interrompue. | Lire le message : la revue en cours est préservée. |
-| compte de démonstration et notes | Dans la lane (`fastlane/ios_review_notes.rb`), en pré-vol avant la garde « revue en cours » puis de nouveau avant la soumission : la version modifiable est bien `2.0.0` (créée si absente) ; sans compte de démonstration complet, sa fiche est copiée de la version distribuée (à l'écriture seulement) ; `demoAccountRequired` vrai, nom et mot de passe du compte de démonstration non vides ; notes composées en 4 000 caractères au plus. Détail : section suivante. | Voir « Si le verrou refuse », section suivante. |
 
 ## Secrets et droits
 
 Trois secrets, ceux du TestFlight : `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY_BASE64`. Aucun
-matériel de signature n'est lu. Droits du jeton GitHub : lecture seule, sauf le job `consigner` qui pose
-le tag. Les entrées passent par des variables d'environnement, jamais par interpolation dans un script ;
-la phrase saisie n'est pas réaffichée. Les actions sont épinglées par leur commit.
+matériel de signature n'est lu. La connexion du compte de démonstration n'ajoute aucun secret : l'URL et la clé
+publishable de production sont publiques et lues dans `ios-native/Config/Production.xcconfig`. Droits du jeton
+GitHub : lecture seule, sauf le job `consigner` qui pose le tag. Les entrées passent par des variables
+d'environnement, jamais par interpolation dans un script ; la phrase saisie n'est pas réaffichée. Les actions
+sont épinglées par leur commit.
+
+**Journaux de Spaceship.** Le client App Store Connect de fastlane (Spaceship, 2.240.1,
+`spaceship/lib/spaceship/client.rb`) écrit chaque requête et chaque réponse de l'API d'Apple, corps compris,
+dans un fichier `$TMPDIR/spaceship*.log` du runner. Seule une clé `password` de premier niveau y est masquée :
+la lecture de la fiche de vérification (par la lane comme par deliver) et sa copie y laissent donc le mot de
+passe du compte de démonstration, en clair. Règles :
+
+- jamais `VERBOSE`, `--verbose`, `FASTLANE_VERBOSE` ni `SPACESHIP_DEBUG` dans ces workflows : avec `VERBOSE`, ce
+  journal part sur la sortie standard, donc dans le journal GitHub ; avec `--verbose`, fastlane affiche aussi la
+  cause des erreurs ;
+- jamais d'artefact (`upload-artifact`) ni de cache du dossier temporaire : `ios-native-app-store.yml` n'en
+  envoie aucun (gardé par `tests/node/ios-native-app-store.node.mjs`) ;
+- les journaux sont effacés avec la clé App Store Connect, à la fin du pré-vol et à la fin de la soumission,
+  quel que soit le résultat ; les runners GitHub sont de toute façon détruits après le job.
+
+Le journal GitHub, lui, ne contient aucune valeur de la fiche : seulement des noms de champs, des longueurs,
+des états et les lignes « compte de démo : … ».
 
 **La lane hors du workflow.** `fastlane ios submit_native` refuse de tourner hors du job `soumettre` de
 ce workflow sur `main` (contexte GitHub Actions, `workflow_dispatch`, `GITHUB_WORKFLOW_REF` de ce
 fichier), sans le mode `soumettre`, sans le verdict des gardes de la même tentative, ou sans la phrase
-exacte (`IosReviewSubmission.exiger_contexte_workflow!`, `fastlane/ios_review_submission.rb`). Ce sont
-des contrôles de contexte : ils arrêtent une lane lancée par erreur depuis un poste ou un autre workflow,
-pas une personne qui détient la clé App Store Connect et appelle l'API d'Apple directement. La vraie
-protection est la garde de la clé : elle ne doit exister nulle part ailleurs que dans les secrets GitHub.
+exacte (`IosReviewSubmission.exiger_contexte_workflow!`, `fastlane/ios_review_submission.rb`).
+`fastlane ios preflight_review_native` refuse de tourner hors de ce workflow sur `main`, dans l'un de ses deux
+modes (`IosReviewSubmission.exiger_contexte_prevol!`). Ce sont des contrôles de contexte : ils arrêtent une
+lane lancée par erreur depuis un poste ou un autre workflow, pas une personne qui détient la clé App Store
+Connect et appelle l'API d'Apple directement. La vraie protection est la garde de la clé : elle ne doit
+exister nulle part ailleurs que dans les secrets GitHub.
 
 **Action du propriétaire du dépôt, non faite (réglage hors code).** « Depuis `main` seulement » n'est
 garanti que par le fichier : un `workflow_dispatch` sur une autre branche exécute la copie du workflow de
@@ -126,7 +151,9 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 - « Soumis », « approuvé » et « en vente » sont trois états distincts : le tag prouve la soumission.
 - Suivre l'état par `mobile-store-status.yml` (lecture seule) ou dans App Store Connect.
 - Relancer le workflow avec le même build ne soumet pas deux fois : si ce build est déjà soumis (en
-  attente de revue ou en revue) ou déjà en vente, la lane s'arrête sur « déjà soumis » et le job finit vert.
+  attente de revue ou en revue) ou déjà en vente, publication progressive comprise, la lane s'arrête sur
+  « déjà soumis » et le job finit vert. Une fois la 2.0.0 en vente, le pré-vol des notes constate qu'elle est
+  distribuée et laisse conclure la garde de la revue, sans rien lire ni écrire de plus.
   **Exception** : en publication `manuelle`, une fois la version approuvée (« Pending Developer
   Release »), la lane lève une erreur (`ios_review_submission.rb`) et le job finit **rouge** : rien n'a
   été changé chez Apple ; la mise en vente se fait par le bouton « Release this version ».
@@ -138,109 +165,147 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 
 ## Notes pour la revue et compte de démonstration
 
-Personne ne se connecte au site App Store Connect : la lane passe par l'API, avec la clé du job
-`soumettre`. Code : `fastlane/ios_review_notes.rb` ; tests hors réseau : `fastlane/ios_review_notes.test.rb`
-(job `validate-pr`).
+Personne ne se connecte au site App Store Connect : la lane passe par l'API, avec la clé ASC du workflow.
+Code : `fastlane/ios_review_notes.rb` (notes, fiche) et `fastlane/ios_review_demo_account.rb` (connexion du
+compte) ; tests hors réseau : `fastlane/ios_review_notes.test.rb` (job `validate-pr`).
 
-**Où sont les notes.** Le texte pour le relecteur Apple (en anglais) est dans `config/ios-review-notes-2.0.txt`,
-versionné. Dans App Store Connect, le champ « Notes » de la version 2.0.0 devient :
+**Où sont les notes.** Le texte pour le relecteur Apple (en anglais) existe en deux variantes versionnées, une par
+compte possible dans les champs « Sign-in required » :
+
+- `config/ios-review-notes-2.0-soignant.txt` : le compte des champs est le compte soignant ; le compte
+  établissement est dans les notes précédentes ;
+- `config/ios-review-notes-2.0-etablissement.txt` : l'inverse.
+
+La variante est choisie d'après le rôle **vérifié** par la connexion (ci-dessous), jamais supposé. Dans App
+Store Connect, le champ « Notes » de la version 2.0.0 devient :
 
 1. ce bloc ;
-2. une ligne vide, puis la ligne `--- Notes de la version précédente ---` ;
+2. une ligne vide, puis la ligne `--- Notes from version 1.0.7 (previous hybrid app) ---` ;
 3. les notes déjà présentes, telles quelles. Quand la version 2.0.0 est créée, elles viennent de 1.0.7 (app
-   Capacitor, trois rôles dont un compte administrateur) ; elles portent les identifiants du compte
-   établissement, auxquels le bloc renvoie.
+   Capacitor, trois rôles dont un compte administrateur) ; elles portent les identifiants de l'autre compte
+   de revue, auxquels le bloc renvoie.
 
 La lane ne passe pas par l'option `app_review_information` de deliver, qui remettrait `demoAccountRequired` à
-faux faute d'identifiants. Aucun identifiant n'entre dans le dépôt (public) : le bloc est refusé s'il contient
+faux faute d'identifiants. Aucun identifiant n'entre dans le dépôt (public) : un bloc est refusé s'il contient
 une adresse e-mail.
 
-**Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou en a
-une sans compte de démonstration complet, la lane la complète depuis la version distribuée
+**Connexion du compte de démonstration** (pré-vol, `fastlane/ios_review_demo_account.rb`). Avec le nom et le
+mot de passe de la fiche (celle de la 2.0.0, ou celle de 1.0.7 si la reprise doit s'appliquer), la lane se
+connecte à Supabase de production exactement comme l'app native (`SupabaseAuthGateway.signIn`) :
+`POST /auth/v1/token?grant_type=password`, clé publishable en en-tête `apikey`, sans jeton captcha (l'app n'en
+envoie pas à la connexion). Elle relit le rôle par la même RPC que l'app (`fn_get_my_role`), puis révoque
+aussitôt cette session seulement (`POST /auth/v1/logout?scope=local`, jamais les sessions d'un relecteur en
+cours). Rôles admis : soignant (`SOIGNANT`, le compte attendu) ou établissement (`ADMIN_ETABLISSEMENT`). Tout
+autre rôle (`ADMIN_PLATEFORME`, `ADMIN_GROUPE`, `INCONNU`) arrête la lane : l'app ne sert pas ces comptes.
+Journal : « compte de démo : connexion OK, rôle soignant » (ou établissement) ; en échec, un motif fermé :
+« connexion refusée (HTTP 400) », « connexion refusée, captcha exigé (HTTP 400) », « connexion impossible
+(réseau : …) », « rôle ADMIN_PLATEFORME », « déconnexion non confirmée ». Jamais d'adresse, de mot de passe,
+de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
+identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
+
+**Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou n'a pas
+d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la version distribuée
 (`READY_FOR_DISTRIBUTION`, unique et plus ancienne : aujourd'hui 1.0.7) :
 
-- le compte de démonstration, d'un bloc : `demoAccountName`, `demoAccountPassword`, `demoAccountRequired` ;
+- les identifiants, d'un bloc : `demoAccountName`, `demoAccountPassword`, et `demoAccountRequired` écrit à `true`
+  (la connexion de ces identifiants a réussi au pré-vol) ;
 - les contacts (`contactFirstName`, `contactLastName`, `contactPhone`, `contactEmail`) et `notes`, seulement là
   où la 2.0.0 est vide : une valeur déjà saisie n'est jamais remplacée.
 
-Rien n'est copié si la 2.0.0 a déjà un compte de démonstration complet : une fiche existante n'est jamais
-écrasée. La copie va d'une réponse de l'API à une requête de l'API, dans le job ; aucune valeur n'est affichée
-ni journalisée (le journal nomme les champs copiés). La fiche est relue et comparée à la copie avant la suite.
-Une fiche illisible (erreur d'Apple) n'est jamais tenue pour absente : la lane s'arrête sans rien copier.
-Ensuite, le verrou et la composition des notes s'appliquent comme sans copie.
+Des identifiants présents dans la 2.0.0 ne sont jamais écrasés. La copie va d'une réponse de l'API à une requête
+de l'API, dans le job ; le journal nomme les champs copiés, jamais une valeur. La fiche est relue et comparée à la
+copie avant la suite. Une fiche illisible (erreur d'Apple) n'est jamais tenue pour absente : la lane s'arrête
+sans rien copier. La copie n'a lieu qu'à l'écriture, jamais au pré-vol.
+
+**`demoAccountRequired` inconnu (null).** Apple a déjà renvoyé ce booléen à `null` sur ce compte. Si les
+identifiants sont présents et que la connexion a réussi, la lane l'écrit explicitement à `true` : c'est la seule
+écriture permise hors `notes` et hors reprise. Un `false` explicite (« Connexion requise » décoché) n'est jamais
+retourné : la lane s'arrête.
 
 **Ordre dans la lane** (`IosReviewSubmission.enchainer!`) :
 
-1. pré-vol, en lecture seule, avant la garde « revue en cours » (donc avant toute annulation) : si une version
-   modifiable existe, elle doit être `2.0.0` ; sa fiche est lue et, s'il lui manque le compte de démonstration,
-   celle de la version distribuée aussi ; le verrou est joué sur la fiche telle qu'elle sera après la copie, et
-   les notes sont composées. Si la 2.0.0 n'existe pas encore, la fiche de la version distribuée sert de
-   prévision. Rien n'est écrit, pas même la copie ;
+1. pré-vol, sans écriture chez Apple, avant la garde « revue en cours » (donc avant toute annulation) : si une
+   version modifiable existe, elle doit être `2.0.0` ; sa fiche est lue et, s'il lui manque les identifiants,
+   celle de la version distribuée aussi ; si la 2.0.0 n'existe pas encore, la fiche de la version distribuée sert
+   de prévision ; si la 2.0.0 est déjà distribuée, rien de plus n'est lu et la garde conclut. Puis : verrou sur la
+   fiche telle qu'elle sera après la copie, connexion du compte, choix du bloc par le rôle, notes composées et
+   mesurées. Rien n'est écrit, pas même la copie ;
 2. garde « revue en cours » (`ios_review_submission.rb`) ;
 3. version `2.0.0` retrouvée, ou créée si aucune version n'est modifiable (même requête que deliver) ; fiche
-   relue, copiée de la version distribuée si besoin, puis relue ; verrou rejoué, champ `notes` écrit puis relu
-   (verrou et texte contrôlés encore une fois) ;
+   relue, copiée de la version distribuée si besoin puis relue ; `demoAccountRequired` écrit à `true` s'il est
+   inconnu ; mêmes identifiants qu'au pré-vol ; verrou rejoué ; champ `notes` écrit puis relu (verrou, identifiants
+   et texte contrôlés encore une fois) ;
 4. soumission par deliver, qui retrouve cette même version (`get_edit_app_store_version`) sans en créer une
    seconde.
 
-**Le verrou.** La soumission s'arrête si, après la copie éventuelle, `demoAccountRequired` est faux, le nom ou
-le mot de passe du compte de démonstration est vide, ou la fiche absente. Elle s'arrête aussi si la 2.0.0 n'a
-pas de compte de démonstration et que la version distribuée n'en a pas non plus (ou qu'il n'y a pas de version
-distribuée). Le message dit ce qui manque, jamais une valeur : le nom et le mot de passe ne sont ni affichés ni
-journalisés, pas même masqués. Le texte des notes et les contacts ne le sont pas non plus : le journal ne donne
-que des noms de champs et des longueurs.
+La lane `preflight_review_native` du job `gardes` n'exécute que l'étape 1, dans les deux modes : le run
+`verifier` sur `main` prouve donc la fiche, la connexion du compte, son rôle et la longueur des notes avant toute
+soumission.
 
-**Idempotence.** Si les notes commencent déjà par le bloc, rien n'est écrit. Si un bloc précédent est en tête
-(texte placé avant la ligne de séparation), il est remplacé ; les notes de la version précédente restent une
-seule fois, et le bloc n'apparaît jamais deux fois. Plus d'une ligne de séparation : arrêt (composition
-ambiguë). Au-delà de 4 000 caractères (limite d'Apple) : arrêt, rien n'est soumis. Le bloc fait environ
-1 800 caractères ; il reste environ 2 100 caractères pour les notes de 1.0.7.
+**Le verrou.** La soumission s'arrête si, après la copie éventuelle, `demoAccountRequired` n'est pas `true`, le
+nom ou le mot de passe du compte de démonstration est vide, la fiche est absente, ou la connexion échoue. Elle
+s'arrête aussi si la 2.0.0 n'a pas d'identifiants et que la version distribuée n'en a pas non plus (ou qu'il n'y
+a pas de version distribuée). Le message dit ce qui manque, jamais une valeur : le nom et le mot de passe ne sont
+ni affichés ni journalisés, pas même masqués. Le texte des notes et les contacts ne le sont pas non plus.
+
+**Idempotence.** Si les notes commencent déjà par le bloc du rôle vérifié, rien n'est écrit. Si un bloc précédent
+est en tête (texte placé avant la ligne de séparation, y compris l'autre variante), il est remplacé ; les notes de
+la version précédente restent une seule fois, et le bloc n'apparaît jamais deux fois. Plus d'une ligne de
+séparation : arrêt (composition ambiguë).
+
+**Marge sous la limite d'Apple.** Apple limite le champ à 4 000 caractères. La lane s'arrête au-delà de 3 900,
+comptés en unités UTF-16 (un émoji en compte deux), fins de ligne `\r\n` ramenées à `\n`, dès le pré-vol. Chaque
+bloc fait 1 854 unités, 1 911 avec le séparateur : il reste 1 989 unités pour les notes de 1.0.7.
 
 **Avertissement sans échec.** Si les notes de la version précédente ne contiennent aucune adresse e-mail (donc
-pas d'identifiants du compte établissement), le journal l'écrit et la soumission continue.
+pas d'identifiants de l'autre compte de revue), le journal l'écrit et la soumission continue.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
-lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée qui n'est pas plus ancienne que
-2.0.0, l'arrêtent aussi. Une version qui change entre le pré-vol et l'écriture, une fiche relue différente de la
-copie, ou des notes relues différentes de celles écrites, arrêtent la lane avant la soumission.
+lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée plus récente que 2.0.0, l'arrêtent
+aussi. Une version qui change entre le pré-vol et l'écriture, des identifiants différents de ceux connectés, une
+fiche relue différente de la copie, ou des notes relues différentes de celles écrites, arrêtent la lane avant la
+soumission.
 
-**Si le verrou refuse.** Rien n'est soumis. Quand la 2.0.0 n'existe pas encore et que la version distribuée n'a
-pas de compte de démonstration, le pré-vol refuse avant de créer la version. Si la version 2.0.0 venait d'être
-créée (cas sans version distribuée), elle reste en « Prepare for Submission », vide de toute soumission ; la
-relance la retrouve. Si ni la 2.0.0 ni la version distribuée n'ont de compte de démonstration, il ne peut se
-saisir que par l'API (`PATCH /v1/appStoreReviewDetails/{id}`, ou création de la fiche si elle manque), dans une
-étape distincte, relue, qui ne met aucun identifiant dans le dépôt ni dans un journal. Ensuite, relancer le
-workflow entier.
+**Si le verrou refuse.** Rien n'est soumis, et le pré-vol refuse avant toute écriture : avant de créer la version,
+avant toute copie et avant toute annulation de revue. Si ni la 2.0.0 ni la version distribuée n'ont
+d'identifiants qui se connectent sur un rôle admis, ils ne peuvent se saisir que par l'API
+(`PATCH /v1/appStoreReviewDetails/{id}`, ou création de la fiche si elle manque), dans une étape distincte,
+relue, qui ne met aucun identifiant dans le dépôt ni dans un journal. Ensuite, relancer le workflow entier,
+d'abord en `verifier`.
 
-**Changer le texte.** Modifier `config/ios-review-notes-2.0.txt` par une PR (anglais, pas d'adresse, pas de ligne
-de séparation, faits vérifiés dans `ios-native/`). À la soumission suivante, le bloc en tête est remplacé par le
-nouveau. Une version déjà soumise n'est pas modifiée : la lane s'arrête sur « déjà soumis » avant l'écriture.
+**Changer le texte.** Modifier les deux fichiers `config/ios-review-notes-2.0-*.txt` par une PR (anglais, pas
+d'adresse, pas de ligne de séparation, faits vérifiés dans `ios-native/`). À la soumission suivante, le bloc en
+tête est remplacé par le nouveau. Une version déjà soumise n'est pas modifiée : la lane s'arrête sur « déjà
+soumis » avant l'écriture.
 
 **Libellés du bloc vérifiés dans `ios-native/` (26/11/2026).** Onglets soignant : Accueil, Explorer, Mes missions,
 Revenus, Profil (`MainTabView.swift`). Suppression, soignant : section « Suppression de compte », bouton
 « Supprimer mon compte » de l'onglet Profil (`CompteSuppression.swift`). Établissement : onglet Compte, section
 « Aide & légal », entrée « Supprimer mon compte » (`RenvoisWebEtab.swift`), qui ouvre la page de suppression du
 site jolene.app (connexion redemandée) : le bloc le dit. « Mot de passe oublié ? » est sur l'écran de connexion
-(`LoginScreen.swift`). Les données des comptes de revue (trois missions à Paris, publication désactivée faute de
-vérification) ne se vérifient pas dans le code : elles se vérifient sur les comptes eux-mêmes.
+(`LoginScreen.swift`). Paiements : établissements prélevés par SEPA, Jolene créancière du mandat, honoraires
+versés au soignant par virement, hors de l'app (`docs/flux-monetaire-escrow.md`). Les données des comptes de
+revue (trois missions à Paris, publication désactivée faute de vérification) ne se vérifient pas dans le code :
+elles se vérifient sur les comptes eux-mêmes.
 
-**Prouvé seulement au vrai run de soumission.** Que l'API d'Apple renvoie bien le nom et le mot de passe du
-compte de démonstration en lecture : probable, non prouvé (`download_metadata` de deliver,
-`deliver/lib/deliver/setup.rb`, relit `demo_account_password` par la même requête ; sinon le verrou refuse
-toujours, et aucune copie n'est possible). Qu'Apple réponde `data: null` pour une version sans fiche (une erreur
-est tenue pour « illisible » et arrête la lane sans copie). Qu'une version créée par l'API reprenne ou non la
-fiche de 1.0.7 (les deux cas sont traités). Qu'Apple accepte la création ou la copie de la fiche et l'écriture
-des notes dans l'état de la version, sans rien modifier d'autre. Le décompte exact des 4 000 caractères chez
-Apple.
+**Prouvé seulement au vrai run.** Le run `verifier` prouve, sans rien écrire : la lecture de la fiche et du mot de
+passe par l'API (probable : `download_metadata` de deliver, `deliver/lib/deliver/setup.rb`, relit
+`demo_account_password` par la même requête), la connexion et le rôle du compte, la longueur des notes de 1.0.7,
+l'état et l'unicité des versions. Restent à prouver au run `soumettre` : qu'Apple réponde `data: null` pour une
+version sans fiche (une erreur est tenue pour « illisible » et arrête la lane sans copie) ; qu'une version créée
+par l'API reprenne ou non la fiche de 1.0.7 (les deux cas sont traités) ; qu'Apple accepte la création ou la copie
+de la fiche, l'écriture de `demoAccountRequired` et celle des notes dans l'état de la version, sans rien modifier
+d'autre ; le décompte exact des caractères chez Apple (marge de 100).
 
 ## Vérification locale
 
 ```bash
 node --test tests/node/ios-native-app-store.node.mjs
 node scripts/mobile/ios-native-app-store.mjs source .   # gardes lots, apple-4.2 et ota sur l'arbre courant
-ruby fastlane/ios_review_submission.test.rb              # revue en cours et contexte de la lane
-ruby fastlane/ios_review_notes.test.rb                   # notes pour la revue et verrou du compte de démonstration
+ruby fastlane/ios_review_submission.test.rb              # revue en cours et contexte des lanes
+ruby fastlane/ios_review_notes.test.rb                   # notes, fiche et connexion simulée du compte de démonstration
 ```
 
-Sur l'arbre actuel, la deuxième commande refuse sur la garde `lots` (`recovery` au lot 1, ports des lots
-4 et 5) : c'est l'état attendu tant que les lots ne sont pas clos.
+Sur l'arbre de `main` au 26/11/2026, la deuxième commande passe : aucun port en attente, espace établissement
+ouvert, Apple 4.2 et absence de mise à jour à chaud vérifiés. Les lanes elles-mêmes ne tournent que dans le
+workflow.
