@@ -28,7 +28,7 @@ Plan §5 « Lot 6 », l.225 à l.234.
 | Captures iPhone et iPad refaites depuis l'app Swift | **à faire** | tranche T5 |
 | App Privacy recalculée | **à faire** (fondatrice) | §3, action 4 ; base : `ios-native/Jolene/PrivacyInfo.xcprivacy` (22 types de données) |
 | Notes de version annonçant la reconnexion et Face ID | **fait, à valider** | `config/mobile-release-notes-ios.txt` (D7) |
-| Notes pour la revue | **à faire** (fondatrice) | §3, action 3 ; brouillon dans `APP_STORE.md` |
+| Notes pour la revue | **fait, à valider** ; comptes de revue **à vérifier** (fondatrice) | §3, action 3 ; bloc `config/ios-review-notes-2.0.txt`, écrit en tête des notes par la lane (`APP_STORE.md`) |
 | Écran d'accueil après la mise à jour | **à faire** | aucun écran de ce type dans `ios-native/` ; tranche T6 |
 | Déploiement progressif sur 7 jours | **fait** | lane `ios submit_native`, `phased_release: true` (A3) |
 | Suivi par `mobile-store-status.yml` | **fait** (existant) | lit l'état de la version et de la publication progressive, en lecture seule |

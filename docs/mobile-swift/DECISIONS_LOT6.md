@@ -145,6 +145,11 @@ une décision à part (« En attente », n° 6).
 - **La fiche n'est pas touchée**, sauf le champ « Nouveautés » fr-FR, lu dans
   `config/mobile-release-notes-ios.txt`. Les captures, la description, les notes pour la revue, la
   confidentialité et la classification se saisissent dans App Store Connect.
+  **Amendé le 26/11/2026** : personne ne peut se connecter au site App Store Connect. La lane écrit donc
+  aussi, par l'API, le seul champ « Notes » des informations pour la vérification : le bloc de
+  `config/ios-review-notes-2.0.txt` en tête, puis les notes existantes ; jamais le compte de démonstration
+  ni les contacts. Elle refuse de soumettre sans compte de démonstration complet (`APP_STORE.md`, section
+  « Notes pour la revue et compte de démonstration »).
 - **Texte des « Nouveautés »** : proposé dans le fichier, il annonce la reconnexion et la réactivation de
   Face ID (plan, l.225). Il est validé par la fondatrice à la revue de la PR ; ce n'est pas un texte
   juridique.

@@ -8,11 +8,13 @@ Gardes : `scripts/mobile/ios-native-app-store.mjs`, testées par `tests/node/ios
 
 Il soumet à la revue Apple un build de l'app `app.jolene` (App Store Connect `6774672845`) **déjà envoyé
 sur TestFlight** par `ios-native-testflight.yml` et déjà traité (`VALID`). Il active la publication
-progressive sur sept jours et écrit le champ « Nouveautés » fr-FR.
+progressive sur sept jours, écrit le champ « Nouveautés » fr-FR et place en tête du champ « Notes » des
+informations pour la vérification le bloc de `config/ios-review-notes-2.0.txt` (section « Notes pour la
+revue et compte de démonstration »).
 
 Il ne fait **jamais** : de compilation, d'envoi de binaire, de modification des captures, de la
-description, des notes pour la revue, de la confidentialité ou de la classification. Il ne part jamais
-seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le déclenchent.
+description, de la confidentialité, de la classification, du compte de démonstration ou des contacts de la
+revue. Il ne part jamais seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le déclenchent.
 
 Deux modes : `verifier` (défaut) joue toutes les gardes en lecture seule et s'arrête avant la lane et
 avant le tag ; `soumettre` joue les mêmes gardes, puis soumet et pose le tag, et exige en plus la phrase de
@@ -35,8 +37,10 @@ confirmation. Lancer d'abord en `verifier` : c'est la répétition à blanc de l
    `ios-swift-ci.yml` à la main sur `main` **avant** l'envoi TestFlight, au même commit.
 4. Ce build a été recetté sur iPhone (`RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md`), dont les liens
    universels et le push de production.
-5. Les saisies d'App Store Connect sont faites (`LOT6_PLAN.md` §3) : fiche, notes pour la revue et compte
-   de démonstration, confidentialité, classification, captures.
+5. Les saisies d'App Store Connect sont faites (`LOT6_PLAN.md` §3) : fiche, confidentialité, classification,
+   captures. Le compte de démonstration soignant (« Connexion requise ») et, dans les notes, les identifiants
+   du compte établissement viennent de la version précédente : la lane ne les écrit jamais et refuse de
+   soumettre sans compte de démonstration complet (section « Notes pour la revue et compte de démonstration »).
 6. `config/mobile-release-notes-ios.txt` contient le texte voulu pour « Nouveautés ».
 
 ## Lancer la soumission
@@ -86,6 +90,7 @@ et arrête le workflow avant toute écriture chez Apple. Aucune garde ne se dés
 | backend | Le dernier déploiement Supabase de production est vert et couvre le backend de `main` (`delivery-plan-backend.mjs`). | Attendre ou réparer `deploy-supabase`. |
 | `build` | Dans App Store Connect : un seul build `N`, `VALID`, non expiré, `usesNonExemptEncryption = false`, version `2.0.0`, plateforme iOS ; version supérieure à 1.0.7, build supérieur à 24. | Attendre la fin du traitement, ou envoyer un nouveau build. |
 | revue en cours | Dans la lane (`fastlane/ios_review_submission.rb`) : version supérieure à la version en vente ; une soumission encore « en attente de revue » pour un build plus ancien est annulée puis remplacée ; une revue commencée (`IN_REVIEW`) n'est jamais interrompue. | Lire le message : la revue en cours est préservée. |
+| compte de démonstration et notes | Dans la lane (`fastlane/ios_review_notes.rb`), en pré-vol avant la garde « revue en cours » puis de nouveau avant la soumission : la version modifiable est bien `2.0.0` (créée si absente) ; `demoAccountRequired` vrai, nom et mot de passe du compte de démonstration non vides ; notes composées en 4 000 caractères au plus. Détail : section suivante. | Voir « Si le verrou refuse », section suivante. |
 
 ## Secrets et droits
 
@@ -128,29 +133,78 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 - Après la mise à jour, chaque utilisateur se reconnecte une fois et réactive Face ID (plan §6). Le taux
   de reconnexion se suit par `fn_audit_connexion`.
 
-## Brouillon de notes pour la revue
+## Notes pour la revue et compte de démonstration
 
-À adapter à l'état réel de l'app à la clôture du lot 5, puis à saisir dans App Store Connect. Les
-identifiants des comptes de revue se saisissent dans les champs sécurisés, jamais dans le dépôt
-(`docs/STORE_METADATA_FR.md`).
+Personne ne se connecte au site App Store Connect : la lane passe par l'API, avec la clé du job
+`soumettre`. Code : `fastlane/ios_review_notes.rb` ; tests hors réseau : `fastlane/ios_review_notes.test.rb`
+(job `validate-pr`).
 
-> Jolene 2.0 est une réécriture native (Swift) de l'application. Elle remplace la version 1.0.7.
->
-> Jolene est une plateforme professionnelle de remplacement en santé. Les comptes de revue contiennent
-> des données de démonstration.
->
-> Compte soignant : tableau de bord, recherche de missions, candidature, Mes missions, documents,
-> contrats, revenus, compte. Compte établissement : tableau de bord, missions, candidatures, présences.
-> Les comptes administrateur et groupe sont renvoyés vers le site jolene.app : leur espace n'existe pas
-> dans l'application.
->
-> Le pointage demande la position (au premier plan seulement) et un code affiché sur place par
-> l'établissement : il ne peut pas être terminé hors d'un établissement. La caméra n'est demandée que
-> pour photographier un document ou scanner un code. Le paiement, la signature par SMS et Pro Santé
-> Connect ne doivent pas être menés à leur terme par la revue.
->
-> La suppression du compte se lance depuis l'application, dans les réglages du compte (indiquer ici le
-> chemin exact des écrans).
+**Où sont les notes.** Le texte pour le relecteur Apple (en anglais) est dans `config/ios-review-notes-2.0.txt`,
+versionné. Dans App Store Connect, le champ « Notes » de la version 2.0.0 devient :
+
+1. ce bloc ;
+2. une ligne vide, puis la ligne `--- Notes de la version précédente ---` ;
+3. les notes déjà présentes, telles quelles. Quand la version 2.0.0 est créée, elles viennent de 1.0.7 (app
+   Capacitor, trois rôles dont un compte administrateur) ; elles portent les identifiants du compte
+   établissement, auxquels le bloc renvoie.
+
+Rien d'autre n'est écrit : ni le compte de démonstration, ni les contacts, ni `demoAccountRequired`. La lane ne
+passe pas par l'option `app_review_information` de deliver, qui remettrait `demoAccountRequired` à faux faute
+d'identifiants. Aucun identifiant n'entre dans le dépôt (public) : le bloc est refusé s'il contient une adresse
+e-mail.
+
+**Ordre dans la lane** (`IosReviewSubmission.enchainer!`) :
+
+1. pré-vol, en lecture seule, avant la garde « revue en cours » (donc avant toute annulation) : si une version
+   modifiable existe, elle doit être `2.0.0` ; sa fiche est lue, le verrou joué et les notes composées, sans
+   rien écrire ;
+2. garde « revue en cours » (`ios_review_submission.rb`) ;
+3. version `2.0.0` retrouvée, ou créée si aucune version n'est modifiable (même requête que deliver) ; fiche
+   relue, verrou rejoué, champ `notes` écrit puis relu (verrou et texte contrôlés une troisième fois) ;
+4. soumission par deliver, qui retrouve cette même version (`get_edit_app_store_version`) sans en créer une
+   seconde.
+
+**Le verrou.** La soumission s'arrête si `demoAccountRequired` est faux, si le nom ou le mot de passe du compte
+de démonstration est vide, ou si la fiche est absente ou illisible. Le message dit ce qui manque, jamais une
+valeur : le nom et le mot de passe ne sont ni affichés ni journalisés, pas même masqués. Le texte des notes
+n'est jamais affiché non plus (il contient les identifiants du compte établissement) : le journal ne donne que
+des longueurs.
+
+**Idempotence.** Si les notes commencent déjà par le bloc, rien n'est écrit. Si un bloc précédent est en tête
+(texte placé avant la ligne de séparation), il est remplacé ; les notes de la version précédente restent une
+seule fois, et le bloc n'apparaît jamais deux fois. Plus d'une ligne de séparation : arrêt (composition
+ambiguë). Au-delà de 4 000 caractères (limite d'Apple) : arrêt, rien n'est soumis. Le bloc fait environ
+1 800 caractères ; il reste environ 2 100 caractères pour les notes de 1.0.7.
+
+**Avertissement sans échec.** Si les notes de la version précédente ne contiennent aucune adresse e-mail (donc
+pas d'identifiants du compte établissement), le journal l'écrit et la soumission continue.
+
+**Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
+lane au pré-vol. Une version qui change entre le pré-vol et l'écriture, ou des notes relues différentes de
+celles écrites, arrêtent aussi la lane, avant la soumission.
+
+**Si le verrou refuse.** Rien n'est soumis. Si la version 2.0.0 venait d'être créée, elle reste en « Prepare for
+Submission », vide de toute soumission ; la relance la retrouve. Le compte de démonstration manquant ne peut se
+saisir que par l'API (`PATCH /v1/appStoreReviewDetails/{id}`, ou création de la fiche si elle manque), dans une
+étape distincte, relue, qui ne met aucun identifiant dans le dépôt ni dans un journal. Ensuite, relancer le
+workflow entier.
+
+**Changer le texte.** Modifier `config/ios-review-notes-2.0.txt` par une PR (anglais, pas d'adresse, pas de ligne
+de séparation, faits vérifiés dans `ios-native/`). À la soumission suivante, le bloc en tête est remplacé par le
+nouveau. Une version déjà soumise n'est pas modifiée : la lane s'arrête sur « déjà soumis » avant l'écriture.
+
+**Libellés du bloc vérifiés dans `ios-native/` (26/11/2026).** Onglets soignant : Accueil, Explorer, Mes missions,
+Revenus, Profil (`MainTabView.swift`). Suppression, soignant : section « Suppression de compte », bouton
+« Supprimer mon compte » de l'onglet Profil (`CompteSuppression.swift`). Établissement : onglet Compte, section
+« Aide & légal », entrée « Supprimer mon compte » (`RenvoisWebEtab.swift`), qui ouvre la page de suppression du
+site jolene.app (connexion redemandée) : le bloc le dit. « Mot de passe oublié ? » est sur l'écran de connexion
+(`LoginScreen.swift`). Les données des comptes de revue (trois missions à Paris, publication désactivée faute de
+vérification) ne se vérifient pas dans le code : elles se vérifient sur les comptes eux-mêmes.
+
+**Prouvé seulement au vrai run de soumission.** Que l'API d'Apple renvoie bien le nom et le mot de passe du
+compte de démonstration en lecture (sinon le verrou refuse toujours) ; qu'une version créée par l'API reprenne
+la fiche de 1.0.7 ; qu'Apple accepte l'écriture des notes dans l'état de la version et ne modifie rien d'autre ;
+le décompte exact des 4 000 caractères chez Apple.
 
 ## Vérification locale
 
@@ -158,6 +212,7 @@ identifiants des comptes de revue se saisissent dans les champs sécurisés, jam
 node --test tests/node/ios-native-app-store.node.mjs
 node scripts/mobile/ios-native-app-store.mjs source .   # gardes lots, apple-4.2 et ota sur l'arbre courant
 ruby fastlane/ios_review_submission.test.rb              # revue en cours et contexte de la lane
+ruby fastlane/ios_review_notes.test.rb                   # notes pour la revue et verrou du compte de démonstration
 ```
 
 Sur l'arbre actuel, la deuxième commande refuse sur la garde `lots` (`recovery` au lot 1, ports des lots

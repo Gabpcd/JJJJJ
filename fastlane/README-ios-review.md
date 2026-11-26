@@ -45,9 +45,20 @@ an empty draft can be reused by deliver. Local metadata/API errors after success
 cancellation can still leave the old version developer-rejected; re-run only after
 resolving the reported error.
 
-Run offline checks with `ruby fastlane/ios_review_submission.test.rb`. They require
-no Fastlane installation, credentials or network. The lane itself uses the pinned
-Fastlane 2.240.1 API.
+Review notes (`fastlane/ios_review_notes.rb`, `IosReviewSubmission.enchainer!`): before
+this guard runs, a read-only pre-flight checks the editable version that deliver will use
+(`App#get_edit_app_store_version`). It must be the configured marketing version (another
+editable version, which deliver's `ensure_version!` would rename, stops the lane), with
+`demoAccountRequired` true and a non-empty demo account name and password. After this guard,
+the version is found or created (same request as `ensure_version!`), the lock is replayed,
+and only the `notes` attribute of its `appStoreReviewDetail` is patched: the block from
+`config/ios-review-notes-2.0.txt`, the separator line, then the previous notes. The lane
+never passes `app_review_information` to deliver, which would reset `demoAccountRequired`.
+Demo credentials and note contents are never printed. Details: `docs/mobile-swift/APP_STORE.md`.
+
+Run offline checks with `ruby fastlane/ios_review_submission.test.rb` and
+`ruby fastlane/ios_review_notes.test.rb`. They require no Fastlane installation,
+credentials or network. The lane itself uses the pinned Fastlane 2.240.1 API.
 
 Sources checked:
 
