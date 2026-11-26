@@ -13,8 +13,10 @@ informations pour la vérification le bloc de `config/ios-review-notes-2.0.txt` 
 revue et compte de démonstration »).
 
 Il ne fait **jamais** : de compilation, d'envoi de binaire, de modification des captures, de la
-description, de la confidentialité, de la classification, du compte de démonstration ou des contacts de la
-revue. Il ne part jamais seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le déclenchent.
+description, de la confidentialité ou de la classification. Il n'écrase jamais un compte de démonstration
+existant : il ne copie la fiche de vérification de la version distribuée que si la 2.0.0 n'a pas de compte de
+démonstration complet. Il ne part jamais seul : ni push, ni PR, ni merge, ni fin d'un autre workflow ne le
+déclenchent.
 
 Deux modes : `verifier` (défaut) joue toutes les gardes en lecture seule et s'arrête avant la lane et
 avant le tag ; `soumettre` joue les mêmes gardes, puis soumet et pose le tag, et exige en plus la phrase de
@@ -39,8 +41,9 @@ confirmation. Lancer d'abord en `verifier` : c'est la répétition à blanc de l
    universels et le push de production.
 5. Les saisies d'App Store Connect sont faites (`LOT6_PLAN.md` §3) : fiche, confidentialité, classification,
    captures. Le compte de démonstration soignant (« Connexion requise ») et, dans les notes, les identifiants
-   du compte établissement viennent de la version précédente : la lane ne les écrit jamais et refuse de
-   soumettre sans compte de démonstration complet (section « Notes pour la revue et compte de démonstration »).
+   du compte établissement viennent de la version précédente : si la 2.0.0 n'en a pas, la lane les copie de la
+   version distribuée (1.0.7) ; si aucune des deux n'a de compte de démonstration complet, elle refuse de
+   soumettre (section « Notes pour la revue et compte de démonstration »).
 6. `config/mobile-release-notes-ios.txt` contient le texte voulu pour « Nouveautés ».
 
 ## Lancer la soumission
@@ -90,7 +93,7 @@ et arrête le workflow avant toute écriture chez Apple. Aucune garde ne se dés
 | backend | Le dernier déploiement Supabase de production est vert et couvre le backend de `main` (`delivery-plan-backend.mjs`). | Attendre ou réparer `deploy-supabase`. |
 | `build` | Dans App Store Connect : un seul build `N`, `VALID`, non expiré, `usesNonExemptEncryption = false`, version `2.0.0`, plateforme iOS ; version supérieure à 1.0.7, build supérieur à 24. | Attendre la fin du traitement, ou envoyer un nouveau build. |
 | revue en cours | Dans la lane (`fastlane/ios_review_submission.rb`) : version supérieure à la version en vente ; une soumission encore « en attente de revue » pour un build plus ancien est annulée puis remplacée ; une revue commencée (`IN_REVIEW`) n'est jamais interrompue. | Lire le message : la revue en cours est préservée. |
-| compte de démonstration et notes | Dans la lane (`fastlane/ios_review_notes.rb`), en pré-vol avant la garde « revue en cours » puis de nouveau avant la soumission : la version modifiable est bien `2.0.0` (créée si absente) ; `demoAccountRequired` vrai, nom et mot de passe du compte de démonstration non vides ; notes composées en 4 000 caractères au plus. Détail : section suivante. | Voir « Si le verrou refuse », section suivante. |
+| compte de démonstration et notes | Dans la lane (`fastlane/ios_review_notes.rb`), en pré-vol avant la garde « revue en cours » puis de nouveau avant la soumission : la version modifiable est bien `2.0.0` (créée si absente) ; sans compte de démonstration complet, sa fiche est copiée de la version distribuée (à l'écriture seulement) ; `demoAccountRequired` vrai, nom et mot de passe du compte de démonstration non vides ; notes composées en 4 000 caractères au plus. Détail : section suivante. | Voir « Si le verrou refuse », section suivante. |
 
 ## Secrets et droits
 
@@ -148,27 +151,44 @@ versionné. Dans App Store Connect, le champ « Notes » de la version 2.0.0 dev
    Capacitor, trois rôles dont un compte administrateur) ; elles portent les identifiants du compte
    établissement, auxquels le bloc renvoie.
 
-Rien d'autre n'est écrit : ni le compte de démonstration, ni les contacts, ni `demoAccountRequired`. La lane ne
-passe pas par l'option `app_review_information` de deliver, qui remettrait `demoAccountRequired` à faux faute
-d'identifiants. Aucun identifiant n'entre dans le dépôt (public) : le bloc est refusé s'il contient une adresse
-e-mail.
+La lane ne passe pas par l'option `app_review_information` de deliver, qui remettrait `demoAccountRequired` à
+faux faute d'identifiants. Aucun identifiant n'entre dans le dépôt (public) : le bloc est refusé s'il contient
+une adresse e-mail.
+
+**Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou en a
+une sans compte de démonstration complet, la lane la complète depuis la version distribuée
+(`READY_FOR_DISTRIBUTION`, unique et plus ancienne : aujourd'hui 1.0.7) :
+
+- le compte de démonstration, d'un bloc : `demoAccountName`, `demoAccountPassword`, `demoAccountRequired` ;
+- les contacts (`contactFirstName`, `contactLastName`, `contactPhone`, `contactEmail`) et `notes`, seulement là
+  où la 2.0.0 est vide : une valeur déjà saisie n'est jamais remplacée.
+
+Rien n'est copié si la 2.0.0 a déjà un compte de démonstration complet : une fiche existante n'est jamais
+écrasée. La copie va d'une réponse de l'API à une requête de l'API, dans le job ; aucune valeur n'est affichée
+ni journalisée (le journal nomme les champs copiés). La fiche est relue et comparée à la copie avant la suite.
+Une fiche illisible (erreur d'Apple) n'est jamais tenue pour absente : la lane s'arrête sans rien copier.
+Ensuite, le verrou et la composition des notes s'appliquent comme sans copie.
 
 **Ordre dans la lane** (`IosReviewSubmission.enchainer!`) :
 
 1. pré-vol, en lecture seule, avant la garde « revue en cours » (donc avant toute annulation) : si une version
-   modifiable existe, elle doit être `2.0.0` ; sa fiche est lue, le verrou joué et les notes composées, sans
-   rien écrire ;
+   modifiable existe, elle doit être `2.0.0` ; sa fiche est lue et, s'il lui manque le compte de démonstration,
+   celle de la version distribuée aussi ; le verrou est joué sur la fiche telle qu'elle sera après la copie, et
+   les notes sont composées. Si la 2.0.0 n'existe pas encore, la fiche de la version distribuée sert de
+   prévision. Rien n'est écrit, pas même la copie ;
 2. garde « revue en cours » (`ios_review_submission.rb`) ;
 3. version `2.0.0` retrouvée, ou créée si aucune version n'est modifiable (même requête que deliver) ; fiche
-   relue, verrou rejoué, champ `notes` écrit puis relu (verrou et texte contrôlés une troisième fois) ;
+   relue, copiée de la version distribuée si besoin, puis relue ; verrou rejoué, champ `notes` écrit puis relu
+   (verrou et texte contrôlés encore une fois) ;
 4. soumission par deliver, qui retrouve cette même version (`get_edit_app_store_version`) sans en créer une
    seconde.
 
-**Le verrou.** La soumission s'arrête si `demoAccountRequired` est faux, si le nom ou le mot de passe du compte
-de démonstration est vide, ou si la fiche est absente ou illisible. Le message dit ce qui manque, jamais une
-valeur : le nom et le mot de passe ne sont ni affichés ni journalisés, pas même masqués. Le texte des notes
-n'est jamais affiché non plus (il contient les identifiants du compte établissement) : le journal ne donne que
-des longueurs.
+**Le verrou.** La soumission s'arrête si, après la copie éventuelle, `demoAccountRequired` est faux, le nom ou
+le mot de passe du compte de démonstration est vide, ou la fiche absente. Elle s'arrête aussi si la 2.0.0 n'a
+pas de compte de démonstration et que la version distribuée n'en a pas non plus (ou qu'il n'y a pas de version
+distribuée). Le message dit ce qui manque, jamais une valeur : le nom et le mot de passe ne sont ni affichés ni
+journalisés, pas même masqués. Le texte des notes et les contacts ne le sont pas non plus : le journal ne donne
+que des noms de champs et des longueurs.
 
 **Idempotence.** Si les notes commencent déjà par le bloc, rien n'est écrit. Si un bloc précédent est en tête
 (texte placé avant la ligne de séparation), il est remplacé ; les notes de la version précédente restent une
@@ -180,11 +200,14 @@ ambiguë). Au-delà de 4 000 caractères (limite d'Apple) : arrêt, rien n'est s
 pas d'identifiants du compte établissement), le journal l'écrit et la soumission continue.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
-lane au pré-vol. Une version qui change entre le pré-vol et l'écriture, ou des notes relues différentes de
-celles écrites, arrêtent aussi la lane, avant la soumission.
+lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée qui n'est pas plus ancienne que
+2.0.0, l'arrêtent aussi. Une version qui change entre le pré-vol et l'écriture, une fiche relue différente de la
+copie, ou des notes relues différentes de celles écrites, arrêtent la lane avant la soumission.
 
-**Si le verrou refuse.** Rien n'est soumis. Si la version 2.0.0 venait d'être créée, elle reste en « Prepare for
-Submission », vide de toute soumission ; la relance la retrouve. Le compte de démonstration manquant ne peut se
+**Si le verrou refuse.** Rien n'est soumis. Quand la 2.0.0 n'existe pas encore et que la version distribuée n'a
+pas de compte de démonstration, le pré-vol refuse avant de créer la version. Si la version 2.0.0 venait d'être
+créée (cas sans version distribuée), elle reste en « Prepare for Submission », vide de toute soumission ; la
+relance la retrouve. Si ni la 2.0.0 ni la version distribuée n'ont de compte de démonstration, il ne peut se
 saisir que par l'API (`PATCH /v1/appStoreReviewDetails/{id}`, ou création de la fiche si elle manque), dans une
 étape distincte, relue, qui ne met aucun identifiant dans le dépôt ni dans un journal. Ensuite, relancer le
 workflow entier.
@@ -202,9 +225,13 @@ site jolene.app (connexion redemandée) : le bloc le dit. « Mot de passe oubli�
 vérification) ne se vérifient pas dans le code : elles se vérifient sur les comptes eux-mêmes.
 
 **Prouvé seulement au vrai run de soumission.** Que l'API d'Apple renvoie bien le nom et le mot de passe du
-compte de démonstration en lecture (sinon le verrou refuse toujours) ; qu'une version créée par l'API reprenne
-la fiche de 1.0.7 ; qu'Apple accepte l'écriture des notes dans l'état de la version et ne modifie rien d'autre ;
-le décompte exact des 4 000 caractères chez Apple.
+compte de démonstration en lecture : probable, non prouvé (`download_metadata` de deliver,
+`deliver/lib/deliver/setup.rb`, relit `demo_account_password` par la même requête ; sinon le verrou refuse
+toujours, et aucune copie n'est possible). Qu'Apple réponde `data: null` pour une version sans fiche (une erreur
+est tenue pour « illisible » et arrête la lane sans copie). Qu'une version créée par l'API reprenne ou non la
+fiche de 1.0.7 (les deux cas sont traités). Qu'Apple accepte la création ou la copie de la fiche et l'écriture
+des notes dans l'état de la version, sans rien modifier d'autre. Le décompte exact des 4 000 caractères chez
+Apple.
 
 ## Vérification locale
 

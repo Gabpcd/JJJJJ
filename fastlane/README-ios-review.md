@@ -49,12 +49,16 @@ Review notes (`fastlane/ios_review_notes.rb`, `IosReviewSubmission.enchainer!`):
 this guard runs, a read-only pre-flight checks the editable version that deliver will use
 (`App#get_edit_app_store_version`). It must be the configured marketing version (another
 editable version, which deliver's `ensure_version!` would rename, stops the lane), with
-`demoAccountRequired` true and a non-empty demo account name and password. After this guard,
-the version is found or created (same request as `ensure_version!`), the lock is replayed,
-and only the `notes` attribute of its `appStoreReviewDetail` is patched: the block from
-`config/ios-review-notes-2.0.txt`, the separator line, then the previous notes. The lane
-never passes `app_review_information` to deliver, which would reset `demoAccountRequired`.
-Demo credentials and note contents are never printed. Details: `docs/mobile-swift/APP_STORE.md`.
+`demoAccountRequired` true and a non-empty demo account name and password, once the planned
+copy is applied. After this guard, the version is found or created (same request as
+`ensure_version!`). Only if its `appStoreReviewDetail` is missing or has no complete demo
+account, the review detail of the single distributed version is copied API to API: the demo
+account as a whole, then contacts and notes only where the target is empty; an existing demo
+account is never overwritten. The lock is replayed, then the `notes` attribute is patched:
+the block from `config/ios-review-notes-2.0.txt`, the separator line, then the previous notes.
+The lane never passes `app_review_information` to deliver, which would reset
+`demoAccountRequired`. No review detail value is ever printed. Details:
+`docs/mobile-swift/APP_STORE.md`.
 
 Run offline checks with `ruby fastlane/ios_review_submission.test.rb` and
 `ruby fastlane/ios_review_notes.test.rb`. They require no Fastlane installation,
