@@ -2085,3 +2085,107 @@ Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 - Reste à prouver en CI : un run complet de la branche sur les trois formats, dont l'iPhone 17 en iOS 26.2. Aucun
   workflow n'est déclenché par la tranche. Si un gel se reproduit malgré le bouton, les relevés de backboardd et de
   SpringBoard serviront à instruire un rapport du défaut du simulateur.
+
+## Garde de repos XCUITest — 26/11/2026
+
+Décision de la session de pilotage, sur délégation de la fondatrice (8/11/2026). Branche `fix/ios-ui-repos-xcuitest`,
+depuis `main`. Aucun B9, aucun HARD STOP : rien n'entre dans le binaire livré (cible JoleneUITests, et en DEBUG
+seulement un argument de lancement de l'app), aucun texte juridique n'est touché.
+
+### Constat
+
+- Symptôme : sur iPad, environ un job d'interface sur trois échoue. Avant chaque geste synthétisé, XCTest attend 60 s
+  (« App animations complete notification not received »). Cela dure jusqu'à la fin du processus de l'app. Aucune
+  assertion n'échoue, mais le test dépasse sa limite de 10 min. Dernière occurrence : série 45699673091, job 139506151098
+  (iPad portrait, `DemoAnnulationTests.testAnnulationCandidatureAvecJustificatifRelue`).
+- **Déclencheur établi.** Dans les 4 blocages persistants dont on a le journal détaillé, la première attente expirée suit
+  le toucher sur « OK » (`clavier-ok`, `BoutonClavierOK`) :
+  - jobs 139506151098 (portrait) et 138917774550, 138917774902, 139043161443 (paysage) ;
+  - environ 4 touchers « OK » sur 80 sur iPad, 0 sur 27 sur iPhone, dans les artefacts légers consultés ;
+  - le même test passe par le même chemin, sans attente, sur iPhone et sur d'autres séries iPad.
+- **Mécanisme observé.** Journal du simulateur du job 138917774902 :
+  - le clavier se ferme normalement (`didHide`, 02:31:05.07) ;
+  - la demande « notify when animations are idle » de 02:31:04.774 ne reçoit jamais de réponse, ni aucune des
+    suivantes ;
+  - dans l'app, le fil principal est inactif (spindump du job 139506151098 : 0,012 s de CPU) ;
+  - le fil du lanceur est dans `-[XCUIApplicationProcess waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:]`.
+- **Cause non établie.** On ne sait pas quelle animation reste ouverte. Piste probable : une animation de la barre
+  d'accessoire SwiftUI du clavier, détachée de la fenêtre au moment où la condition `if actif && focus` de
+  `BoutonClavierOK` retire le bouton. Autre piste : un défaut d'iPadOS 26.2 sur simulateur, ou de l'appariement début/fin
+  d'XCTest (« Unexpectedly received animationDidStop without a matching animationDidStart » à l'arrivée sur Présences).
+- Rien n'indique d'effet pour les utilisateurs réels : aucune animation sans fin ni minuterie dans le code concerné, et
+  l'interface reste correcte après le blocage.
+
+### Décision : borner le coût côté tests, journaliser, prouver en CI
+
+On ne cherche pas l'animation fautive dans cette tranche. Un re-jeu de job coûte 3 h, et l'envoi à l'App Store exige
+une série entièrement verte.
+
+1. **Garde de repos** (`ios-native/JoleneUITests/GardeRepos.swift`, posée par `JoleneUITestCase.setUpWithError`, une
+   fois par processus du lanceur) :
+   - **Méthodes enveloppées.** Les méthodes de `XCUIApplicationProcess` dont le sélecteur commence par
+     `waitForQuiescenceIncludingAnimationsIdle:`, et seulement aux signatures relevées (encodage de types sans
+     décalages) :
+     - `v@:BBB` : `…:usingActivity:isPreEvent:`, relevé à `v28@0:8B16B20B24` sur Xcode 16.4 ;
+     - `v@:BB` : `…:isPreEvent:` ;
+     - `v@:B@B`.
+   - **Repli.** Si aucune signature ne correspond, rien n'est posé. Une ligne
+     `Jolene diagnostic repos-xcuitest : garde de repos non installée : <sélecteurs vus>` est écrite, et les tests se
+     comportent exactement comme avant.
+   - **Comportement normal.** L'original est appelé tel quel et chronométré : tant qu'aucune attente n'expire, rien ne
+     change. Un appel imbriqué passe tel quel.
+   - **Attente expirée.** Une attente avec animations d'au moins 50 s est suivie d'une attente de la seule boucle
+     principale :
+     - si elle tient sous 10 s, l'expiration vient des animations. Pour ce processus d'app seulement (`processID`),
+       les appels suivants passent `includingAnimationsIdle = false`, et l'attente du repos de la boucle principale
+       reste ;
+     - une boucle principale lente (app occupée, comme le gel du 16/11) ne change rien. Au plus trois vérifications
+       par processus.
+   - **Remise à zéro.** Chaque test repart à zéro (nouveau lancement de l'app).
+   - Les décisions sont des fonctions pures, partagées avec JoleneCoreTests : `PartageUITests/GardeReposDecision.swift`,
+     `GardeReposDecisionTests`.
+2. **Journal.** À la première expiration d'un processus, une activité XCTest :
+   `Jolene diagnostic repos-xcuitest : attente des animations expirée (N s) pendant <test> ; attente des animations
+   suspendue pour ce processus`. Au premier test de chaque éclat, l'état de pose est aussi journalisé.
+   `scripts/mobile/ios-ci-resume-tests.mjs` les fait remonter dans le résumé du job, section « Garde de repos XCUITest »,
+   avec des annotations `::warning::`, jamais `::error::` : la fréquence reste visible.
+3. **Intact :** aucune assertion affaiblie, aucun `-retry-tests-on-failure`, la couverture du bouton « OK » est
+   inchangée.
+
+### Preuve
+
+- **CI** : `DemoGardeReposTests`, dans le socle du job `ui`, sur les trois formats, sans `-only-testing`.
+  - Le premier test lance l'app avec `-JOLENE_UITEST_ANIMATION_OUVERTE 1` (`SondeAnimationOuverte`, JoleneCore, DEBUG,
+    démo seulement). La sonde `SondeAnimationOuverteUITest` de l'app (DEBUG) pose alors une animation UIKit répétée
+    sans fin sur une vue de 1 pt invisible et hors de l'accessibilité. Le test exige :
+    - une seule expiration relevée, d'au moins 50 s, entre le lancement et le premier geste ;
+    - quatre glissements suivants de moins de 20 s chacun.
+  - Le second test, témoin sans l'argument, exige : aucune relève et cinq gestes rapides.
+- **Local** (Xcode 16.4) :
+  - `GardeReposDecisionTests`, `SondeAnimationOuverteTests` et `PasDeDefilementTests` : 24/24 (`swift test`) ;
+  - vérification de types de toute la cible JoleneUITests et de la sonde (`swiftc -typecheck`, simulateur iOS 16,
+    concurrence stricte) : aucune erreur ;
+  - reconnaissance des deux sélecteurs réels du framework XCUIAutomation local ;
+  - `ios-ci-resume-tests.test.mjs` 17/17 et `ios-swift-ci-eclats.node.mjs` 34/34.
+- **Seule la CI prouvera** que l'animation répétée reproduit bien l'attente sans réponse sous Xcode 26.4.1 et iOS 26.2,
+  que la signature y est reconnue, et que la garde rend les gestes rapides.
+
+### Limites
+
+- API privée d'XCTest, Xcode épinglé à 26.4.1. Un changement de sélecteur ou de signature n'installe rien : la ligne
+  « non installée » apparaît, et `DemoGardeReposTests` échoue pour le signaler. Les autres tests se comportent alors
+  comme avant.
+- La garde masque le coût du blocage, pas sa cause. Un processus suspendu n'attend plus la fin des animations : un geste
+  peut alors tomber pendant une animation. Les assertions bornées (`require`) restent la preuve.
+
+### Pour corriger la cause
+
+Il faut identifier l'animation restée ouverte. Instrumentation proposée, DEBUG et mode test seulement :
+
+- au masquage du clavier, garder une référence faible à l'`inputAccessoryView` du champ ;
+- 2 s après `keyboardDidHide`, journaliser les calques dont `animationKeys()` n'est pas vide, dans toutes les fenêtres,
+  y compris `UITextEffectsWindow`, et dans la barre détachée ;
+- côté CI, recueillir `log show` du simulateur quand la marque apparaît.
+
+Une animation encore présente sur la barre détachée justifierait un correctif dans `BoutonClavierOK` (barre retirée
+sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou le simulateur.

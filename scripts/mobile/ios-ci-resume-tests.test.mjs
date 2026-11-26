@@ -17,6 +17,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
+  MARQUE_GARDE_REPOS,
   MARQUES_INACTIVITE,
   SEUIL_SILENCE_S,
   SEUIL_TEST_LONG_S,
@@ -502,4 +503,48 @@ test('commande : sans éclat, sans environnement ou sur une erreur interne — a
     assert.match(illisible.stdout, /::warning::Résumé des tests par éclat non établi/);
   } finally { b.nettoyer(); }
   assert.equal(main([], {}), 0);
+});
+
+// Garde de repos XCUITest (`ios-native/JoleneUITests/GardeRepos.swift`) : journal RECONSTITUÉ au format des lignes
+// d'activité « t = …s » (aucun run de la garde n'existe encore au moment de ce test). Il prouve la lecture, pas la garde.
+const JOURNAL_GARDE = [
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides]' started.",
+  '    t =     0.00s Start Test at 2026-11-26 10:00:00.000',
+  '    t =     0.01s Jolene diagnostic repos-xcuitest : garde de repos installée sur waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent: v28@0:8B16B20B24',
+  '    t =     1.05s     Launch app.jolene',
+  '    t =    19.10s     Wait for app.jolene to idle',
+  '    t =    79.20s App animations complete notification not received, will attempt to continue.',
+  '    t =    79.80s Jolene diagnostic repos-xcuitest : attente des animations expirée (60 s) pendant -[DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides] ; attente des animations suspendue pour ce processus',
+  '    t =    80.10s Press Target Application',
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides]' passed (95.210 seconds).",
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testSansAnimationOuverteLaGardeNeChangeRien]' started.",
+  '    t =     0.00s Start Test at 2026-11-26 10:01:40.000',
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testSansAnimationOuverteLaGardeNeChangeRien]' passed (30.100 seconds).",
+].join('\n');
+
+test('garde de repos : expirations relevées par test, en avertissement ; pose et non-pose lues', () => {
+  assert.equal(MARQUE_GARDE_REPOS, 'Jolene diagnostic repos-xcuitest', 'GardeReposDecision.marque');
+  const { tests, installation } = lireJournal(JOURNAL_GARDE);
+  const lent = tests.get('DemoGardeReposTests.testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides');
+  assert.equal(lent.gardeRepos.length, 1);
+  assert.equal(lent.gardeRepos[0].t, 79.8);
+  assert.equal(tests.get('DemoGardeReposTests.testSansAnimationOuverteLaGardeNeChangeRien').gardeRepos.length, 0);
+  assert.equal(installation.length, 1, 'la ligne de pose n est pas une expiration');
+
+  const eclat = resumerEclat({ nom: 'socle', journal: JOURNAL_GARDE });
+  const { lignes, annotations } = rendre({ format: 'ipad-portrait', eclats: [eclat] });
+  const texte = lignes.join('\n');
+  assert.match(texte, /\*\*Garde de repos XCUITest\*\* : 1 attente des animations expirée puis suspendue pour le processus d’app \(1 test\)/);
+  assert.match(texte, /- socle — `DemoGardeReposTests\.testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides` \(t = 79,8 s\) : Jolene diagnostic/);
+  assert.equal(annotations.filter(a => a.startsWith('::warning::Garde de repos (ipad-portrait, éclat socle)')).length, 1);
+  assert.ok(!annotations.some(a => a.startsWith('::error')), 'jamais une erreur');
+
+  const nonPosee = JOURNAL_GARDE.replace(/garde de repos installée sur .*/, 'garde de repos non installée : waitForQuiescenceIncludingAnimationsIdle:isPreEvent: B24@0:8B16B20')
+    .split('\n').filter(l => !l.includes('attente des animations expirée')).join('\n');
+  const rendu = rendre({ format: 'iphone', eclats: [resumerEclat({ nom: 'socle', journal: nonPosee })] });
+  assert.ok(rendu.lignes.some(l => l.includes('garde de repos non installée')), 'non-pose visible au résumé');
+  assert.equal(rendu.annotations.filter(a => a.startsWith('::warning::Garde de repos (iphone, éclat socle) : Jolene diagnostic repos-xcuitest : garde de repos non installée')).length, 1);
+
+  const sans = rendre({ format: 'iphone', eclats: [resumerEclat({ nom: 'socle', journal: JOURNAL_T1 })] });
+  assert.ok(!sans.lignes.some(l => l.includes('Garde de repos')), 'aucune section sans ligne de la garde');
 });

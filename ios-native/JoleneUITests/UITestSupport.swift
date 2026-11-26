@@ -39,6 +39,8 @@ class JoleneUITestCase: XCTestCase {
         let landscape = requestedOrientation != .portrait
         let isPad = MainActor.assumeIsolated { UIDevice.current.userInterfaceIdiom == .pad }
         proofPrefix = "\(isPad ? "ipad" : "iphone")-\(landscape ? "paysage" : "portrait")"
+        // Garde de repos (`GardeRepos.swift`) : posée une fois par processus du lanceur, remise à zéro à chaque test.
+        GardeRepos.debutDeTest(name)
     }
 
     /// Fin du budget de blocage à froid (`coldStallBudget`), quelle que soit l'issue du test ; puis,

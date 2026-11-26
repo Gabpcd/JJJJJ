@@ -15,6 +15,9 @@
  *   - le temps passé des tests échoués, restés sans conclusion ou de plus de 5 min : marques d'attente d'inactivité de
  *     XCTest comptées dans le journal (« App event loop idle notification not received »…) et plus longs silences entre
  *     deux lignes d'activité, attribués à l'activité qui précède ;
+ *   - la garde de repos XCUITest (`ios-native/JoleneUITests/GardeRepos.swift`, « Garde de repos XCUITest — 26/11/2026 »
+ *     de `docs/mobile-swift/DECISIONS_LOT2.md`) : lignes « Jolene diagnostic repos-xcuitest » du journal, en
+ *     avertissement (attentes des animations expirées puis suspendues pour un processus d'app ; garde non installée) ;
  *   - les relevés du veilleur (`scripts/mobile/ios-ci-gel-simulateur.sh veiller`) : passes, pile la plus fréquente du fil
  *     principal de chaque `sample` ; et les Spindump que XCTest joint à un test qui dépasse son délai d'exécution, copiés
  *     dans `diagnostic/` pour l'artefact léger du job.
@@ -55,6 +58,8 @@ export const MARQUES_INACTIVITE = [
   'Timed out while evaluating UI query',
   'exceeded execution time allowance',
 ];
+/** Marque des lignes de la garde de repos XCUITest (`GardeReposDecision.marque`). */
+export const MARQUE_GARDE_REPOS = 'Jolene diagnostic repos-xcuitest';
 const MAX_ECHOUES = 40;
 const MAX_DETAILS = 15;
 const MAX_ANNOTATIONS = 10;
@@ -151,6 +156,7 @@ const MARQUES_MINUSCULES = MARQUES_INACTIVITE.map(m => [m, m.toLowerCase()]);
  */
 export function lireJournal(texte) {
   const tests = new Map();
+  const installation = [];
   let courant = null;
   let precedent = null;
   const noter = (info, silence) => {
@@ -176,7 +182,7 @@ export function lireJournal(texte) {
       courant = {
         cle: `${debut[2]}.${debut[3]}`, cible: debut[1], classe: debut[2], nom: debut[3], issue: null, duree: null, erreur: null,
         marques: new Map(), silences: [], silencesTotal: 0, activites: 0, dernierT: null, derniereActivite: null,
-        sansConclusion: true, enCoursALaFin: false,
+        sansConclusion: true, enCoursALaFin: false, gardeRepos: [],
       };
       tests.set(courant.cle, courant);
       precedent = null;
@@ -198,6 +204,12 @@ export function lireJournal(texte) {
     if (activite) {
       const t = Number(activite[1]);
       const libelle = activite[2].trim();
+      // Garde de repos : une ligne par processus d'app suspendu (attente des animations expirée), et son état de pose
+      // au premier test de l'éclat.
+      if (libelle.startsWith(MARQUE_GARDE_REPOS)) {
+        if (libelle.includes('garde de repos')) installation.push(libelle);
+        else courant.gardeRepos.push({ t, ligne: libelle });
+      }
       if (precedent) noter(courant, { duree: t - precedent.t, apres: precedent.texte, t: precedent.t, fin: false });
       precedent = { t, texte: libelle };
       courant.activites += 1;
@@ -214,7 +226,7 @@ export function lireJournal(texte) {
     clore(courant, null, null);
     courant.enCoursALaFin = true;
   }
-  return { tests };
+  return { tests, installation };
 }
 
 // MARK: - Relevés du veilleur (`sample`)
@@ -269,7 +281,8 @@ const tronquer = texte => {
  * toujours les tests de l'arbre, et un test resté sans conclusion au journal mais absent de l'arbre est ajouté.
  */
 export function resumerEclat({ nom, arbre = null, lecture = null, journal = null, veilleur = null, spindumps = [] }) {
-  const duJournal = journal === null || journal === undefined ? null : lireJournal(journal).tests;
+  const lu = journal === null || journal === undefined ? null : lireJournal(journal);
+  const duJournal = lu?.tests ?? null;
   const deLArbre = testsDeLArbre(arbre);
   let source = null;
   let motif = lecture;
@@ -312,6 +325,10 @@ export function resumerEclat({ nom, arbre = null, lecture = null, journal = null
     details: tests.filter(t => t.journal && (t.echoue || t.sansConclusion || (Number.isFinite(t.duree) && t.duree >= SEUIL_TEST_LONG_S))),
     veilleur: veilleur ?? { passes: [], piles: [] },
     spindumps,
+    gardeRepos: {
+      installation: lu?.installation ?? [],
+      expirations: [...(duJournal?.values() ?? [])].flatMap(info => info.gardeRepos.map(g => ({ test: info.cle, ...g }))),
+    },
   };
 }
 
@@ -409,6 +426,21 @@ export function rendre({ format, eclats, racine = RACINE }) {
       lignes.push(`- ${e.nom} — \`${t.cle}\` (${formaterDuree(t.duree)}, ${etat(t)}) : ${replier(tempsPasse(t))}`);
     }
     if (details.length > MAX_DETAILS) lignes.push(`- … et ${details.length - MAX_DETAILS} autres tests (journaux des éclats dans l’artefact léger du job).`);
+  }
+
+  // Garde de repos XCUITest : avertissements, jamais une erreur (on doit voir la fréquence, pas masquer un échec).
+  const garde = eclats.flatMap(e => (e.gardeRepos?.expirations ?? []).map(g => ({ e, g })));
+  const nonPosee = eclats.flatMap(e => (e.gardeRepos?.installation ?? []).filter(l => l.includes('non installée')).map(l => ({ e, l })));
+  if (garde.length || nonPosee.length) {
+    const tests = [...new Set(garde.map(({ g }) => g.test))];
+    lignes.push('', `**Garde de repos XCUITest** : ${garde.length} attente${garde.length > 1 ? 's' : ''} des animations expirée${garde.length > 1 ? 's' : ''} puis suspendue${garde.length > 1 ? 's' : ''} pour le processus d’app${tests.length ? ` (${tests.length} test${tests.length > 1 ? 's' : ''})` : ''}`, '');
+    for (const { e, g } of garde.slice(0, MAX_DETAILS)) lignes.push(`- ${e.nom} — \`${cell(g.test)}\` (${instant(g.t)}) : ${replier(g.ligne)}`);
+    if (garde.length > MAX_DETAILS) lignes.push(`- … et ${garde.length - MAX_DETAILS} autres (journaux des éclats dans l’artefact léger du job).`);
+    for (const { e, l } of nonPosee) lignes.push(`- ${e.nom} — ${replier(l)}`);
+    for (const { e, g } of garde.slice(0, MAX_ANNOTATIONS)) {
+      annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${g.test} — ${replier(g.ligne)}`)}`);
+    }
+    for (const { e, l } of nonPosee.slice(0, MAX_ANNOTATIONS)) annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${replier(l)}`)}`);
   }
 
   const releves = eclats.flatMap(e => [
