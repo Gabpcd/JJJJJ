@@ -67,6 +67,21 @@ CREATE OR REPLACE FUNCTION net.http_post(url text, body jsonb DEFAULT '{}'::json
 INSERT INTO vault.secrets (name, secret) SELECT 'service_role_key', 'banc-jeton-fictif'
  WHERE NOT EXISTS (SELECT 1 FROM vault.secrets WHERE name = 'service_role_key');`;
 
+/**
+ * Référentiel documentaire IDE (données de référence de la production, relues le 26/11/2026). Le staging en a un :
+ * sans lui, la suite n'insère aucune pièce aux fixtures et les chemins qui touchent des pièces vérifiées (exigence
+ * documentaire, anonymisation d'un profil) ne sont pas exercés par le banc (job SQL du 27/11/2026).
+ */
+export const REFERENTIEL_DOCUMENTS = `
+INSERT INTO public.documents_requis_par_profession (id, profession, type_document, est_critique, a_expiration,
+  duree_validite_mois, type_exercice_requis)
+SELECT gen_random_uuid(), 'IDE', r.type_document::public.type_document, r.est_critique, r.a_expiration, r.duree, r.exercice
+  FROM (VALUES ('ATTESTATION_URSSAF', true, true, 6, 'LIBERAL_ONLY'), ('AUTORISATION_EXERCICE', false, false, NULL, 'TOUS'),
+    ('CARTE_IDENTITE', true, true, NULL, 'TOUS'), ('DIPLOME', true, false, NULL, 'TOUS'),
+    ('RCP_ASSURANCE', true, true, 12, 'LIBERAL_ONLY'), ('RIB', true, false, NULL, 'TOUS'), ('RPPS_ADELI', true, false, NULL, 'TOUS')
+  ) AS r(type_document, est_critique, a_expiration, duree, exercice)
+ WHERE NOT EXISTS (SELECT 1 FROM public.documents_requis_par_profession WHERE profession = 'IDE');`;
+
 /** Comptes joignables par les e-mails publics de la migration, réels ou de test. */
 const comptesRevue = ({ etabTest, soignantTest }) => `
 UPDATE public.parametres_systeme SET valeur = 1 WHERE cle = 'inscriptions_publiques_actives';
@@ -92,6 +107,10 @@ test('missions de revue des stores : stock garanti, diffusées à personne, lues
     // Paramètre du staging (0 : cohorte test forcée) relu dans sa migration, puis file HTTP et jeton fictifs.
     for (const instr of parametresRequis(RACINE, ['inscriptions_publiques_actives'])) await executer(instr);
     await executer(FILE_HTTP);
+    await executer(REFERENTIEL_DOCUMENTS);
+    const [referentiel] = await executer(`SELECT count(*)::int AS n FROM public.documents_requis_par_profession
+      WHERE profession = 'IDE' AND est_critique AND type_exercice_requis IN ('TOUS', 'SALARIE_ONLY') AND type_document <> 'RPPS_ADELI';`);
+    assert.equal(referentiel.n, 3, 'référentiel documentaire IDE chargé : la suite insère des pièces vérifiées');
     const anterieures = definitionsPriveesAnterieures();
     assert.ok(anterieures.has('fn_soignant_visible_pool_etablissement') && anterieures.has('fn_resultats_filtre_missions'),
       'définitions LIVE des fonctions private redéfinies introuvables');

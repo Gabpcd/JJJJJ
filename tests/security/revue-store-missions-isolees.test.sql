@@ -54,6 +54,7 @@ DECLARE
   v_er constant uuid := 'a5f0e001-0000-4000-8000-000000000002';
   v_t constant uuid := 'a5f0e002-0000-4000-8000-000000000001';
   v_t2 constant uuid := 'a5f0e002-0000-4000-8000-000000000003';
+  v_t3 constant uuid := 'a5f0e002-0000-4000-8000-000000000004';  -- soignant de revue sans pièce (G4)
   v_r constant uuid := 'a5f0e002-0000-4000-8000-000000000002';
   v_adm constant uuid := 'a5f0e003-0000-4000-8000-000000000001';
   v_m2 constant uuid := 'a5f0e004-0000-4000-8000-000000000001';      -- mission de test ordinaire de E2
@@ -719,16 +720,33 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = v_sentinelle, MESSAGE = 'sentinelle';
   EXCEPTION WHEN SQLSTATE 'RS999' THEN NULL;
   END;
+  -- Suppression du compte du soignant de revue. Soignant désigné sans pièce
+  -- justificative : l'anonymisation d'un profil aux pièces vérifiées passe par
+  -- l'invalidation des preuves, que la protection des documents refuse en session
+  -- utilisateur ; ce chemin ne dépend pas des missions de revue et reste intact.
   BEGIN
-    PERFORM set_config('request.jwt.claim.sub', v_t::text, true);
+    PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+    PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
+    INSERT INTO auth.users (id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at)
+    VALUES (v_t3, '00000000-0000-0000-0000-000000000000', 'revue-store-t3@example.invalid', 'authenticated', 'authenticated',
+            '{"role":"SOIGNANT","est_compte_test":true}'::jsonb, now());
+    INSERT INTO public.soignants (id, prenom, nom, email, profession, est_compte_test)
+    VALUES (v_t3, 'Fixture', 'Revue sans piece', 'revue-store-t3@example.invalid', 'IDE', true);
+    PERFORM set_config('request.jwt.claim.role', '', true);
+    PERFORM set_config('request.jwt.claims', '', true);
+    DELETE FROM private.soignants_revue_store WHERE soignant_id = v_t;
+    INSERT INTO private.soignants_revue_store (soignant_id, motif) VALUES (v_t3, 'Fixture : soignant de revue sans pièce');
+    IF NOT private.fn_est_soignant_revue_store(v_t3) OR private.fn_est_soignant_revue_store(v_t)
+    THEN RAISE EXCEPTION 'REVUE_STORE G4 : désignation du soignant de revue de remplacement inattendue'; END IF;
+    PERFORM set_config('request.jwt.claim.sub', v_t3::text, true);
     PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
-    PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_t, 'role', 'authenticated')::text, true);
+    PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_t3, 'role', 'authenticated')::text, true);
     v_res := public.fn_supprimer_mon_compte();
     PERFORM set_config('request.jwt.claim.sub', '', true);
     PERFORM set_config('request.jwt.claim.role', '', true);
     PERFORM set_config('request.jwt.claims', '', true);
     v_res2 := private.fn_garantir_missions_revue_store();
-    IF (v_res->>'success')::boolean IS NOT TRUE OR private.fn_est_soignant_revue_store(v_t)
+    IF (v_res->>'success')::boolean IS NOT TRUE OR private.fn_est_soignant_revue_store(v_t3)
        OR (v_res2->>'success')::boolean IS NOT TRUE
        OR (SELECT count(*) FROM public.missions WHERE etablissement_id = v_e AND statut = 'OUVERTE' AND mission_source = 'REVUE_STORE') <> 3
     THEN RAISE EXCEPTION 'REVUE_STORE G4 : suppression du soignant de revue (% / %)', v_res, v_res2; END IF;
