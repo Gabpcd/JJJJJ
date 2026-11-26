@@ -1175,7 +1175,7 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
 ## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
 
 Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`570df5db`, après le merge de #1188, corrections
-juridiques du point 4). La PR n'est pas mergeable tant que le parcours STAGING n'est pas vert.
+juridiques du point 4). Parcours STAGING n° 5 vert le 26/11/2026 (point 4).
 
 1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
    staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
@@ -1212,13 +1212,29 @@ juridiques du point 4). La PR n'est pas mergeable tant que le parcours STAGING n
    argument, `.pour(mode: .demo)` hors démo, contrôleur hors d'`AppContainer`, rôle refusé en amont, fichiers absents,
    CLI sur un arbre extrait) ; la garde Node `contrats-etablissement-ios.node.mjs` applique la même lecture du câblage.
 4. **Preuves exigées avant merge** :
-   - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6) sur le commit de `main` dont
-     part la PR. **État au 25/11/2026 : TOUJOURS NON VERT.** Trois runs ont échoué. Le troisième (45677331174, `main`
-     `b95c84ff`) a nommé la cause côté app : le pré-vol serveur est passé, mais l'app reçoit « non autorisé » sur
-     `fn_mes_permissions_etab` juste après une connexion acceptée (diagnostic `permissions:unauthorized`). Ce refus est
-     instruit par la section « Troisième parcours STAGING » ci-dessus et par #1191 (mergée sur `main`, `338df39b`) ;
-     aucun parcours vert n'est connu de cette tranche à ce jour, et un défaut qui toucherait aussi la production n'est
-     ni prouvé ni exclu ici. **T14 ne se merge pas avant un parcours vert.**
+   - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6). **Vert au parcours n° 5**
+     (run 45754181214, sur `main` `d0bd46e3`, 26/11/2026, 04:52 → 05:24 UTC, Xcode 26.4.1, 19 étapes en succès), lu
+     dans le journal du job par la session de coordination :
+     - `build-for-testing` Jolene-Staging : succès (première compilation de #1196 sous Xcode 26.4.1) ;
+     - pré-vol : témoin sans session refusé comme attendu (`fn_mes_permissions_etab`, HTTP 401, code 42501) ; plancher
+       prouvé par PostgREST (12,30 €/h refusé, HTTP 400, P0001, « Le taux horaire doit être d'au moins 12,31 €/h. »,
+       0 mission créée) ; 20 lectures du parcours acceptées sous le JWT d'E1 (manifeste
+       `lot5-lectures-parcours-etab-v1`) ;
+     - XCUITest phase 1 `testPhase1ConnexionCandidatureAccepteeContratSigneEtCodeDePointage` passé (199,4 s) ; scans
+       d'arrivée et de départ de M2 sous le JWT de S1 réussis ; phase 2
+       `testPhase2ValidationDeLaPresenceApresLesScansDuSoignant` passé (68,7 s) ; `** TEST EXECUTE SUCCEEDED **` deux
+       fois ;
+     - relectures en base conformes (candidature `ACCEPTEE`, M1 assignée, présence validée et notée, aucune ligne
+       d'escrow) ; nettoyage prouvé (0 objet marqué).
+     Les runs précédents ont échoué : le troisième (45677331174) sur le refus `permissions:unauthorized` (section
+     « Troisième parcours STAGING », #1191) ; le quatrième (45737490974) sur un défaut du test, corrigé par #1196.
+     **Non prouvé par ce parcours** : `Jolene diagnostic stockage-session : stockage=memoire;sonde=-34018` aux deux
+     phases, le trousseau refuse toujours le build non signé et le repli mémoire DEBUG/staging a servi ; le critère
+     « restauration après arrêt » n'est donc pas prouvé (build signé requis, à décider). **Suivi, non corrigé ici** : la
+     ligne `Jolene diagnostic échec : attente « Initial session emitted after attempting to refresh the local stored
+     session… » | dernier-echec=élément absent` est publiée aux deux phases alors que les tests passent (incident
+     enregistré sans faire échouer le test ; cause non établie). Le parcours a tourné sur `main` `d0bd46e3`, pas sur la
+     tête de cette branche.
    - **Validation juridique de la fondatrice** (HARD STOP n°4) : **validé le 25/11/2026**. À une liste de neuf points
      juridiques avec recommandations, la fondatrice a répondu « Oui, tout valider » (réponse rapportée par la session
      de coordination, non relue ici). Pour T14, cela couvre, mot pour mot de la liste :
@@ -1244,8 +1260,8 @@ juridiques du point 4). La PR n'est pas mergeable tant que le parcours STAGING n
      requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
      enregistrée, `EXECUTE` accordé à `authenticated` et refusé à `anon`. Aucune migration nécessaire. À relire le jour
      du merge (un administrateur peut couper un écran à chaud) ; non relu en STAGING.
-5. **Ce qui n'est pas prouvé** : aucun parcours établissement n'a tourné contre le serveur de production ni contre le
-   STAGING dans cette tranche ; le coupe-circuit du point 6 n'a été exercé contre aucun serveur ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
+5. **Ce qui n'est pas prouvé** : aucun parcours établissement n'a tourné contre le serveur de production ; le parcours
+   STAGING n° 5 (point 4) a tourné sur `main`, sans l'ouverture de production ni le coupe-circuit de cette tranche ; le coupe-circuit du point 6 n'a été exercé contre aucun serveur ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
    par la CI (26.4.1) ; les XCUITest n'ont pas été compilés ; aucun appareil physique ; aucun compte établissement legacy
    réel relu (« En attente », point 6).
 6. **Coupe-circuit distant de l'espace entier** (revue fraîche de #1190, M1 ; décision de la session de coordination
@@ -1328,4 +1344,4 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
 11. **T14 (ouverture en production)** : validation juridique obtenue le 25/11/2026 (section T14, point 4) ; go de
-    merge après le parcours STAGING vert (#1188, prérequis, est mergée).
+    merge (parcours STAGING n° 5 vert le 26/11/2026 ; #1188, prérequis, est mergée).
