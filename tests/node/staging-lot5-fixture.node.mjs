@@ -11,7 +11,7 @@ import {
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
   NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur, decrireTemoinSansSession,
   prouverRefusTauxMinimum, chargeRefusTaux, intituleRefusTaux, messageTauxMinimum, CLE_TAUX_MINIMUM,
-  lireManifesteLectures, requetesLectures, decrireLectureRefusee, CHEMIN_LECTURES,
+  lireManifesteLectures, requetesLectures, decrireLectureRefusee, CHEMIN_LECTURES, LECTURES_RPC_ADMISES,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -138,7 +138,7 @@ function banc(t, surcharge = {}) {
       if (b.lectureRefusee === table) return rep({ code: '42703', message: `column ${table}.x does not exist (mission 3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c)` }, 400);
       return rep([]);
     }
-    if (['fn_lire_candidatures_mission_habilitee', 'fn_etat_pointage_mission', 'fn_contrat_signe_pour_pointage'].some(f => u.pathname === `/rest/v1/rpc/${f}`)) {
+    if (['fn_lire_candidatures_mission_habilitee', 'fn_soignant_pour_etablissement', 'fn_etat_pointage_mission', 'fn_contrat_signe_pour_pointage'].some(f => u.pathname === `/rest/v1/rpc/${f}`)) {
       const fonction = u.pathname.split('/').at(-1);
       b.lectures.push({ fonction, corps, auth: opts.headers.Authorization });
       if (b.lectureRefusee === fonction) return rep({ success: false, error: 'Accès refusé à cette mission' });
@@ -708,6 +708,8 @@ test('plancher : charge, intitulé et message, fonctions pures', async () => {
   assert.equal(messageTauxMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.");
   const ignore = await prouverRefusTauxMinimum({ doc: m, rpc: async () => false, sql: async () => { throw new Error('jamais'); } });
   assert.deepEqual(ignore, { ignore: true });
+});
+
 // MARK: - Quatrième parcours STAGING (26/11/2026) : lectures du parcours rejouées au pré-vol
 
 const MANIFESTE_LECTURES = lireManifesteLectures(readFileSync(CHEMIN_LECTURES, 'utf8'));
@@ -739,7 +741,7 @@ test('pré-vol des lectures : la première refusée arrête la préparation, nom
 test('manifeste des lectures : forme validée, jetons connus et remplacés, tables et fonctions présentes dans le Swift', () => {
   assert.throws(() => lireManifesteLectures('{"purpose":"autre","lectures":[]}'), /illisible/);
   assert.throws(() => lireManifesteLectures(JSON.stringify({ purpose: 'lot5-lectures-parcours-etab-v1', lectures: [{ nom: 'x', table: 'missions' }] })), /mal formée/);
-  const ids = { e1: 'e1', m1: 'm1', m2: 'm2', candidature: 'c', contrat: 'k' };
+  const ids = { e1: 'e1', s1: 's1', m1: 'm1', m2: 'm2', candidature: 'c', contrat: 'k' };
   const requetes = requetesLectures(MANIFESTE_LECTURES, ids);
   assert.ok(requetes.every(r => r.url ? !/%7B|\{/.test(r.url) : Object.values(r.params).every(v => !v.includes('{'))));
   assert.throws(() => requetesLectures(MANIFESTE_LECTURES, { ...ids, candidature: null }), /\{CANDIDATURE\} sans valeur/);
@@ -753,6 +755,19 @@ test('manifeste des lectures : forme validée, jetons connus et remplacés, tabl
     if (l.fonction) assert.ok(swift.includes(`"${l.fonction}"`), `fonction ${l.fonction} appelée par une passerelle`);
     for (const p of Object.keys(l.params ?? {})) assert.ok(swift.includes(`"${p}"`), `paramètre ${p}`);
   }
-  assert.ok(MANIFESTE_LECTURES.lectures.every(l => !/creer|valider|traiter|contester|declarer|postuler|scanner/.test(l.fonction ?? '')), 'aucune écriture');
+  // Revue de #1196, m2 : liste blanche ; chaque fonction admise est STABLE, ou sans écriture dans son corps (public.sql).
+  const fonctions = MANIFESTE_LECTURES.lectures.filter(l => l.fonction).map(l => l.fonction);
+  assert.ok(fonctions.every(f => LECTURES_RPC_ADMISES.includes(f)), 'toute fonction du manifeste est dans la liste blanche');
+  const dump = readFileSync(new URL('../../supabase/schema/public.sql', import.meta.url), 'utf8');
+  for (const f of LECTURES_RPC_ADMISES) {
+    const definitions = [...dump.matchAll(new RegExp(`CREATE OR REPLACE FUNCTION "public"\\."${f}"\\([^)]*\\)([\\s\\S]*?)\\n\\$\\$;`, 'g'))];
+    assert.ok(definitions.length >= 1, `${f} définie dans public.sql`);
+    for (const [, corps] of definitions) {
+      const stable = /\bSTABLE\b/.test(corps.split('AS $$')[0]);
+      assert.ok(stable || !/\b(INSERT|UPDATE|DELETE|PERFORM|EXECUTE)\b/.test(corps), `${f} : STABLE ou sans écriture`);
+    }
+  }
+  assert.throws(() => lireManifesteLectures(JSON.stringify({ purpose: 'lot5-lectures-parcours-etab-v1',
+    lectures: [{ nom: 'écriture', fonction: 'fn_accepter_candidature', params: {} }] })), /hors de la liste blanche/);
   assert.match(decrireLectureRefusee('x', { http: 0 }), /« x » — HTTP 0\. /);
 });

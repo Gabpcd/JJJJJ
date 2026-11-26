@@ -865,12 +865,24 @@ export function decrireTemoinSansSession(resultat) {
 }
 
 /**
- * Manifeste des lectures du parcours (quatrième parcours STAGING, 26/11/2026) : produit par le test Swift
- * `LecturesParcoursEtabManifesteTests` depuis les constantes réelles des passerelles (tables, `select`, filtres,
- * fonctions et paramètres), jamais recopié à la main. Validé ici avant tout appel ; une forme inattendue est refusée.
+ * Manifeste des lectures principales du parcours (quatrième parcours STAGING, 26/11/2026), produit par le test Swift
+ * `LecturesParcoursEtabManifesteTests`. Les `select`, les noms de fonctions, les tables des contrats et les tailles de
+ * page viennent des constantes des passerelles ; les autres tables, les filtres et les ordres y sont recopiés, comme
+ * les passerelles les écrivent en dur (revue de #1196, M1). Validé ici avant tout appel : une forme inattendue ou une
+ * fonction hors de la liste blanche est refusée.
  */
 export const CHEMIN_LECTURES = resolve(dirname(fileURLToPath(import.meta.url)), 'staging-lot5-lectures.json');
-const JETONS_LECTURES = ['{E1}', '{M1}', '{M2}', '{CANDIDATURE}', '{CONTRAT}'];
+const JETONS_LECTURES = ['{E1}', '{S1}', '{M1}', '{M2}', '{CANDIDATURE}', '{CONTRAT}'];
+/**
+ * Liste blanche des fonctions de lecture admises au pré-vol (revue de #1196, m2) : chacune est STABLE dans
+ * `supabase/schema/public.sql`, ou VOLATILE déclarée sans aucune écriture dans son corps (`fn_soignant_pour_etablissement`),
+ * ce que vérifie la garde Node. Une fonction absente de cette liste fait refuser le manifeste : une écriture ne peut pas
+ * entrer au pré-vol par le manifeste.
+ */
+export const LECTURES_RPC_ADMISES = Object.freeze([
+  'fn_lire_candidatures_mission_habilitee', 'fn_soignant_pour_etablissement', 'fn_etat_pointage_mission',
+  'fn_contrat_signe_pour_pointage',
+]);
 
 export function lireManifesteLectures(texte) {
   const m = JSON.parse(texte);
@@ -882,13 +894,17 @@ export function lireManifesteLectures(texte) {
       && Array.isArray(l.filtres) && l.filtres.every(f => Array.isArray(f) && f.length === 2 && f.every(x => typeof x === 'string'));
     const fonction = typeof l.fonction === 'string' && /^fn_[a-z0-9_]+$/.test(l.fonction) && l.params && typeof l.params === 'object';
     if (typeof l.nom !== 'string' || table === fonction) throw new Error(`Lecture du manifeste mal formée : ${JSON.stringify(l.nom ?? null)}.`);
+    if (fonction && !LECTURES_RPC_ADMISES.includes(l.fonction)) {
+      throw new Error(`Fonction ${l.fonction} hors de la liste blanche des lectures du pré-vol (LECTURES_RPC_ADMISES).`);
+    }
   }
   return m;
 }
 
 /** Requêtes concrètes d'un manifeste : jetons remplacés par les identifiants de la cohorte, jamais de jeton inconnu. */
 export function requetesLectures(manifeste, ids) {
-  const valeurs = { '{E1}': ids.e1, '{M1}': ids.m1, '{M2}': ids.m2, '{CANDIDATURE}': ids.candidature, '{CONTRAT}': ids.contrat };
+  const valeurs = { '{E1}': ids.e1, '{S1}': ids.s1, '{M1}': ids.m1, '{M2}': ids.m2, '{CANDIDATURE}': ids.candidature,
+    '{CONTRAT}': ids.contrat };
   const remplacer = (texte) => {
     const resultat = String(texte).replace(/\{[A-Z0-9]+\}/g, j => {
       if (!JETONS_LECTURES.includes(j) || !valeurs[j]) throw new Error(`Jeton de lecture ${j} sans valeur dans la cohorte.`);
@@ -1169,10 +1185,12 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     }
     // Suivi de #1188 : refus du plancher du taux horaire à travers le vrai PostgREST, sous le JWT d'E1.
     await prouverRefusTauxMinimum({ doc, rpc: (fonction, params) => rpc(fonction, params, cleApp.cle, jwtE1), sql, log });
-    // Quatrième parcours STAGING : toutes les lectures que fera le parcours (manifeste produit depuis le Swift), sous le
-    // JWT d'E1 avec la clé de l'app, dans l'ordre du parcours ; la première refusée arrête la préparation, nommée.
+    // Quatrième parcours STAGING : les lectures principales du parcours (manifeste, voir CHEMIN_LECTURES), sous le JWT
+    // d'E1 avec la clé de l'app, dans l'ordre du parcours ; la première refusée arrête la préparation, nommée. Limite
+    // (revue de #1196, m1) : un refus est détecté (HTTP, code, `success:false` ou `error`), pas une réponse vide — une
+    // RLS qui filtre tout passe ici ; c'est le XCUITest qui exige la carte de la mission de la cohorte.
     const manifesteLectures = lireManifesteLectures(lecturesTexte ?? readFileSync(CHEMIN_LECTURES, 'utf8'));
-    const lectures = requetesLectures(manifesteLectures, { e1: doc.etablissement.id, m1: doc.m1.id, m2: doc.m2.id,
+    const lectures = requetesLectures(manifesteLectures, { e1: doc.etablissement.id, s1: doc.soignant.id, m1: doc.m1.id, m2: doc.m2.id,
       candidature: doc.candidatureId, contrat: doc.m2.contratId });
     for (const l of lectures) {
       let corps;
