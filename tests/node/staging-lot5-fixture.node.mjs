@@ -10,6 +10,7 @@ import {
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
   NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur, decrireTemoinSansSession,
+  prouverRefusTauxMinimum, chargeRefusTaux, intituleRefusTaux, messageTauxMinimum, CLE_TAUX_MINIMUM,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -32,6 +33,8 @@ function banc(t, surcharge = {}) {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
     recherches: 0, residus: {}, sessionEtab: [], permissions: null,
+    // Plancher du taux (suivi de #1188) : annonce, valeur, verrou serveur (`present` | `absent`), fuite comptée.
+    annonceTaux: true, minimumTaux: 12.31, verrouTaux: 'present', fuiteTaux: 0, creationsTaux: [],
     horloge: new Date('2026-11-24T10:00:00.000Z'),
   };
   // Recherche par étiquette : ce que le STAGING simulé contient pour le run, sans mot de passe.
@@ -64,6 +67,7 @@ function banc(t, surcharge = {}) {
       if (sql.includes('AS candidature_statut')) return rep([b.relu]);
       if (sql.includes('AS auth;')) { b.recherches += 1; return rep([b.recherche()]); }
       if (sql.includes('AS residus;')) return rep([{ residus: { ...Object.fromEntries(Object.keys(NON_SUPPRIMABLES).map(t => [t, []])), ...b.residus } }]);
+      if (sql.includes('AS n FROM public.missions WHERE intitule')) return rep([{ n: b.fuiteTaux }]);
       if (sql.includes('AS auth,')) {
         const ligne = b.reste ?? (b.seeded ? { ...ZERO, missions: 2, auth: b.users.size } : { ...ZERO, auth: b.users.size });
         return rep([ligne]);
@@ -102,6 +106,18 @@ function banc(t, surcharge = {}) {
     if (u.pathname === '/rest/v1/rpc/fn_mon_etablissement_complet') {
       b.sessionEtab.push({ rpc: 'profil' });
       return rep({ id: e1().id, nom: e1().app_metadata.load_fixture_run ? `RECETTE-L5-${e1().app_metadata.load_fixture_run}` : null });
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_param_bool') {
+      b.sessionEtab.push({ rpc: 'annonce-taux', corps, auth: opts.headers.Authorization });
+      return rep(corps.p_cle === 'taux_horaire_minimum_salarie' ? b.annonceTaux : false);
+    }
+    if (u.pathname === '/rest/v1/rpc/fn_taux_horaire_minimum_salarie') return rep(b.minimumTaux);
+    if (u.pathname === '/rest/v1/rpc/fn_creer_mission_multi_jours_v4') {
+      b.creationsTaux.push({ corps, auth: opts.headers.Authorization, apikey: opts.headers.apikey });
+      if (b.verrouTaux === 'absent') { b.fuiteTaux = 1; return rep({ success: true, mission_id: '2d8c4b7a-3e4f-4051-9cad-9e8f7a6b5c4d' }); }
+      if (b.verrouTaux === 'autre') return rep({ code: '23514', message: 'Contrôle inattendu' }, 400);
+      return rep({ code: 'P0001', details: null, hint: 'TAUX_HORAIRE_SOUS_MINIMUM_SALARIE',
+        message: `Le taux horaire doit être d'au moins ${b.minimumTaux.toFixed(2).replace('.', ',')} €/h.` }, 400);
     }
     if (u.pathname === '/rest/v1/rpc/fn_postuler_mission') {
       b.candidature = { id: '0b6a2f5e-1c2d-4e3f-9a8b-7c6d5e4f3a2b', statut: 'EN_ATTENTE' }; return rep({ success: true });
@@ -508,7 +524,7 @@ test('m-B : SQL des résidus en lecture seule ; suppression ligne à ligne sur r
 test('pré-vol : les trois lectures, sous le JWT d E1, avec la clé que reçoit l app ; la clé employée est dite, jamais montrée', async t => {
   const b = banc(t, { JOLENE_STAGING_PUBLISHABLE_KEY: 'sb_publishable_CANARIcleDeLApp000000' });
   await b.run('preparer');
-  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil', 'temoin']);
+  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil', 'temoin', 'annonce-taux']);
   // Témoin (troisième parcours STAGING) : en-têtes de l'app sans session enregistrée, refus nommé, non bloquant.
   assert.equal(b.sessionEtab[3].auth, 'Bearer sb_publishable_CANARIcleDeLApp000000');
   assert.ok(b.logs.some(l => /^Témoin sans session .*: fn_mes_permissions_etab refusée, HTTP 401, code 42501 \(refus attendu du rôle anon\)\.$/.test(l)));
@@ -616,4 +632,63 @@ test('pré-vol (revue de #1187, r2) : un refus en HTTP 200 recopie le message de
   // Un échec HTTP recopie aussi le message masqué.
   assert.throws(() => controlerSessionEtablissement(doc, { ...ok, profil: { echec: { http: 400, code: 'P0001', message: `refus ${uuid}` } } }),
     e => /HTTP 400, code P0001 — refus <uuid>/.test(e.message) && !e.message.includes(uuid));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Plancher du taux horaire salarié (suivi de #1188) : refus serveur prouvé à travers le vrai PostgREST
+// ---------------------------------------------------------------------------------------------
+
+test('plancher : préparer prouve le refus à un centime sous le plancher, sous le JWT d E1, avec le message validé, 0 mission', async t => {
+  const b = banc(t, { JOLENE_STAGING_PUBLISHABLE_KEY: 'sb_publishable_CANARIcleDeLApp000000' });
+  await b.run('preparer');
+  assert.equal(b.creationsTaux.length, 1, 'une seule tentative, aucun renvoi');
+  const [envoi] = b.creationsTaux;
+  assert.equal(envoi.auth, 'Bearer jwt-CANARI-ETABLISSEMENT');
+  assert.equal(envoi.apikey, 'sb_publishable_CANARIcleDeLApp000000');
+  assert.equal(Object.keys(envoi.corps).length, 16, 'seize clés du natif');
+  assert.equal(envoi.corps.p_taux_horaire_base, 12.3);
+  assert.equal(envoi.corps.p_type_contrat_recherche, 'SALARIE');
+  assert.ok(envoi.corps.p_intitule.startsWith('RECETTE-L5-'), 'intitulé marqué du run');
+  assert.ok(new Date(envoi.corps.p_creneaux[0].debut) > b.horloge, 'créneau futur');
+  const annonce = b.sessionEtab.find(x => x.rpc === 'annonce-taux');
+  assert.deepEqual(annonce.corps, { p_cle: CLE_TAUX_MINIMUM, p_defaut: false });
+  assert.ok(b.logs.includes("Plancher du taux prouvé par PostgREST : 12,30 €/h refusé (HTTP 400, P0001, « Le taux horaire doit être d'au moins 12,31 €/h. »), 0 mission créée."));
+  assert.ok(existsSync(b.env.LOT5_XCUITEST_JSON), 'préparation menée à son terme');
+});
+
+test('plancher : non annoncé → preuve ignorée nommément, aucune tentative de création', async t => {
+  const b = banc(t);
+  b.annonceTaux = false;
+  await b.run('preparer');
+  assert.equal(b.creationsTaux.length, 0);
+  assert.ok(b.logs.includes('Plancher du taux non annoncé par fn_param_bool : preuve du refus serveur ignorée.'));
+});
+
+test('plancher : verrou absent, autre refus, fuite ou plancher illisible → la préparation échoue nommément', async t => {
+  for (const [regler, motif] of [
+    [b => { b.verrouTaux = 'absent'; }, /Taux 12\.3 non refusé par le verrou serveur .* 1 mission\(s\) à l'intitulé du run/],
+    [b => { b.verrouTaux = 'autre'; }, /Refus du plancher inattendu \(HTTP 400, code 23514\)/],
+    [b => { b.fuiteTaux = 1; }, /Refus du plancher : 1 mission\(s\) à l'intitulé du run malgré le refus/],
+    [b => { b.minimumTaux = null; }, /Plancher du taux illisible/],
+  ]) {
+    const b = banc(t);
+    regler(b);
+    await assert.rejects(b.run('preparer'), motif);
+    assert.equal(existsSync(b.env.LOT5_XCUITEST_JSON), false, 'aucune entrée de XCUITest');
+  }
+});
+
+test('plancher : charge, intitulé et message, fonctions pures', async () => {
+  const m = manifeste('pur-1', new Date('2026-11-24T10:00:00.000Z'));
+  const c = chargeRefusTaux(m, 12.3);
+  assert.deepEqual(Object.keys(c).sort(), ['p_accepte_internes', 'p_accepte_non_specialises', 'p_creneaux', 'p_description',
+    'p_est_urgente', 'p_intitule', 'p_mode_attribution', 'p_mode_remuneration', 'p_nature_tva_prestation', 'p_niveau_urgence',
+    'p_profession_requise', 'p_retrocession_pct', 'p_service', 'p_specialite_medicale_requise', 'p_taux_horaire_base',
+    'p_type_contrat_recherche']);
+  assert.equal(c.p_intitule, intituleRefusTaux(m));
+  assert.ok(c.p_intitule.startsWith(debutIntitule(m.marker)));
+  assert.equal(messageTauxMinimum(12.31), "Le taux horaire doit être d'au moins 12,31 €/h.");
+  assert.equal(messageTauxMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.");
+  const ignore = await prouverRefusTauxMinimum({ doc: m, rpc: async () => false, sql: async () => { throw new Error('jamais'); } });
+  assert.deepEqual(ignore, { ignore: true });
 });

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decouper, SOCLE, objetsPrives, moteurPsql, REQUIS } from '../../scripts/mobile/staging-lot5-banc-sql.mjs';
+import { decouper, SOCLE, objetsPrives, moteurPsql, REQUIS, tupleDeCle, parametresRequis } from '../../scripts/mobile/staging-lot5-banc-sql.mjs';
 
 test('découpage : dollar-quotes, chaînes, identifiants et commentaires respectés', () => {
   const sql = `SELECT 'a;b' AS "x;y"; -- c;d
@@ -64,4 +64,17 @@ test('moteur psql : seule la dernière instruction est relue (JSON), arrêt sur 
 test('validate-pr : le banc tourne sur PostgreSQL 17 dans une base dédiée', () => {
   const ci = readFileSync(new URL('../../.github/workflows/validate-pr.yml', import.meta.url), 'utf8');
   assert.match(ci, /psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE staging_lot5_banc'\n\s+PGDATABASE=staging_lot5_banc node --test tests\/postgres\/staging-lot5-fixture\.pg17\.mjs/);
+});
+
+test('paramètres requis : la clé ouvre un tuple de VALUES, jamais une occurrence quelconque (revue de #1193, m3)', () => {
+  const re = tupleDeCle('taux_horaire_minimum_salarie');
+  assert.ok(re.test("INSERT INTO public.parametres_systeme(cle,valeur,label) VALUES('taux_horaire_minimum_salarie',12.31,'x') ON CONFLICT(cle) DO NOTHING;"));
+  assert.ok(re.test("INSERT INTO parametres_systeme (cle, valeur) VALUES\n  ('a', 1),\n  ('taux_horaire_minimum_salarie', 12.31);"), 'tuple suivant');
+  assert.ok(!re.test("INSERT INTO public.parametres_systeme(cle,valeur,description) VALUES('autre',1,'voir ''taux_horaire_minimum_salarie''');"), 'description d un autre paramètre');
+  assert.ok(!re.test("INSERT INTO public.parametres_systeme(valeur,cle) VALUES(12.31,'taux_horaire_minimum_salarie');"), 'colonne cle non en tête');
+  assert.ok(!re.test("INSERT INTO public.autre_table(cle,valeur) VALUES('taux_horaire_minimum_salarie',1);"));
+  const lignes = parametresRequis();
+  assert.equal(lignes.length, 1);
+  assert.match(lignes[0], /VALUES\('taux_horaire_minimum_salarie',12\.31,/);
+  assert.throws(() => parametresRequis(undefined, ['cle_inexistante_xyz']), /cle_inexistante_xyz/);
 });
