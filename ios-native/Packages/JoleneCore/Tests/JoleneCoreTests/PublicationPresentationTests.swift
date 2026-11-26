@@ -89,7 +89,8 @@ final class PublicationPresentationTests: XCTestCase {
     /// La mention du type de contrat (texte du web à portée juridique, `TextesWeb.PublicationEtablissement`) est affichée
     /// mot pour mot depuis la décision c de l'intégration de la vague D (`DECISIONS_LOT5.md`, point 1 ; texte validé
     /// explicitement par la fondatrice le 24/11/2026). Verrou gardé : si elle
-    /// redevenait `nil`, l'espace établissement devrait rester fermé hors démonstration.
+    /// redevenait `nil`, l'espace établissement devrait être fermé hors démonstration ; STAGING (T13) et production
+    /// (T14) étant ouverts, ce test échouerait alors.
     func testMentionContratExigeeAvantToutEspaceOuvertHorsDemo() {
         XCTAssertNotNil(PublicationPresentation.mentionContrat, "décision c : mention affichée")
         if PublicationPresentation.mentionContrat == nil {

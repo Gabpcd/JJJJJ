@@ -61,7 +61,7 @@ public enum AvatarProfil {
         public static let fichierVide = "Le fichier sélectionné est vide."
         public static let fichierTropLourd = "Le fichier ne doit pas dépasser 2 Mo."
         public static let fichierIllisible = "Impossible de lire le fichier sélectionné."
-        /// Sans équivalent web (le web n'a qu'un sélecteur de fichier ; non juridiques, à relire par Gabrielle,
+        /// Sans équivalent web (le web n'a qu'un sélecteur de fichier ; non juridiques, à relire par la fondatrice,
         /// `DECISIONS_LOT3.md` section T10) : choix de la source de la photo.
         public static let choisirPhototheque = "Choisir dans la photothèque"
         public static let prendrePhoto = "Prendre une photo"

@@ -388,7 +388,7 @@ public struct DashboardSnapshot: Equatable, Sendable {
     /// `gains_mois.nb_missions` du serveur (missions TERMINEE débutées dans le mois), conservé tel
     /// quel mais jamais affiché : « sur N missions » compte les missions relues porteuses d'un
     /// montant (`GainsDuMois.nombreMissions`, comme `gainsCeMois.nb` du web ; lecture de la
-    /// décision 10 à acter par Gabrielle, `LOT1_PLAN.md` §7).
+    /// décision 10 à acter par la fondatrice, `LOT1_PLAN.md` §7).
     public var gainsMoisNbMissions: Int
     /// Décodé, jamais affiché au lot 1 (`BandeauAlerte48h` exclu, HARD STOP n°4).
     public var heuresSemaine: Double

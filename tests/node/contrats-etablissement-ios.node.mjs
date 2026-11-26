@@ -20,6 +20,7 @@ import {
 } from '../../scripts/mobile/check-rpc-contracts.mjs';
 import { lecteurWeb, lireTextesSwift, TEXTES_SWIFT } from '../../scripts/mobile/check-textes-juridiques-ios.mjs';
 import { buildDemoEtabPermissions, FIXTURES_DIR } from '../../scripts/mobile/export-demo-fixtures.mjs';
+import { lireCablageEtablissement, loadSourceTree } from '../../scripts/mobile/ios-native-app-store.mjs';
 
 // Garde du lot 5, tranche T0 (docs/mobile-swift/LOT5_PLAN.md §3 T0) : les RPC de l'espace
 // établissement sont sous contrat avant toute gateway Swift, leurs exceptions interceptées sont des
@@ -558,7 +559,7 @@ function swiftSous(relatif) {
   });
 }
 
-test('AppContainer câble l ouverture de l espace établissement sur le mode de lancement (m3) ; production fermée (T13)', () => {
+test('AppContainer câble l ouverture de l espace établissement sur le mode de lancement (m3) ; production ouverte (T14)', () => {
   // La cible app n'a pas de tests unitaires et les XCUITest tournent en démo (espace ouvert) : un `.ouvert` posé dans le
   // chemin staging/production passerait toute la CI. Le câblage est donc lu dans le source.
   const app = read('ios-native/Jolene/Composition/AppContainer.swift');
@@ -571,14 +572,18 @@ test('AppContainer câble l ouverture de l espace établissement sur le mode de 
   assert.ok(coordinateur.includes('espaceEtablissement: .pour(mode: environment.mode)'),
     'DeepLinkCoordinator(espaceEtablissement:) : .pour(mode: environment.mode)');
   assert.ok(!/\.ouvert\b/.test(sansCommentaires), 'aucune ouverture forcée de l espace établissement dans AppContainer');
-  // La table elle-même : ouverte en démo et (T13, 24/11/2026) en staging, la production reste FERMÉE jusqu'à T14 ;
-  // défaut fermé du contrôleur et de l'aiguillage. Ouvrir la production est l'objet de T14, jamais d'une autre tranche.
+  // Revue de #1190, M2 : chaque construction lue une à une, hors de toute compilation conditionnelle (même lecture que la
+  // garde etablissement de la soumission App Store).
+  assert.deepEqual(lireCablageEtablissement(loadSourceTree(root).swiftSources).erreurs, [], 'câblage de l espace établissement');
+  // La table elle-même : ouverte en démo, en staging (T13, 24/11/2026) et en production (T14, 25/11/2026) ; défaut
+  // fermé du contrôleur et de l'aiguillage. Refermer une ligne (production comprise) est une décision consignée dans
+  // DECISIONS_LOT5.md et une PR de cette garde, jamais un effet de bord.
   const espace = read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/EspaceResolution.swift');
   const table = /public static func pour\(mode: JoleneMode\) -> OuvertureEspaceEtablissement \{([\s\S]*?)\n {4}\}/.exec(espace)?.[1] ?? '';
   const cas = [...table.replace(/\/\/.*$/gm, '').matchAll(/case ([^:]+): return \.(ouvert|ferme)\b/g)]
     .flatMap(m => m[1].split(',').map(c => [c.trim(), m[2]]));
-  assert.deepEqual(Object.fromEntries(cas), { '.demo': 'ouvert', '.staging': 'ouvert', '.production': 'ferme' },
-    'OuvertureEspaceEtablissement.pour(mode:) : démo et staging ouverts (T13), production fermée jusqu à T14');
+  assert.deepEqual(Object.fromEntries(cas), { '.demo': 'ouvert', '.staging': 'ouvert', '.production': 'ouvert' },
+    'OuvertureEspaceEtablissement.pour(mode:) : démo, staging (T13) et production (T14) ouverts');
   assert.equal(cas.length, 3, `trois cas exactement, sans default : ${JSON.stringify(cas)}`);
   assert.doesNotMatch(table, /\bdefault\b/, 'aucun default : un mode ajouté doit être décidé explicitement');
   assert.match(read('ios-native/Packages/JoleneCore/Sources/JoleneCore/Session/SessionController.swift'),

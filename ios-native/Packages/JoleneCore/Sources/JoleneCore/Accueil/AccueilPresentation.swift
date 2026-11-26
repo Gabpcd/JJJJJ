@@ -114,7 +114,7 @@ public enum AccueilPresentation {
 
     /// « 💰 Ce mois : 162,40 € net salarié estimé* sur 1 mission » (web l.664-678). « sur N
     /// missions » compte les missions relues porteuses d'un montant (`gainsCeMois.nb` du web ;
-    /// lecture de la décision 10 à acter par Gabrielle, `LOT1_PLAN.md` §7), jamais
+    /// lecture de la décision 10 à acter par la fondatrice, `LOT1_PLAN.md` §7), jamais
     /// `gains_mois.nb_missions`. `nil` (carte masquée) sans mission
     /// relue porteuse d'un montant, ou si aucun montant n'est positif : le web afficherait alors
     /// « Ce mois :  sur N missions » (écart assumé, `PARITE_SOIGNANT.md`).

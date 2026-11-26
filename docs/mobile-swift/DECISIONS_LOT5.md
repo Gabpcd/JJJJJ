@@ -1172,6 +1172,130 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
        pointage, SIRET, téléphone collé) et les empreintes hexadécimales. Les noms de la cohorte sont fictifs
        (« Recette », « Lot cinq ») ; un nom réel cité par un message ne serait pas masqué.
 
+## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
+
+Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`570df5db`, après le merge de #1188, corrections
+juridiques du point 4). Parcours STAGING n° 5 vert le 26/11/2026 (point 4).
+
+1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
+   staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
+   modifié. Un compte établissement réel confirmé par `fn_mes_permissions_etab` reçoit en production les écrans livrés
+   par T4 à T12, au lieu de l'écran « Espace non disponible ». `.ferme` reste le défaut du contrôleur
+   (`SessionController`) et de l'aiguillage des liens (`AiguillageLiens`) : la table reste le seul point d'ouverture.
+   Le mode d'un build Release vient de l'Info.plist seulement (`JoleneEnvironment.load`, surcharges lues en DEBUG
+   uniquement) : non modifié, toujours couvert par `EnvironmentTests`.
+2. **Tests et gardes adaptés** (un retour à `.ferme` en production fait échouer chacun, vérifié en mutant la ligne) :
+   - `SessionControllerEtablissementTests.testOuvertureParModeDeLancement` (trois modes ouverts) et
+     `testStagingEtProductionOuvrentLEspaceLeVerrouFermeLeRefuse` (remplace `testStagingOuvreLEspaceEtLaProductionLeRefuse` :
+     le même compte reçoit l'espace avec les tables de staging et de production, et le refus d'avant le lot 5, sans appel
+     établissement, avec `.ferme`) ;
+   - garde Node `tests/node/contrats-etablissement-ios.node.mjs` : table lue dans la source, trois cas `ouvert`, trois cas
+     exactement, aucun `default` ; câblage d'`AppContainer` inchangé ;
+   - `PublicationPresentationTests.testMentionContratExigeeAvantToutEspaceOuvertHorsDemo` : commentaire seul ; le verrou
+     (mention de contrat exigée hors démo) vaut désormais pour la production aussi.
+3. **Garde `etablissement` de la soumission App Store** (`scripts/mobile/ios-native-app-store.mjs`, sous-commande
+   `source`, mode d'emploi `APP_STORE.md`) : refuse un build dont la source rend `.ferme` (ou rien de lisible) pour
+   `.production`. La table est lue dans `EspaceResolution.swift` et les modes dans `enum JoleneMode`
+   (`Environment.swift`), aucune valeur recopiée : commentaires retirés, un seul `switch mode` de
+   `case .x: return .ouvert/.ferme`, sans `default` ni `#if`, chaque mode décidé une fois ; sinon « illisible » et refus.
+   Câblage (revue fraîche de #1190, M2 et m1) : chaque construction de `SessionController(` et de
+   `DeepLinkCoordinator(` de la cible app est dans `AppContainer.swift`, hors de toute compilation conditionnelle
+   (`#if`), et reçoit `espaceEtablissement: .pour(mode: environment.mode)` ; `.pour(mode: .demo)` n'est admis que pour le
+   contrôleur de la branche `case .demo:` de `switch environment.mode` ; une construction sans l'argument (défaut
+   `.ferme`) est refusée. Le contre-exemple du relecteur (contrôleur de production sous `#if DEBUG … #else
+   SessionController(gateways:) #endif`, qui laissait la garde verte) est refusé. Rôles (m2) : `EspaceResolution.espace`
+   doit rendre `.etablissement` et `UserRole.isNativelyServed` `true` pour `.adminEtablissement` et
+   `.etablissementLegacy`. Limite écrite dans `APP_STORE.md` : la garde lit ces sources, pas la résolution complète de la
+   session ni le coupe-circuit distant (point 6) ; `SessionControllerEtablissementTests` couvre le reste. Tests :
+   `tests/node/ios-native-app-store.node.mjs` (lecture du dépôt, mutations fermée, regroupée, commentée, `default`, `#if`
+   dans la table, mode manquant ou doublé, valeur calculée, câblage forcé, contrôleur ou aiguillage sous `#if` ou sans
+   argument, `.pour(mode: .demo)` hors démo, contrôleur hors d'`AppContainer`, rôle refusé en amont, fichiers absents,
+   CLI sur un arbre extrait) ; la garde Node `contrats-etablissement-ios.node.mjs` applique la même lecture du câblage.
+4. **Preuves exigées avant merge** :
+   - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6). **Vert au parcours n° 5**
+     (run 45754181214, sur `main` `d0bd46e3`, 26/11/2026, 04:52 → 05:24 UTC, Xcode 26.4.1, 19 étapes en succès), lu
+     dans le journal du job par la session de coordination :
+     - `build-for-testing` Jolene-Staging : succès (première compilation de #1196 sous Xcode 26.4.1) ;
+     - pré-vol : témoin sans session refusé comme attendu (`fn_mes_permissions_etab`, HTTP 401, code 42501) ; plancher
+       prouvé par PostgREST (12,30 €/h refusé, HTTP 400, P0001, « Le taux horaire doit être d'au moins 12,31 €/h. »,
+       0 mission créée) ; 20 lectures du parcours acceptées sous le JWT d'E1 (manifeste
+       `lot5-lectures-parcours-etab-v1`) ;
+     - XCUITest phase 1 `testPhase1ConnexionCandidatureAccepteeContratSigneEtCodeDePointage` passé (199,4 s) ; scans
+       d'arrivée et de départ de M2 sous le JWT de S1 réussis ; phase 2
+       `testPhase2ValidationDeLaPresenceApresLesScansDuSoignant` passé (68,7 s) ; `** TEST EXECUTE SUCCEEDED **` deux
+       fois ;
+     - relectures en base conformes (candidature `ACCEPTEE`, M1 assignée, présence validée et notée, aucune ligne
+       d'escrow) ; nettoyage prouvé (0 objet marqué).
+     Les runs précédents ont échoué : le troisième (45677331174) sur le refus `permissions:unauthorized` (section
+     « Troisième parcours STAGING », #1191) ; le quatrième (45737490974) sur un défaut du test, corrigé par #1196.
+     **Non prouvé par ce parcours** : `Jolene diagnostic stockage-session : stockage=memoire;sonde=-34018` aux deux
+     phases, le trousseau refuse toujours le build non signé et le repli mémoire DEBUG/staging a servi ; le critère
+     « restauration après arrêt » n'est donc pas prouvé (build signé requis, à décider). **Suivi, non corrigé ici** : la
+     ligne `Jolene diagnostic échec : attente « Initial session emitted after attempting to refresh the local stored
+     session… » | dernier-echec=élément absent` est publiée aux deux phases alors que les tests passent (incident
+     enregistré sans faire échouer le test ; cause non établie). Le parcours a tourné sur `main` `d0bd46e3`, pas sur la
+     tête de cette branche.
+   - **Validation juridique de la fondatrice** (HARD STOP n°4) : **validé le 25/11/2026**. À une liste de neuf points
+     juridiques avec recommandations, la fondatrice a répondu « Oui, tout valider » (réponse rapportée par la session
+     de coordination, non relue ici). Pour T14, cela couvre, mot pour mot de la liste :
+     - « Dans l'app, un établissement ne publie que des missions salariées ; le libéral reste sur le site » ;
+     - « L'acceptation d'un étudiant aide-soignant se fait sur le site seulement » ;
+     - « L'iPhone ouvre sans l'alerte de requalification en CDI, qui est à réécrire d'abord sur le site » ;
+     - « Les missions de médecins et d'internat restent sur le site seulement » ;
+     - « Le libellé “Taux horaire brut * (€/h)” est conservé » ;
+     - « “Plafond légal 48 h/semaine” : le garder tel quel ».
+     Les trois autres points (taux minimal de 12,31 €/h, refusé en dessous ; référence DPAE L1221-10 ; mentions
+     « Signature électronique simple (art. 1366-1367 Code civil) ») sont appliqués par la PR #1188, mergée sur `main`
+     (`570df5db`) avant T14 ; les textes affichés sont ceux de `main`. Restent hors validation : le règlement eIDAS (non relu à la source), l'articulation entre la
+     fenêtre de signature de 72 h et la transmission du CDD (L1242-13), les CGU, le modèle de contrat et le mandat de
+     facturation, qui ne sont pas modifiés. Sources : corps de la PR, section « Juridique — HARD STOP n°4 ».
+     Textes `[juridique]` affichés à l'établissement (revue de #1190, M3) : chacun est rattaché dans le corps de la PR
+     (§2 c) à la liste validée le 24/11/2026 (#1179, section 6, groupes A à E) ou à #1188 ; les autres (bandeaux, pied
+     de page, compte à rebours, signature OTP et certificat de l'écran contrat partagé, dont « Signé avec succès…
+     (art. 1366-1367 Code civil) », « RPPS vérifié », « PSC actif » et « Audit trail complet disponible sur demande »)
+     sont **à soumettre à la fondatrice** (§3), sans rien trancher. La validation du 25/11 a été donnée dans la
+     conversation de travail et consignée par la session principale ; elle reste à poster dans la PR.
+   - **Drapeaux** : les sept clés `ios_natif_etab_{accueil,missions,publier,presences,pointage,messages,compte}_actif`
+     présentes et à 1 en production, et `fn_param_bool` exécutable par `authenticated`. Lues le 25/11/2026 par une
+     requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
+     enregistrée, `EXECUTE` accordé à `authenticated` et refusé à `anon`. Aucune migration nécessaire. À relire le jour
+     du merge (un administrateur peut couper un écran à chaud) ; non relu en STAGING.
+5. **Ce qui n'est pas prouvé** : aucun parcours établissement n'a tourné contre le serveur de production ; le parcours
+   STAGING n° 5 (point 4) a tourné sur `main`, sans l'ouverture de production ni le coupe-circuit de cette tranche ; le coupe-circuit du point 6 n'a été exercé contre aucun serveur ; les tests Swift ont tourné avec le compilateur local (Xcode 16.4), pas avec celui épinglé
+   par la CI (26.4.1) ; les XCUITest n'ont pas été compilés ; aucun appareil physique ; aucun compte établissement legacy
+   réel relu (« En attente », point 6).
+6. **Coupe-circuit distant de l'espace entier** (revue fraîche de #1190, M1 ; décision de la session de coordination
+   du 25/11/2026) : huitième drapeau `ios_natif_etab_espace_actif` (`EspaceEtablissementDrapeau.cle`), posé à 1 par la
+   migration `20261125130000_drapeau_ios_natif_etab_espace.sql` (même gabarit que D-FLAGS : `parametres_systeme`,
+   catégorie `OPERATIONS`, bornes 0 et 1, `ON CONFLICT (cle) DO NOTHING`, aucune fonction ni GRANT, lu par
+   `fn_param_bool` déjà accordée à `authenticated`). **Migration de données en production : approbation humaine au
+   merge** (elle part par `deploy-supabase` au merge, jamais par MCP).
+   - **Lecture** : `SessionController.resolve`, pour un compte établissement, après le rôle et l'ouverture par mode,
+     AVANT `fn_mes_permissions_etab` ; donc à la connexion, au lancement et à chaque retour au premier plan
+     (revalidation silencieuse de `start()`). Lecture bornée par `resolutionTimeout` (15 s).
+   - **À 0** : `.blocked(.unsupportedRole(<rôle>))`, exactement le refus d'un espace fermé (« Espace non disponible »,
+     renvoi jolene.app), sans aucun appel établissement et sans texte nouveau. En revalidation, l'espace ouvert est
+     remplacé par ce refus et l'epoch avance (écrans établissement démontés). Un compte soignant n'est pas concerné.
+   - **Absent, illisible, en erreur ou en délai : fail-open** (espace ouvert), comme les sept drapeaux d'écran. Choix
+     assumé, avec sa limite : le drapeau protège contre un défaut connu du NATIF, que l'administrateur coupe
+     délibérément ; une panne de lecture (réseau, `fn_param_bool` indisponible) n'est pas un signal de ce défaut, et un
+     fail-closed ferait de chaque incident réseau un refus « Espace non disponible » pour tous les établissements, sans
+     reprise automatique visible. **Limite** : si `fn_param_bool` elle-même est en panne, la coupure ne s'applique pas ;
+     et un backend qui ne répond pas à `fn_param_bool` retarde l'ouverture de l'espace jusqu'à 15 s.
+   - **Procédure de fermeture à distance** : un administrateur plateforme (`est_admin()`) passe la valeur à 0, soit dans
+     AdminConfig (`src/pages/admin/AdminConfig.tsx`, catégorie « Opérations », libellé « App iOS — espace établissement
+     actif »), soit par `fn_admin_maj_parametre('ios_natif_etab_espace_actif', 0)` (contrôle `est_admin()`, bornes
+     0 et 1). Effet : à la prochaine connexion, au prochain lancement ou au prochain retour au premier plan de chaque
+     app ; une session restée au premier plan garde l'espace jusqu'à sa prochaine revalidation. Réouverture : valeur 1,
+     même chemin. Aucune nouvelle version de l'app n'est nécessaire, et la garde `etablissement` de la soumission reste
+     inchangée.
+   - **Tests** : `SessionControllerEtablissementTests` (drapeau à 0 en staging et en production : refus d'avant T14,
+     appels « restauration, rôle, drapeau » seulement ; à 1 : ouvert ; défaut renvoyé ou port non câblé : ouvert ; délai :
+     ouvert ; passage à 0 en revalidation : refus et epoch + 1 ; surcharge démo `-JOLENE_FLAG_ios_natif_etab_espace_actif
+     false` : refus ; espace fermé : drapeau jamais lu), `EtabFeatureFlagsTests` (clé égale à la migration, hors des
+     sept écrans), `src/lib/__tests__/drapeauxIosNatifMigration.test.ts` (29 clés, gabarit, libellé propre).
+   - **Non relu** : la valeur en production (la ligne n'existe qu'après le merge) et en STAGING.
+
 ## En attente de Gabrielle
 
 Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui suit n'est implémenté sans son accord.
@@ -1219,3 +1343,5 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
    de `fn_generer_qr_mission` ; consigné dans `PORTE_LOT5.md` seulement avec son accord explicite.
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
+11. **T14 (ouverture en production)** : validation juridique obtenue le 25/11/2026 (section T14, point 4) ; go de
+    merge (parcours STAGING n° 5 vert le 26/11/2026 ; #1188, prérequis, est mergée).

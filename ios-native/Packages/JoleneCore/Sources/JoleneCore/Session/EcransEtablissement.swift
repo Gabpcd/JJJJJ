@@ -59,10 +59,26 @@ public enum EcranNatifEtablissement: String, CaseIterable, Sendable {
     }
 }
 
+/// Coupe-circuit de l'espace établissement ENTIER (lot 5, T14, M1 de la revue de #1190) : huitième clé
+/// `parametres_systeme`, posée à 1 par la migration `20261125130000_drapeau_ios_natif_etab_espace.sql`. Lue par
+/// `SessionController` à chaque résolution d'un compte établissement (connexion, lancement, retour au premier plan),
+/// après le rôle et AVANT tout appel établissement (`fn_mes_permissions_etab`). À 0, l'espace rend exactement le refus
+/// d'un espace fermé (`OuvertureEspaceEtablissement.ferme` : « Espace non disponible », renvoi jolene.app), sans texte
+/// nouveau. Absent ou illisible : fail-open (`FlagsPolicy.defautFailOpen`), comme les sept drapeaux d'écran
+/// (`DECISIONS_LOT5.md`, section T14, point 6). Hors de `EcranNatifEtablissement` : ce n'est pas un écran.
+public enum EspaceEtablissementDrapeau {
+    public static let cle = "ios_natif_etab_espace_actif"
+}
+
 public extension FlagsPort {
     /// Drapeau d'un écran établissement, défaut fail-open (`FlagsPolicy.defautFailOpen`).
     func ecranEtablissementActif(_ ecran: EcranNatifEtablissement) async -> Bool {
         await ecranActif(cle: ecran.cle, defaut: FlagsPolicy.defautFailOpen)
+    }
+
+    /// Coupe-circuit de l'espace établissement entier, défaut fail-open (`EspaceEtablissementDrapeau`).
+    func espaceEtablissementActif() async -> Bool {
+        await ecranActif(cle: EspaceEtablissementDrapeau.cle, defaut: FlagsPolicy.defautFailOpen)
     }
 }
 

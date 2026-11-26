@@ -10,9 +10,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  DEMO_WORLD_TESTS, MODES, NOTES, NOTES_MAX, PORTS_COEUR, RETENTION_PROVENANCE_JOURS, WORKFLOW_CI_IOS, WORKFLOW_TESTFLIGHT,
+  APP_CONTAINER, DEMO_WORLD_TESTS, ENVIRONNEMENT, ESPACE_RESOLUTION, MODES, ROLES_SERVIS, NOTES, NOTES_MAX, PORTS_COEUR, RETENTION_PROVENANCE_JOURS, WORKFLOW_CI_IOS, WORKFLOW_TESTFLIGHT,
   evaluateBuild, evaluateCiIos, evaluateEntrees, evaluateNotes, evaluateSource, findProvenance, lireBuild, lirePortsEnAttente,
-  loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
+  lireCablageEtablissement, lireModes, lireOuvertureEtablissement, lireRolesEtablissement, loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
 } from '../../scripts/mobile/ios-native-app-store.mjs';
 import { APP, GuardFailure, ascClient } from '../../scripts/mobile/ios-native-testflight.mjs';
 import { lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
@@ -381,6 +381,147 @@ test('la garde OTA lit aussi Package.swift, Package.resolved et project.yml de l
   }
 });
 
+// --- Espace établissement ouvert en production (lot 5, T14) ---------------------------------
+
+const PRODUCTION_OUVERTE = 'case .production: return .ouvert';
+/** Arbre clos dont la table d'ouverture de l'espace établissement est réécrite par `remplacer`. */
+const arbreEspace = (remplacer) => {
+  const files = arbreClos();
+  const avant = files.swiftSources[ESPACE_RESOLUTION];
+  files.swiftSources[ESPACE_RESOLUTION] = remplacer(avant);
+  assert.notEqual(files.swiftSources[ESPACE_RESOLUTION], avant, 'la mutation doit changer la source');
+  return files;
+};
+
+test('etablissement : la table du dépôt est lue depuis la source Swift, production ouverte (T14)', () => {
+  const sources = arbre().swiftSources;
+  assert.deepEqual(lireModes(sources[ENVIRONNEMENT]), ['demo', 'staging', 'production'], 'JoleneMode lu dans Environment.swift');
+  const lu = lireOuvertureEtablissement(sources[ESPACE_RESOLUTION], lireModes(sources[ENVIRONNEMENT]));
+  assert.equal(lu.etat, 'lue', lu.raison);
+  assert.equal(lu.cas.production, 'ouvert', 'T14 : production ouverte dans la source du dépôt');
+  assert.ok(sources[ESPACE_RESOLUTION].includes(PRODUCTION_OUVERTE), 'ligne de production attendue par les mutations ci-dessous');
+});
+
+test('etablissement : un build dont l espace établissement est fermé en production est refusé', () => {
+  refus(() => evaluateSource(arbreEspace((s) => s.replace(PRODUCTION_OUVERTE, 'case .production: return .ferme'))),
+    'etablissement', /fermé en production .*return \.ferme.*DECISIONS_LOT5\.md/);
+  // Production regroupée avec un autre mode : même lecture.
+  refus(() => evaluateSource(arbreEspace((s) => s.replace('        case .staging: return .ouvert\n', '')
+    .replace(PRODUCTION_OUVERTE, 'case .staging, .production: return .ferme'))), 'etablissement', /fermé en production/);
+  // Une ligne commentée ne rouvre rien : la ligne réelle compte.
+  refus(() => evaluateSource(arbreEspace((s) => s.replace(PRODUCTION_OUVERTE, '// case .production: return .ouvert\n        case .production: return .ferme'))),
+    'etablissement', /fermé en production/);
+});
+
+test('etablissement : en cas de doute sur la table, refus (default, #if, mode manquant ou doublé, table absente)', () => {
+  for (const [mutation, raison] of [
+    [(s) => s.replace(PRODUCTION_OUVERTE, 'default: return .ouvert'), /default/],
+    [(s) => s.replace(PRODUCTION_OUVERTE, '#if DEBUG\n        case .production: return .ouvert\n        #else\n        case .production: return .ferme\n        #endif'), /compilation conditionnelle/],
+    [(s) => s.replace(`        ${PRODUCTION_OUVERTE}\n`, ''), /manquants : production/],
+    [(s) => s.replace(PRODUCTION_OUVERTE, `${PRODUCTION_OUVERTE}\n        case .production: return .ferme`), /production décidé deux fois/],
+    [(s) => s.replace(PRODUCTION_OUVERTE, 'case .production: return ouvertureProduction'), /ligne inattendue/],
+    [(s) => s.replace(PRODUCTION_OUVERTE, 'case .production: return Bool.random() ? .ouvert : .ferme'), /ligne inattendue/],
+  ]) refus(() => evaluateSource(arbreEspace(mutation)), 'etablissement', raison);
+  const absente = arbreClos();
+  delete absente.swiftSources[ESPACE_RESOLUTION];
+  refus(() => evaluateSource(absente), 'etablissement', /introuvable/);
+  const modes = arbreClos();
+  modes.swiftSources[ENVIRONNEMENT] = modes.swiftSources[ENVIRONNEMENT].replace('case demo, staging, production', 'case demo, staging, production, recette');
+  refus(() => evaluateSource(modes), 'etablissement', /manquants : recette/);
+  assert.equal(lireOuvertureEtablissement(undefined, ['production']).etat, 'absente');
+  assert.equal(lireModes('public enum JoleneMode { case demo; static let x = 1 }'), null, 'JoleneMode illisible : refus');
+});
+
+test('etablissement : AppContainer câble la table sur le mode de lancement, sans ouverture forcée', () => {
+  for (const [avant, apres, fragment] of [
+    ['espaceEtablissement: .pour(mode: environment.mode))', 'espaceEtablissement: .ferme)', /force l'ouverture .*\.ferme|ne câble pas/],
+    ['espaceEtablissement: .pour(mode: environment.mode), // lot 5, T2b', 'espaceEtablissement: .ouvert, // lot 5, T2b', /force l'ouverture .*\.ouvert/],
+    ['espaceEtablissement: .pour(mode: environment.mode))', 'espaceEtablissement: .pour(mode: .staging))', /force l'ouverture .*\.pour\(mode: \.staging\)/],
+  ]) {
+    const files = arbreClos();
+    assert.ok(files.swiftSources[APP_CONTAINER].includes(avant), `${avant} attendu dans AppContainer.swift`);
+    files.swiftSources[APP_CONTAINER] = files.swiftSources[APP_CONTAINER].replace(avant, apres);
+    refus(() => evaluateSource(files), 'etablissement', fragment);
+  }
+  const sansApp = arbreClos();
+  delete sansApp.swiftSources[APP_CONTAINER];
+  refus(() => evaluateSource(sansApp), 'etablissement', /AppContainer\.swift absent/);
+});
+
+// Revue fraîche de #1190 : M2 (contrôleur sous #if), m1 (.pour(mode: .demo) hors du monde démo), m2 (rôles refusés en
+// amont de la table). Chaque contournement montré par le relecteur est rejoué ici et doit être refusé.
+const LIGNE_PRODUCTION = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))';
+const LIGNE_DEMO = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: .demo))';
+const avecApp = (remplacer) => {
+  const files = arbreClos();
+  const avant = files.swiftSources[APP_CONTAINER];
+  files.swiftSources[APP_CONTAINER] = remplacer(avant);
+  assert.notEqual(files.swiftSources[APP_CONTAINER], avant, 'la mutation doit changer AppContainer.swift');
+  return files;
+};
+
+test('etablissement (M2) : le câblage du dépôt est lu construction par construction', () => {
+  const app = arbre().swiftSources[APP_CONTAINER];
+  assert.ok(app.includes(LIGNE_PRODUCTION) && app.includes(LIGNE_DEMO), 'lignes attendues par les mutations ci-dessous');
+  assert.deepEqual(lireCablageEtablissement(arbre().swiftSources), { erreurs: [], controleurs: 2, coordinateurs: 1, productionParMode: 1 });
+  assert.deepEqual(lireRolesEtablissement(arbre().swiftSources), []);
+});
+
+test('etablissement (M2) : un contrôleur de session sous #if, ou sans espaceEtablissement:, est refusé', () => {
+  // Contre-exemple exact du relecteur : la ligne DEBUG garde deux câblages par mode, le Release retombe sur .ferme.
+  const reviseur = avecApp((s) => s.replace(LIGNE_PRODUCTION,
+    `#if DEBUG\n                ${LIGNE_PRODUCTION}\n                #else\n                let controller = SessionController(gateways: gateways)   // défaut .ferme\n                #endif`));
+  refus(() => evaluateSource(reviseur), 'etablissement', /SessionController\( sous compilation conditionnelle/);
+  refus(() => evaluateSource(reviseur), 'etablissement', /SessionController\( sans espaceEtablissement: .*défaut \.ferme/);
+  // #if sans #else autour du seul câblage : refusé aussi.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, `#if DEBUG\n                ${LIGNE_PRODUCTION}\n                #endif`))),
+    'etablissement', /sous compilation conditionnelle/);
+  // Argument retiré : défaut .ferme du contrôleur.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, 'let controller = SessionController(gateways: gateways)'))),
+    'etablissement', /sans espaceEtablissement: .*défaut \.ferme/);
+  // Argument multiligne, valeur autre : refus nommé.
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION,
+    'let controller = SessionController(gateways: gateways,\n                    espaceEtablissement: OuvertureEspaceEtablissement.ferme)'))),
+    'etablissement', /force l'ouverture .*OuvertureEspaceEtablissement\.ferme/);
+  // Aiguillage des liens sous #if ou sans argument.
+  refus(() => evaluateSource(avecApp((s) => s.replace('let liens = DeepLinkCoordinator(', '#if DEBUG\n        let liens = DeepLinkCoordinator(')
+    .replace('        self.liens = liens\n', '        #endif\n        self.liens = liens\n'))), 'etablissement', /DeepLinkCoordinator\( sous compilation conditionnelle/);
+  refus(() => evaluateSource(avecApp((s) => s.replace(/\s*espaceEtablissement: \.pour\(mode: environment\.mode\), \/\/ lot 5, T2b/, ''))),
+    'etablissement', /DeepLinkCoordinator\( sans espaceEtablissement:/);
+  // Un #if refermé avant la construction ne compte pas.
+  const ferme = avecApp((s) => s.replace(LIGNE_PRODUCTION, `#if DEBUG\n                let essai = 1\n                #endif\n                ${LIGNE_PRODUCTION}`));
+  assert.deepEqual(lireCablageEtablissement(ferme.swiftSources).erreurs, []);
+});
+
+test('etablissement (m1) : .pour(mode: .demo) n est admis que dans la branche case .demo', () => {
+  refus(() => evaluateSource(avecApp((s) => s.replace(LIGNE_PRODUCTION, LIGNE_DEMO))), 'etablissement',
+    /force l'ouverture .*espaceEtablissement: \.pour\(mode: \.demo\)/);
+  refus(() => evaluateSource(avecApp((s) => s.replace('espaceEtablissement: .pour(mode: environment.mode), // lot 5, T2b',
+    'espaceEtablissement: .pour(mode: .demo), // lot 5, T2b'))), 'etablissement', /DeepLinkCoordinator\( force l'ouverture/);
+  // Un contrôleur construit hors d'AppContainer échappe au contrôle : refusé.
+  const ailleurs = arbreClos();
+  ailleurs.swiftSources['ios-native/Jolene/Composition/AutreConteneur.swift'] = 'let c = SessionController(gateways: g, espaceEtablissement: .pour(mode: .demo))\n';
+  refus(() => evaluateSource(ailleurs), 'etablissement', /construit hors d'AppContainer .*AutreConteneur\.swift:1/);
+});
+
+test('etablissement (m2) : un rôle établissement refusé en amont de la table ferme l espace de fait, refusé', () => {
+  for (const [chemin, avant, apres, fragment] of [
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      'case .adminEtablissement, .etablissementLegacy: return .bloque(.unsupportedRole(role))', /EspaceResolution\.espace ne rend pas \.etablissement pour \.adminEtablissement/],
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      'case .adminEtablissement: return .etablissement\n        case .etablissementLegacy: return .bloque(.unsupportedRole(role))', /pour \.etablissementLegacy/],
+    [ROLES_SERVIS, 'case .adminEtablissement, .etablissementLegacy: return true',
+      'case .adminEtablissement, .etablissementLegacy: return false', /UserRole\.isNativelyServed ne rend pas true/],
+    [ESPACE_RESOLUTION, 'case .adminEtablissement, .etablissementLegacy: return .etablissement',
+      '#if DEBUG\n        case .adminEtablissement, .etablissementLegacy: return .etablissement\n        #else\n        case .adminEtablissement, .etablissementLegacy: return .bloque(.unsupportedRole(role))\n        #endif', /EspaceResolution\.espace : compilation conditionnelle/],
+  ]) {
+    const files = arbreClos();
+    assert.ok(files.swiftSources[chemin].includes(avant), `${avant} attendu dans ${chemin}`);
+    files.swiftSources[chemin] = files.swiftSources[chemin].replace(avant, apres);
+    refus(() => evaluateSource(files), 'etablissement', fragment);
+  }
+});
+
 // --- Build dans App Store Connect ------------------------------------------------------------
 
 const reponse = (attributs = {}, version = {}) => ({
@@ -695,7 +836,7 @@ test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {
 
 test('le mode d\'emploi existe et nomme chaque garde', () => {
   const doc = lire('docs/mobile-swift/APP_STORE.md');
-  for (const garde of ['entrees', 'notes', 'provenance', 'ci-ios', 'lots', 'apple-4.2', 'ota', 'build']) assert.ok(doc.includes(`\`${garde}\``), `garde ${garde} absente du mode d'emploi`);
+  for (const garde of ['entrees', 'notes', 'provenance', 'ci-ios', 'lots', 'etablissement', 'apple-4.2', 'ota', 'build']) assert.ok(doc.includes(`\`${garde}\``), `garde ${garde} absente du mode d'emploi`);
   assert.ok(doc.includes(phraseConfirmation(marketingVersion, 'N')));
   // Revue m6 de #1177 : documents alignés sur le code.
   assert.doesNotMatch(doc, /montés par les onglets/, 'le montage du pointage n\'est pas contrôlé');
@@ -844,7 +985,7 @@ function arbreSurDisque(t, modifier = () => {}) {
   return dir;
 }
 
-test('cli source : la garde rejoue lots, Apple 4.2 et OTA sur l\'arbre extrait', (t) => {
+test('cli source : la garde rejoue lots, établissement, Apple 4.2 et OTA sur l\'arbre extrait', (t) => {
   const ok = cli(t, { args: ['source', arbreSurDisque(t)] });
   assert.equal(ok.status, 0, ok.stderr);
   const lot3 = arbreSurDisque(t, (dir) => {
@@ -857,6 +998,20 @@ test('cli source : la garde rejoue lots, Apple 4.2 et OTA sur l\'arbre extrait',
     writeFileSync(chemin, `${readFileSync(chemin, 'utf8')}\n// capawesome-live-update\n`);
   });
   refuseCli(cli(t, { args: ['source', ota] }), /\[ota\] .*Package\.resolved/);
+  // Lot 5, T14 : l'espace établissement refermé en production dans l'arbre extrait bloque la soumission.
+  const ferme = arbreSurDisque(t, (dir) => {
+    const chemin = join(dir, ESPACE_RESOLUTION);
+    writeFileSync(chemin, readFileSync(chemin, 'utf8').replace('case .production: return .ouvert', 'case .production: return .ferme'));
+  });
+  refuseCli(cli(t, { args: ['source', ferme] }), /\[etablissement\] espace établissement fermé en production/);
+  // Revue de #1190, M2 : contrôleur de production sous #if DEBUG / #else sans argument, sur l'arbre extrait.
+  const sousIf = arbreSurDisque(t, (dir) => {
+    const chemin = join(dir, APP_CONTAINER);
+    const ligne = 'let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))';
+    writeFileSync(chemin, readFileSync(chemin, 'utf8').replace(ligne,
+      `#if DEBUG\n                ${ligne}\n                #else\n                let controller = SessionController(gateways: gateways)\n                #endif`));
+  });
+  refuseCli(cli(t, { args: ['source', sousIf] }), /\[etablissement\] SessionController\( sous compilation conditionnelle/);
   if (portsEnAttente(lire(DEMO_WORLD_TESTS), 1)?.length) refuseCli(cli(t, { args: ['source', root] }), /\[lots\] le lot 1 n'est pas clos/);
 });
 

@@ -242,7 +242,7 @@ final class AppContainer: ObservableObject {
             do {
                 let gateways = try SupabaseGateways.make(environment: environment)
                 clock = gateways.clock
-                // Lot 5 : espace établissement ouvert en staging (T13), fermé en production jusqu'à T14
+                // Lot 5 : espace établissement ouvert en staging (T13) et en production (T14)
                 // (`OuvertureEspaceEtablissement`).
                 let controller = SessionController(gateways: gateways, espaceEtablissement: .pour(mode: environment.mode))
                 parrainage.controleur = controller // lot 4, T1c

@@ -3,7 +3,7 @@ import Foundation
 // Libellés non juridiques des écrans du lot 2 (tranche TL, docs/mobile-swift/LOT2_PLAN.md §3 « TL »),
 // HORS HARD STOP n°4 : boutons de navigation, états d'envoi, erreurs génériques ou réseau, compteurs,
 // minuteurs, en-têtes. Les textes juridiques et de consentement des mêmes composants sont dans
-// `Legal/TextesWeb.swift` (HARD STOP, validation de Gabrielle).
+// `Legal/TextesWeb.swift` (HARD STOP, validation de la fondatrice).
 //
 // Même machinerie que TextesWeb : chaque constante est le texte EXACT que le web affiche à la ligne
 // annoncée (`// source: fichier:ligne`, sans nature : tout ici est libellé), prouvé par la garde

@@ -11,7 +11,7 @@ import SwiftUI
 /// Textes par défaut (vouvoiement) réservés aux confirmations sans portée juridique. La suppression
 /// de compte (T8, HARD STOP n°4) passe `message`, `phrasePrompt` et `phrasePlaceholder` tels que sur
 /// le web (`SectionConfidentialite.tsx` l.171-172 « Tape SUPPRIMER pour confirmer », l.178
-/// placeholder « Tape SUPPRIMER »), en tutoiement, tant que Gabrielle n'a pas validé un autre wording.
+/// placeholder « Tape SUPPRIMER »), en tutoiement, tant que la fondatrice n'a pas validé un autre wording.
 public struct ConfirmationSheet: View {
     public enum Variant: Equatable, Sendable { case primary, danger }
 

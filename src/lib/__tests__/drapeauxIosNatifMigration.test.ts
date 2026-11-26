@@ -7,6 +7,9 @@ import { describe, expect, it } from 'vitest';
 // session (défaut fail-open côté Swift).
 // - B0 (lot 1) : 20261102150000_drapeaux_ios_natif.sql, 5 onglets du socle.
 // - D-FLAGS (lots 2, 4, 5) : <version>_drapeaux_ios_natif_lots_2_4_5.sql.
+// - T14 du lot 5 (M1 de la revue de #1190) : 20261125130000_drapeau_ios_natif_etab_espace.sql,
+//   coupe-circuit de l'espace établissement ENTIER (pas un écran : libellé et
+//   description propres, même gabarit pour le reste).
 // Toutes les insertions suivent le gabarit B0 : mêmes colonnes, valeur 1, bornes
 // 0/1, catégorie OPERATIONS (seule visible dans AdminConfig), cablee true,
 // ON CONFLICT (cle) DO NOTHING — jamais DO UPDATE, sinon un rejeu réarmerait un
@@ -15,6 +18,10 @@ import { describe, expect, it } from 'vitest';
 const DOSSIER = 'supabase/migrations';
 const FICHIER_B0 = '20261102150000_drapeaux_ios_natif.sql';
 const SUFFIXE_LOTS_2_4_5 = '_drapeaux_ios_natif_lots_2_4_5.sql';
+const FICHIER_ESPACE = '20261125130000_drapeau_ios_natif_etab_espace.sql';
+const CLE_ESPACE = 'ios_natif_etab_espace_actif';
+const AVERTISSEMENT_ESPACE =
+  "Coupe-circuit : passez à 0 uniquement si l'espace établissement natif est cassé. Lu par l'app à l'ouverture de session et au retour au premier plan.";
 
 const ECRANS_LOT1 = ['accueil', 'explorer', 'missions', 'revenus', 'profil'];
 const ECRANS_LOT2 = ['presences', 'documents', 'contrats'];
@@ -180,9 +187,14 @@ const toutesInsertions = fichiersDrapeaux.flatMap(insertions);
 const fichiersLots245 = fichiers.filter((fichier) => fichier.endsWith(SUFFIXE_LOTS_2_4_5));
 
 describe('drapeaux ios_natif_* de l’app iOS native', () => {
-  it('la migration B0 et la migration D-FLAGS des lots 2, 4 et 5 sont les seules à poser des drapeaux', () => {
+  it('les migrations B0, D-FLAGS (lots 2, 4 et 5) et T14 (espace) sont les seules à poser des drapeaux', () => {
     expect(fichiersLots245).toHaveLength(1);
-    expect(fichiersDrapeaux).toEqual([FICHIER_B0, fichiersLots245[0]]);
+    expect(fichiersDrapeaux).toEqual([FICHIER_B0, fichiersLots245[0], FICHIER_ESPACE]);
+  });
+
+  it('T14 : une seule clé, le coupe-circuit de l’espace établissement entier, postérieure à D-FLAGS', () => {
+    expect(insertions(FICHIER_ESPACE).map((i) => i.champs[0])).toEqual([CLE_ESPACE]);
+    expect(FICHIER_ESPACE.slice(0, 14) > fichiersLots245[0].slice(0, 14)).toBe(true);
   });
 
   it('la migration D-FLAGS est au format 14 chiffres et postérieure à B0', () => {
@@ -227,11 +239,20 @@ describe('drapeaux ios_natif_* de l’app iOS native', () => {
         'OPERATIONS',
         'true',
       ]);
-      expect(label, contexte).toMatch(/^App iOS — écran \S.* actif$/);
-      expect(description, contexte).toMatch(
-        /^Autorise l'écran natif \S.* de l'application iOS\. À 0, l'app affiche un renvoi vers la version web à la place de cet écran\.$/,
-      );
-      expect(avertissement, contexte).toBe(AVERTISSEMENT);
+      if (cleLue === CLE_ESPACE) {
+        // Coupe-circuit de l'espace entier (T14) : pas un écran, libellé et description propres.
+        expect(label, contexte).toBe('App iOS — espace établissement actif');
+        expect(description, contexte).toMatch(
+          /^Autorise l'espace établissement entier de l'application iOS\. À 0, un compte établissement voit « Espace non disponible » et un renvoi vers la version web, sans aucun écran natif établissement\.$/,
+        );
+        expect(avertissement, contexte).toBe(AVERTISSEMENT_ESPACE);
+      } else {
+        expect(label, contexte).toMatch(/^App iOS — écran \S.* actif$/);
+        expect(description, contexte).toMatch(
+          /^Autorise l'écran natif \S.* de l'application iOS\. À 0, l'app affiche un renvoi vers la version web à la place de cet écran\.$/,
+        );
+        expect(avertissement, contexte).toBe(AVERTISSEMENT);
+      }
       for (const texte of [label, description, avertissement]) {
         expect(texte, `${contexte} : vouvoiement`).not.toMatch(
           /(?<!\p{L})(tu|toi|ton|ta|tes)(?!\p{L})/iu,
@@ -255,14 +276,14 @@ describe('drapeaux ios_natif_* de l’app iOS native', () => {
     expect(cles).toEqual(expect.arrayContaining(['exclusions', 'serie', 'etab_pointage'].map(cle)));
   });
 
-  it('28 drapeaux distincts au total, libellés et descriptions distincts', () => {
+  it('29 drapeaux distincts au total (28 écrans + l’espace établissement), libellés et descriptions distincts', () => {
     const cles = toutesInsertions.map((i) => i.champs[0]);
-    expect(cles).toHaveLength(28);
-    expect(new Set(cles).size).toBe(28);
-    expect(new Set(toutesInsertions.map((i) => i.champs[2])).size).toBe(28);
-    expect(new Set(toutesInsertions.map((i) => i.champs[3])).size).toBe(28);
+    expect(cles).toHaveLength(29);
+    expect(new Set(cles).size).toBe(29);
+    expect(new Set(toutesInsertions.map((i) => i.champs[2])).size).toBe(29);
+    expect(new Set(toutesInsertions.map((i) => i.champs[3])).size).toBe(29);
     expect(new Set(cles)).toEqual(
-      new Set([...ECRANS_LOT1, ...ECRANS_LOT2, ...ECRANS_LOT4, ...ECRANS_LOT5].map(cle)),
+      new Set([...[...ECRANS_LOT1, ...ECRANS_LOT2, ...ECRANS_LOT4, ...ECRANS_LOT5].map(cle), CLE_ESPACE]),
     );
   });
 
