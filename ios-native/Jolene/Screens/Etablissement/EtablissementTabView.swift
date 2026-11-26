@@ -92,6 +92,7 @@ struct EtablissementTabView: View {
             .accessibilityIdentifier("tab-etab-compte")
         }
         .tint(JoleneColor.rose700)
+        .modifier(DernierEchecDebug(actif: !container.isDemo))
         // Lot 5, T11 : cycle Realtime et horloge de la messagerie pour les racines et destinations de l'espace.
         .environment(\.messagerieEtablissement,
                      MessagerieEtablissementEnvironnement(cycle: container.cycleMessagerie, clock: container.clock))
@@ -133,5 +134,31 @@ struct EtablissementTabView: View {
         if cible.onglet == .presences, cible.destination == nil {
             demandePresences = DemandeOngletPresences(onglet: cible.ongletPresences, jeton: demandePresences.jeton + 1)
         }
+    }
+}
+
+/// DEBUG seulement, hors démo : dernier échec serveur (`DiagnosticDernierEchec`, sans secret) posé comme valeur
+/// d'accessibilité de `debug-dernier-echec`, relu chaque seconde, pour que le XCUITest STAGING nomme la cause d'une
+/// attente échouée (quatrième parcours STAGING du lot 5). En Release, la vue est rendue telle quelle.
+private struct DernierEchecDebug: ViewModifier {
+    let actif: Bool
+
+    func body(content: Content) -> some View {
+        #if DEBUG
+        content.overlay(alignment: .topLeading) {
+            if actif {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .accessibilityElement()
+                        .accessibilityIdentifier("debug-dernier-echec")
+                        .accessibilityValue(DiagnosticDernierEchec.partage.valeur ?? "aucun")
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        #else
+        content
+        #endif
     }
 }

@@ -1019,7 +1019,7 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    échoue en 53,6 s avec le diagnostic `permissions:unauthorized:Votre session a expiré. Reconnectez-vous.` : Auth
    accepte les identifiants, puis `fn_mes_permissions_etab` est refusée. Le schéma n'est pas en cause : c'est la
    requête de l'app qui diffère de celle de la fixture.
-2. **Cause PROBABLE (revue de #1191, M1) : établie dans le code, pas sur le runner** :
+2. **Refus du trousseau ÉTABLI : la sonde -34018 est OBSERVÉE au parcours n° 4** (run 45737490974, ligne 541 du journal publié : `Jolene diagnostic stockage-session : stockage=memoire;sonde=-34018`). **Son lien avec l'échec du parcours n° 3 est DÉDUIT** : même build non signé, même image de simulateur, même mécanisme du SDK (points a à g), et témoin du pré-vol 401/42501. Il n'a pas été rejoué sans le repli (revue de #1196, m6). Notée d'abord probable (revue de #1191, M1) :
    - (a) les workflows STAGING construisent l'app de simulateur avec `CODE_SIGNING_ALLOWED=NO`
      (`ios-swift-lot5-staging.yml`, `ios-swift-staging.yml`) : seule la signature ad hoc de l'éditeur de liens, sans
      entitlement ni `application-identifier` ;
@@ -1054,8 +1054,14 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
    - `native-auth-staging.yml` a été exécuté une fois et s'est arrêté avant les tests UI ;
    - aucun parcours XCUITest authentifié n'a encore réussi en CI.
 
-   La cause n'est donc ni contredite ni confirmée par la CI. Le parcours n° 4 tranchera grâce à la ligne de stockage
-   (point 5).
+   La cause n'était donc ni contredite ni confirmée par la CI. Le parcours n° 4 l'a tranchée.
+
+   **Observation (parcours n° 4, 26/11/2026)** : sur le simulateur iOS 26.2 de la CI, le trousseau refuse l'écriture
+   pour le build non signé. La sonde rend -34018 et le repli en mémoire a servi : la connexion et l'ouverture de
+   l'espace établissement ont réussi, et le témoin du pré-vol confirme que `anon` est refusé (HTTP 401, 42501).
+   Conséquence : le critère « restauration après arrêt » (`StagingConnexionTests`, PORTE_LOT0 1.1) ne peut être prouvé
+   que par un build de simulateur **signé**, qui porte un `application-identifier`. Un build non signé n'a pas de
+   trousseau. La signature des workflows STAGING reste à décider ; elle n'est pas faite ici.
 3. **Production** : une app TestFlight ou App Store est signée avec son profil, qui porte l'`application-identifier`,
    et le trousseau accepte la session. C'est le cas des builds 25 à 31, où des soignants se connectent et lisent leurs
    données. Un compte établissement passe par le même client, le même stockage et le même transport. La cause (a) est
@@ -1098,6 +1104,73 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
        (principe « un gap connu reste verrouillé ») ;
      - m4 : le refus « Impossible d'enregistrer votre session sur cet appareil. Réessayez. » n'offre que « Réessayez »,
        sans renvoi vers le support ni vers jolene.app. L'issue est à décider avec le texte.
+
+## Quatrième parcours STAGING, liste des missions « non relue » (run 45737490974, 26/11/2026)
+
+1. **Constat** :
+   - le pré-vol passe, le stockage est retenu en mémoire (voir ci-dessus), la connexion et l'espace établissement
+     s'ouvrent ;
+   - le XCUITest va ensuite jusqu'au contrat de M2 : missions listées par statut, candidature de S1 acceptée et relue
+     « Acceptée », contrat listé puis relu « Signé » ;
+   - il échoue au retour sur Missions (`StagingEtabParcoursTests.swift:257`, « La liste des missions est relue » fausse
+     pendant 45 s). La phase 2 n'est pas exécutée et le nettoyage est prouvé (0 objet marqué).
+2. **Ce que montrait l'écran** (instantané d'accessibilité et capture de l'échec, xcresult de l'artefact) :
+   - `etab-missions-screen` est affiché, avec les compteurs serveur « Toutes (2) », « Ouvertes (0) », « Assignées (2) » ;
+   - le filtre « Ouvertes » est resté choisi et l'écran rend `etab-missions-empty` (« Aucune mission ouverte ») ;
+   - aucun état d'erreur n'est affiché et `etab-missions-count` est absent.
+3. **Cause, ÉTABLIE : défaut du XCUITest, pas de l'app ni du serveur.**
+   - Après l'acceptation de M1, la liste « Ouvertes » est vide.
+   - `EtabMissionsScreen` rend `etab-missions-empty`, jamais `etab-missions-count`, pour une liste vide
+     (`case let .chargee(missions) where missions.isEmpty`).
+   - `ouvrirMissions` exigeait pourtant `etab-missions-count` avant de choisir le filtre de l'étape suivante
+     (« Assignées », code de pointage de M2).
+   - Toutes les lectures de l'écran ont réussi : listes, compteurs et contrat ont été relus.
+4. **Risque en production** : aucun, cette cause étant propre au test. Les colonnes, relations et la RLS lues par
+   l'écran Missions et les écrans suivants sont celles que le STAGING a servies sans erreur, et le STAGING provient du
+   dump de production. Le pré-vol (point 5) rejoue désormais chaque lecture sur le STAGING avant tout XCUITest.
+5. **Correctifs** :
+   - `ouvrirMissions` attend la liste chargée, pleine (`etab-missions-count`) ou vide (`etab-missions-empty`), et
+     s'arrête nommément sur `etab-missions-error` ;
+   - **manifeste des lectures principales du parcours** (`scripts/mobile/staging-lot5-lectures.json`, 20 lectures), produit
+     par le test Swift `LecturesParcoursEtabManifesteTests`.
+     - Ce qu'il garantit (revue de #1196, M1) : les `select` des passerelles, les noms de fonctions, les tables des
+       contrats et les tailles de page viennent des constantes du Swift. S'ils changent sans régénération, le test
+       échoue.
+     - Ce qu'il ne garantit pas : les autres tables, les filtres, les ordres et les `select` courts (`statut`,
+       `mission_id`, `id`) sont écrits en dur dans les passerelles et recopiés dans le test. Un filtre changé dans une
+       passerelle ne fait échouer ni ce test ni la garde Node, qui vérifie seulement que chaque table, fonction et
+       paramètre figure dans les passerelles.
+     - Lectures couvertes : missions (Toutes, Assignées, compteurs, créneaux, candidatures en attente, détail, soignant
+       assigné `fn_soignant_pour_etablissement`, compte des candidatures en attente), candidatures (lecture habilitée,
+       relecture, périmètre), contrat (liste, détail, certificat), pointage (mission, état, contrat signé), présences
+       (liste, missions terminées, créneaux).
+     - Non couvert : le téléchargement du PDF du contrat (Storage, pas PostgREST) et toute écriture (acceptation,
+       validation, notation).
+     - Le pré-vol de `staging-lot5-fixture.mjs preparer` rejoue ces lectures sous le JWT d'E1 avec la clé de l'app. La
+       première refusée arrête la préparation, nommée avec le statut HTTP, le code PostgREST et le message masqué.
+     - Limite (m1) : le pré-vol détecte un refus (HTTP, code, `success:false` ou `error`), pas une réponse vide. Un
+       `200 []`, par exemple une RLS qui filtre tout, passe. C'est le XCUITest qui l'arrête, puisqu'il exige la carte de
+       la mission de la cohorte sous son statut.
+     - Liste blanche (m2) : `LECTURES_RPC_ADMISES` (quatre fonctions). Une fonction absente fait refuser le manifeste
+       par la fixture et échouer la garde Node. La garde exige aussi que chaque fonction admise soit `STABLE` dans
+       `public.sql`, ou sans aucune écriture (`INSERT`, `UPDATE`, `DELETE`, `PERFORM`, `EXECUTE`) dans son corps.
+       `fn_soignant_pour_etablissement` est VOLATILE déclarée et son corps n'écrit rien.
+   - **diagnostic DEBUG des écrans établissement** : `SupabaseErrorMapping.map` note le dernier échec serveur
+     (`DiagnosticDernierEchec` : `postgrest=<code>;message=<masqué>`, `http=<statut>`, `reseau=<code>`,
+     `decodage=<clé>`). L'espace établissement le pose, hors démo, comme valeur d'accessibilité de
+     `debug-dernier-echec`, relue chaque seconde. Rien en Release. Le XCUITest STAGING écrit, à chaque échec, une ligne
+     `Jolene diagnostic échec : attente « … » | dernier-echec=… | erreurs=…` (états `*-error` affichés, uuid et
+     adresses masqués), publiée par le filtre du journal du job. Revue de #1196 :
+     - M2 et m4 : `record(_:)` est `nonisolated`. Il interroge l'app sous `MainActor.assumeIsolated`, sur le fil
+       principal seulement. Un appel imbriqué pendant la collecte est écarté, jamais enregistré. La collecte est
+       bornée : deux requêtes au plus, la seconde sautée au-delà de 5 s, rien si l'app n'est plus au premier plan.
+       L'échec d'origine est ensuite enregistré tel quel, seul.
+     - m3 : « dernier-echec=aucun » ne prouve pas l'absence d'échec serveur. La valeur n'est jamais effacée (elle peut
+       dater d'un écran antérieur du même processus), et seuls les échecs passés par `SupabaseErrorMapping.map` sont
+       notés : un refus en corps HTTP 200 ou une erreur avalée (`candidaturesEnAttente`) ne l'est pas.
+     - m5 : sont masqués les uuid, les adresses, les numéros de téléphone, toute suite d'au moins six chiffres (code de
+       pointage, SIRET, téléphone collé) et les empreintes hexadécimales. Les noms de la cohorte sont fictifs
+       (« Recette », « Lot cinq ») ; un nom réel cité par un message ne serait pas masqué.
 
 ## En attente de Gabrielle
 

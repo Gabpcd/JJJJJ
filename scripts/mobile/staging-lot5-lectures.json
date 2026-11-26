@@ -1,0 +1,279 @@
+{
+  "lectures" : [
+    {
+      "filtres" : [
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "limit" : 50,
+      "nom" : "missions — liste",
+      "order" : "debut_le.desc,id.asc",
+      "select" : "id,etablissement_id,intitule,description,service,profession_requise,debut_le,fin_le,nb_creneaux,statut,est_urgente,niveau_urgence,soignant_assigne_id,mode_attribution,type_contrat_recherche,cree_le",
+      "table" : "missions"
+    },
+    {
+      "filtres" : [
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ],
+        [
+          "statut",
+          "eq.ASSIGNEE"
+        ]
+      ],
+      "limit" : 50,
+      "nom" : "missions — liste Assignées",
+      "order" : "debut_le.desc,id.asc",
+      "select" : "id,etablissement_id,intitule,description,service,profession_requise,debut_le,fin_le,nb_creneaux,statut,est_urgente,niveau_urgence,soignant_assigne_id,mode_attribution,type_contrat_recherche,cree_le",
+      "table" : "missions"
+    },
+    {
+      "filtres" : [
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "limit" : 1000,
+      "nom" : "missions — compteurs",
+      "order" : "id.asc",
+      "select" : "statut",
+      "table" : "missions"
+    },
+    {
+      "filtres" : [
+        [
+          "mission_id",
+          "in.({M1},{M2})"
+        ],
+        [
+          "type_creneau",
+          "eq.PREVISIONNEL"
+        ],
+        [
+          "est_pause",
+          "eq.false"
+        ]
+      ],
+      "limit" : 500,
+      "nom" : "missions — créneaux",
+      "order" : "mission_id.asc,debut.asc,id.asc",
+      "select" : "id,mission_id,debut,fin,est_pause,type_creneau",
+      "table" : "mission_creneaux"
+    },
+    {
+      "filtres" : [
+        [
+          "mission_id",
+          "in.({M1})"
+        ],
+        [
+          "statut",
+          "eq.EN_ATTENTE"
+        ]
+      ],
+      "nom" : "missions — candidatures en attente",
+      "select" : "mission_id",
+      "table" : "candidatures"
+    },
+    {
+      "filtres" : [
+        [
+          "id",
+          "eq.{M2}"
+        ],
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "nom" : "mission — détail",
+      "select" : "id,etablissement_id,intitule,description,service,profession_requise,debut_le,fin_le,nb_creneaux,statut,est_urgente,niveau_urgence,soignant_assigne_id,mode_attribution,type_contrat_recherche,cree_le",
+      "table" : "missions"
+    },
+    {
+      "fonction" : "fn_soignant_pour_etablissement",
+      "nom" : "mission — soignant assigné",
+      "params" : {
+        "p_soignant_id" : "{S1}"
+      }
+    },
+    {
+      "filtres" : [
+        [
+          "mission_id",
+          "eq.{M1}"
+        ],
+        [
+          "statut",
+          "eq.EN_ATTENTE"
+        ]
+      ],
+      "nom" : "mission — candidatures en attente (compte)",
+      "select" : "id",
+      "table" : "candidatures"
+    },
+    {
+      "fonction" : "fn_lire_candidatures_mission_habilitee",
+      "nom" : "candidatures — lecture habilitée",
+      "params" : {
+        "p_mission_id" : "{M1}"
+      }
+    },
+    {
+      "filtres" : [
+        [
+          "id",
+          "eq.{CANDIDATURE}"
+        ]
+      ],
+      "nom" : "candidature — relecture",
+      "select" : "id,mission_id",
+      "table" : "candidatures"
+    },
+    {
+      "filtres" : [
+        [
+          "id",
+          "eq.{M1}"
+        ],
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "nom" : "candidature — périmètre de la mission",
+      "select" : "id,etablissement_id,type_contrat_recherche,profession_requise",
+      "table" : "missions"
+    },
+    {
+      "filtres" : [
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "nom" : "contrats — liste",
+      "order" : "cree_le.desc.nullsfirst",
+      "select" : "id,mission_id,numero_contrat,type_contrat,statut,soignant_id,etablissement_id,signature_soignant,signature_etablissement,cree_le,missions(intitule,debut_le,fin_le)",
+      "table" : "contrats_mission"
+    },
+    {
+      "filtres" : [
+        [
+          "id",
+          "eq.{CONTRAT}"
+        ],
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "nom" : "contrat — détail",
+      "select" : "id,mission_id,soignant_id,etablissement_id,numero_contrat,type_contrat,statut,mode_signature,contenu_html,hash_document,storage_path,contenu_html_rendu_le,signature_soignant,signature_soignant_le,signature_etablissement,signature_etablissement_le,cree_le,dpae_numero,dpae_effectuee,dpae_effectuee_le",
+      "table" : "contrats_mission"
+    },
+    {
+      "filtres" : [
+        [
+          "contrat_id",
+          "eq.{CONTRAT}"
+        ]
+      ],
+      "nom" : "contrat — certificat",
+      "order" : "cree_le.asc",
+      "select" : "id,contrat_id,signataire_user_id,signataire_role,signe_a,ip_signature,user_agent,hash_document,otp_valide_a,psc_session_active,rpps_verifie,traits_identite_verifies,statut_signature,cree_le",
+      "table" : "signatures_contrats"
+    },
+    {
+      "filtres" : [
+        [
+          "id",
+          "eq.{M2}"
+        ],
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ]
+      ],
+      "nom" : "pointage — mission",
+      "select" : "id,debut_le,fin_le,nb_creneaux,etablissement_id",
+      "table" : "missions"
+    },
+    {
+      "fonction" : "fn_etat_pointage_mission",
+      "nom" : "pointage — état",
+      "params" : {
+        "p_mission_id" : "{M2}"
+      }
+    },
+    {
+      "fonction" : "fn_contrat_signe_pour_pointage",
+      "nom" : "pointage — contrat signé",
+      "params" : {
+        "p_mission_id" : "{M2}"
+      }
+    },
+    {
+      "filtres" : [
+        [
+          "missions.etablissement_id",
+          "eq.{E1}"
+        ],
+        [
+          "pointage_arrivee_le",
+          "not.is.null"
+        ]
+      ],
+      "nom" : "présences — liste",
+      "order" : "pointage_arrivee_le.desc",
+      "select" : "id,mission_id,soignant_id,distance_etablissement_m,perimetre_gps_valide,alerte_teleportation,arrivee_mock_detected,depart_mock_detected,valide_par_etablissement,valide_le,motif_litige,missions!inner(id,intitule,service,debut_le,fin_le,nb_creneaux,etablissement_id)",
+      "table" : "presences"
+    },
+    {
+      "filtres" : [
+        [
+          "etablissement_id",
+          "eq.{E1}"
+        ],
+        [
+          "type_contrat_applique",
+          "eq.SALARIE"
+        ],
+        [
+          "statut",
+          "eq.TERMINEE"
+        ],
+        [
+          "soignant_assigne_id",
+          "not.is.null"
+        ]
+      ],
+      "nom" : "présences — missions terminées",
+      "order" : "fin_le.desc",
+      "select" : "id,intitule,service,debut_le,fin_le,soignant_assigne_id,statut,etablissement_id",
+      "table" : "missions"
+    },
+    {
+      "filtres" : [
+        [
+          "mission_id",
+          "in.({M2})"
+        ],
+        [
+          "est_pause",
+          "eq.false"
+        ]
+      ],
+      "limit" : 500,
+      "nom" : "présences — créneaux",
+      "order" : "mission_id.asc,debut.asc,id.asc",
+      "select" : "id,mission_id,debut,fin,est_pause,type_creneau",
+      "table" : "mission_creneaux"
+    }
+  ],
+  "purpose" : "lot5-lectures-parcours-etab-v1"
+}

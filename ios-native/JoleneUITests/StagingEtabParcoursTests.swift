@@ -194,6 +194,70 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
     /// Préfixe de la ligne de journal du stockage de session : le même que `SupabaseGateways.prefixeJournalStockage`
     /// et que le filtre du journal publié de `ios-swift-lot5-staging.yml` (garde : `staging-lot5-fixture.node.mjs`).
     static let prefixeJournalStockage = "Jolene diagnostic stockage-session :"
+    /// Préfixe de la ligne de journal d'un échec du parcours (quatrième parcours STAGING du lot 5, 26/11/2026).
+    nonisolated static let prefixeJournalEchec = "Jolene diagnostic échec :"
+
+    /// Vrai pendant la collecte du diagnostic d'un échec : un échec imbriqué (requête d'accessibilité qui expire sur une
+    /// app qui ne répond plus) est écarté, jamais enregistré à la place de l'échec d'origine (revue de #1196, M2).
+    private var enDiagnostic = false
+    /// Budget de la collecte : au-delà, les requêtes restantes sont sautées (une requête en cours n'est pas interrompue).
+    nonisolated static let budgetDiagnostic: TimeInterval = 5
+
+    /// Quatrième parcours STAGING : un échec écrit d'abord, dans le journal publié du job, le dernier échec serveur noté
+    /// par l'app (`debug-dernier-echec`, DEBUG) et les états d'erreur affichés (`*-error`), masqués (`masquer`), puis
+    /// l'échec d'origine est enregistré tel quel. Revue de #1196 :
+    /// - M2 : un appel imbriqué pendant la collecte est écarté (il n'enregistre rien) ; la collecte est bornée
+    ///   (`budgetDiagnostic`, deux requêtes au plus) ; l'échec d'origine est le seul enregistré, sans modification ;
+    /// - m4 : XCTest appelle `record` hors de tout acteur ; l'override est `nonisolated` et n'interroge l'app que sur le
+    ///   fil principal, sous `MainActor.assumeIsolated`, comme `JoleneUITestCase.tearDownWithError` ; ailleurs, il
+    ///   enregistre seulement ;
+    /// - m3 : « dernier-echec=aucun » dit seulement qu'aucun échec n'est passé par `SupabaseErrorMapping.map` depuis le
+    ///   lancement de l'app, pas qu'aucun échec serveur n'a eu lieu (refus en corps HTTP 200, erreurs avalées).
+    nonisolated override func record(_ issue: XCTIssue) {
+        guard Thread.isMainThread else { super.record(issue); return }
+        // nil : appel imbriqué pendant la collecte, écarté sans rien enregistrer à la place de l'échec d'origine.
+        let ligne: String? = MainActor.assumeIsolated {
+            guard !enDiagnostic else { return nil }
+            enDiagnostic = true
+            defer { enDiagnostic = false }
+            return diagnostiquer(issue)
+        }
+        guard let ligne else { return }
+        print("\(Self.prefixeJournalEchec) \(ligne)")
+        super.record(issue)
+    }
+
+    /// Ligne de diagnostic d'un échec, masquée ; deux requêtes au plus, sautées si l'app n'est plus au premier plan ou si
+    /// le budget est dépassé.
+    private func diagnostiquer(_ issue: XCTIssue) -> String {
+        let debut = Date()
+        let attente = issue.compactDescription.prefix(160)
+        guard app.state == .runningForeground else {
+            return Self.masquer("attente « \(attente) » | app hors premier plan : diagnostic non collecté")
+        }
+        let dernier = element("debug-dernier-echec")
+        let echec = dernier.exists ? ((dernier.value as? String) ?? "illisible") : "élément absent"
+        var erreurs = "non collectées (budget dépassé)"
+        if Date().timeIntervalSince(debut) < Self.budgetDiagnostic {
+            let trouvees = app.descendants(matching: .any).matching(NSPredicate(format: "identifier ENDSWITH %@", "-error"))
+                .allElementsBoundByIndex.prefix(5).map { "\($0.identifier)=\($0.label)" }
+            erreurs = trouvees.isEmpty ? "aucune" : trouvees.joined(separator: ", ")
+        }
+        return Self.masquer("attente « \(attente) » | dernier-echec=\(echec) | erreurs=\(erreurs)")
+    }
+
+    /// Masquage de la ligne publiée (revue de #1196, m5) : uuid, adresses, numéros de téléphone, toute suite d'au moins
+    /// six chiffres (code de pointage, SIRET, téléphone collé) et empreintes hexadécimales ; retours à la ligne aplatis.
+    /// Les noms de la cohorte sont fictifs (« Recette », « Lot cinq ») ; un nom réel cité par un message n'est pas masqué.
+    nonisolated static func masquer(_ texte: String) -> String {
+        texte.replacingOccurrences(of: #"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"#,
+                                   with: "<uuid>", options: .regularExpression)
+            .replacingOccurrences(of: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#, with: "<adresse>", options: .regularExpression)
+            .replacingOccurrences(of: #"\b[0-9A-Fa-f]{32,}\b"#, with: "<empreinte>", options: .regularExpression)
+            .replacingOccurrences(of: #"(\+33|\b0)[1-9]([ .-]?[0-9]{2}){4}\b"#, with: "<telephone>", options: .regularExpression)
+            .replacingOccurrences(of: #"[0-9]{6,}"#, with: "<nombre>", options: .regularExpression)
+            .replacingOccurrences(of: "\n", with: " ")
+    }
 
     private func lancerEtConnecter() {
         // 1re session imposée (DEBUG) : le pré-prompt de notification ne recouvre jamais le parcours.
@@ -254,8 +318,17 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
 
     private func ouvrirMissions(filtre: String, carte id: String) {
         if !containerVisible(element("etab-missions-screen")) { tabButton("tab-etab-missions", label: "Missions").tap() }
+        // Quatrième parcours STAGING (run 45737490974) : après l'acceptation de M1, le filtre « Ouvertes » resté choisi est
+        // vide ; l'écran rend alors `etab-missions-empty`, jamais `etab-missions-count` (EtabMissionsScreen, liste vide).
+        // La liste est relue dès qu'elle est chargée, pleine ou vide ; un état d'erreur arrête l'attente et la nomme.
+        let erreurListe = element("etab-missions-error")
         require("La liste des missions est relue", timeout: 45) {
-            self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
+            self.containerVisible(self.element("etab-missions-screen"))
+                && (self.element("etab-missions-count").exists || self.element("etab-missions-empty").exists || erreurListe.exists)
+        }
+        if erreurListe.exists {
+            XCTFail("Liste des missions en erreur : « \(erreurListe.label) »")
+            return
         }
         tap("etab-missions-filtre-\(filtre)")
         let carte = element("etab-mission-card-\(id)")
