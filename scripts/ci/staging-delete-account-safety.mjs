@@ -36,6 +36,21 @@ export function checkSource(source) {
     || FILES.some(path => typeof source.files.get(path) !== 'string' || digest(source.files.get(path)) !== m.files[path])
     || typeof source.query !== 'string' || digest(source.query) !== m.catalogueQuerySha256
     || m.catalogue?.routines?.length !== 7 || m.catalogue?.psc_routines?.length !== 1) fail('SOURCE');
+  if (m.catalogueSuccesseur !== undefined) acceptedCatalogues(m);
+}
+
+// Catalogue audité, et au plus un successeur revu dans une PR : la même routine,
+// mêmes propriétaire et ACL, seul le corps change (migration nommée).
+export function acceptedCatalogues(m) {
+  const next = m.catalogueSuccesseur;
+  if (next === undefined) return [m.catalogue];
+  const routine = m.catalogue.routines.find(row => row.signature === next?.signature);
+  if (!isDeepStrictEqual(Object.keys(next ?? {}).sort(), ['definition_md5', 'migration', 'signature'])
+    || !/^supabase\/migrations\/\d{14}_[a-z0-9_]+\.sql$/.test(next.migration)
+    || !/^[a-f0-9]{32}$/.test(next.definition_md5) || !routine || routine.definition_md5 === next.definition_md5) fail('SOURCE');
+  const successor = structuredClone(m.catalogue);
+  successor.routines.find(row => row.signature === next.signature).definition_md5 = next.definition_md5;
+  return [m.catalogue, successor];
 }
 
 function checkMetadata(rows, expected) {
@@ -118,7 +133,8 @@ export function createDeletionSafetyGate({ env = process.env, source = sourceFro
     checkMetadata(await request('/functions'), source.manifest.edge);
     checkBody(await request('/functions/delete-account/body', undefined, true), source);
     const rows = await request('/database/query', { query: source.query, read_only: true });
-    if (!Array.isArray(rows) || rows.length !== 1 || !isDeepStrictEqual(rows[0]?.catalogue, source.manifest.catalogue)) fail('RPC_DRIFT');
+    if (!Array.isArray(rows) || rows.length !== 1
+      || !acceptedCatalogues(source.manifest).some(catalogue => isDeepStrictEqual(rows[0]?.catalogue, catalogue))) fail('RPC_DRIFT');
     checkMetadata(await request('/functions'), source.manifest.edge);
   };
 }

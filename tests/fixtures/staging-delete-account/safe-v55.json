@@ -20,6 +20,11 @@
     "supabase/functions/delete-account/index.ts": "4ae55ac7eee2f57b652cb05dd62357b96ad6860ec194fb89fc3c3c6ffbdf78f4"
   },
   "catalogueQuerySha256": "babeb6089a5c6ab88a718ad136c300851c8e041c7bc8b0fdcc8add5b90ff42a7",
+  "catalogueSuccesseur": {
+    "migration": "supabase/migrations/20261126100100_missions_revue_store.sql",
+    "signature": "public.fn_supprimer_mon_compte_etablissement()",
+    "definition_md5": "dfa336f2895335c770f4bee6ba9cbc05"
+  },
   "catalogue": {
     "psc_constraints": [
       "PRIMARY KEY (state)"

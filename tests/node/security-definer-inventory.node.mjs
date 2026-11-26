@@ -18,6 +18,8 @@ const suppressionEtablissementAvant = '8d1a6220cdc135d36d2d472fcde230ee';
 const suppressionEtablissementApres = '35b630a12ed0f755592fdc431031b8cc';
 const imputationMigration = read('supabase/migrations/20261018140952_imputer_avoirs_commission.sql');
 const suppressionEtablissementImputation = 'a43978aee09ef1ae4a157dbee9911b2f';
+const revueMigration = read('supabase/migrations/20261126100100_missions_revue_store.sql');
+const suppressionEtablissementRevue = 'a5dd6e6858e7ad641f4bd353753f3223';
 const litigeSalarieSignature = 'fn_admin_resoudre_litige_salarie(uuid,text,text,numeric,numeric,text)';
 const litigeSalarieAvant = '139ca12a3fcbff5bd5f65074d3242b53';
 const litigeSalarieApres = 'f07f34e05904c5f7c233a9477b6cdd1c';
@@ -27,7 +29,7 @@ const rechercheAvant = '5a1fc4a4651f794ca8d95c3f6885195a';
 const rechercheApres = '62d0bf39f1600b82a93a522a411f1bd7';
 const successors = new Map([
   [suppressionSignature, { old_md5: suppressionAvant, definition_md5: suppressionApres }],
-  [suppressionEtablissementSignature, { old_md5: suppressionEtablissementApres, definition_md5: suppressionEtablissementImputation }],
+  [suppressionEtablissementSignature, { old_md5: suppressionEtablissementImputation, definition_md5: suppressionEtablissementRevue }],
   [litigeSalarieSignature, { old_md5: litigeSalarieAvant, definition_md5: litigeSalarieApres }],
   [rechercheSignature, { old_md5: rechercheAvant, definition_md5: rechercheApres }],
 ]);
@@ -103,9 +105,19 @@ test('imputation : la chaîne suppression établissement conserve le prédécess
   assert.equal(md5(sourceBody(avoirsMigration, name)), suppressionEtablissementApres);
   assert.ok(imputationMigration.includes(`('public.${suppressionEtablissementSignature}','${suppressionEtablissementApres}','${suppressionEtablissementImputation}'`));
   assert.equal(md5(sourceBody(imputationMigration, name)), suppressionEtablissementImputation);
-  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), name)), suppressionEtablissementImputation);
+});
+
+test('missions de revue : le successeur suppression établissement part du corps imputation LIVE', () => {
+  const name = 'fn_supprimer_mon_compte_etablissement';
+  // Préflight sur le corps LIVE (imputation), post-condition sur le corps installé.
+  assert.ok(revueMigration.includes(`('public.${suppressionEtablissementSignature}', '${suppressionEtablissementImputation}', true, 'v', 'search_path=public, extensions')`));
+  assert.ok(revueMigration.includes(`('public.${suppressionEtablissementSignature}', '${suppressionEtablissementRevue}')`));
+  assert.equal(md5(sourceBody(revueMigration, name)), suppressionEtablissementRevue);
+  // Snapshot de schéma : corps imputation jusqu'au re-snapshot qui suit le merge, puis successeur.
+  assert.ok([suppressionEtablissementImputation, suppressionEtablissementRevue]
+    .includes(md5(sourceBody(read('supabase/schema/public.sql'), name))));
   assert.deepEqual(successors.get(suppressionEtablissementSignature), {
-    old_md5: suppressionEtablissementApres, definition_md5: suppressionEtablissementImputation,
+    old_md5: suppressionEtablissementImputation, definition_md5: suppressionEtablissementRevue,
   });
 });
 
