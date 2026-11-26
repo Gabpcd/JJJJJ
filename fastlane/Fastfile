@@ -22,10 +22,11 @@ platform :ios do
 
   # App Swift (ios-native/), workflow ios-native-app-store.yml : soumet à la revue Apple un build
   # déjà envoyé sur TestFlight et déjà VALID. Aucun binaire n'est envoyé ici. La fiche (description,
-  # captures, confidentialité, classification, compte de démonstration) reste celle d'App Store
-  # Connect ; les « Nouveautés » fr-FR viennent de config/mobile-release-notes-ios.txt et seul le champ
-  # « notes » des informations pour la vérification reçoit en tête config/ios-review-notes-2.0.txt
-  # (fastlane/ios_review_notes.rb). Publication progressive sur sept jours (docs/mobile-swift/APP_STORE.md).
+  # captures, confidentialité, classification) reste celle d'App Store Connect ; les « Nouveautés » fr-FR
+  # viennent de config/mobile-release-notes-ios.txt ; le champ « notes » des informations pour la
+  # vérification reçoit en tête config/ios-review-notes-2.0.txt, et ces informations ne sont copiées de la
+  # version distribuée que si la 2.0.0 n'a pas de compte de démonstration (fastlane/ios_review_notes.rb).
+  # Publication progressive sur sept jours (docs/mobile-swift/APP_STORE.md).
   desc 'Submit an existing TestFlight build of the Swift app to App Review with a phased release'
   lane :submit_native do
     release = release_config('ios')
@@ -59,8 +60,9 @@ platform :ios do
       marketing_version: marketing, build_number: number
     )
     result = begin
-      # Notes pour la revue : jamais `app_review_information` (deliver y remettrait demoAccountRequired à faux),
-      # seul le champ `notes` est écrit ; verrou du compte de démonstration (docs/mobile-swift/APP_STORE.md).
+      # Notes pour la revue : jamais `app_review_information` (deliver y remettrait demoAccountRequired à faux) ;
+      # champ `notes` écrit, fiche copiée de la version distribuée seulement si la 2.0.0 n'a pas de compte de
+      # démonstration, verrou du compte de démonstration (docs/mobile-swift/APP_STORE.md).
       notes = IosReviewSubmission::ReviewNotes.new(
         gateway: IosReviewSubmission::ReviewNotesGateway.new(client: Spaceship::ConnectAPI, app: app),
         marketing_version: marketing,

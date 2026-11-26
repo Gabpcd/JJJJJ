@@ -2,19 +2,23 @@
 # section « Notes pour la revue et compte de démonstration »).
 #
 # Personne ne se connecte au site App Store Connect : tout passe par l'API, avec la clé du job `soumettre`.
-# La lane écrit SEULEMENT le champ `notes` de l'appStoreReviewDetail de la version modifiable : jamais les
-# identifiants du compte de démonstration, ni les contacts, ni `demoAccountRequired`. Elle ne passe donc pas
-# par `upload_to_app_store(app_review_information: …)` : deliver y remet `demoAccountRequired` à faux dès que
-# le nom ou le mot de passe manque (fastlane 2.240.1, deliver/lib/deliver/upload_metadata.rb, review_information).
+# Dans l'appStoreReviewDetail de la version modifiable, la lane écrit :
+# - le champ `notes` (bloc versionné en tête, puis les notes existantes) ;
+# - SEULEMENT si la version n'a pas de compte de démonstration complet : une copie, d'API à API, de la fiche de la
+#   version distribuée (compte de démonstration, puis contacts et notes là où la cible est vide). Une fiche qui a
+#   déjà un compte de démonstration n'est jamais écrasée.
+# Elle ne passe pas par `upload_to_app_store(app_review_information: …)` : deliver y remet `demoAccountRequired` à
+# faux dès que le nom ou le mot de passe manque (fastlane 2.240.1, deliver/lib/deliver/upload_metadata.rb).
 #
-# Ni le nom ni le mot de passe du compte de démonstration ne sont affichés ou journalisés, pas même masqués ;
-# le contenu des notes non plus (les notes de la version précédente portent les identifiants du compte
-# établissement) : les messages ne citent que des longueurs et des états.
+# Aucune valeur de la fiche (compte de démonstration, contacts, texte des notes, qui porte les identifiants du compte
+# établissement) n'est affichée ou journalisée, pas même masquée : les messages ne citent que des noms de champs,
+# des longueurs et des états.
+require 'rubygems/version'
 require_relative 'ios_review_submission'
 
 module IosReviewSubmission
   # Ordre de la lane submit_native, son seul appelant : pré-vol des notes en lecture seule, gardes de la revue en
-  # cours (attente du build, annulation éventuelle d'une revue en attente), écriture des notes, puis soumission.
+  # cours (attente du build, annulation éventuelle d'une revue en attente), écriture de la fiche, puis soumission.
   # Un verrou qui échoue lève avant `soumettre` : rien n'est soumis.
   def self.enchainer!(notes:, guard:, build_absent:, soumettre:)
     notes.verifier!
@@ -26,7 +30,8 @@ module IosReviewSubmission
 
   # Accès App Store Connect des notes. Les lectures de version passent par la même méthode Spaceship que deliver
   # (`App#get_edit_app_store_version`, appelée par `ensure_version!`, l'envoi de la fiche et `submit_for_review`) :
-  # la version contrôlée ici est celle que deliver éditera puis soumettra.
+  # la version contrôlée ici est celle que deliver éditera puis soumettra. Une erreur d'Apple peut citer le corps de
+  # la réponse, donc une valeur : seule sa classe est reprise.
   class ReviewNotesGateway
     def initialize(client:, app:)
       @client, @app = client, app
@@ -42,11 +47,34 @@ module IosReviewSubmission
       @client.post_app_store_version(app_id: @app.id, attributes: { versionString: marketing, platform: 'IOS' })
     end
 
-    # Une erreur d'Apple peut citer le corps de la réponse : seule sa classe est reprise.
+    # Source de la copie : toutes les pages, filtrées encore une fois par ReviewNotes.choisir_source.
+    def distributed_versions
+      @app.get_app_store_versions(filter: { appVersionState: 'READY_FOR_DISTRIBUTION', platform: 'IOS' })
+    end
+
+    # nil quand Apple répond sans fiche (`data: null`) ; toute erreur arrête la lane : une fiche illisible n'est
+    # jamais tenue pour absente, donc jamais écrasée.
     def review_detail(version_id)
-      @client.get_app_store_review_detail(app_store_version_id: version_id).to_models.first
+      response = @client.get_app_store_review_detail(app_store_version_id: version_id)
+      body = response.body
+      return nil if body.is_a?(Hash) && body.key?('data') && body['data'].nil?
+      response.to_models.first
+    rescue Failure
+      raise
     rescue StandardError => error
-      raise Failure, "Fiche « Informations pour la vérification de l'app » absente ou illisible (#{error.class}) : compte de démonstration non vérifiable, soumission arrêtée (voir #{ReviewNotes::DOC})"
+      raise Failure, "Fiche « Informations pour la vérification de l'app » illisible (#{error.class}) : compte de démonstration non vérifiable, soumission arrêtée (voir #{ReviewNotes::DOC})"
+    end
+
+    def create_review_detail(version_id, attributes)
+      @client.post_app_store_review_detail(app_store_version_id: version_id, attributes: attributes)
+    rescue StandardError => error
+      raise Failure, "Création de la fiche de vérification refusée par Apple (#{error.class}) : soumission arrêtée (voir #{ReviewNotes::DOC})"
+    end
+
+    def update_review_detail(detail_id, attributes)
+      @client.patch_app_store_review_detail(app_store_review_detail_id: detail_id, attributes: attributes)
+    rescue StandardError => error
+      raise Failure, "Copie de la fiche de vérification refusée par Apple (#{error.class}) : soumission arrêtée (voir #{ReviewNotes::DOC})"
     end
 
     def update_notes(detail_id, notes)
@@ -63,9 +91,28 @@ module IosReviewSubmission
     # Limite Apple du champ « Notes » des informations pour la vérification de l'app.
     LIMITE = 4000
     EMAIL = /[^\s@<>"'()]+@[^\s@<>"'()]+\.[A-Za-z]{2,}/
+    # Copie depuis la version distribuée : attribut Apple → attribut du modèle Spaceship. Le compte de démonstration
+    # est copié d'un bloc ; contacts et notes seulement là où la cible est vide. Aucun autre attribut n'est écrit.
+    CHAMPS_DEMO = {
+      'demoAccountName' => :demo_account_name,
+      'demoAccountPassword' => :demo_account_password,
+      'demoAccountRequired' => :demo_account_required
+    }.freeze
+    CHAMPS_SI_VIDES = {
+      'contactFirstName' => :contact_first_name,
+      'contactLastName' => :contact_last_name,
+      'contactPhone' => :contact_phone,
+      'contactEmail' => :contact_email,
+      'notes' => :notes
+    }.freeze
+    CHAMPS_COPIE = CHAMPS_DEMO.merge(CHAMPS_SI_VIDES).freeze
 
     def self.normaliser(texte)
       texte.to_s.gsub(/\r\n?/, "\n").strip
+    end
+
+    def self.vide?(valeur)
+      valeur.nil? || valeur.to_s.strip.empty?
     end
 
     # Le bloc vient d'un dépôt public : jamais d'adresse (donc jamais d'identifiant), jamais le séparateur, et
@@ -83,21 +130,67 @@ module IosReviewSubmission
       texte
     end
 
+    # Ce qui manque au compte de démonstration d'une fiche, nommé sans jamais citer une valeur.
+    def self.manques_compte_demo(detail)
+      return ['fiche absente'] if detail.nil?
+      [
+        ('« Connexion requise » décoché (demoAccountRequired faux)' unless detail.demo_account_required == true),
+        ('nom du compte vide' if vide?(detail.demo_account_name)),
+        ('mot de passe vide' if vide?(detail.demo_account_password))
+      ].compact
+    end
+
+    def self.compte_demo_complet?(detail)
+      manques_compte_demo(detail).empty?
+    end
+
     # Verrou : sans compte de démonstration complet, Apple ne peut pas se connecter et refuse la version.
-    # Le message nomme ce qui manque, jamais une valeur.
     def self.exiger_compte_demo!(detail, marketing)
-      manques = if detail.nil?
-        ['fiche absente']
-      else
-        [
-          ('« Connexion requise » décoché (demoAccountRequired faux)' unless detail.demo_account_required == true),
-          ('nom du compte vide' if detail.demo_account_name.to_s.strip.empty?),
-          ('mot de passe vide' if detail.demo_account_password.to_s.strip.empty?)
-        ].compact
-      end
+      manques = manques_compte_demo(detail)
       return true if manques.empty?
       raise Failure, "Compte de démonstration incomplet pour la version #{marketing} dans App Store Connect (#{manques.join(', ')}) : " \
         "rien n'est soumis. Le saisir par l'API avant de relancer (voir #{DOC})"
+    end
+
+    # Fonction pure. La version distribuée (READY_FOR_DISTRIBUTION) unique, plus ancienne que la cible ; nil s'il n'y
+    # en a pas.
+    def self.choisir_source(versions, marketing)
+      distribuees = Array(versions).select { |v| v.platform == 'IOS' && v.app_version_state == 'READY_FOR_DISTRIBUTION' }
+      return nil if distribuees.empty?
+      raise Failure, "#{distribuees.length} versions iOS distribuées : source de la fiche de vérification ambiguë, rien n'est soumis (voir #{DOC})" if distribuees.length > 1
+      source = distribuees.first
+      unless source.version_string.to_s.match?(/\A\d+(?:\.\d+){0,2}\z/) && Gem::Version.new(source.version_string) < Gem::Version.new(marketing)
+        raise Failure, "La version distribuée #{source.version_string.inspect} n'est pas antérieure à #{marketing} : rien n'est copié ni soumis (voir #{DOC})"
+      end
+      raise Failure, "Version distribuée #{source.version_string} sans identifiant Apple : rien n'est soumis (voir #{DOC})" if source.id.to_s.empty?
+      source
+    end
+
+    # Fonction pure. Attributs à écrire dans la fiche cible, nil si la cible a déjà un compte de démonstration
+    # complet (rien n'est jamais écrasé). La source doit en avoir un, sinon le verrou refuse. Les valeurs vont de la
+    # réponse d'Apple à la requête d'Apple : elles ne sont ni transformées, ni affichées.
+    def self.attributs_de_copie(source:, cible:, marketing:, source_version:)
+      return nil if compte_demo_complet?(cible)
+      manques_source = manques_compte_demo(source)
+      unless manques_source.empty?
+        raise Failure, "Compte de démonstration incomplet pour la version #{marketing} (#{manques_compte_demo(cible).join(', ')}) " \
+          "et dans la version distribuée #{source_version} (#{manques_source.join(', ')}) : rien n'est copié ni soumis. " \
+          "Le saisir par l'API avant de relancer (voir #{DOC})"
+      end
+      attributs = CHAMPS_DEMO.to_h { |api, champ| [api, source.public_send(champ)] }
+      CHAMPS_SI_VIDES.each do |api, champ|
+        valeur = source.public_send(champ)
+        next if vide?(valeur) || !(cible.nil? || vide?(cible.public_send(champ)))
+        attributs[api] = valeur
+      end
+      attributs
+    end
+
+    # Fonction pure. Fiche telle qu'elle sera après la copie (pré-vol, et contrôle de la relecture).
+    def self.fusionner(cible, attributs)
+      champs = CHAMPS_COPIE.values.to_h { |champ| [champ, cible&.public_send(champ)] }
+      attributs.each { |api, valeur| champs[CHAMPS_COPIE.fetch(api)] = valeur }
+      Struct.new(:id, *champs.keys, keyword_init: true).new(id: cible&.id, **champs)
     end
 
     # Fonction pure. Statuts : :inchange (le bloc est déjà en tête, rien à écrire), :remplace (un bloc
@@ -140,24 +233,40 @@ module IosReviewSubmission
       raise Failure, 'Invalid iOS release configuration' unless @marketing.match?(/\A\d+(?:\.\d+){0,2}\z/)
     end
 
-    # Pré-vol en lecture seule, avant les gardes de la revue en cours (donc avant toute annulation) : si la version
-    # que deliver éditera existe déjà, ce doit être la version configurée, avec un compte de démonstration complet et
-    # des notes composables. Sinon elle sera créée par appliquer!, qui refait tous les contrôles.
+    # Pré-vol en lecture seule, avant les gardes de la revue en cours (donc avant toute annulation) : rien n'est écrit,
+    # pas même la copie de la fiche. Si la version que deliver éditera existe, ce doit être la version configurée ; sa
+    # fiche, telle qu'elle sera après une copie éventuelle, doit avoir un compte de démonstration complet et des notes
+    # composables. Si elle n'existe pas encore, la fiche de la version distribuée sert de prévision.
     def verifier!
       @version_vue = @gateway.edit_version
       @verifie = true
-      if @version_vue.nil?
-        @journal.call("Aucune version iOS modifiable dans App Store Connect : la version #{@marketing} sera créée après les gardes, puis contrôlée.")
+      exiger_version!(@version_vue) if @version_vue
+      cible = @version_vue && @gateway.review_detail(@version_vue.id)
+      attributs, source = planifier_copie(cible, prevision: @version_vue.nil?)
+      if @version_vue.nil? && source.nil?
+        @journal.call("Aucune version iOS modifiable ni distribuée : la version #{@marketing} sera créée après les gardes, puis contrôlée.")
         return :a_creer
       end
-      exiger_version!(@version_vue)
-      lire_et_composer(@version_vue)
-      @journal.call("Pré-vol des notes pour la revue : version #{@marketing} trouvée, compte de démonstration renseigné.")
+      prevue = attributs ? ReviewNotes.fusionner(cible, attributs) : cible
+      # Filet : la fiche prévue reprend un compte de démonstration déjà contrôlé ; ce verrou ne cède que si la copie
+      # prévue est fausse.
+      ReviewNotes.exiger_compte_demo!(prevue, @marketing)
+      ReviewNotes.composer(bloc: @bloc, existantes: prevue.notes)
+      if @version_vue.nil?
+        @journal.call("Pré-vol des notes pour la revue : la version #{@marketing} sera créée après les gardes ; la fiche de la version distribuée #{source.version_string} a un compte de démonstration.")
+        return :a_creer
+      end
+      if attributs
+        @journal.call("Pré-vol des notes pour la revue : la version #{@marketing} n'a pas de compte de démonstration ; il sera copié depuis la version distribuée #{source.version_string} à l'écriture.")
+      else
+        @journal.call("Pré-vol des notes pour la revue : version #{@marketing} trouvée, compte de démonstration renseigné.")
+      end
       :pret
     end
 
-    # Après les gardes, avant la soumission : la version est retrouvée (ou créée si absente), le verrou rejoué,
-    # puis seul le champ `notes` est écrit et relu.
+    # Après les gardes, avant la soumission : la version est retrouvée (ou créée si absente), la fiche complétée
+    # depuis la version distribuée si elle n'a pas de compte de démonstration, le verrou rejoué, puis le champ `notes`
+    # écrit et relu.
     def appliquer!
       raise Failure, 'Notes pour la revue appliquées sans pré-vol' unless @verifie
       version = @gateway.edit_version
@@ -171,7 +280,9 @@ module IosReviewSubmission
         raise Failure, "La version modifiable a changé depuis le pré-vol : rien n'est soumis, relancer le workflow entier (voir #{DOC})"
       end
       exiger_version!(version)
-      detail, composition = lire_et_composer(version)
+      detail = copier_si_besoin(version, @gateway.review_detail(version.id))
+      ReviewNotes.exiger_compte_demo!(detail, @marketing)
+      composition = ReviewNotes.composer(bloc: @bloc, existantes: detail.notes)
       unless composition[:anciennes_avec_email]
         @journal.call("Avertissement : les notes de la version précédente ne contiennent aucune adresse e-mail ; le bloc y renvoie pourtant pour les identifiants du compte établissement (voir #{DOC}).")
       end
@@ -201,10 +312,42 @@ module IosReviewSubmission
       raise Failure, "Version #{@marketing} sans identifiant Apple : rien n'est soumis (voir #{DOC})" if version.id.to_s.empty?
     end
 
-    def lire_et_composer(version)
-      detail = @gateway.review_detail(version.id)
-      ReviewNotes.exiger_compte_demo!(detail, @marketing)
-      [detail, ReviewNotes.composer(bloc: @bloc, existantes: detail.notes)]
+    # [attributs à copier ou nil, version source ou nil]. Lecture seule. Une cible déjà complète ne lit pas la source.
+    # `prevision` : la version n'existe pas encore ; sans version distribuée, sa fiche (créée par Apple) n'est
+    # contrôlée qu'à l'écriture.
+    def planifier_copie(cible, prevision: false)
+      return [nil, nil] if ReviewNotes.compte_demo_complet?(cible)
+      source_version = ReviewNotes.choisir_source(@gateway.distributed_versions, @marketing)
+      if source_version.nil?
+        return [nil, nil] if prevision
+        raise Failure, "Compte de démonstration incomplet pour la version #{@marketing} (#{ReviewNotes.manques_compte_demo(cible).join(', ')}) " \
+          "et aucune version distribuée d'où le copier : rien n'est soumis. Le saisir par l'API avant de relancer (voir #{DOC})"
+      end
+      source = @gateway.review_detail(source_version.id)
+      [ReviewNotes.attributs_de_copie(source: source, cible: cible, marketing: @marketing, source_version: source_version.version_string), source_version]
+    end
+
+    # Seule écriture hors du champ notes, et seulement si la cible n'a pas de compte de démonstration complet.
+    def copier_si_besoin(version, cible)
+      attributs, source_version = planifier_copie(cible)
+      return cible if attributs.nil?
+      if cible.nil?
+        @gateway.create_review_detail(version.id, attributs)
+      else
+        raise Failure, "Fiche de vérification sans identifiant Apple : rien n'est soumis (voir #{DOC})" if cible.id.to_s.empty?
+        @gateway.update_review_detail(cible.id, attributs)
+      end
+      relu = @gateway.review_detail(version.id)
+      attendu = ReviewNotes.fusionner(cible, attributs)
+      ecarts = CHAMPS_COPIE.select do |api, champ|
+        attributs.key?(api) && ReviewNotes.normaliser(relu&.public_send(champ)) != ReviewNotes.normaliser(attendu.public_send(champ))
+      end.keys
+      unless relu && ecarts.empty?
+        raise Failure, "Fiche de vérification relue différente de la copie (#{relu ? ecarts.join(', ') : 'fiche absente'}) : rien n'est soumis (voir #{DOC})"
+      end
+      @journal.call("Fiche de vérification de la version #{@marketing} #{cible.nil? ? 'créée' : 'complétée'} depuis la version distribuée " \
+        "#{source_version.version_string} (champs copiés : #{attributs.keys.join(', ')} ; aucune valeur affichée).")
+      relu
     end
   end
 end

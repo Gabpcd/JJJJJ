@@ -846,9 +846,18 @@ test('la lane n\'écrit que les notes pour la revue, après le verrou du compte 
   assert.ok(ordre.every((p) => p > 0), 'étape absente de enchainer!');
   assert.deepEqual([...ordre].sort((a, b) => a - b), ordre, 'pré-vol, gardes de revue, notes, soumission');
   assert.doesNotMatch(enchainer, /rescue/, 'aucun échec avalé avant la soumission');
-  // Seul `notes` est écrit dans la fiche de vérification.
+  // Fiche de vérification : `notes` seul, sauf la copie depuis la version distribuée, limitée aux huit attributs
+  // listés (compte de démonstration, contacts, notes) et faite seulement si la cible n'a pas de compte de démonstration.
   assert.match(module, /patch_app_store_review_detail\(app_store_review_detail_id: detail_id, attributes: \{ notes: notes \}\)/);
-  assert.equal(module.split('patch_app_store_review_detail(').length, 2);
+  assert.equal(module.split('patch_app_store_review_detail(').length, 3, 'notes, et copie sur une fiche existante');
+  assert.equal(module.split('post_app_store_review_detail(').length, 2, 'copie sur une version sans fiche');
+  const copies = [...module.matchAll(/^\s+'([A-Za-z]+)' => :[a-z_]+,?$/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(copies, ['contactEmail', 'contactFirstName', 'contactLastName', 'contactPhone', 'demoAccountName',
+    'demoAccountPassword', 'demoAccountRequired', 'notes']);
+  assert.match(module, /def self\.attributs_de_copie\(source:, cible:, marketing:, source_version:\)\n\s+return nil if compte_demo_complet\?\(cible\)/,
+    'jamais de copie sur une fiche qui a déjà un compte de démonstration');
+  const preVol = module.slice(module.indexOf('    def verifier!'), module.indexOf('    def appliquer!'));
+  assert.doesNotMatch(preVol, /create_|update_|copier_si_besoin/, 'le pré-vol n\'écrit rien');
   // Les deux suites Ruby hors réseau tournent dans validate-pr.
   const validatePr = lire('.github/workflows/validate-pr.yml');
   for (const suite of ['ruby fastlane/ios_review_submission.test.rb', 'ruby fastlane/ios_review_notes.test.rb']) assert.ok(validatePr.includes(suite), suite);

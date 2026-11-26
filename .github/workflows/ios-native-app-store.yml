@@ -156,7 +156,7 @@ jobs:
         with:
           ruby-version: '3.3'
           bundler-cache: true
-      - name: Soumettre le build à la revue (fiche inchangée, hors « Nouveautés » et notes pour la revue)
+      - name: Soumettre le build à la revue (fiche inchangée, hors « Nouveautés » et informations pour la vérification)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
