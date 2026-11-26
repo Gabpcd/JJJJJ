@@ -1296,9 +1296,11 @@ jobs:
           # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
           # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
           # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
-          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
-          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
-          trap 'node scripts/mobile/ios-ci-resume-tests.mjs socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Son échec
+          # n'est qu'un avertissement ; il ne change le code de sortie de l'étape que dans un cas : la garde de repos
+          # XCUITest a absorbé plus de SEUIL_ABSORPTIONS_PAR_JOB processus d'app (code 8, « probable animation sans fin
+          # dans l'app »), et l'étape réussissait. Un test échoué reste échoué (DECISIONS_LOT2, « Garde de repos XCUITest »).
+          trap 'statut=$?; releve=0; node scripts/mobile/ios-ci-resume-tests.mjs socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus || releve=$?; if [ "$releve" -eq 8 ]; then [ "$statut" -ne 0 ] || statut=8; elif [ "$releve" -ne 0 ]; then echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."; fi; exit "$statut"' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
           for eclat in socle presences pointage documents contrats lot3-compte lot3-push lot3-notifications lot3-inscription lot3-profil-photo lot3-revenus; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"
@@ -2096,9 +2098,11 @@ jobs:
           # Tests échoués (nom, durée, premier message d'échec), trois tests les plus longs et temps passé de chaque éclat :
           # relevé de scripts/mobile/ios-ci-resume-tests.mjs, écrit dans le résumé du job, au journal et en annotation. Il
           # est lancé à la SORTIE de l'étape (trap EXIT), quelle que soit son issue : bundle xcresult absent, tests en
-          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Il ne
-          # change jamais le code de sortie de l'étape : le script rend toujours 0, et son échec n'est qu'un avertissement.
-          trap 'node scripts/mobile/ios-ci-resume-tests.mjs lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil || echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."' EXIT
+          # échec, éclat coupé à ses 30 min, dont le grep n'a alors rien imprimé (run 45239724447, tentative 2). Son échec
+          # n'est qu'un avertissement ; il ne change le code de sortie de l'étape que dans un cas : la garde de repos
+          # XCUITest a absorbé plus de SEUIL_ABSORPTIONS_PAR_JOB processus d'app (code 8, « probable animation sans fin
+          # dans l'app »), et l'étape réussissait. Un test échoué reste échoué (DECISIONS_LOT2, « Garde de repos XCUITest »).
+          trap 'statut=$?; releve=0; node scripts/mobile/ios-ci-resume-tests.mjs lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil || releve=$?; if [ "$releve" -eq 8 ]; then [ "$statut" -ne 0 ] || statut=8; elif [ "$releve" -ne 0 ]; then echo "::warning::Relevé des tests par éclat non lancé (scripts/mobile/ios-ci-resume-tests.mjs)."; fi; exit "$statut"' EXIT
           mkdir -p "$JOLENE_UI_OUTPUT/attachments"
           for eclat in lot1-missions lot1-accueil-explorer lot4 lot4-score-litiges lot4-swipe lot4-messagerie lot5-etablissement lot5-etablissement-ecrans lot3-profil; do
             xcresult="$RUNNER_TEMP/ui-$JOLENE_UI_FORMAT-$eclat.xcresult"

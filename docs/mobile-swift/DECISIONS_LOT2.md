@@ -2148,7 +2148,7 @@ une série entièrement verte.
    `Jolene diagnostic repos-xcuitest : attente des animations expirée (N s) pendant <test> ; attente des animations
    suspendue pour ce processus`. Au premier test de chaque éclat, l'état de pose est aussi journalisé.
    `scripts/mobile/ios-ci-resume-tests.mjs` les fait remonter dans le résumé du job, section « Garde de repos XCUITest »,
-   avec des annotations `::warning::`, jamais `::error::` : la fréquence reste visible.
+   avec des annotations `::warning::` : la fréquence reste visible. Au-delà du seuil d'absorption, c'est une erreur (voir « Absorption bornée »).
 3. **Intact :** aucune assertion affaiblie, aucun `-retry-tests-on-failure`, la couverture du bouton « OK » est
    inchangée.
 
@@ -2166,17 +2166,61 @@ une série entièrement verte.
   - vérification de types de toute la cible JoleneUITests et de la sonde (`swiftc -typecheck`, simulateur iOS 16,
     concurrence stricte) : aucune erreur ;
   - reconnaissance des deux sélecteurs réels du framework XCUIAutomation local ;
-  - `ios-ci-resume-tests.test.mjs` 17/17 et `ios-swift-ci-eclats.node.mjs` 34/34.
+  - `ios-ci-resume-tests.test.mjs` 19/19 et `ios-swift-ci-eclats.node.mjs` 34/34.
 - **Seule la CI prouvera** que l'animation répétée reproduit bien l'attente sans réponse sous Xcode 26.4.1 et iOS 26.2,
   que la signature y est reconnue, et que la garde rend les gestes rapides.
+
+### Absorption bornée (revue B8 de #1195, M1, tranché par la session de pilotage)
+
+La garde vaut pour toute la suite, pas seulement après `clavier-ok` sur iPad. Sans borne, une vraie animation sans fin
+introduite plus tard dans l'app (indicateur bloqué, `repeatForever` oublié) ne ferait plus rougir la série. Le
+compromis :
+
+- **Ce que la garde absorbe** : le blocage connu, rare. Au comptage du 26/11/2026, sur les 103 jobs UI terminés des
+  120 dernières séries, on relève **au plus une** attente des animations expirée par job : 5 jobs, chacun un seul test.
+  Quatre suivent `clavier-ok` sur iPad ; le cinquième est un cas isolé de la messagerie, qui s'est rétabli de lui-même.
+- **Ce qu'elle ne doit pas absorber** : une animation sans fin sur un écran. Elle frapperait chaque test qui passe par
+  cet écran, donc plusieurs processus d'app dans le même job.
+- **Seuil** : `SEUIL_ABSORPTIONS_PAR_JOB = 3` (`scripts/mobile/ios-ci-resume-tests.mjs`).
+  - On compte les processus d'app suspendus (une ligne chacun) dans tous les éclats du job, sans la recette
+    `DemoGardeReposTests`, dont la seule absorption est attendue.
+  - Jusqu'à 3 : avertissements, comme avant.
+  - Au-delà : erreur `::error::` qui nomme les tests (« probable animation sans fin dans l'app, la garde ne doit pas
+    l'absorber »), et code de sortie `CODE_ABSORPTIONS_EXCESSIVES = 8`. Le `trap` de l'étape « Résumé xcresult » des
+    jobs `ui` et `ui-lot1` ne propage que ce code, et seulement si l'étape réussissait : un test échoué reste échoué
+    dans tous les cas.
+  - Garanti par `ios-ci-resume-tests.test.mjs` (sous le seuil, au-delà, recette exclue, test échoué) et
+    `ios-swift-ci-eclats.node.mjs` (trap simulé sous `bash -e -o pipefail`).
+  - Le seuil laisse trois fois la marge du maximum observé. Une animation sans fin sur un écran visité par trois tests
+    ou moins dans un job resterait sous le seuil : c'est une limite connue. Les avertissements la gardent visible.
 
 ### Limites
 
 - API privée d'XCTest, Xcode épinglé à 26.4.1. Un changement de sélecteur ou de signature n'installe rien : la ligne
   « non installée » apparaît, et `DemoGardeReposTests` échoue pour le signaler. Les autres tests se comportent alors
   comme avant.
-- La garde masque le coût du blocage, pas sa cause. Un processus suspendu n'attend plus la fin des animations : un geste
-  peut alors tomber pendant une animation. Les assertions bornées (`require`) restent la preuve.
+- La garde masque le coût du blocage, pas sa cause.
+- Mineurs de la revue B8 de #1195, limites connues :
+  - **m1 — gel de 50 à 60 s qui se termine.** Si le fil principal reste bloqué environ 55 s puis se libère,
+    l'attente rend la main vers 55 s, la vérification est rapide, et le processus est suspendu avec la ligne
+    « attente des animations expirée ». Avant la garde, ce cas ne faisait pas non plus échouer de test : rien n'est
+    masqué, mais le diagnostic est faux. La marque « App animations complete notification not received » du journal,
+    relevée à côté par le résumé, permet de trancher.
+  - **m2 — garanties réduites après une suspension.** Gestes et lectures ne sont plus précédés de la fin des
+    animations. Les constats passent presque tous par des attentes bornées (`require`, environ 1 200 appels ;
+    `requireAbsence`), mais 48 assertions sont immédiates (`.exists`, `.isSelected`, `.isHittable`), dont 12
+    absences : lue pendant une transition, une absence pourrait passer à tort. Risque faible, limité aux processus
+    suspendus.
+  - **m3 — profondeur d'appel globale, pas propre au fil.** Un appel simultané depuis un autre fil serait traité comme
+    imbriqué et passerait sans garde : c'est prudent. La ligne de la garde part par `print` hors du fil principal. Le
+    résumé la lit aussi sans « t = … s » (sans instant), si la sortie standard du lanceur parvient au journal de
+    l'éclat, ce que XCTest ne garantit pas. XCTest appelle la méthode sur le fil principal (spindump du job
+    139506151098) : ce chemin n'est qu'un repli.
+  - **m4 — méthodes propres à la classe seulement** (`class_copyMethodList`). Une méthode héritée n'est pas vue : la
+    garde est « non installée » et la recette échoue nettement. Une sous-classe qui redéfinirait la méthode échapperait
+    à la garde sans rien signaler, sauf si la recette passe par elle. Non vérifiable hors CI.
+- **Recette indépendante de l'ordre** : `DemoGardeReposTests` arrête l'app restée en vie avant que la garde ne passe au
+  test suivant. Le témoin ne relève donc que les attentes de son propre lancement.
 
 ### Pour corriger la cause
 

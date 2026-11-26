@@ -17,6 +17,18 @@ final class DemoGardeReposTests: JoleneUITestCase {
     /// Borne d'un geste quand la garde a suspendu l'attente des animations (sans elle : 60 s au moins).
     static let gesteRapide: TimeInterval = 20
 
+    /// Indépendance de l'ordre (revue B8 de #1195) : l'app laissée en vie par le test précédent (animation ouverte
+    /// comprise) est arrêtée AVANT que la garde ne passe à ce test (`GardeRepos.debutDeTest`, appelé par
+    /// `super.setUpWithError`). Une attente expirée pendant cet arrêt reste donc attribuée au test précédent, et le
+    /// témoin ne relève que les attentes de son propre lancement.
+    override func setUpWithError() throws {
+        let application = app
+        MainActor.assumeIsolated {
+            if application.state != .notRunning { application.terminate() }
+        }
+        try super.setUpWithError()
+    }
+
     func testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides() throws {
         guard case .installee = GardeRepos.installation else {
             XCTFail("garde de repos non installée : \(String(describing: GardeRepos.installation))")

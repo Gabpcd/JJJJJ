@@ -17,7 +17,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
+  CODE_ABSORPTIONS_EXCESSIVES,
   MARQUE_GARDE_REPOS,
+  SEUIL_ABSORPTIONS_PAR_JOB,
   MARQUES_INACTIVITE,
   SEUIL_SILENCE_S,
   SEUIL_TEST_LONG_S,
@@ -547,4 +549,56 @@ test('garde de repos : expirations relevées par test, en avertissement ; pose e
 
   const sans = rendre({ format: 'iphone', eclats: [resumerEclat({ nom: 'socle', journal: JOURNAL_T1 })] });
   assert.ok(!sans.lignes.some(l => l.includes('Garde de repos')), 'aucune section sans ligne de la garde');
+});
+
+/** Journal reconstitué : `n` tests, chacun absorbé une fois par la garde ; `echoue` : le premier test échoue. */
+function journalAbsorptions(n, { classe = 'DemoAccueilTests', echoue = false, horsFil = false } = {}) {
+  const lignes = [];
+  for (let i = 1; i <= n; i += 1) {
+    const nom = `testEcran${i}`;
+    const ligne = `${MARQUE_GARDE_REPOS} : attente des animations expirée (60 s) pendant -[${classe} ${nom}] ; attente des animations suspendue pour ce processus`;
+    lignes.push(`Test Case '-[JoleneUITests.${classe} ${nom}]' started.`, '    t =     0.00s Start Test at 2026-11-26 10:00:00.000',
+      horsFil ? ligne : `    t =    70.00s ${ligne}`,
+      `Test Case '-[JoleneUITests.${classe} ${nom}]' ${echoue && i === 1 ? 'failed' : 'passed'} (90.000 seconds).`);
+  }
+  return lignes.join('\n');
+}
+
+test('garde de repos : absorption bornée — avertissement jusqu au seuil, erreur et code non nul au-delà', () => {
+  assert.equal(SEUIL_ABSORPTIONS_PAR_JOB, 3, 'au plus une absorption par job relevée sur 103 jobs (26/11/2026)');
+  const rendu = journal => rendre({ format: 'ipad-portrait', eclats: [resumerEclat({ nom: 'lot4', journal })] });
+  const sous = rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB));
+  assert.equal(sous.code, 0);
+  assert.ok(!sous.annotations.some(a => a.startsWith('::error')), 'sous le seuil : avertissements seulement');
+  assert.equal(sous.annotations.filter(a => a.startsWith('::warning::Garde de repos')).length, SEUIL_ABSORPTIONS_PAR_JOB);
+
+  const au = rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 1));
+  assert.equal(au.code, CODE_ABSORPTIONS_EXCESSIVES);
+  const erreur = au.annotations.find(a => a.startsWith('::error::Garde de repos'));
+  assert.ok(erreur, 'au-delà du seuil : erreur nette');
+  assert.match(erreur, /4 processus d’app absorbés dans ce job, au-delà de 3 — probable animation sans fin dans l’app, la garde ne doit pas l’absorber/);
+  assert.match(erreur, /DemoAccueilTests\.testEcran1, DemoAccueilTests\.testEcran2, DemoAccueilTests\.testEcran3, DemoAccueilTests\.testEcran4/);
+
+  // La recette (DemoGardeReposTests) ne compte pas ; une ligne écrite par `print` hors du fil principal compte.
+  assert.equal(rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 2, { classe: 'DemoGardeReposTests' })).code, 0);
+  const horsFil = rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 1, { horsFil: true }));
+  assert.equal(horsFil.code, CODE_ABSORPTIONS_EXCESSIVES, 'ligne sans « t = … s » lue aussi');
+  assert.ok(horsFil.lignes.some(l => l.startsWith('- lot4 — `DemoAccueilTests.testEcran1` : Jolene diagnostic')), 'sans instant');
+
+  // Un test échoué reste échoué dans tous les cas (sous et au-delà du seuil).
+  for (const n of [1, SEUIL_ABSORPTIONS_PAR_JOB + 1]) {
+    const r = rendu(journalAbsorptions(n, { echoue: true }));
+    assert.ok(r.annotations.some(a => a.startsWith('::error::Test échoué (ipad-portrait, éclat lot4) : DemoAccueilTests.testEcran1')), `n = ${n}`);
+  }
+});
+
+test('commande : absorptions au-delà du seuil — code de sortie CODE_ABSORPTIONS_EXCESSIVES ; sous le seuil — 0', () => {
+  for (const [n, attendu] of [[SEUIL_ABSORPTIONS_PAR_JOB, 0], [SEUIL_ABSORPTIONS_PAR_JOB + 1, CODE_ABSORPTIONS_EXCESSIVES]]) {
+    const b = bac({ arbres: {}, journaux: { lot4: journalAbsorptions(n) } });
+    try {
+      const r = b.lancer(['lot4']);
+      assert.equal(r.status, attendu, `${n} absorptions : ${r.stderr}`);
+      assert.equal(r.stdout.includes('::error::Garde de repos'), attendu !== 0);
+    } finally { b.nettoyer(); }
+  }
 });
