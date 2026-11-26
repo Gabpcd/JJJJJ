@@ -13,7 +13,7 @@ final class ListesBlanchesEtablissementTests: XCTestCase {
         let avecExceptions = contrats.rpcs.filter { $0.exceptions != nil }
         XCTAssertEqual(Set(avecExceptions.map(\.name)), Set(ListesBlanchesEtablissement.parRPC.keys),
                        "une liste Swift par RPC du lot 5, aucune de plus")
-        XCTAssertEqual(avecExceptions.count, 14)
+        XCTAssertEqual(avecExceptions.count, 15)
         for contrat in avecExceptions {
             let attendues = (contrat.exceptions ?? []).map { [$0.sqlstate, $0.message] }
             let swift = (ListesBlanchesEtablissement.parRPC[contrat.name] ?? []).map { [$0.sqlstate, $0.message] }

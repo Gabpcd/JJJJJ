@@ -51,6 +51,7 @@ const LOT5 = [
   'fn_creer_notation_mission',
   'fn_declarer_fin_retroactive',
   'fn_creer_mission_multi_jours_v4',
+  'fn_taux_horaire_minimum_salarie',
   'fn_obtenir_conversation',
 ];
 // Chaque tranche qui câble une gateway passe sa RPC en `consommee` et l'ajoute ici (modèle LOT1_CONSOMMEES).
@@ -63,6 +64,7 @@ const LOT5_CONSOMMEES = [
   // T8 (B9) : SupabaseEtabPresencesGateway ; fn_creer_notation_mission reste l'entrée du lot 2, déjà consommée.
   'fn_valider_presence', 'fn_valider_presences_lot', 'fn_contester_presence', 'fn_creer_notation_mission', 'fn_declarer_fin_retroactive',
   'fn_creer_mission_multi_jours_v4', // T9 : SupabaseEtabPublicationGateway
+  'fn_taux_horaire_minimum_salarie', // suivi de #1188 : SupabaseEtabPublicationGateway.tauxMinimumSalarie
 ];
 // Déjà suivies par un lot soignant, consommées aussi par l'établissement (annotation, jamais doublon).
 const PARTAGEES = [
@@ -72,9 +74,9 @@ const PARTAGEES = [
 // Classement manuel (absentes du manifeste SECURITY DEFINER, comme la décision 6 du lot 1).
 const HORS_MANIFESTE = [
   'fn_lire_candidatures_mission_habilitee', 'fn_traiter_candidature_planning_v1',
-  'fn_contrat_signe_pour_pointage', 'fn_creer_mission_multi_jours_v4',
+  'fn_contrat_signe_pour_pointage', 'fn_creer_mission_multi_jours_v4', 'fn_taux_horaire_minimum_salarie',
 ];
-const HORS_TYPES = ['fn_traiter_candidature_planning_v1', 'fn_contrat_signe_pour_pointage'];
+const HORS_TYPES = ['fn_traiter_candidature_planning_v1', 'fn_contrat_signe_pour_pointage', 'fn_taux_horaire_minimum_salarie'];
 
 const RBAC_POINTAGE = {
   sqlstate: '42501', message: 'Permission etablissement pointage requise',
@@ -154,7 +156,7 @@ function section(doc, heading) {
 // RPC_SUIVIES
 // ---------------------------------------------------------------------------------------------
 
-test('lot 5 : les 14 RPC établissement sont suivies, a_venir lot 5 (consommee une fois câblées) sauf si un lot antérieur les suit déjà', () => {
+test('lot 5 : les 15 RPC établissement sont suivies, a_venir lot 5 (consommee une fois câblées) sauf si un lot antérieur les suit déjà', () => {
   assert.deepEqual(RPC_SUIVIES_ETABLISSEMENT.map(r => r.name), LOT5);
   for (const r of RPC_SUIVIES_ETABLISSEMENT) {
     const statut = LOT5_CONSOMMEES.includes(r.name) ? 'consommee' : 'a_venir';

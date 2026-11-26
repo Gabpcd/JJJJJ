@@ -760,6 +760,26 @@ CORRIGER ». Un commit par constat ou petit groupe ; les réponses constat par c
   TOUS, libéral exclu) ; le web le lit (`fn_taux_horaire_minimum_salarie`, repli `src/lib/tauxHoraireMinimumSalarie.ts`),
   l'app garde la constante (12.31, aucun port numérique de paramètres) ; la garde `tests/node/taux-horaire-minimum-salarie.node.mjs`
   lie les trois valeurs. Même texte partout : « Le taux horaire doit être d'au moins 12,31 €/h. ».
+  **Suivi du 26/11/2026 (après le re-baseline #1193)** : l'app lit le plancher par `fn_taux_horaire_minimum_salarie()`
+  (`SupabaseEtabPublicationGateway.tauxMinimumSalarie`, fiche `CONTRATS_RPC_ETABLISSEMENT.md`), seul plancher de la
+  validation et de l'avis (même phrase, montant lu). Fermé : plancher non lu ou illisible → aucun taux publiable, message
+  générique existant (« La publication n'a pas pu aboutir. Vérifiez votre connexion. »), relecture par « tirer pour
+  actualiser » ; aucune constante substituée. Le monde démo rend sa valeur de fixture. La constante iOS ne sert plus
+  qu'à cette fixture et au contrôle structurel de la passerelle avant envoi ; elle reste liée à la migration par la
+  garde node. Refus serveur prouvé à travers le vrai PostgREST par la préparation STAGING du lot 5
+  (`prouverRefusTauxMinimum`) et sur le schéma du dépôt par le banc L5. **Limites connues** : un administrateur peut
+  abaisser le paramètre par écriture directe sur `parametres_systeme` (les bornes ne sont imposées que par
+  `fn_admin_maj_parametre`) ; sur le site, l'attribut `min` du champ porte le plancher, et hors parcours le navigateur
+  refuserait l'envoi d'une mission ouverte existante sous le plancher même sans changement de taux ni de contrat.
+  **Revue de #1194** : le plancher lu décide seul, de la saisie à l'envoi ; le contrôle du brouillon par la passerelle
+  est structurel (taux strictement positif et fini), le serveur restant seul juge du montant (M1). Après un refus
+  serveur, le plancher est relu (m3, partie faite). **Suivis notés, non traités** : (m2) le message réutilisé quand le
+  plancher est illisible parle de connexion, et après `effacerAnnonce()` ou une lecture annulée le formulaire reste
+  fermé sans explication autre que « tirer pour actualiser » — un texte dédié demande la validation de la fondatrice ;
+  (m3, reste) relecture du plancher au retour au premier plan, non faite (l'écran n'observe pas `scenePhase`) ; (m4)
+  dans `LOT5_PLAN.md` §16, les citations l.75904, l.62956, l.63314 et l.63317 ne pointent plus vers les objets nommés ;
+  (m5) sur STAGING, un plancher non annoncé fait ignorer la preuve avec un simple journal (le banc PostgreSQL 17,
+  lui, l'exige) ; à signaler dans le résumé du workflow si la preuve STAGING doit devenir obligatoire.
 - M5 : une présence validée propose « Contester cette présence » (libellé du web, `PanneauContestation.tsx` l.365) en
   renvoi web vers `/etablissement/presences` ; aucune RPC, aucun texte de délai ; le serveur juge la fenêtre.
 - M6 : l'écran contrat de l'établissement affiche le statut (`DPAEStatus.tsx`) et le rappel (`BandeauRappelDPAE.tsx`)

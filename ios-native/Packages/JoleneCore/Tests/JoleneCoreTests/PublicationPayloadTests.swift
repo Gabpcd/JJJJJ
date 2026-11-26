@@ -168,49 +168,57 @@ final class PublicationPayloadTests: XCTestCase {
         XCTAssertEqual(LibellesWeb.Publication.tauxMinimumHorsLiberal, "12.31", "SMIC horaire brut au 1er juin 2026")
         XCTAssertEqual(PublicationPayload.typeContratRecherche, "SALARIE", "publication native salariée : plancher hors libéral")
         XCTAssertEqual(PublicationRules.tauxMinimum, Double(LibellesWeb.Publication.tauxMinimumHorsLiberal))
-        let minimum = LibellesWeb.Publication.tauxMinimumHorsLiberal
-        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: PublicationRules.tauxMinimum)), [], "le plancher lui-même est publiable")
-        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: PublicationRules.tauxMinimum - 0.01)), [.taux])
-        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: 5)), [.taux], "la gateway refuse avant tout envoi")
+        let minimum = PublicationRules.tauxMinimum
         var saisie = PublicationSaisie()
         saisie.intitule = "IDE"
         saisie.profession = "IDE"
         saisie.taux = "5"
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [.taux])
-        XCTAssertTrue(PublicationRules.tauxSousLeMinimum(saisie.taux))
-        XCTAssertFalse(PublicationRules.tauxSousLeMinimum(minimum))
-        XCTAssertFalse(PublicationRules.tauxSousLeMinimum(""), "saisie vide : champ obligatoire, pas un taux sous le plancher")
-        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,31 €/h.",
-                       "nombre à la française, formaté depuis la constante (fr_FR)")
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [.taux])
+        XCTAssertTrue(PublicationRules.tauxSousLeMinimum(saisie.taux, minimum: minimum))
+        XCTAssertFalse(PublicationRules.tauxSousLeMinimum(LibellesWeb.Publication.tauxMinimumHorsLiberal, minimum: minimum))
+        XCTAssertFalse(PublicationRules.tauxSousLeMinimum("", minimum: minimum), "saisie vide : champ obligatoire, pas un taux sous le plancher")
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(minimum), "Le taux horaire doit être d'au moins 12,31 €/h.",
+                       "nombre à la française, formaté depuis le plancher (fr_FR)")
         XCTAssertEqual(PublicationPresentation.montantFrancais(1234.5), "1234,50")
-        // Plancher lu au serveur (migration 20261125120000) : même texte, montant du paramètre ; repli sur la constante.
+        // Plancher lu au serveur (migration 20261125120000) : même texte, montant du paramètre.
         XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.")
-        XCTAssertEqual(PublicationRules.tauxMinimum(serveur: 12.5), 12.5)
-        for illisible in [nil, 0, -3, Double.nan, Double.infinity] as [Double?] {
-            XCTAssertEqual(PublicationRules.tauxMinimum(serveur: illisible), PublicationRules.tauxMinimum)
-        }
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(12), "Le taux horaire doit être d'au moins 12,00 €/h.")
+        XCTAssertEqual(PublicationPresentation.tauxSousLeMinimum(13), "Le taux horaire doit être d'au moins 13,00 €/h.")
         XCTAssertTrue(PublicationRules.tauxSousLeMinimum("12,40", minimum: 12.5))
         XCTAssertFalse(PublicationRules.tauxSousLeMinimum("12,50", minimum: 12.5))
         XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: 4), [], "plancher plus bas : 5 € passe")
-        XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: 12.4)), [], "la gateway rejoue la constante")
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: .infinity), [.taux], "plancher non lu : fermé")
+    }
+
+    /// Revue de #1194, M1 : le contrôle du brouillon par la passerelle est structurel ; aucun plancher, et surtout pas la
+    /// constante, n'y refuse un taux strictement positif (le plancher est appliqué au récapitulatif avec la valeur lue,
+    /// le serveur reste seul juge du montant).
+    func testControleDuBrouillonSansPlancher() {
+        for taux in [12.0, 12.1, PublicationRules.tauxMinimum - 0.01, 5, 0.01, 13] {
+            XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: taux)), [], "\(taux)")
+        }
+        for taux in [0, -1, Double.nan, Double.infinity] {
+            XCTAssertEqual(PublicationRules.champsInvalides(brouillon(taux: taux)), [.taux], "\(taux)")
+        }
     }
 
     func testChampsInvalides() {
         var saisie = PublicationSaisie()
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [.intitule, .profession, .taux])
+        let minimum = PublicationRules.tauxMinimum
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [.intitule, .profession, .taux])
         saisie.intitule = "  ab "
-        XCTAssertTrue(PublicationRules.champsInvalides(saisie).contains(.intitule), "trois caractères hors espaces de bord")
+        XCTAssertTrue(PublicationRules.champsInvalides(saisie, minimum: minimum).contains(.intitule), "trois caractères hors espaces de bord")
         saisie.intitule = "IDE"
         saisie.profession = "MEDECIN"
         saisie.taux = "30"
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [.profession], "profession renvoyée au web jamais publiable")
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [.profession], "profession renvoyée au web jamais publiable")
         saisie.profession = "IDE"
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [])
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [])
         saisie.estUrgente = true
         saisie.niveauUrgence = 4
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [.niveauUrgence])
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [.niveauUrgence])
         saisie.estUrgente = false
-        XCTAssertEqual(PublicationRules.champsInvalides(saisie), [], "niveau ignoré hors urgence")
+        XCTAssertEqual(PublicationRules.champsInvalides(saisie, minimum: minimum), [], "niveau ignoré hors urgence")
 
         XCTAssertEqual(PublicationRules.champsInvalides(brouillon()), [])
         XCTAssertEqual(PublicationRules.champsInvalides(brouillon(profession: "MEDECIN")), [.profession])

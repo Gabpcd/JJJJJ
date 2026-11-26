@@ -80,31 +80,23 @@ public enum PublicationRules {
         String(saisie.prefix(intituleMaximum))
     }
 
-    /// Plancher du taux horaire d'une mission salariée (revue B8 des textes de la vague D, M4) : valeur de repli du web
-    /// (`src/lib/tauxHoraireMinimumSalarie.ts`), reprise par `LibellesWeb.Publication.tauxMinimumHorsLiberal` ; la
-    /// publication native est salariée (D8, `PublicationPayload.typeContratRecherche`). Le serveur refuse lui-même un taux
-    /// sous le paramètre `taux_horaire_minimum_salarie` (migration `20261125120000`) ; l'app ne lit pas ce paramètre (aucun
-    /// port numérique, seul `fn_param_bool` est raccordé) et garde la constante. Valeur illisible : rien n'est publiable
-    /// (fermé par défaut).
+    /// Valeur de repli du web (`src/lib/tauxHoraireMinimumSalarie.ts`), reprise par
+    /// `LibellesWeb.Publication.tauxMinimumHorsLiberal` et liée à la migration `20261125120000` par la garde node du
+    /// plancher. **Ne décide d'aucune publication** : elle ne sert qu'à la fixture du monde démo
+    /// (`DemoEtabPublicationGateway.tauxMinimumFixture`) et aux tests. Le plancher qui décide est celui lu au serveur
+    /// (`PublicationModel.plancher`, `fn_taux_horaire_minimum_salarie`) ; le refus qui fait foi est celui du verrou serveur.
     public static let tauxMinimum: Double = Double(LibellesWeb.Publication.tauxMinimumHorsLiberal) ?? .infinity
 
     /// Taux lisible mais sous le plancher : l'écran l'explique sous le champ (`PublicationPresentation.tauxSousLeMinimum`).
-    /// `minimum` : plancher lu au serveur (`PublicationModel.tauxMinimum`), la constante à défaut.
-    public static func tauxSousLeMinimum(_ saisie: String, minimum: Double = tauxMinimum) -> Bool {
+    /// `minimum` : plancher lu au serveur (`PublicationModel.tauxMinimum`), toujours fourni par l'appelant.
+    public static func tauxSousLeMinimum(_ saisie: String, minimum: Double) -> Bool {
         guard let valeur = taux(saisie) else { return false }
         return valeur < minimum
     }
 
-    /// Plancher rendu par le serveur (`fn_taux_horaire_minimum_salarie`) : retenu s'il est fini et strictement positif,
-    /// sinon la constante (même règle que `normaliserTauxMinimumSalarie` du web).
-    public static func tauxMinimum(serveur: Double?) -> Double {
-        guard let serveur, serveur.isFinite, serveur > 0 else { return tauxMinimum }
-        return serveur
-    }
-
     /// Taux horaire saisi : chiffres, puis au plus deux décimales après une virgule ou un point (`step="0.01"` du web,
     /// l.921) ; `nil` pour toute autre saisie, pour zéro et pour un nombre négatif (« supérieur à zéro », l.27339).
-    /// Le plancher (`tauxMinimum`) est appliqué par `champsInvalides`, pas ici.
+    /// Le plancher (lu au serveur) est appliqué par `champsInvalides(_:minimum:)`, pas ici.
     public static func taux(_ saisie: String) -> Double? {
         let texte = saisie.trimmingCharacters(in: .whitespacesAndNewlines)
         let octets = Array(texte.utf8)
@@ -122,18 +114,22 @@ public enum PublicationRules {
         return valeur
     }
 
-    /// Champs obligatoires invalides d'une saisie, dans l'ordre du formulaire. `minimum` : plancher lu au serveur.
-    public static func champsInvalides(_ saisie: PublicationSaisie, minimum: Double = tauxMinimum) -> [Champ] {
+    /// Champs obligatoires invalides d'une saisie, dans l'ordre du formulaire. `minimum` : plancher lu au serveur
+    /// (`.infinity` tant qu'il ne l'est pas : rien n'est publiable).
+    public static func champsInvalides(_ saisie: PublicationSaisie, minimum: Double) -> [Champ] {
         champsInvalides(intitule: saisie.intitule, profession: saisie.profession, taux: taux(saisie.taux),
                         estUrgente: saisie.estUrgente, niveauUrgence: saisie.niveauUrgence, minimum: minimum)
     }
 
-    /// Mêmes contrôles sur un brouillon prêt à l'envoi : la gateway les rejoue avant tout appel (fail-closed, D8 :
-    /// jamais une profession renvoyée au web, jamais un niveau hors bornes).
+    /// Contrôles **structurels** d'un brouillon prêt à l'envoi : la passerelle les rejoue avant tout appel (fail-closed,
+    /// D8 : jamais une profession renvoyée au web, jamais un niveau hors bornes, jamais un taux nul, négatif ou non fini).
+    /// Le plancher n'y figure pas (revue de #1194, M1) : il a été appliqué au récapitulatif avec la valeur lue au serveur,
+    /// et le serveur reste seul juge du montant (verrou différé, refus `P0001` rendu mot pour mot). Aucune constante ne
+    /// peut donc refuser localement un taux que le paramètre serveur admet.
     public static func champsInvalides(_ brouillon: PublicationMission) -> [Champ] {
         champsInvalides(intitule: brouillon.intitule, profession: brouillon.professionRequise,
                         taux: brouillon.tauxHoraireBase.isFinite && brouillon.tauxHoraireBase > 0 ? brouillon.tauxHoraireBase : nil,
-                        estUrgente: brouillon.estUrgente, niveauUrgence: brouillon.niveauUrgence, minimum: tauxMinimum)
+                        estUrgente: brouillon.estUrgente, niveauUrgence: brouillon.niveauUrgence, minimum: 0)
     }
 
     private static func champsInvalides(intitule: String, profession: String, taux: Double?, estUrgente: Bool,

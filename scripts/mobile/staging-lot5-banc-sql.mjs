@@ -33,8 +33,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   manifeste, sqlPreparer, sqlCode, sqlCandidature, sqlPresence, sqlVerifier, sqlNettoyer, sqlCompter, sqlResidus,
   sqlRetrouverRun, cibleDepuisRecherche, lireResidus, totalMarques, GRAPHE_NETTOYAGE, lireGraphe, KIND,
-  controlerSessionEtablissement,
+  controlerSessionEtablissement, chargeRefusTaux, messageTauxMinimum, sqlCompterRefusTaux, CLE_TAUX_MINIMUM,
 } from './staging-lot5-fixture.mjs';
+
+/** Littéral SQL d'un argument nommé (charge JSON du natif) : `NULL`, nombre, booléen, texte, ou `jsonb`. */
+const litteral = v => (v === null ? 'NULL' : typeof v === 'number' || typeof v === 'boolean' ? String(v)
+  : typeof v === 'string' ? `'${v.replaceAll("'", "''")}'` : `'${JSON.stringify(v).replaceAll("'", "''")}'::jsonb`);
+const appelNomme = (fonction, params) => `SELECT public.${fonction}(${Object.entries(params)
+  .map(([k, v]) => `${k} => ${litteral(v)}`).join(', ')})::text AS r;`;
 
 export const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -148,14 +154,19 @@ export function objetsPrives(racine = RACINE) {
  */
 export const PARAMETRES_REQUIS = ['taux_horaire_minimum_salarie'];
 
+/** Tuple de VALUES dont la première valeur est `cle` (colonne `cle` en tête de la liste des colonnes). */
+export const tupleDeCle = cle => new RegExp(`^INSERT\\s+INTO\\s+(?:"?public"?\\.)?"?parametres_systeme"?\\s*\\(\\s*"?cle"?\\s*,[\\s\\S]*?(?:\\bVALUES\\s*|\\)\\s*,\\s*)\\(\\s*'${cle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'\\s*,`, 'i');
+
 export function parametresRequis(racine = RACINE, cles = PARAMETRES_REQUIS) {
   const trouves = new Map();
   const dossier = join(racine, 'supabase/migrations');
   for (const fichier of readdirSync(dossier).filter(f => f.endsWith('.sql')).sort()) {
     for (const brute of decouper(readFileSync(join(dossier, fichier), 'utf8'))) {
       const instr = sansCommentairesDeTete(brute);
-      if (!/^INSERT\s+INTO\s+"?public"?\."?parametres_systeme"?\s*\(/i.test(instr)) continue;
-      for (const cle of cles) if (instr.includes(`'${cle}'`)) trouves.set(cle, instr);
+      if (!/^INSERT\s+INTO\s+(?:"?public"?\.)?"?parametres_systeme"?\s*\(/i.test(instr)) continue;
+      // Strict (revue de #1193, m3) : la clé doit ouvrir un tuple de VALUES (première valeur, après `VALUES` ou `),`),
+      // jamais une occurrence quelconque entre apostrophes (description d'un autre paramètre, par exemple).
+      for (const cle of cles) if (tupleDeCle(cle).test(instr)) trouves.set(cle, instr);
     }
   }
   const absents = cles.filter(c => !trouves.has(c));
@@ -259,6 +270,34 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
   const lire = v => (typeof v === 'string' ? JSON.parse(v) : v);
   controlerSessionEtablissement(m, { role: { corps: lire(session?.role) }, permissions: { corps: lire(session?.permissions) },
     profil: { corps: lire(session?.profil) } }, 'banc');
+  // Suivi de #1188 : même preuve que le script (prouverRefusTauxMinimum), sur le schéma du dépôt. Plancher annoncé et lu
+  // sous le JWT d'E1, création SALARIE à un centime sous le plancher refusée à la validation de la transaction (verrou
+  // différé), message validé exact, 0 mission à l'intitulé du run.
+  // Lecture au niveau de la session (comme le pré-vol) : la ligne lue est celle de la DERNIÈRE instruction, ce que
+  // les deux moteurs rendent (psql ne relit que la dernière ; un `COMMIT` final ne rendrait aucune ligne).
+  const [plancher] = await pas('plancher annoncé et lu sous le JWT d E1 (rôle authenticated)', `${commeUtilisateur(m.etablissement.id)}
+  SELECT public.fn_param_bool('${CLE_TAUX_MINIMUM}', false) AS annonce, public.fn_taux_horaire_minimum_salarie()::text AS minimum;`);
+  await pas('fin du rôle authenticated (plancher)', FIN_UTILISATEUR);
+  if (plancher?.annonce !== true || !(Number(plancher?.minimum) > 0)) {
+    throw new Error(`Banc L5 : plancher du taux non annoncé ou illisible (${JSON.stringify(plancher)}).`);
+  }
+  const minimum = Number(plancher.minimum);
+  const tauxRefuse = Math.round((minimum - 0.01) * 100) / 100;
+  let refus = null;
+  try {
+    await executer(sousJwt(m.etablissement.id, appelNomme('fn_creer_mission_multi_jours_v4', chargeRefusTaux(m, tauxRefuse))));
+  } catch (e) {
+    refus = String(e?.message ?? e);
+    await executer('ROLLBACK;').catch(() => {});
+  }
+  if (!refus?.includes(messageTauxMinimum(minimum))) {
+    etapes.push({ nom: 'refus du plancher du taux (fn_creer_mission_multi_jours_v4 sous JWT)', ok: false, erreur: refus });
+    throw new Error(`Banc L5 : ${tauxRefuse} €/h non refusé avec « ${messageTauxMinimum(minimum)} » (${refus ?? 'aucune erreur'}).`);
+  }
+  etapes.push({ nom: 'refus du plancher du taux (fn_creer_mission_multi_jours_v4 sous JWT)', ok: true });
+  const [fuite] = await pas('aucune mission créée par le refus du plancher', sqlCompterRefusTaux(m));
+  if (fuite?.n !== 0) throw new Error(`Banc L5 : ${fuite?.n} mission(s) créée(s) malgré le refus du plancher.`);
+  journal(`plancher du taux : ${tauxRefuse.toFixed(2).replace('.', ',')} €/h refusé (« ${messageTauxMinimum(minimum)} »), 0 mission créée`);
   await pas('candidature de S1 (fn_postuler_mission sous JWT)', sousJwt(m.soignant.id,
     `SELECT public.fn_postuler_mission('${m.m1.id}'::uuid, '${m.marker}', 'SALARIE');`));
   const candidatures = await pas('relecture de la candidature (sqlCandidature)', sqlCandidature(m));

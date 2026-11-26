@@ -730,6 +730,68 @@ const refusCorps = (corps) => {
 };
 const porteErreur = (corps) => !!corps && typeof corps === 'object' && corps.error !== undefined && corps.error !== null;
 
+// MARK: - Plancher du taux horaire salarié (suivi de #1188)
+
+/** Clé du paramètre qui annonce et porte le plancher (migration 20261125120000). */
+export const CLE_TAUX_MINIMUM = 'taux_horaire_minimum_salarie';
+/** Intitulé marqué du run : une fuite éventuelle est comptée, puis supprimée avec la cohorte. */
+export const intituleRefusTaux = m => `${debutIntitule(m.marker)}refus taux minimal`;
+/** Texte validé le 25/11/2026, montant à la française (deux décimales, virgule). */
+export const messageTauxMinimum = minimum => `Le taux horaire doit être d'au moins ${Number(minimum).toFixed(2).replace('.', ',')} €/h.`;
+export const sqlCompterRefusTaux = m => `SELECT count(*)::int AS n FROM public.missions WHERE intitule = ${q(intituleRefusTaux(m))};`;
+
+/** Charge du natif (seize clés de `PublicationPayload`) : mission SALARIE d'E1 le lendemain de M1, au taux donné. */
+export function chargeRefusTaux(m, taux) {
+  const debut = new Date(new Date(m.m1.debut).getTime() + 24 * 3_600_000);
+  const fin = new Date(debut.getTime() + 4 * 3_600_000);
+  return {
+    p_intitule: intituleRefusTaux(m), p_description: null, p_profession_requise: 'AS', p_service: 'Recette L5',
+    p_taux_horaire_base: taux, p_est_urgente: false, p_niveau_urgence: 0, p_mode_attribution: 'CANDIDATURE',
+    p_specialite_medicale_requise: null, p_accepte_non_specialises: true,
+    p_creneaux: [{ debut: debut.toISOString(), fin: fin.toISOString() }],
+    p_type_contrat_recherche: 'SALARIE', p_mode_remuneration: 'TAUX_HORAIRE', p_retrocession_pct: null,
+    p_nature_tva_prestation: null, p_accepte_internes: false,
+  };
+}
+
+/**
+ * Preuve du refus serveur du plancher à travers le vrai PostgREST, sous le JWT d'E1 (établissement publiable de la
+ * cohorte) : plancher annoncé par `fn_param_bool`, lu par `fn_taux_horaire_minimum_salarie`, puis
+ * `fn_creer_mission_multi_jours_v4` SALARIE à un centime sous le plancher. Attendu : HTTP 4xx, code `P0001`, message
+ * validé exact (le verrou différé lève au COMMIT, la transaction est annulée), et 0 mission à l'intitulé du run.
+ * Plancher non annoncé : preuve ignorée, nommément. Toute autre issue lève (une mission créée est comptée et reste
+ * supprimée par le nettoyage de la cohorte).
+ */
+export async function prouverRefusTauxMinimum({ doc, rpc, sql, log = () => {} }) {
+  const annonce = await rpc('fn_param_bool', { p_cle: CLE_TAUX_MINIMUM, p_defaut: false });
+  if (annonce !== true) {
+    log('Plancher du taux non annoncé par fn_param_bool : preuve du refus serveur ignorée.');
+    return { ignore: true };
+  }
+  const minimum = await rpc('fn_taux_horaire_minimum_salarie', {});
+  if (typeof minimum !== 'number' || !Number.isFinite(minimum) || minimum <= 0) {
+    throw new Error(`Plancher du taux illisible : ${JSON.stringify(minimum)?.slice(0, 40)}.`);
+  }
+  const taux = Math.round((minimum - 0.01) * 100) / 100;
+  const attendu = messageTauxMinimum(minimum);
+  let reponse;
+  try {
+    reponse = await rpc('fn_creer_mission_multi_jours_v4', chargeRefusTaux(doc, taux));
+  } catch (e) {
+    const [ligne] = await sql(sqlCompterRefusTaux(doc));
+    if (ligne?.n !== 0) throw new Error(`Refus du plancher : ${ligne?.n} mission(s) à l'intitulé du run malgré le refus.`);
+    if (e?.code === 'P0001' && e?.http >= 400 && e?.http < 500 && String(e.message).includes(`: ${attendu}`)) {
+      log(`Plancher du taux prouvé par PostgREST : ${taux.toFixed(2).replace('.', ',')} €/h refusé (HTTP ${e.http}, P0001, `
+        + `« ${attendu} »), 0 mission créée.`);
+      return { refuse: true, taux, minimum, http: e.http };
+    }
+    throw new Error(`Refus du plancher inattendu (HTTP ${e?.http ?? 0}, code ${e?.code || '—'}) : ${String(e?.message ?? e).slice(0, 240)}`);
+  }
+  const [ligne] = await sql(sqlCompterRefusTaux(doc));
+  throw new Error(`Taux ${taux} non refusé par le verrou serveur (réponse ${JSON.stringify(reponse)?.slice(0, 160)}) ; `
+    + `${ligne?.n ?? '?'} mission(s) à l'intitulé du run, supprimée(s) avec la cohorte.`);
+}
+
 /**
  * Pré-vol de la session établissement, à la manière de `SessionController` (`RoleResolution`, `EspaceResolution`,
  * `resolveEtablissement`). Deux listes :
@@ -1051,6 +1113,8 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     } catch (e) {
       log(decrireTemoinSansSession({ echec: { http: e?.http ?? 0, code: e?.code ?? '' } }));
     }
+    // Suivi de #1188 : refus du plancher du taux horaire à travers le vrai PostgREST, sous le JWT d'E1.
+    await prouverRefusTauxMinimum({ doc, rpc: (fonction, params) => rpc(fonction, params, cleApp.cle, jwtE1), sql, log });
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);

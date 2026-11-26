@@ -80,10 +80,14 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
         self.horloge = horloge
     }
 
-    /// Plancher du monde démo : la constante (aucun réseau), après le même contrôle de contexte que l'envoi.
-    public func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? {
-        guard (try? DemoEtablissementWorld.verifier(context)) != nil else { return nil }
-        return PublicationRules.tauxMinimum
+    /// Valeur de fixture du paramètre serveur dans le monde démo (aucun réseau) : le repli du web repris par
+    /// `LibellesWeb.Publication.tauxMinimumHorsLiberal`, lié à la migration par la garde node du plancher.
+    public static let tauxMinimumFixture: Double = PublicationRules.tauxMinimum
+
+    /// Plancher du monde démo, après le même contrôle de contexte que l'envoi.
+    public func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double {
+        try DemoEtablissementWorld.verifier(context)
+        return Self.tauxMinimumFixture
     }
 
     public func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome {
@@ -102,6 +106,11 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
         }
         guard premier >= maintenant else { return .refusee(code: nil, message: Self.messagePasse) }
         guard context.permissions.missions else { return .refusee(code: Self.codeIndisponible, message: Self.messageIndisponible) }
+        // Verrou différé du serveur (migration 20261125120000), levé à la validation, donc après les refus ci-dessus :
+        // sous le plancher de fixture, refus mot pour mot et rien n'est créé.
+        guard brouillon.tauxHoraireBase >= Self.tauxMinimumFixture else {
+            return .refusee(code: nil, message: PublicationPresentation.tauxSousLeMinimum(Self.tauxMinimumFixture))
+        }
         let id = await etat.creer(brouillon, etablissementId: context.etablissementId, creeLe: DateHeureParis.isoUTC(maintenant))
         guard let relue = await etat.relire(id), PublicationRelecture.confirme(relue, envoi: brouillon.creneaux) else {
             return .nonConfirmee(missionId: id)

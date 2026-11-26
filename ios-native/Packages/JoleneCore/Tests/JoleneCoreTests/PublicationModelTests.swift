@@ -19,13 +19,19 @@ final class PublicationModelTests: XCTestCase {
         private var enAttente: [CheckedContinuation<Void, Never>] = []
         private var libere = false
         private let retenir: Bool
-        private let minimumServeur: Double?
+        private var minimumServeur: Double?
 
-        init(_ reponses: [Reponse] = [], retenir: Bool = false, minimumServeur: Double? = nil) {
+        /// `minimumServeur` : plancher rendu par le port (`nil` : lecture impossible, `PlancherTauxIndisponible`).
+        init(_ reponses: [Reponse] = [], retenir: Bool = false, minimumServeur: Double? = PublicationRules.tauxMinimum) {
             self.reponses = reponses; self.retenir = retenir; self.minimumServeur = minimumServeur
         }
 
-        func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? { minimumServeur }
+        func definirMinimum(_ valeur: Double?) { lock.withLock { minimumServeur = valeur } }
+
+        func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double {
+            guard let valeur = lock.withLock({ minimumServeur }) else { throw PlancherTauxIndisponible("paramètre absent") }
+            return valeur
+        }
 
         var brouillons: [PublicationMission] { lock.withLock { recus } }
 
@@ -59,7 +65,8 @@ final class PublicationModelTests: XCTestCase {
         }
     }
 
-    private func modele(_ script: Script = Script()) async throws -> PublicationModel {
+    /// `charger` : plancher lu avant de rendre le modèle (comme le `.task` de l'écran).
+    private func modele(_ script: Script = Script(), charger: Bool = true) async throws -> PublicationModel {
         var gateways = DemoWorld.gateways(espace: .etablissement(.init()))
         gateways.etablissement.publication = script
         let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
@@ -70,10 +77,12 @@ final class PublicationModelTests: XCTestCase {
             throw PanneTest()
         }
         var compteur = 0
-        return PublicationModel(controller: controller, snapshot: snapshot, nouvelIdClient: {
+        let model = PublicationModel(controller: controller, snapshot: snapshot, nouvelIdClient: {
             compteur += 1
             return "c\(compteur)"
         })
+        if charger { await model.chargerTauxMinimum() }
+        return model
     }
 
     /// Champs obligatoires valides ; le planning reste à saisir.
@@ -92,33 +101,140 @@ final class PublicationModelTests: XCTestCase {
 
     // MARK: - Plancher du taux horaire salarié (migration 20261125120000)
 
-    /// Plancher lu au serveur (paramètre relevé à 12,50) : il remplace la constante pour la validation et l'avis.
+    /// Plancher lu au serveur (paramètre relevé à 12,50) : seul plancher de la validation et de l'avis ; avant la
+    /// lecture, rien n'est publiable (fermé) et aucun avis n'est affiché.
     func testPlancherLuAuServeur() async throws {
-        let model = try await modele(Script(minimumServeur: 12.5))
-        XCTAssertEqual(model.tauxMinimum, PublicationRules.tauxMinimum, "constante avant lecture")
-        await model.chargerTauxMinimum()
-        XCTAssertEqual(model.tauxMinimum, 12.5)
+        let model = try await modele(Script(minimumServeur: 12.5), charger: false)
+        XCTAssertEqual(model.plancher, .enCours)
+        XCTAssertNil(model.tauxMinimum)
         remplirChamps(model)
+        XCTAssertEqual(model.champsInvalides, [.taux], "plancher non lu : fermé")
+        XCTAssertNil(model.avisTauxSousLeMinimum)
+        await model.chargerTauxMinimum()
+        XCTAssertEqual(model.plancher, .lu(12.5))
+        XCTAssertEqual(model.champsInvalides, [])
         model.definirTaux("12,40")
         XCTAssertEqual(model.champsInvalides, [.taux])
         XCTAssertEqual(model.avisTauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,50 €/h.")
         model.definirTaux("12,50")
         XCTAssertEqual(model.champsInvalides, [])
         XCTAssertNil(model.avisTauxSousLeMinimum)
+        XCTAssertNil(model.annonce)
     }
 
-    /// Paramètre absent, illisible ou port sans lecture : la constante reste le plancher.
-    func testPlancherAbsentGardeLaConstante() async throws {
+    /// Lecture impossible ou valeur illisible : fermé et nommé (`.indisponible`, message générique existant), jamais une
+    /// constante substituée ; une relecture réussie rouvre le formulaire et retire ce message.
+    func testPlancherIndisponibleFermeEtNomme() async throws {
         for serveur in [nil, 0, -1, Double.nan, Double.infinity] as [Double?] {
-            let model = try await modele(Script(minimumServeur: serveur))
+            let script = Script(minimumServeur: serveur)
+            let model = try await modele(script)
+            guard case .indisponible = model.plancher else {
+                XCTFail("\(String(describing: serveur)) : plancher \(model.plancher)"); continue
+            }
+            XCTAssertNil(model.tauxMinimum)
+            remplirUnJour(model)
+            XCTAssertEqual(model.champsInvalides, [.taux], "\(String(describing: serveur))")
+            XCTAssertFalse(model.peutOuvrirRecap)
+            XCTAssertNil(model.avisTauxSousLeMinimum)
+            XCTAssertEqual(model.annonce, .erreur(PublicationPresentation.messageErreurGenerique))
+            model.ouvrirRecapitulatif()
+            XCTAssertNil(model.recap, "aucun récapitulatif sans plancher lu")
+
+            script.definirMinimum(12.31)
             await model.chargerTauxMinimum()
-            XCTAssertEqual(model.tauxMinimum, PublicationRules.tauxMinimum, "\(String(describing: serveur))")
-            remplirChamps(model)
-            model.definirTaux("12.30")
-            XCTAssertEqual(model.avisTauxSousLeMinimum, "Le taux horaire doit être d'au moins 12,31 €/h.")
-            model.definirTaux("")
-            XCTAssertNil(model.avisTauxSousLeMinimum, "saisie vide : champ obligatoire, pas un avis de plancher")
+            XCTAssertEqual(model.plancher, .lu(12.31))
+            XCTAssertNil(model.annonce, "message du plancher retiré après relecture")
+            XCTAssertTrue(model.peutOuvrirRecap)
         }
+    }
+
+    /// Revue de #1194, M1 : le plancher lu décide seul, de la saisie à l'envoi. À 12,00, 12,10 (sous la constante) est
+    /// accepté et envoyé ; à 13,00, 12,50 est refusé avec la même phrase validée au montant lu, 13,00 accepté et envoyé.
+    func testPlancherLuDecideDeLaSaisieALEnvoi() async throws {
+        for (plancher, refuse, accepte, avis) in [
+            (12.0, "11,99", "12,10", "Le taux horaire doit être d'au moins 12,00 €/h."),
+            (13.0, "12,50", "13,00", "Le taux horaire doit être d'au moins 13,00 €/h."),
+        ] {
+            let script = Script([.issue(.publiee(missionId: "m-\(plancher)"))], minimumServeur: plancher)
+            let model = try await modele(script)
+            XCTAssertEqual(model.plancher, .lu(plancher))
+            remplirUnJour(model)
+            model.definirTaux(refuse)
+            XCTAssertEqual(model.champsInvalides, [.taux], "\(refuse) sous \(plancher)")
+            XCTAssertEqual(model.avisTauxSousLeMinimum, avis)
+            model.ouvrirRecapitulatif()
+            XCTAssertNil(model.recap)
+            model.definirTaux(accepte)
+            XCTAssertEqual(model.champsInvalides, [], "\(accepte) au plancher \(plancher)")
+            XCTAssertNil(model.avisTauxSousLeMinimum)
+            model.ouvrirRecapitulatif()
+            XCTAssertNotNil(model.recap)
+            await model.confirmerPublication()
+            XCTAssertEqual(model.etat, .publiee(missionId: "m-\(plancher)"))
+            XCTAssertEqual(script.brouillons.map(\.tauxHoraireBase), [PublicationRules.taux(accepte)!], "envoyé tel quel")
+            XCTAssertTrue(PublicationRules.champsInvalides(script.brouillons[0]).isEmpty, "la passerelle ne le refuse pas")
+        }
+    }
+
+    /// Revue de #1194, m3 : un refus serveur relit le plancher (paramètre relevé depuis la lecture).
+    func testRefusServeurRelitLePlancher() async throws {
+        let message = "Le taux horaire doit être d'au moins 12,50 €/h."
+        let script = Script([.issue(.refusee(code: "REFUS_METIER", message: message))], minimumServeur: 12.31)
+        let model = try await modele(script)
+        remplirUnJour(model)
+        model.definirTaux("12.40")
+        model.ouvrirRecapitulatif()
+        script.definirMinimum(12.5)
+        await model.confirmerPublication()
+        XCTAssertEqual(model.annonce, .erreur(message), "refus serveur mot pour mot, conservé")
+        XCTAssertEqual(model.plancher, .lu(12.5), "plancher relu après le refus")
+        XCTAssertEqual(model.avisTauxSousLeMinimum, message, "avis au plancher relu, même phrase")
+    }
+
+    /// Monde démo : le verrou serveur est rejoué avec la fixture, après les refus structurels.
+    func testVerrouDuMondeDemo() async throws {
+        let gateway = DemoEtabPublicationGateway(etat: DemoEtabEtatPublication())
+        let gateways = DemoWorld.gateways(espace: .etablissement(.init()))
+        let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
+        _ = await controller.start()
+        let etat = await controller.signIn(email: DemoEspace.emailEtablissement, password: "demo")
+        guard case let .readyEtablissement(snapshot) = etat else { XCTFail("\(etat)"); return }
+        let debut = "2030-01-02T07:00:00Z", fin = "2030-01-02T11:00:00Z"
+        func brouillon(_ taux: Double) -> PublicationMission {
+            PublicationMission(intitule: "IDE de jour", description: nil, professionRequise: "IDE", service: nil,
+                               tauxHoraireBase: taux, estUrgente: false, creneaux: [CreneauConfirme(debut: debut, fin: fin)],
+                               niveauUrgence: 0, modeAttribution: .candidature)
+        }
+        let refus = try await gateway.publier(brouillon(12.3), context: snapshot.context)
+        XCTAssertEqual(refus, .refusee(code: nil, message: "Le taux horaire doit être d'au moins 12,31 €/h."))
+        let ok = try await gateway.publier(brouillon(12.31), context: snapshot.context)
+        guard case .publiee = ok else { XCTFail("\(ok)"); return }
+    }
+
+    /// Un plancher déjà lu n'est jamais remplacé par une erreur de relecture.
+    func testPlancherLuConserveSurEchecUlterieur() async throws {
+        let script = Script(minimumServeur: 12.5)
+        let model = try await modele(script)
+        XCTAssertEqual(model.plancher, .lu(12.5))
+        script.definirMinimum(nil)
+        await model.chargerTauxMinimum()
+        XCTAssertEqual(model.plancher, .lu(12.5))
+        XCTAssertNil(model.annonce)
+    }
+
+    /// Monde démo : la valeur de fixture du paramètre, après le contrôle de contexte.
+    func testPlancherDuMondeDemo() async throws {
+        let gateways = DemoWorld.gateways(espace: .etablissement(.init()))
+        let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
+        _ = await controller.start()
+        let etat = await controller.signIn(email: DemoEspace.emailEtablissement, password: "demo")
+        guard case let .readyEtablissement(snapshot) = etat else {
+            XCTFail("espace établissement démo attendu, obtenu \(etat)"); return
+        }
+        let model = PublicationModel(controller: controller, snapshot: snapshot)
+        await model.chargerTauxMinimum()
+        XCTAssertEqual(model.plancher, .lu(DemoEtabPublicationGateway.tauxMinimumFixture))
+        XCTAssertEqual(DemoEtabPublicationGateway.tauxMinimumFixture, 12.31)
     }
 
     /// Refus du verrou serveur (app restée à un plancher plus bas que le paramètre) : message serveur mot pour mot.

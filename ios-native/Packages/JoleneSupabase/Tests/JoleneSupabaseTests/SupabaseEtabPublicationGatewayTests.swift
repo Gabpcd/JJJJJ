@@ -32,9 +32,9 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
                          CreneauConfirme(debut: "2026-11-26T06:00:00Z", fin: "2026-11-26T18:00:00Z")]
 
     private func brouillon(profession: String = "IDE", urgente: Bool = true, description: String? = "Renfort [SERIE_ID:x]",
-                           creneaux: [CreneauConfirme]? = nil) -> PublicationMission {
+                           creneaux: [CreneauConfirme]? = nil, taux: Double = 30.5) -> PublicationMission {
         PublicationMission(intitule: "IDE de nuit", description: description, professionRequise: profession, service: "Urgences",
-                           tauxHoraireBase: 30.5, estUrgente: urgente, creneaux: creneaux ?? envoi, niveauUrgence: 2,
+                           tauxHoraireBase: taux, estUrgente: urgente, creneaux: creneaux ?? envoi, niveauUrgence: 2,
                            modeAttribution: .candidature)
     }
 
@@ -272,11 +272,53 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
             "la liste blanche extraite du dump reste inchangée")
     }
 
-    /// Lecture du plancher non câblée tant que le dump ne porte pas la RPC : aucune requête, la constante s'applique.
-    func testTauxMinimumNonLuAvantLaReBaseline() async {
-        let lu = await gateway().tauxMinimumSalarie(context: contexte())
-        XCTAssertNil(lu)
-        XCTAssertTrue(registry.requests(to: "/rest/v1/rpc/fn_param_bool").isEmpty)
+    /// Plancher lu par `fn_taux_horaire_minimum_salarie()` : une requête `POST` sans paramètre, sous le JWT ; nombre
+    /// entier ou réel rendu tel quel ; fermé sur `NULL`, valeur illisible ou non positive, et sur erreur serveur.
+    func testTauxMinimumLuAuServeurEtFerme() async throws {
+        let chemin = "/rest/v1/rpc/fn_taux_horaire_minimum_salarie"
+        registry.add("POST", chemin, respond: .json(200, "12.5"))
+        let lu = try await gateway().tauxMinimumSalarie(context: contexte())
+        XCTAssertEqual(lu, 12.5)
+        XCTAssertEqual(registry.requests(to: chemin).count, 1)
+        XCTAssertTrue(registry.requests(to: "/rest/v1/rpc/fn_param_bool").isEmpty, "aucune annonce : la RPC est au dump")
+
+        registry.reset()
+        registry.add("POST", chemin, respond: .json(200, "13"))
+        let entier = try await gateway().tauxMinimumSalarie(context: contexte())
+        XCTAssertEqual(entier, 13)
+
+        for corps in ["null", "0", "-1", #""12.5""#, "{}"] {
+            registry.reset()
+            registry.add("POST", chemin, respond: .json(200, corps))
+            do {
+                let valeur = try await gateway().tauxMinimumSalarie(context: contexte())
+                XCTFail("\(corps) : plancher \(valeur) au lieu d'un refus")
+            } catch {
+                XCTAssertTrue(error is PlancherTauxIndisponible, "\(corps) : \(error)")
+            }
+        }
+        for (statut, corps) in [(404, #"{"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function"}"#),
+                                (403, #"{"code":"42501","details":null,"hint":null,"message":"permission denied for function"}"#)] {
+            registry.reset()
+            registry.add("POST", chemin, respond: .json(statut, corps))
+            let erreur = await echec { _ = try await self.gateway().tauxMinimumSalarie(context: self.contexte()) }
+            XCTAssertNotNil(erreur, "HTTP \(statut) : erreur levée, jamais une valeur")
+        }
+    }
+
+    /// Revue de #1194, M1 : aucun plancher local dans la passerelle. Un taux sous la constante (plancher serveur à 12,00)
+    /// part tel quel, une seule requête ; le serveur reste seul juge du montant.
+    func testAucunPlancherLocalAvantEnvoi() async throws {
+        for taux in [12.1, 12.0] {
+            registry.reset()
+            stubRelecture()
+            registry.add("POST", rpc, respond: .json(200, succesJSON()))
+            let issue = try await gateway().publier(brouillon(taux: taux), context: contexte())
+            XCTAssertEqual(issue, .publiee(missionId: missionId), "\(taux)")
+            let corps = try XCTUnwrap(registry.requests(to: rpc).first?.bodyJSON as? [String: Any])
+            XCTAssertEqual(corps["p_taux_horaire_base"] as? Double, taux)
+            XCTAssertEqual(registry.requests(to: rpc).count, 1)
+        }
     }
 
     func testNonAuthentifieSessionJamaisUnRefusMetier() async throws {

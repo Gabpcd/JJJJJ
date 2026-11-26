@@ -80,15 +80,16 @@ public protocol EtabPresencesPort: Sendable {
 /// Publication d'une mission simple ou urgente, salariée (D8) — T9.
 public protocol EtabPublicationPort: Sendable {
     func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome
-    /// Taux horaire minimal d'une mission salariée lu au serveur (`fn_taux_horaire_minimum_salarie`, annoncé par
-    /// `fn_param_bool`, migration 20261125120000). Ne lève pas : `nil` (paramètre absent, erreur, port non câblé)
-    /// laisse la constante `PublicationRules.tauxMinimum`. Le refus qui fait foi reste celui du serveur.
-    func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double?
+    /// Taux horaire minimal d'une mission salariée lu au serveur (`fn_taux_horaire_minimum_salarie`, paramètre
+    /// `taux_horaire_minimum_salarie`, migration 20261125120000). Fermé : toute lecture impossible lève
+    /// (`PlancherTauxIndisponible` ou erreur de transport) ; aucune valeur de repli n'est inventée par le port.
+    func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double
 }
 
-public extension EtabPublicationPort {
-    /// Par défaut, aucune lecture : la constante s'applique.
-    func tauxMinimumSalarie(context: EtablissementReadContext) async -> Double? { nil }
+/// Plancher du taux illisible : paramètre absent côté serveur (`NULL`), réponse non numérique ou non positive.
+public struct PlancherTauxIndisponible: Error, Equatable, Sendable {
+    public var motif: String
+    public init(_ motif: String) { self.motif = motif }
 }
 
 /// Audit de consultation `DONNEES_PERSO_CONSULTATION` (D19) — câblé en T1, consommé par T4.
@@ -171,6 +172,9 @@ public struct UnwiredEtabPublicationPort: EtabPublicationPort, UnwiredPort {
     public init() {}
     public func publier(_ brouillon: PublicationMission, context: EtablissementReadContext) async throws -> PublicationOutcome {
         throw UnwiredPortsLot5.erreur(port: "publication de mission", tranche: "T9")
+    }
+    public func tauxMinimumSalarie(context: EtablissementReadContext) async throws -> Double {
+        throw UnwiredPortsLot5.erreur(port: "plancher du taux horaire", tranche: "T9")
     }
 }
 

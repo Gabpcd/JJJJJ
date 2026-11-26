@@ -62,8 +62,22 @@ public final class PublicationModel: ObservableObject {
     /// ne repart plus depuis cet écran (revue B8 sécurité de la vague D, m3, risque de doublon) ; « Voir mes missions »
     /// (liste relue) reste la seule suite, l'avertissement restant affiché. Jamais levé par une modification de saisie.
     @Published public private(set) var relectureRequise = false
-    /// Plancher du taux horaire salarié : lu au serveur par `chargerTauxMinimum()`, la constante à défaut.
-    @Published public private(set) var tauxMinimum: Double = PublicationRules.tauxMinimum
+    /// Plancher du taux horaire salarié, lu au serveur par `chargerTauxMinimum()`. Fermé : tant qu'il n'est pas lu
+    /// (`.enCours`) ou s'il est illisible (`.indisponible`), aucun taux n'est publiable ; aucune constante ne le remplace.
+    @Published public private(set) var plancher: PlancherTaux = .enCours
+
+    public enum PlancherTaux: Equatable, Sendable {
+        case enCours
+        case lu(Double)
+        /// Lecture impossible (paramètre absent, réponse illisible, délai, transport) ; `motif` pour le diagnostic.
+        case indisponible(motif: String)
+    }
+
+    /// Plancher retenu, `nil` tant qu'il n'est pas lu.
+    public var tauxMinimum: Double? {
+        if case let .lu(valeur) = plancher { return valeur }
+        return nil
+    }
 
     private let controller: SessionController
     private let snapshot: EtablissementSessionSnapshot
@@ -80,22 +94,48 @@ public final class PublicationModel: ObservableObject {
     // MARK: - État dérivé
 
     /// Champs obligatoires manquants ou invalides, dans l'ordre du formulaire.
-    public var champsInvalides: [PublicationRules.Champ] { PublicationRules.champsInvalides(saisie, minimum: tauxMinimum) }
-
-    /// Avis sous le champ du taux quand un taux lisible est sous le plancher (texte validé, montant du plancher retenu).
-    public var avisTauxSousLeMinimum: String? {
-        PublicationRules.tauxSousLeMinimum(saisie.taux, minimum: tauxMinimum)
-            ? PublicationPresentation.tauxSousLeMinimum(tauxMinimum) : nil
+    /// Plancher non lu : `.infinity` (comme une constante illisible, `PublicationRules.tauxMinimum`) ferme le champ.
+    public var champsInvalides: [PublicationRules.Champ] {
+        PublicationRules.champsInvalides(saisie, minimum: tauxMinimum ?? .infinity)
     }
 
-    /// Lit le plancher au serveur pour l'epoch de la session (borné comme l'envoi). Toute absence garde la constante.
+    /// Avis sous le champ du taux quand un taux lisible est sous le plancher lu (texte validé, montant lu).
+    public var avisTauxSousLeMinimum: String? {
+        guard let minimum = tauxMinimum, PublicationRules.tauxSousLeMinimum(saisie.taux, minimum: minimum) else { return nil }
+        return PublicationPresentation.tauxSousLeMinimum(minimum)
+    }
+
+    /// Lit le plancher au serveur pour l'epoch de la session (borné comme l'envoi). Lecture impossible : `.indisponible`
+    /// et le message générique de la publication (texte existant), jamais une valeur inventée. Rappelable (« tirer pour
+    /// actualiser ») ; un plancher déjà lu n'est jamais remplacé par une erreur ultérieure.
     public func chargerTauxMinimum() async {
         guard let gateways = await controller.gateways(for: snapshot.epoch) else { return }
         let port = gateways.etablissement.publication
         let context = snapshot.context
-        let lu = try? await bounded(timeout: controller.resolutionTimeout) { await port.tauxMinimumSalarie(context: context) }
+        let resultat: Result<Double, Error>
+        do {
+            resultat = .success(try await bounded(timeout: controller.resolutionTimeout) {
+                try await port.tauxMinimumSalarie(context: context)
+            })
+        } catch {
+            resultat = .failure(error)
+        }
         guard await epochValide() else { return }
-        tauxMinimum = PublicationRules.tauxMinimum(serveur: lu ?? nil)
+        switch resultat {
+        case let .success(valeur) where valeur.isFinite && valeur > 0:
+            plancher = .lu(valeur)
+            if annonce == .erreur(PublicationPresentation.messageErreurGenerique) { annonce = nil }
+        case .success:
+            if tauxMinimum == nil { signalerPlancherIndisponible("valeur non positive") }
+        case let .failure(erreur):
+            if Self.message(erreur) == nil { return } // annulation : rien à signaler
+            if tauxMinimum == nil { signalerPlancherIndisponible(String(describing: erreur)) }
+        }
+    }
+
+    private func signalerPlancherIndisponible(_ motif: String) {
+        plancher = .indisponible(motif: motif)
+        if annonce == nil { annonce = .erreur(PublicationPresentation.messageErreurGenerique) }
     }
 
     /// Erreurs structurelles du planning (`FormulaireRecurrence.tsx` l.180-218) ; une date illisible vaut une période
@@ -325,6 +365,9 @@ public final class PublicationModel: ObservableObject {
             etat = .publiee(missionId: missionId)
         case let .refusee(_, message):
             annonce = .erreur(message)
+            // Revue de #1194, m3 : un refus (dont le verrou du plancher, `P0001`) peut venir d'un paramètre relevé
+            // depuis la lecture ; le plancher est relu, sans autre texte ni état d'écran.
+            await chargerTauxMinimum()
         case let .blocageEtablissement(code, message):
             annonce = .blocage(code: code, message: message)
         case let .nonConfirmee(missionId):

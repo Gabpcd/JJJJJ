@@ -1,7 +1,7 @@
 # Contrats RPC de l'espace établissement (lot 5, tranche T0)
 
 Document de référence des RPC que l'espace établissement du client Swift consommera au lot 5
-(`docs/mobile-swift/LOT5_PLAN.md` §2.4-§2.5, §3 T0) : quatorze RPC propres à l'établissement, suivies en
+(`docs/mobile-swift/LOT5_PLAN.md` §2.4-§2.5, §3 T0) : quatorze RPC propres à l'établissement (quinze depuis le suivi de #1188, plancher du taux), suivies en
 `a_venir` lot 5 dans `RPC_SUIVIES_ETABLISSEMENT` de `scripts/mobile/check-rpc-contracts.mjs` (puis `consommee` dans
 la PR qui câble leur gateway : T1 pour la session établissement), et sept RPC déjà
 suivies par un lot soignant que l'établissement consomme aussi (`RPC_PARTAGEES_ETABLISSEMENT`, champ
@@ -55,6 +55,7 @@ Règles de l'espace établissement (`LOT5_PLAN.md` §2.2-§2.8) :
 | `fn_creer_notation_mission` | consommée (T8 ; entrée du lot 2) | 5 (T8, best-effort) — partagée, suivie par le lot 2 | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0001` |
 | `fn_declarer_fin_retroactive` | consommée (T8) | 5 (T8, B9) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | `P0002` ×2, `42501` ×3 (dont RBAC ×2), `23514` |
 | `fn_creer_mission_multi_jours_v4` | consommée (T9) | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | `28000` |
+| `fn_taux_horaire_minimum_salarie` | consommée (suivi de #1188) | 5 (T9) | hors manifeste — classement manuel RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | absente | aucune |
 | `fn_obtenir_conversation` | à venir | 5 (T11, port du lot 4) — partagée si le lot 4 la suit | MIXTE_TENANT_ADMIN | authenticated | déclarée | `28000`, `22023`, `42501` |
 | `fn_get_my_role` | consommée lot 0 — aussi établissement | 0 (lot 5 T2) | MIXTE_TENANT_ADMIN | authenticated, service_role | déclarée | — (fiche soignant) |
 | `fn_audit_connexion` | à venir — aussi établissement | 1 (lot 5 T2) | RPC_UTILISATEUR_AUTH_INTERNE | authenticated, service_role | déclarée | — (fiche soignant) |
@@ -540,6 +541,40 @@ CREATE OR REPLACE FUNCTION "public"."fn_creer_mission_multi_jours_v4"("p_intitul
   debut_le, fin_le, type_contrat_recherche` (aucun montant) ; créneaux par le pager exact de T5 ; comparaison par
   **instants** (`PublicationRelecture.confirme` : le serveur rend `+00:00`, l'envoi porte `Z`), bornes `debut_le` /
   `fin_le` comprises ; lecture en panne, ligne illisible ou d'un autre établissement → `.nonConfirmee`.
+
+## fn_taux_horaire_minimum_salarie
+
+- **Statut natif** : consommée (suivi de #1188 : `SupabaseEtabPublicationGateway.tauxMinimumSalarie`, port
+  `EtabPublicationPort`, lu par `PublicationModel.chargerTauxMinimum()` à l'ouverture de l'écran de publication et en
+  « tirer pour actualiser »). Plancher du taux horaire d'une mission salariée (paramètre
+  `parametres_systeme.taux_horaire_minimum_salarie`, migration `20261125120000`), seul plancher de la validation et de
+  l'avis « Le taux horaire doit être d'au moins … €/h. » (texte validé le 25/11/2026, montant lu). Le refus qui fait foi
+  reste celui du verrou différé à la création (`P0001`, voir `fn_creer_mission_multi_jours_v4`).
+- **Usage** : aucun paramètre (`POST /rest/v1/rpc/fn_taux_horaire_minimum_salarie`, corps vide), sous le JWT du membre.
+- **Signature SQL** (`supabase/schema/public.sql` l.61093) :
+
+```sql
+CREATE OR REPLACE FUNCTION "public"."fn_taux_horaire_minimum_salarie"() RETURNS numeric
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+```
+
+- **Classe d'authentification (manifeste)** : hors manifeste — classement manuel `RPC_UTILISATEUR_AUTH_INTERNE`
+  (lecture d'une valeur numérique de `parametres_systeme`, aucune donnée personnelle ; inscrite dans
+  `private.security_definer_inventory` par la migration) ; manifeste non régénéré.
+- **GRANT** : `REVOKE ALL … FROM PUBLIC` puis `service_role`, `authenticated` (l.85662-85664) ; aucun `anon`.
+- **Signature TypeScript** : absente de `types.ts` (le site l'appelle par `supabase.rpc('fn_taux_horaire_minimum_salarie' as any)`).
+- **Forme de réponse** : un nombre JSON (`12.31`), ou `null` si le paramètre est absent (corps l.61097). Fermé côté
+  natif : `null`, valeur non numérique ou non positive → `PlancherTauxIndisponible` ; erreur PostgREST ou transport →
+  erreur mappée. Le modèle passe alors en `.indisponible` (aucun taux publiable, message générique existant
+  « La publication n'a pas pu aboutir. Vérifiez votre connexion. »), jamais une constante substituée ; le monde démo
+  rend sa valeur de fixture (`DemoEtabPublicationGateway.tauxMinimumFixture`).
+- **Exceptions** : aucune (corps `LANGUAGE sql` sans `RAISE`).
+- **Relecture** : sans objet (lecture seule).
+- **Limites connues** : le paramètre peut être modifié par un administrateur en écriture directe sur
+  `parametres_systeme` (bornes de `fn_admin_maj_parametre` contournées) ; l'app suit la valeur lue, le verrou serveur
+  aussi. Côté site, l'attribut `min` du champ porte le plancher : hors parcours, le navigateur refuserait l'envoi d'une
+  mission ouverte existante sous le plancher même sans changement de taux ni de contrat.
 
 ## fn_obtenir_conversation
 

@@ -84,6 +84,8 @@ public enum ListesBlanchesEtablissement {
         "fn_creer_mission_multi_jours_v4": [
             ExceptionServeur("28000", "Non authentifié", .session), // source: l.27258
         ],
+        // Corps SQL sans RAISE (`public.sql` l.61093-61099) : aucune exception à intercepter.
+        "fn_taux_horaire_minimum_salarie": [],
         "fn_obtenir_conversation": [
             ExceptionServeur("28000", "Non authentifié", .session), // source: l.45636
             ExceptionServeur("22023", "Interlocuteur invalide"), // source: l.45640
