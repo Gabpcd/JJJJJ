@@ -818,13 +818,40 @@ test('la lane soumet un build existant, avec publication progressive, sans rien 
   }
   assert.doesNotMatch(lane, /upload_to_testflight|\bipa:|IOS_IPA_PATH|skip_binary_upload: false|phased_release: false/);
   assert.match(lane, /automatic_release: automatic\b/);
-  assert.match(lane, /guard\.prepare! do\n\s+raise IosReviewSubmission::Failure/, 'un build absent arrête la lane : aucun envoi depuis ici');
+  assert.match(lane, /build_absent: -> \{ raise IosReviewSubmission::Failure, "Build /, 'un build absent arrête la lane : aucun envoi depuis ici');
   assert.ok(lane.includes(NOTES));
   // Revue m8 de #1177 : contexte du workflow, verdict des gardes et phrase exacte avant toute lecture chez Apple.
   const contexte = lane.indexOf('IosReviewSubmission.exiger_contexte_workflow!(env: ENV, marketing: marketing, number: number)');
   assert.ok(contexte > 0, 'la lane contrôle son contexte');
-  for (const suite of ['app_store_connect_api_key(', 'guard.prepare!', 'upload_to_app_store(']) assert.ok(contexte < lane.indexOf(suite), suite);
+  for (const suite of ['app_store_connect_api_key(', 'IosReviewSubmission.enchainer!(', 'upload_to_app_store(']) assert.ok(contexte < lane.indexOf(suite), suite);
   assert.match(lane, /rescue IosReviewSubmission::Failure => error\n\s+UI\.user_error!\(error\.message\)/);
+});
+
+// Notes pour la revue (docs/mobile-swift/APP_STORE.md, « Notes pour la revue et compte de démonstration ») : la lane
+// n'écrit que le champ `notes`, après le pré-vol et le verrou du compte de démonstration, et ne soumet qu'ensuite.
+test('la lane n\'écrit que les notes pour la revue, après le verrou du compte de démonstration, puis soumet', () => {
+  const module = lire('fastlane/ios_review_notes.rb');
+  assert.match(fastfile, /^require_relative 'ios_review_notes'$/m);
+  // Jamais `app_review_information` : deliver remettrait demoAccountRequired à faux sans identifiants.
+  const laneActive = lane.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
+  assert.doesNotMatch(laneActive, /review_information|demo_account|demoAccount/);
+  assert.ok(lane.includes('bloc: File.read(File.join(ROOT, IosReviewSubmission::ReviewNotes::FICHIER)'), 'bloc lu dans le fichier versionné');
+  assert.match(module, /FICHIER = 'config\/ios-review-notes-2\.0\.txt'/);
+  assert.ok(existsSync(join(root, 'config/ios-review-notes-2.0.txt')));
+  // La soumission est la seule action de `soumettre`, que enchainer! n'appelle qu'après les notes.
+  assert.equal(lane.split('upload_to_app_store(').length, 2, 'un seul appel de deliver');
+  assert.ok(lane.indexOf('soumettre: lambda do') < lane.indexOf('upload_to_app_store('), 'deliver n\'est appelé que par soumettre');
+  const enchainer = module.slice(module.indexOf('def self.enchainer!'), module.indexOf('class ReviewNotesGateway'));
+  const ordre = ['notes.verifier!', 'guard.prepare!(&build_absent)', 'notes.appliquer!', 'soumettre.call'].map((etape) => enchainer.indexOf(etape));
+  assert.ok(ordre.every((p) => p > 0), 'étape absente de enchainer!');
+  assert.deepEqual([...ordre].sort((a, b) => a - b), ordre, 'pré-vol, gardes de revue, notes, soumission');
+  assert.doesNotMatch(enchainer, /rescue/, 'aucun échec avalé avant la soumission');
+  // Seul `notes` est écrit dans la fiche de vérification.
+  assert.match(module, /patch_app_store_review_detail\(app_store_review_detail_id: detail_id, attributes: \{ notes: notes \}\)/);
+  assert.equal(module.split('patch_app_store_review_detail(').length, 2);
+  // Les deux suites Ruby hors réseau tournent dans validate-pr.
+  const validatePr = lire('.github/workflows/validate-pr.yml');
+  for (const suite of ['ruby fastlane/ios_review_submission.test.rb', 'ruby fastlane/ios_review_notes.test.rb']) assert.ok(validatePr.includes(suite), suite);
 });
 
 test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {

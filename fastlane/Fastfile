@@ -1,5 +1,6 @@
 require 'json'
 require_relative 'ios_review_submission'
+require_relative 'ios_review_notes'
 ROOT = File.expand_path('..', __dir__)
 
 default_platform(:ios)
@@ -21,9 +22,10 @@ platform :ios do
 
   # App Swift (ios-native/), workflow ios-native-app-store.yml : soumet à la revue Apple un build
   # déjà envoyé sur TestFlight et déjà VALID. Aucun binaire n'est envoyé ici. La fiche (description,
-  # captures, notes pour la revue, confidentialité, classification) reste saisie dans App Store
-  # Connect ; seules les « Nouveautés » fr-FR viennent de config/mobile-release-notes-ios.txt.
-  # Publication progressive sur sept jours (docs/mobile-swift/APP_STORE.md).
+  # captures, confidentialité, classification, compte de démonstration) reste celle d'App Store
+  # Connect ; les « Nouveautés » fr-FR viennent de config/mobile-release-notes-ios.txt et seul le champ
+  # « notes » des informations pour la vérification reçoit en tête config/ios-review-notes-2.0.txt
+  # (fastlane/ios_review_notes.rb). Publication progressive sur sept jours (docs/mobile-swift/APP_STORE.md).
   desc 'Submit an existing TestFlight build of the Swift app to App Review with a phased release'
   lane :submit_native do
     release = release_config('ios')
@@ -56,23 +58,34 @@ platform :ios do
       gateway: IosReviewSubmission::Gateway.new(client: Spaceship::ConnectAPI, app_id: app&.id),
       marketing_version: marketing, build_number: number
     )
-    # Le bloc ne s'exécute que si le build est absent d'App Store Connect : rien n'est envoyé d'ici.
-    result = guard.prepare! do
-      raise IosReviewSubmission::Failure, "Build #{marketing} (#{number}) absent de TestFlight : lancer d'abord ios-native-testflight.yml"
+    result = begin
+      # Notes pour la revue : jamais `app_review_information` (deliver y remettrait demoAccountRequired à faux),
+      # seul le champ `notes` est écrit ; verrou du compte de démonstration (docs/mobile-swift/APP_STORE.md).
+      notes = IosReviewSubmission::ReviewNotes.new(
+        gateway: IosReviewSubmission::ReviewNotesGateway.new(client: Spaceship::ConnectAPI, app: app),
+        marketing_version: marketing,
+        bloc: File.read(File.join(ROOT, IosReviewSubmission::ReviewNotes::FICHIER), encoding: 'UTF-8'),
+        journal: ->(message) { UI.important(message) }
+      )
+      # Pré-vol des notes (lecture seule), gardes de la revue en cours, écriture des notes, puis soumission.
+      IosReviewSubmission.enchainer!(notes: notes, guard: guard,
+        # Ne s'exécute que si le build est absent d'App Store Connect : rien n'est envoyé d'ici.
+        build_absent: -> { raise IosReviewSubmission::Failure, "Build #{marketing} (#{number}) absent de TestFlight : lancer d'abord ios-native-testflight.yml" },
+        soumettre: lambda do
+          upload_to_app_store(
+            api_key: api, app_identifier: 'app.jolene', app_version: marketing,
+            build_number: number, skip_binary_upload: true,
+            skip_screenshots: true, skip_metadata: false,
+            release_notes: { 'fr-FR' => release_notes },
+            submit_for_review: true, automatic_release: automatic, phased_release: true, force: true,
+            reject_if_possible: false,
+            run_precheck_before_submit: false
+          )
+        end)
+    rescue IosReviewSubmission::Failure => error
+      UI.user_error!(error.message)
     end
-    if result == :already_submitted
-      UI.success('This exact Apple build is already submitted')
-      next
-    end
-    upload_to_app_store(
-      api_key: api, app_identifier: 'app.jolene', app_version: marketing,
-      build_number: number, skip_binary_upload: true,
-      skip_screenshots: true, skip_metadata: false,
-      release_notes: { 'fr-FR' => release_notes },
-      submit_for_review: true, automatic_release: automatic, phased_release: true, force: true,
-      reject_if_possible: false,
-      run_precheck_before_submit: false
-    )
+    UI.success('This exact Apple build is already submitted') if result == :already_submitted
   end
 
   # App Swift (ios-native/), workflow ios-native-testflight.yml : envoi TestFlight interne
