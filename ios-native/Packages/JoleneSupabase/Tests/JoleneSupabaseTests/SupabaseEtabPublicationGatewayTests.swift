@@ -32,9 +32,9 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
                          CreneauConfirme(debut: "2026-11-26T06:00:00Z", fin: "2026-11-26T18:00:00Z")]
 
     private func brouillon(profession: String = "IDE", urgente: Bool = true, description: String? = "Renfort [SERIE_ID:x]",
-                           creneaux: [CreneauConfirme]? = nil) -> PublicationMission {
+                           creneaux: [CreneauConfirme]? = nil, taux: Double = 30.5) -> PublicationMission {
         PublicationMission(intitule: "IDE de nuit", description: description, professionRequise: profession, service: "Urgences",
-                           tauxHoraireBase: 30.5, estUrgente: urgente, creneaux: creneaux ?? envoi, niveauUrgence: 2,
+                           tauxHoraireBase: taux, estUrgente: urgente, creneaux: creneaux ?? envoi, niveauUrgence: 2,
                            modeAttribution: .candidature)
     }
 
@@ -303,6 +303,21 @@ final class SupabaseEtabPublicationGatewayTests: XCTestCase {
             registry.add("POST", chemin, respond: .json(statut, corps))
             let erreur = await echec { _ = try await self.gateway().tauxMinimumSalarie(context: self.contexte()) }
             XCTAssertNotNil(erreur, "HTTP \(statut) : erreur levée, jamais une valeur")
+        }
+    }
+
+    /// Revue de #1194, M1 : aucun plancher local dans la passerelle. Un taux sous la constante (plancher serveur à 12,00)
+    /// part tel quel, une seule requête ; le serveur reste seul juge du montant.
+    func testAucunPlancherLocalAvantEnvoi() async throws {
+        for taux in [12.1, 12.0] {
+            registry.reset()
+            stubRelecture()
+            registry.add("POST", rpc, respond: .json(200, succesJSON()))
+            let issue = try await gateway().publier(brouillon(taux: taux), context: contexte())
+            XCTAssertEqual(issue, .publiee(missionId: missionId), "\(taux)")
+            let corps = try XCTUnwrap(registry.requests(to: rpc).first?.bodyJSON as? [String: Any])
+            XCTAssertEqual(corps["p_taux_horaire_base"] as? Double, taux)
+            XCTAssertEqual(registry.requests(to: rpc).count, 1)
         }
     }
 

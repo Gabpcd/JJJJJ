@@ -148,6 +148,69 @@ final class PublicationModelTests: XCTestCase {
         }
     }
 
+    /// Revue de #1194, M1 : le plancher lu décide seul, de la saisie à l'envoi. À 12,00, 12,10 (sous la constante) est
+    /// accepté et envoyé ; à 13,00, 12,50 est refusé avec la même phrase validée au montant lu, 13,00 accepté et envoyé.
+    func testPlancherLuDecideDeLaSaisieALEnvoi() async throws {
+        for (plancher, refuse, accepte, avis) in [
+            (12.0, "11,99", "12,10", "Le taux horaire doit être d'au moins 12,00 €/h."),
+            (13.0, "12,50", "13,00", "Le taux horaire doit être d'au moins 13,00 €/h."),
+        ] {
+            let script = Script([.issue(.publiee(missionId: "m-\(plancher)"))], minimumServeur: plancher)
+            let model = try await modele(script)
+            XCTAssertEqual(model.plancher, .lu(plancher))
+            remplirUnJour(model)
+            model.definirTaux(refuse)
+            XCTAssertEqual(model.champsInvalides, [.taux], "\(refuse) sous \(plancher)")
+            XCTAssertEqual(model.avisTauxSousLeMinimum, avis)
+            model.ouvrirRecapitulatif()
+            XCTAssertNil(model.recap)
+            model.definirTaux(accepte)
+            XCTAssertEqual(model.champsInvalides, [], "\(accepte) au plancher \(plancher)")
+            XCTAssertNil(model.avisTauxSousLeMinimum)
+            model.ouvrirRecapitulatif()
+            XCTAssertNotNil(model.recap)
+            await model.confirmerPublication()
+            XCTAssertEqual(model.etat, .publiee(missionId: "m-\(plancher)"))
+            XCTAssertEqual(script.brouillons.map(\.tauxHoraireBase), [PublicationRules.taux(accepte)!], "envoyé tel quel")
+            XCTAssertTrue(PublicationRules.champsInvalides(script.brouillons[0]).isEmpty, "la passerelle ne le refuse pas")
+        }
+    }
+
+    /// Revue de #1194, m3 : un refus serveur relit le plancher (paramètre relevé depuis la lecture).
+    func testRefusServeurRelitLePlancher() async throws {
+        let message = "Le taux horaire doit être d'au moins 12,50 €/h."
+        let script = Script([.issue(.refusee(code: "REFUS_METIER", message: message))], minimumServeur: 12.31)
+        let model = try await modele(script)
+        remplirUnJour(model)
+        model.definirTaux("12.40")
+        model.ouvrirRecapitulatif()
+        script.definirMinimum(12.5)
+        await model.confirmerPublication()
+        XCTAssertEqual(model.annonce, .erreur(message), "refus serveur mot pour mot, conservé")
+        XCTAssertEqual(model.plancher, .lu(12.5), "plancher relu après le refus")
+        XCTAssertEqual(model.avisTauxSousLeMinimum, message, "avis au plancher relu, même phrase")
+    }
+
+    /// Monde démo : le verrou serveur est rejoué avec la fixture, après les refus structurels.
+    func testVerrouDuMondeDemo() async throws {
+        let gateway = DemoEtabPublicationGateway(etat: DemoEtabEtatPublication())
+        let gateways = DemoWorld.gateways(espace: .etablissement(.init()))
+        let controller = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
+        _ = await controller.start()
+        let etat = await controller.signIn(email: DemoEspace.emailEtablissement, password: "demo")
+        guard case let .readyEtablissement(snapshot) = etat else { XCTFail("\(etat)"); return }
+        let debut = "2030-01-02T07:00:00Z", fin = "2030-01-02T11:00:00Z"
+        func brouillon(_ taux: Double) -> PublicationMission {
+            PublicationMission(intitule: "IDE de jour", description: nil, professionRequise: "IDE", service: nil,
+                               tauxHoraireBase: taux, estUrgente: false, creneaux: [CreneauConfirme(debut: debut, fin: fin)],
+                               niveauUrgence: 0, modeAttribution: .candidature)
+        }
+        let refus = try await gateway.publier(brouillon(12.3), context: snapshot.context)
+        XCTAssertEqual(refus, .refusee(code: nil, message: "Le taux horaire doit être d'au moins 12,31 €/h."))
+        let ok = try await gateway.publier(brouillon(12.31), context: snapshot.context)
+        guard case .publiee = ok else { XCTFail("\(ok)"); return }
+    }
+
     /// Un plancher déjà lu n'est jamais remplacé par une erreur de relecture.
     func testPlancherLuConserveSurEchecUlterieur() async throws {
         let script = Script(minimumServeur: 12.5)

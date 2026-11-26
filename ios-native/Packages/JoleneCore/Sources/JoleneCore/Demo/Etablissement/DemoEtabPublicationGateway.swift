@@ -106,6 +106,11 @@ public struct DemoEtabPublicationGateway: EtabPublicationPort {
         }
         guard premier >= maintenant else { return .refusee(code: nil, message: Self.messagePasse) }
         guard context.permissions.missions else { return .refusee(code: Self.codeIndisponible, message: Self.messageIndisponible) }
+        // Verrou différé du serveur (migration 20261125120000), levé à la validation, donc après les refus ci-dessus :
+        // sous le plancher de fixture, refus mot pour mot et rien n'est créé.
+        guard brouillon.tauxHoraireBase >= Self.tauxMinimumFixture else {
+            return .refusee(code: nil, message: PublicationPresentation.tauxSousLeMinimum(Self.tauxMinimumFixture))
+        }
         let id = await etat.creer(brouillon, etablissementId: context.etablissementId, creeLe: DateHeureParis.isoUTC(maintenant))
         guard let relue = await etat.relire(id), PublicationRelecture.confirme(relue, envoi: brouillon.creneaux) else {
             return .nonConfirmee(missionId: id)

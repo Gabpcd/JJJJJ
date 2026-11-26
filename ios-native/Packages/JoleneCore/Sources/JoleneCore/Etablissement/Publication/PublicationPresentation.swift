@@ -171,12 +171,10 @@ public enum PublicationPresentation {
 
     // MARK: - Textes natifs (navigation, non juridiques)
 
-    /// Taux sous le plancher (revue B8 des textes de la vague D, M4). Même texte que le web (`messageTauxSousMinimum`,
-    /// `src/lib/tauxHoraireMinimumSalarie.ts`) et que le refus du serveur : neutre, sans référence légale, valeur tirée de
-    /// la constante reprise du web (`PublicationRules.tauxMinimum`), écrite à la française (`fr_FR` : « 12,31 €/h »).
-    public static var tauxSousLeMinimum: String { tauxSousLeMinimum(PublicationRules.tauxMinimum) }
-
-    /// Même texte, au plancher lu au serveur (`PublicationModel.tauxMinimum`).
+    /// Taux sous le plancher (revue B8 des textes de la vague D, M4 ; texte validé le 25/11/2026). Même texte que le web
+    /// (`messageTauxSousMinimum`, `src/lib/tauxHoraireMinimumSalarie.ts`) et que le refus du serveur : neutre, sans
+    /// référence légale, au plancher lu au serveur (`PublicationModel.tauxMinimum`), écrit à la française (`fr_FR` :
+    /// « 12,31 €/h »).
     public static func tauxSousLeMinimum(_ minimum: Double) -> String {
         "Le taux horaire doit être d'au moins \(montantFrancais(minimum)) €/h."
     }

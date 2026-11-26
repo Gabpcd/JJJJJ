@@ -771,6 +771,15 @@ CORRIGER ». Un commit par constat ou petit groupe ; les réponses constat par c
   abaisser le paramètre par écriture directe sur `parametres_systeme` (les bornes ne sont imposées que par
   `fn_admin_maj_parametre`) ; sur le site, l'attribut `min` du champ porte le plancher, et hors parcours le navigateur
   refuserait l'envoi d'une mission ouverte existante sous le plancher même sans changement de taux ni de contrat.
+  **Revue de #1194** : le plancher lu décide seul, de la saisie à l'envoi ; le contrôle du brouillon par la passerelle
+  est structurel (taux strictement positif et fini), le serveur restant seul juge du montant (M1). Après un refus
+  serveur, le plancher est relu (m3, partie faite). **Suivis notés, non traités** : (m2) le message réutilisé quand le
+  plancher est illisible parle de connexion, et après `effacerAnnonce()` ou une lecture annulée le formulaire reste
+  fermé sans explication autre que « tirer pour actualiser » — un texte dédié demande la validation de la fondatrice ;
+  (m3, reste) relecture du plancher au retour au premier plan, non faite (l'écran n'observe pas `scenePhase`) ; (m4)
+  dans `LOT5_PLAN.md` §16, les citations l.75904, l.62956, l.63314 et l.63317 ne pointent plus vers les objets nommés ;
+  (m5) sur STAGING, un plancher non annoncé fait ignorer la preuve avec un simple journal (le banc PostgreSQL 17,
+  lui, l'exige) ; à signaler dans le résumé du workflow si la preuve STAGING doit devenir obligatoire.
 - M5 : une présence validée propose « Contester cette présence » (libellé du web, `PanneauContestation.tsx` l.365) en
   renvoi web vers `/etablissement/presences` ; aucune RPC, aucun texte de délai ; le serveur juge la fenêtre.
 - M6 : l'écran contrat de l'établissement affiche le statut (`DPAEStatus.tsx`) et le rappel (`BandeauRappelDPAE.tsx`)

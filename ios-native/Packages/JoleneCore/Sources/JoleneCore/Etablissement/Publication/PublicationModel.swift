@@ -365,6 +365,9 @@ public final class PublicationModel: ObservableObject {
             etat = .publiee(missionId: missionId)
         case let .refusee(_, message):
             annonce = .erreur(message)
+            // Revue de #1194, m3 : un refus (dont le verrou du plancher, `P0001`) peut venir d'un paramètre relevé
+            // depuis la lecture ; le plancher est relu, sans autre texte ni état d'écran.
+            await chargerTauxMinimum()
         case let .blocageEtablissement(code, message):
             annonce = .blocage(code: code, message: message)
         case let .nonConfirmee(missionId):
