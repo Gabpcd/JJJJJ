@@ -510,34 +510,34 @@ test('commande : sans éclat, sans environnement ou sur une erreur interne — a
 // Garde de repos XCUITest (`ios-native/JoleneUITests/GardeRepos.swift`) : journal RECONSTITUÉ au format des lignes
 // d'activité « t = …s » (aucun run de la garde n'existe encore au moment de ce test). Il prouve la lecture, pas la garde.
 const JOURNAL_GARDE = [
-  "Test Case '-[JoleneUITests.DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides]' started.",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' started.",
   '    t =     0.00s Start Test at 2026-11-26 10:00:00.000',
   '    t =     0.01s Jolene diagnostic repos-xcuitest : garde de repos installée sur waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent: v28@0:8B16B20B24',
   '    t =     1.05s     Launch app.jolene',
   '    t =    19.10s     Wait for app.jolene to idle',
   '    t =    79.20s App animations complete notification not received, will attempt to continue.',
-  '    t =    79.80s Jolene diagnostic repos-xcuitest : attente des animations expirée (60 s) pendant -[DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides] ; attente des animations suspendue pour ce processus',
+  '    t =    79.80s Jolene diagnostic repos-xcuitest : attente des animations expirée (60 s) pendant -[DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau] ; attente des animations suspendue pour ce processus',
   '    t =    80.10s Press Target Application',
-  "Test Case '-[JoleneUITests.DemoGardeReposTests testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides]' passed (95.210 seconds).",
-  "Test Case '-[JoleneUITests.DemoGardeReposTests testSansAnimationOuverteLaGardeNeChangeRien]' started.",
+  "Test Case '-[JoleneUITests.DemoPointageTests testConsentementRefusePointeSansPositionEtAfficheLeBandeau]' passed (95.210 seconds).",
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testGardePoseeSansEffetQuandAucuneAttenteNExpire]' started.",
   '    t =     0.00s Start Test at 2026-11-26 10:01:40.000',
-  "Test Case '-[JoleneUITests.DemoGardeReposTests testSansAnimationOuverteLaGardeNeChangeRien]' passed (30.100 seconds).",
+  "Test Case '-[JoleneUITests.DemoGardeReposTests testGardePoseeSansEffetQuandAucuneAttenteNExpire]' passed (30.100 seconds).",
 ].join('\n');
 
 test('garde de repos : expirations relevées par test, en avertissement ; pose et non-pose lues', () => {
   assert.equal(MARQUE_GARDE_REPOS, 'Jolene diagnostic repos-xcuitest', 'GardeReposDecision.marque');
   const { tests, installation } = lireJournal(JOURNAL_GARDE);
-  const lent = tests.get('DemoGardeReposTests.testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides');
+  const lent = tests.get('DemoPointageTests.testConsentementRefusePointeSansPositionEtAfficheLeBandeau');
   assert.equal(lent.gardeRepos.length, 1);
   assert.equal(lent.gardeRepos[0].t, 79.8);
-  assert.equal(tests.get('DemoGardeReposTests.testSansAnimationOuverteLaGardeNeChangeRien').gardeRepos.length, 0);
+  assert.equal(tests.get('DemoGardeReposTests.testGardePoseeSansEffetQuandAucuneAttenteNExpire').gardeRepos.length, 0);
   assert.equal(installation.length, 1, 'la ligne de pose n est pas une expiration');
 
   const eclat = resumerEclat({ nom: 'socle', journal: JOURNAL_GARDE });
   const { lignes, annotations } = rendre({ format: 'ipad-portrait', eclats: [eclat] });
   const texte = lignes.join('\n');
   assert.match(texte, /\*\*Garde de repos XCUITest\*\* : 1 attente des animations expirée puis suspendue pour le processus d’app \(1 test\)/);
-  assert.match(texte, /- socle — `DemoGardeReposTests\.testAnimationOuverteUneSeuleAttenteExpireePuisGestesRapides` \(t = 79,8 s\) : Jolene diagnostic/);
+  assert.match(texte, /- socle — `DemoPointageTests\.testConsentementRefusePointeSansPositionEtAfficheLeBandeau` \(t = 79,8 s\) : Jolene diagnostic/);
   assert.equal(annotations.filter(a => a.startsWith('::warning::Garde de repos (ipad-portrait, éclat socle)')).length, 1);
   assert.ok(!annotations.some(a => a.startsWith('::error')), 'jamais une erreur');
 
@@ -579,8 +579,8 @@ test('garde de repos : absorption bornée — avertissement jusqu au seuil, erre
   assert.match(erreur, /4 processus d’app absorbés dans ce job, au-delà de 3 — probable animation sans fin dans l’app, la garde ne doit pas l’absorber/);
   assert.match(erreur, /DemoAccueilTests\.testEcran1, DemoAccueilTests\.testEcran2, DemoAccueilTests\.testEcran3, DemoAccueilTests\.testEcran4/);
 
-  // La recette (DemoGardeReposTests) ne compte pas ; une ligne écrite par `print` hors du fil principal compte.
-  assert.equal(rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 2, { classe: 'DemoGardeReposTests' })).code, 0);
+  // Toute classe compte (aucune exclusion) ; une ligne écrite par `print` hors du fil principal compte aussi.
+  assert.equal(rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 1, { classe: 'DemoGardeReposTests' })).code, CODE_ABSORPTIONS_EXCESSIVES);
   const horsFil = rendu(journalAbsorptions(SEUIL_ABSORPTIONS_PAR_JOB + 1, { horsFil: true }));
   assert.equal(horsFil.code, CODE_ABSORPTIONS_EXCESSIVES, 'ligne sans « t = … s » lue aussi');
   assert.ok(horsFil.lignes.some(l => l.startsWith('- lot4 — `DemoAccueilTests.testEcran1` : Jolene diagnostic')), 'sans instant');

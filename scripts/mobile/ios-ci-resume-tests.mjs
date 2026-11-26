@@ -24,7 +24,7 @@
  * L'arbre lu est gardé dans `xctest-tests-<éclat>.json` (durée de chaque test), publié par le même artefact léger.
  *
  * Relevé d'information, à une exception près : il ne décide du statut du job que si la garde de repos a absorbé plus de
- * `SEUIL_ABSORPTIONS_PAR_JOB` processus d'app dans le job (hors recette `DemoGardeReposTests`). Il rend alors
+ * `SEUIL_ABSORPTIONS_PAR_JOB` processus d'app dans le job. Il rend alors
  * `CODE_ABSORPTIONS_EXCESSIVES`, avec une erreur qui nomme les tests (« probable animation sans fin dans l'app ») ;
  * sinon toujours 0. L'étape l'appelle par `trap … EXIT`, pour qu'il tourne quelle que soit l'issue de l'étape (bundle
  * absent, tests en échec) ; le trap ne propage que `CODE_ABSORPTIONS_EXCESSIVES`, et seulement si l'étape réussissait
@@ -64,8 +64,8 @@ export const MARQUES_INACTIVITE = [
 /** Marque des lignes de la garde de repos XCUITest (`GardeReposDecision.marque`). */
 export const MARQUE_GARDE_REPOS = 'Jolene diagnostic repos-xcuitest';
 /**
- * Absorptions de la garde tolérées par job (processus d'app suspendus, une ligne chacun), hors recette
- * `DemoGardeReposTests`. Comptage du 26/11/2026 sur les 103 jobs UI terminés des 120 dernières séries : au plus UNE
+ * Absorptions de la garde tolérées par job (processus d'app suspendus, une ligne chacun), tous éclats du job.
+ * Comptage du 26/11/2026 sur les 103 jobs UI terminés des 120 dernières séries : au plus UNE
  * attente des animations expirée par job (5 jobs sur 103, chacun un seul test : `clavier-ok` sur iPad, plus un cas
  * isolé de la messagerie). Une animation sans fin introduite dans l'app frapperait au contraire chaque test qui passe
  * par son écran : au-delà de trois par job, la série doit rougir.
@@ -73,8 +73,6 @@ export const MARQUE_GARDE_REPOS = 'Jolene diagnostic repos-xcuitest';
 export const SEUIL_ABSORPTIONS_PAR_JOB = 3;
 /** Code de sortie du relevé quand le seuil est dépassé (le seul que le trap de l'étape propage). */
 export const CODE_ABSORPTIONS_EXCESSIVES = 8;
-/** Classe de la recette : son absorption est attendue, elle ne compte pas dans le seuil. */
-export const CLASSE_RECETTE_GARDE = 'DemoGardeReposTests';
 const MAX_ECHOUES = 40;
 const MAX_DETAILS = 15;
 const MAX_ANNOTATIONS = 10;
@@ -466,8 +464,8 @@ export function rendre({ format, eclats, racine = RACINE }) {
     }
     for (const { e, l } of nonPosee.slice(0, MAX_ANNOTATIONS)) annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${replier(l)}`)}`);
   }
-  // Absorption bornée : au-delà du seuil (recette exclue), erreur nette et code de sortie non nul.
-  const absorptions = garde.filter(({ g }) => !g.test.startsWith(`${CLASSE_RECETTE_GARDE}.`));
+  // Absorption bornée : au-delà du seuil, erreur nette et code de sortie non nul.
+  const absorptions = garde;
   const excessif = absorptions.length > SEUIL_ABSORPTIONS_PAR_JOB;
   if (excessif) {
     const noms = [...new Set(absorptions.map(({ g }) => g.test))];

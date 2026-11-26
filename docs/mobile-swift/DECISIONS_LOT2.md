@@ -2089,8 +2089,8 @@ Décision prise par Claude sur délégation explicite de Gabrielle du 08/11/2026
 ## Garde de repos XCUITest — 26/11/2026
 
 Décision de la session de pilotage, sur délégation de la fondatrice (8/11/2026). Branche `fix/ios-ui-repos-xcuitest`,
-depuis `main`. Aucun B9, aucun HARD STOP : rien n'entre dans le binaire livré (cible JoleneUITests, et en DEBUG
-seulement un argument de lancement de l'app), aucun texte juridique n'est touché.
+depuis `main`. Aucun B9, aucun HARD STOP : rien n'entre dans le binaire livré (cible JoleneUITests et scripts de
+CI seulement, aucun code de l'app), aucun texte juridique n'est touché.
 
 ### Constat
 
@@ -2154,21 +2154,32 @@ une série entièrement verte.
 
 ### Preuve
 
-- **CI** : `DemoGardeReposTests`, dans le socle du job `ui`, sur les trois formats, sans `-only-testing`.
-  - Le premier test lance l'app avec `-JOLENE_UITEST_ANIMATION_OUVERTE 1` (`SondeAnimationOuverte`, JoleneCore, DEBUG,
-    démo seulement). La sonde `SondeAnimationOuverteUITest` de l'app (DEBUG) pose alors une animation UIKit répétée
-    sans fin sur une vue de 1 pt invisible et hors de l'accessibilité. Le test exige :
-    - une seule expiration relevée, d'au moins 50 s, entre le lancement et le premier geste ;
-    - quatre glissements suivants de moins de 20 s chacun.
-  - Le second test, témoin sans l'argument, exige : aucune relève et cinq gestes rapides.
-- **Local** (Xcode 16.4) :
-  - `GardeReposDecisionTests`, `SondeAnimationOuverteTests` et `PasDeDefilementTests` : 24/24 (`swift test`) ;
-  - vérification de types de toute la cible JoleneUITests et de la sonde (`swiftc -typecheck`, simulateur iOS 16,
-    concurrence stricte) : aucune erreur ;
-  - reconnaissance des deux sélecteurs réels du framework XCUIAutomation local ;
-  - `ios-ci-resume-tests.test.mjs` 19/19 et `ios-swift-ci-eclats.node.mjs` 34/34.
-- **Seule la CI prouvera** que l'animation répétée reproduit bien l'attente sans réponse sous Xcode 26.4.1 et iOS 26.2,
-  que la signature y est reconnue, et que la garde rend les gestes rapides.
+**Vérifié en CI** (série 45737758238, tête `1a30bd7a`, Xcode 26.4.1, iOS 26.2, six jobs) :
+- La garde est posée dans les 60 éclats des six jobs, sur les deux sélecteurs :
+  `waitForQuiescenceIncludingAnimationsIdle:isPreEvent: v24@0:8B16B20` et
+  `waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent: v28@0:8B16B20B24`. Aucune ligne « non installée ».
+- Elle est inoffensive : aucune expiration relevée par la garde et aucune ligne « App animations complete notification
+  not received » sur toute la série, pour 81 touchers `clavier-ok` (27 par format, dont 54 sur iPad). Aucun gel ne
+  s'est produit : la garde n'a donc **jamais agi**.
+- **Recette non reproductrice, retirée.** La recette déterministe posait, par un argument DEBUG de l'app, une animation
+  UIKit répétée sans fin sur une vue de 1 pt. Elle ne fait **pas** expirer l'attente des animations sous iOS 26.2 et
+  Xcode 26.4.1 : le test qui l'exigeait échouait sur les trois formats (« une attente des animations expirée, relevée
+  une fois : [] », en 10 à 16 s). Le test, la sonde, l'argument de lancement et leur test unitaire sont retirés.
+  Aucun code de l'app ne reste dans la tranche.
+- `DemoGardeReposTests.testGardePoseeSansEffetQuandAucuneAttenteNExpire` (socle du job `ui`, trois formats) reste en
+  témoin. Il exige la garde posée, puis aucune relève et cinq gestes de moins de 20 s ; il passait partout sous son
+  nom précédent.
+
+**Vérifié en local** (Xcode 16.4) :
+- `GardeReposDecisionTests` (`swift test` de JoleneCore) ;
+- vérification de types de toute la cible JoleneUITests (`swiftc -typecheck`, simulateur iOS 16, concurrence stricte) ;
+- reconnaissance des deux sélecteurs réels du framework XCUIAutomation local ;
+- `ios-ci-resume-tests.test.mjs` et `ios-swift-ci-eclats.node.mjs`.
+
+**Non vérifié** : l'efficacité de la garde en condition de gel. Personne ne l'a vue suspendre un processus réel. Suivi :
+- trouver une recette qui reproduit l'attente sans réponse (une animation UIKit répétée ne suffit pas sous iOS 26.2) ;
+- ou lire la garde à l'œuvre sur un vrai gel : ligne « attente des animations expirée » au journal, puis gestes
+  rapides dans le même test.
 
 ### Absorption bornée (revue B8 de #1195, M1, tranché par la session de pilotage)
 
@@ -2182,14 +2193,13 @@ compromis :
 - **Ce qu'elle ne doit pas absorber** : une animation sans fin sur un écran. Elle frapperait chaque test qui passe par
   cet écran, donc plusieurs processus d'app dans le même job.
 - **Seuil** : `SEUIL_ABSORPTIONS_PAR_JOB = 3` (`scripts/mobile/ios-ci-resume-tests.mjs`).
-  - On compte les processus d'app suspendus (une ligne chacun) dans tous les éclats du job, sans la recette
-    `DemoGardeReposTests`, dont la seule absorption est attendue.
+  - On compte les processus d'app suspendus (une ligne chacun) dans tous les éclats du job, toutes classes comprises.
   - Jusqu'à 3 : avertissements, comme avant.
   - Au-delà : erreur `::error::` qui nomme les tests (« probable animation sans fin dans l'app, la garde ne doit pas
     l'absorber »), et code de sortie `CODE_ABSORPTIONS_EXCESSIVES = 8`. Le `trap` de l'étape « Résumé xcresult » des
     jobs `ui` et `ui-lot1` ne propage que ce code, et seulement si l'étape réussissait : un test échoué reste échoué
     dans tous les cas.
-  - Garanti par `ios-ci-resume-tests.test.mjs` (sous le seuil, au-delà, recette exclue, test échoué) et
+  - Garanti par `ios-ci-resume-tests.test.mjs` (sous le seuil, au-delà, ligne hors du fil principal, test échoué) et
     `ios-swift-ci-eclats.node.mjs` (trap simulé sous `bash -e -o pipefail`).
   - Le seuil laisse trois fois la marge du maximum observé. Une animation sans fin sur un écran visité par trois tests
     ou moins dans un job resterait sous le seuil : c'est une limite connue. Les avertissements la gardent visible.
@@ -2217,10 +2227,10 @@ compromis :
     l'éclat, ce que XCTest ne garantit pas. XCTest appelle la méthode sur le fil principal (spindump du job
     139506151098) : ce chemin n'est qu'un repli.
   - **m4 — méthodes propres à la classe seulement** (`class_copyMethodList`). Une méthode héritée n'est pas vue : la
-    garde est « non installée » et la recette échoue nettement. Une sous-classe qui redéfinirait la méthode échapperait
-    à la garde sans rien signaler, sauf si la recette passe par elle. Non vérifiable hors CI.
-- **Recette indépendante de l'ordre** : `DemoGardeReposTests` arrête l'app restée en vie avant que la garde ne passe au
-  test suivant. Le témoin ne relève donc que les attentes de son propre lancement.
+    garde est « non installée » et le témoin `DemoGardeReposTests` échoue nettement. Une sous-classe qui redéfinirait la
+    méthode échapperait à la garde sans rien signaler. Non vérifiable hors CI.
+- **Témoin indépendant de l'ordre** : `DemoGardeReposTests` arrête l'app restée en vie avant que la garde ne passe à
+  son test. Il ne relève donc que les attentes de son propre lancement.
 
 ### Pour corriger la cause
 

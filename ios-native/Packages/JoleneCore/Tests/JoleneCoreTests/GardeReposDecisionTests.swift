@@ -1,7 +1,8 @@
 import XCTest
 
 /// Décisions de la garde de repos XCUITest (`PartageUITests/GardeReposDecision.swift`, compilé aussi dans JoleneUITests).
-/// La pose de la garde et son effet sur XCTest ne se prouvent qu'en CI (`DemoGardeReposTests`, socle du job `ui`).
+/// La pose de la garde ne se prouve qu'en CI (`DemoGardeReposTests`, socle du job `ui`) ; son effet en condition de gel
+/// n'est pas prouvé (« Garde de repos XCUITest — 26/11/2026 », DECISIONS_LOT2).
 final class GardeReposDecisionTests: XCTestCase {
     func testFormesConnuesSeulement() {
         XCTAssertEqual(GardeReposDecision.forme(selecteur: "waitForQuiescenceIncludingAnimationsIdle:usingActivity:isPreEvent:",

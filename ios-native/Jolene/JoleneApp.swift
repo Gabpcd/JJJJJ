@@ -26,11 +26,6 @@ struct JoleneApp: App {
                 .modifier(PointDEntreeLiens(coordinateur: container.liens))
                 .modifier(ThemeRacine(theme: container.theme)) // lot 3, T11 : thème Système / Clair / Sombre (D16)
                 .onChange(of: scenePhase) { phase in handleScenePhase(phase) }
-                #if DEBUG
-                // Recette de la garde de repos XCUITest : `-JOLENE_UITEST_ANIMATION_OUVERTE 1`, démo seulement.
-                .modifier(SondeAnimationOuverteUITest(
-                    active: SondeAnimationOuverte.active(arguments: CommandLine.arguments, demo: container.isDemo)))
-                #endif
         }
     }
 

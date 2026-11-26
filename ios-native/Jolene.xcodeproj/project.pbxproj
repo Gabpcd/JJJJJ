@@ -36,7 +36,6 @@
 		1B95D14A610032E076A08B5C /* DemoCompteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F239F5C89642EA9DEEAE04 /* DemoCompteTests.swift */; };
 		1D38CB54985593DFB2AC0729 /* DemoPresenceDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6AC2802597477BC2199B8E9 /* DemoPresenceDetailTests.swift */; };
 		1E721D1A40C901443EE87997 /* DemoAnnulationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01DC3769A5B8B71240E0A5E4 /* DemoAnnulationTests.swift */; };
-		1FBEC945E6EA808B710B1177 /* SondeAnimationOuverteUITest.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5698CF9C04B87E57F043D3E /* SondeAnimationOuverteUITest.swift */; };
 		2126D8FC78A781B4AE10FC61 /* PreferencesScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405F092111FF9950EBBC1D2B /* PreferencesScreen.swift */; };
 		2138F984E427E34E321171FF /* CertificatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95953DD4F15EA662D2ED80F4 /* CertificatView.swift */; };
 		21EA7193FD5C83A73820D5B1 /* RevenusScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65672A4D60960C1448C0894D /* RevenusScreen.swift */; };
@@ -456,7 +455,6 @@
 		DFC5B7266A6D331E2C714506 /* SwipeModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeModeView.swift; sourceTree = "<group>"; };
 		E1E527A9BA6B3A31C47A4F66 /* RequireWait.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RequireWait.swift; path = ../Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/RequireWait.swift; sourceTree = "<group>"; };
 		E3E627DA4957200BD58CE6B5 /* CalendarWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarWriter.swift; sourceTree = "<group>"; };
-		E5698CF9C04B87E57F043D3E /* SondeAnimationOuverteUITest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SondeAnimationOuverteUITest.swift; sourceTree = "<group>"; };
 		E5CD0E1EB436D49127FBD091 /* MissionSignalerButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MissionSignalerButton.swift; sourceTree = "<group>"; };
 		E6AC2802597477BC2199B8E9 /* DemoPresenceDetailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoPresenceDetailTests.swift; sourceTree = "<group>"; };
 		E86E9438181F8293405D902B /* LitigesScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LitigesScreen.swift; sourceTree = "<group>"; };
@@ -507,7 +505,6 @@
 			isa = PBXGroup;
 			children = (
 				599440B6C14B071F935936DD /* PDFLecteur.swift */,
-				E5698CF9C04B87E57F043D3E /* SondeAnimationOuverteUITest.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1377,7 +1374,6 @@
 				C5DFE9293CFDE17D0BDE2708 /* ServicesPointage.swift in Sources */,
 				F76422A8F858F85FC8AF2063 /* ShareSheet.swift in Sources */,
 				D8724D42840055518E70154B /* SignatureOtpView.swift in Sources */,
-				1FBEC945E6EA808B710B1177 /* SondeAnimationOuverteUITest.swift in Sources */,
 				CE5147BA934E8BAC00B16A39 /* StockageAppareil.swift in Sources */,
 				6AA522B07A66D8B2627EE45E /* StripeConnectScreen.swift in Sources */,
 				634E2F09A431203F99161794 /* SuppressionCompteScreen.swift in Sources */,
