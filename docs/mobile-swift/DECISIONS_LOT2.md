@@ -2243,3 +2243,23 @@ Il faut identifier l'animation restée ouverte. Instrumentation proposée, DEBUG
 
 Une animation encore présente sur la barre détachée justifierait un correctif dans `BoutonClavierOK` (barre retirée
 sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou le simulateur.
+
+### Toucher perdu sur un interrupteur des préférences (iPad paysage, même série)
+
+- **Fait.** Série 45737758238, job « UI — ipad-landscape », éclat lot3-notifications :
+  `DemoPreferencesTests.testPreferencesDemoModifieesEnregistreesPuisRelues` échoue. Le toucher synthétisé
+  `Tap "prefs-canal-sms" Switch[0.90, 0.50]` (t = 131,4 s) ne bascule pas l'interrupteur : 12 relectures sur 15 s,
+  valeur jamais « 1 ». Il n'y a ni gel, ni clavier, et la garde de repos est restée inactive. Le même geste réussit
+  deux fois sur `prefs-canal-push` dans le même job, et sur iPad portrait. Le test était passé sur iPad paysage
+  sur main `be5b0d49` : c'est intermittent.
+- **Cause déduite, non prouvée.** Le toucher a été perdu. Sur iPad, la ligne mesure 632 pt : le point à 90 % tombe au
+  début de la poignée, pas en son milieu.
+- **Correctif** (`DemoPreferencesTests.prefsBasculer`, modèle de `DemoPointageUITestCase.basculer`) :
+  - le toucher vise le centre de la poignée (`Switch` imbriqué), à défaut 90 % de la ligne ;
+  - sans changement de la valeur relue en 3 s (`attendreSansEchec`), la ligne est de nouveau dégagée des barres, puis
+    touchée à nouveau ;
+  - au plus trois essais, chaque rejeu consigné par `consignerRejeu` au nom de l'appelant (relevé « Geste rejoué » du
+    résumé de la CI) ;
+  - la valeur est relue après le dégagement : un toucher reçu en retard n'est jamais rejoué ;
+  - les `require` des appelants (préférences et `DemoPushTests`) restent inchangés : une double bascule y échouerait.
+- **Non vérifié en CI** : la position du `Switch` imbriqué sous iOS 26.2, et l'absence de rejeu sur les autres formats.

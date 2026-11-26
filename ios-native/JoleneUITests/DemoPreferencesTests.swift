@@ -165,12 +165,40 @@ extension JoleneUITestCase {
         }
     }
 
-    func prefsBasculer(_ identifiant: String, dans ecran: XCUIElement) {
+    /// Bascule un interrupteur de l'écran (`ToggleRow`), touché au centre de sa poignée (`Switch` imbriqué), à défaut à
+    /// 90 % de la ligne. Sur iPad, la ligne mesure 632 pt (contenu borné à 720 pt) : 90 % tombe à 63 pt du bord droit,
+    /// au début de la poignée et non en son milieu (sur iPhone, au milieu).
+    ///
+    /// Un toucher perdu est rejoué, jamais un toucher reçu, comme `DemoPointageUITestCase.basculer` : run 45737758238
+    /// (PR #1195), UI — ipad-landscape, `testPreferencesDemoModifieesEnregistreesPuisRelues` : toucher synthétisé sur
+    /// `prefs-canal-sms` actif et dégagé des barres, 9 s après le dernier défilement, puis 15 s sans valeur changée ; le
+    /// même geste avait réussi sur `prefs-canal-push` dans le même job, et sur `prefs-canal-sms` en iPad portrait. Tout
+    /// toucher reçu change la valeur relue (« 0 » ↔ « 1 ») : sans ce changement en 3 s, la ligne est de nouveau dégagée
+    /// (un toucher tombé sur une barre ramène le défilement en haut), puis touchée, trois essais au plus, chaque rejeu
+    /// consigné (`consignerRejeu`) au nom de l'appelant. La valeur est relue après le dégagement : un toucher reçu en
+    /// retard n'est jamais rejoué. L'état attendu reste exigé par l'appelant (`require`) ; une double bascule y échouerait.
+    func prefsBasculer(_ identifiant: String, dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let cible = element(identifiant)
         prefsDegager(cible, dans: ecran)
-        require("L'interrupteur \(identifiant) est activable") { cible.isEnabled }
-        // Le commutateur est à droite de la ligne : un tap au centre peut tomber sur le libellé, qui bascule aussi.
-        cible.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        require("L'interrupteur \(identifiant) est activable", file: file, line: line) { cible.isEnabled }
+        let valeurAvant = cible.value as? String
+        let attente = "Le toucher de l'interrupteur \(identifiant) est reçu"
+        for essai in 1...3 {
+            let poignee = cible.switches.firstMatch
+            let point = poignee.exists
+                ? poignee.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                : cible.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5))
+            point.tap()
+            if attendreSansEchec(attente, timeout: 3, file: file, line: line,
+                                 condition: { (cible.value as? String) != valeurAvant }) { return }
+            guard essai < 3 else { return }
+            consignerRejeu(attente, issue: "toucher \(essai)/3 sans effet observable en 3 s (valeur « \(valeurAvant ?? "nil") » "
+                           + "inchangée) : ligne dégagée puis toucher rejoué", file: file, line: line)
+            prefsDegager(cible, dans: ecran)
+            require("L'interrupteur \(identifiant) est activable", file: file, line: line) { cible.isEnabled }
+            // Toucher reçu en retard (pendant le dégagement) : jamais rejoué, sinon double bascule.
+            if (cible.value as? String) != valeurAvant { return }
+        }
     }
 
     /// Barre qui recouvre `cible` : navigation (haut), barre d'enregistrement de l'écran, ou onglets (bas, iPhone).
