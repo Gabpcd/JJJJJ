@@ -5,7 +5,9 @@ name: iOS Swift — soumission App Store
 # Geste manuel uniquement (décision du 24/11/2026, docs/mobile-swift/DECISIONS_LOT6.md) : déclenchement à la
 # main depuis main, avec une phrase de confirmation qui nomme la version et le build. Jamais sur un push, une
 # PR, un merge ou la fin d'un autre workflow.
-# Mode « verifier » (défaut) : toutes les gardes, en lecture seule, puis arrêt avant la lane et le tag.
+# Mode « verifier » (défaut) : toutes les gardes, sans écriture chez Apple, dont le pré-vol des notes pour la revue
+# (lane preflight_review_native : fiche lue, compte de démonstration connecté à la production puis déconnecté), puis
+# arrêt avant la soumission et le tag.
 # Mode « soumettre » : les mêmes gardes, puis la lane et le tag, si la phrase de confirmation est exacte.
 # Mode d'emploi, gardes et ce qui reste à saisir dans App Store Connect : docs/mobile-swift/APP_STORE.md.
 
@@ -51,7 +53,7 @@ jobs:
   gardes:
     name: Gardes avant soumission (lecture seule)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     outputs:
       mode: ${{ steps.entrees.outputs.mode }}
       build_number: ${{ steps.entrees.outputs.build_number }}
@@ -118,6 +120,23 @@ jobs:
           ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
           BUILD_NUMBER: ${{ steps.entrees.outputs.build_number }}
         run: node scripts/mobile/ios-native-app-store.mjs build "$BUILD_NUMBER"
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      # Spaceship écrit chaque requête et chaque réponse de l'API Apple, corps compris, dans $TMPDIR/spaceship*.log :
+      # effacés avec la clé, quel que soit le résultat. Jamais VERBOSE ni --verbose, jamais d'artefact (APP_STORE.md).
+      - name: Pré-vol des notes pour la revue et du compte de démonstration (sans écriture chez Apple)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          IOS_NATIVE_MODE: ${{ steps.entrees.outputs.mode }}
+        run: |
+          statut=0
+          bundle exec fastlane ios preflight_review_native || statut=$?
+          rm -rf "$HOME/.appstoreconnect/private_keys" "${TMPDIR:-/tmp}"/spaceship*.log
+          exit "$statut"
       - name: Verdict des gardes (atteint seulement si toutes ont réussi)
         id: verdict
         env:
@@ -156,7 +175,7 @@ jobs:
         with:
           ruby-version: '3.3'
           bundler-cache: true
-      - name: Soumettre le build à la revue (fiche inchangée, hors « Nouveautés » et informations pour la vérification)
+      - name: Soumettre le build à la revue (« Nouveautés » et informations pour la vérification écrites ; deliver retire les pièces jointes)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -166,9 +185,9 @@ jobs:
           [[ "$IOS_NATIVE_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Numéro de build absent ou invalide."; exit 1; }
           [[ "$IOS_NATIVE_AUTOMATIC_RELEASE" =~ ^(true|false)$ ]] || { echo "::error::Mode de publication absent ou invalide."; exit 1; }
           bundle exec fastlane ios submit_native
-      - name: Supprimer la clé App Store Connect écrite par fastlane
+      - name: Supprimer la clé App Store Connect et les journaux de Spaceship laissés par la lane
         if: always()
-        run: rm -rf "$HOME/.appstoreconnect/private_keys"
+        run: rm -rf "$HOME/.appstoreconnect/private_keys" "${TMPDIR:-/tmp}"/spaceship*.log
 
   consigner:
     name: Consigner la soumission (tag mobile-native-ios-N)

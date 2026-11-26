@@ -573,7 +573,8 @@ test('la lecture du build vérifie l\'app et n\'émet que des GET vers App Store
 const workflow = lire('.github/workflows/ios-native-app-store.yml');
 const actif = workflow.split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
 const fastfile = lire('fastlane/Fastfile');
-const lane = fastfile.slice(fastfile.indexOf('lane :submit_native'), fastfile.indexOf('lane :testflight_native'));
+const lane = fastfile.slice(fastfile.indexOf('lane :submit_native'), fastfile.indexOf('lane :preflight_review_native'));
+const prevol = fastfile.slice(fastfile.indexOf('lane :preflight_review_native'), fastfile.indexOf('lane :testflight_native'));
 const job = (nom) => {
   const debut = actif.indexOf(`\n  ${nom}:\n`);
   assert.ok(debut >= 0, `job ${nom} absent`);
@@ -800,14 +801,17 @@ test('chaque action est épinglée par son commit', () => {
 
 test('toutes les gardes passent avant l\'unique écriture chez Apple', () => {
   const etapes = ['ios-native-app-store.mjs entrees', 'ios-native-testflight.mjs depot', 'ios-native-app-store.mjs provenance', 'git archive "$SOURCE_SHA" ios-native',
-    'ios-native-app-store.mjs source', 'delivery-plan-backend.mjs', 'ios-native-app-store.mjs build', 'bundle exec fastlane ios submit_native', 'release-state.mjs record ios'];
+    'ios-native-app-store.mjs source', 'delivery-plan-backend.mjs', 'ios-native-app-store.mjs build', 'bundle exec fastlane ios preflight_review_native', 'echo "verdict=ok"',
+    'bundle exec fastlane ios submit_native', 'release-state.mjs record ios'];
   const positions = etapes.map((etape) => actif.indexOf(etape));
   assert.ok(positions.every((p) => p >= 0), `étape manquante : ${etapes[positions.indexOf(-1)]}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'ordre des gardes');
   const appels = [...actif.matchAll(/\bfastlane[^\S\n]+(\S+[^\S\n]+\S+)/g)].map((m) => m[1]);
-  assert.deepEqual(appels, ['ios submit_native'], 'une seule lane, celle de la soumission native');
+  assert.deepEqual(appels, ['ios preflight_review_native', 'ios submit_native'], 'le pré-vol des notes dans les gardes, la soumission ensuite');
   assert.ok(job('gardes').includes('fetch-depth: 0'));
-  assert.doesNotMatch(job('gardes'), /fastlane|contents: write/);
+  assert.deepEqual([...job('gardes').matchAll(/\bfastlane[^\S\n]+(\S+[^\S\n]+\S+)/g)].map((m) => m[1]), ['ios preflight_review_native'],
+    'les gardes ne lancent que le pré-vol, sans écriture chez Apple');
+  assert.doesNotMatch(job('gardes'), /submit_native|contents: write/);
 });
 
 test('la lane soumet un build existant, avec publication progressive, sans rien envoyer ni toucher aux captures', () => {
@@ -835,9 +839,12 @@ test('la lane n\'écrit que les notes pour la revue, après le verrou du compte 
   // Jamais `app_review_information` : deliver remettrait demoAccountRequired à faux sans identifiants.
   const laneActive = lane.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
   assert.doesNotMatch(laneActive, /review_information|demo_account|demoAccount/);
-  assert.ok(lane.includes('bloc: File.read(File.join(ROOT, IosReviewSubmission::ReviewNotes::FICHIER)'), 'bloc lu dans le fichier versionné');
-  assert.match(module, /FICHIER = 'config\/ios-review-notes-2\.0\.txt'/);
-  assert.ok(existsSync(join(root, 'config/ios-review-notes-2.0.txt')));
+  assert.ok(lane.includes('notes = review_notes(app, marketing)'), 'notes construites par le seul assembleur');
+  assert.match(fastfile, /def review_notes\(app, marketing\)\n[\s\S]*blocs: IosReviewSubmission::ReviewNotes::FICHIERS\.transform_values\(&lire\)/);
+  assert.match(fastfile, /IosReviewSubmission::CompteDemo\.lire_config!\(lire\.call\(IosReviewSubmission::CompteDemo::CONFIG\)\)/);
+  assert.match(module, /soignant: 'config\/ios-review-notes-2\.0-soignant\.txt',\n\s+etablissement: 'config\/ios-review-notes-2\.0-etablissement\.txt'/);
+  for (const bloc of ['config/ios-review-notes-2.0-soignant.txt', 'config/ios-review-notes-2.0-etablissement.txt']) assert.ok(existsSync(join(root, bloc)), bloc);
+  assert.ok(!existsSync(join(root, 'config/ios-review-notes-2.0.txt')), 'plus de bloc unique qui affirmerait un rôle non vérifié');
   // La soumission est la seule action de `soumettre`, que enchainer! n'appelle qu'après les notes.
   assert.equal(lane.split('upload_to_app_store(').length, 2, 'un seul appel de deliver');
   assert.ok(lane.indexOf('soumettre: lambda do') < lane.indexOf('upload_to_app_store('), 'deliver n\'est appelé que par soumettre');
@@ -854,13 +861,67 @@ test('la lane n\'écrit que les notes pour la revue, après le verrou du compte 
   const copies = [...module.matchAll(/^\s+'([A-Za-z]+)' => :[a-z_]+,?$/gm)].map((m) => m[1]).sort();
   assert.deepEqual(copies, ['contactEmail', 'contactFirstName', 'contactLastName', 'contactPhone', 'demoAccountName',
     'demoAccountPassword', 'demoAccountRequired', 'notes']);
-  assert.match(module, /def self\.attributs_de_copie\(source:, cible:, marketing:, source_version:\)\n\s+return nil if compte_demo_complet\?\(cible\)/,
+  assert.match(module, /def self\.attributs_de_copie\(source:, cible:, marketing:, source_version:\)\n\s+return nil if identifiants_presents\?\(cible\)/,
     'jamais de copie sur une fiche qui a déjà un compte de démonstration');
   const preVol = module.slice(module.indexOf('    def verifier!'), module.indexOf('    def appliquer!'));
   assert.doesNotMatch(preVol, /create_|update_|copier_si_besoin/, 'le pré-vol n\'écrit rien');
   // Les deux suites Ruby hors réseau tournent dans validate-pr.
   const validatePr = lire('.github/workflows/validate-pr.yml');
   for (const suite of ['ruby fastlane/ios_review_submission.test.rb', 'ruby fastlane/ios_review_notes.test.rb']) assert.ok(validatePr.includes(suite), suite);
+});
+
+// Revue fraîche de #1197 (M1, m8) : le pré-vol des notes, connexion du compte de démonstration comprise, tourne aussi
+// en mode `verifier`, dans le job des gardes, avant le verdict ; il n'écrit rien chez Apple.
+test('le pré-vol des notes tourne dans les gardes, avant le verdict, et n\'écrit rien chez Apple', () => {
+  const prevolActif = prevol.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
+  assert.ok(prevol.length > 0, 'lane preflight_review_native absente');
+  const ordre = ['IosReviewSubmission.exiger_contexte_prevol!(env: ENV)', 'app_store_connect_api_key(', 'review_notes(app, marketing).verifier!'].map((x) => prevol.indexOf(x));
+  assert.ok(ordre.every((p) => p > 0) && ordre.join() === [...ordre].sort((a, b) => a - b).join(), 'contexte, clé, puis pré-vol seul');
+  assert.doesNotMatch(prevolActif, /appliquer!|enchainer!|upload_to_app_store|Guard|guard\.|submit|create_|update_/);
+  assert.match(prevol, /rescue IosReviewSubmission::Failure => error\n\s+UI\.user_error!\(error\.message\)/);
+  const gardes = jobs.gardes.etapes;
+  const index = gardes.findIndex((e) => scriptDe(e)?.includes('bundle exec fastlane ios preflight_review_native'));
+  const etape = gardes[index];
+  assert.ok(etape && !('if' in etape.cles), 'étape de pré-vol sans condition');
+  assert.equal(gardes.at(-1), gardes[index + 1], 'le verdict suit le pré-vol');
+  assert.ok(scriptDe(gardes[index - 2])?.includes('ios-native-app-store.mjs build'));
+  const ruby = gardes[index - 1].cles.uses;
+  assert.equal(ruby, jobs.soumettre.etapes.find((e) => e.cles.uses?.startsWith('ruby/setup-ruby@')).cles.uses, 'même setup-ruby que la soumission');
+  // lireJobs ne relève que les noms sans chiffre : la clé privée se lit dans le texte de l'étape.
+  assert.deepEqual(etape.env, {
+    ASC_KEY_ID: '${{ secrets.ASC_KEY_ID }}', ASC_ISSUER_ID: '${{ secrets.ASC_ISSUER_ID }}',
+    IOS_NATIVE_MODE: '${{ steps.entrees.outputs.mode }}',
+  });
+  assert.ok(etape.texte.includes('\n          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}\n'));
+  // Le script tel qu'écrit : statut de la lane conservé, clé et journaux de Spaceship effacés dans tous les cas.
+  for (const code of ['0', '3']) {
+    const dir = mkdtempSync(join(tmpdir(), 'jolene-prevol-'));
+    try {
+      mkdirSync(join(dir, 'bin'));
+      mkdirSync(join(dir, 'tmp'));
+      mkdirSync(join(dir, 'home/.appstoreconnect/private_keys'), { recursive: true });
+      writeFileSync(join(dir, 'bin/bundle'), `#!/bin/sh\nexit ${code}\n`, { mode: 0o755 });
+      writeFileSync(join(dir, 'tmp/spaceship1700000000_1_2.log'), 'corps de requête');
+      writeFileSync(join(dir, 'home/.appstoreconnect/private_keys/AuthKey.p8'), 'clé');
+      const resultat = spawnSync('bash', ['-eo', 'pipefail', '-c', scriptDe(etape)], {
+        encoding: 'utf8', env: { PATH: `${join(dir, 'bin')}:${process.env.PATH}`, TMPDIR: join(dir, 'tmp'), HOME: join(dir, 'home') } });
+      assert.equal(String(resultat.status), code, `statut de la lane conservé (${code})`);
+      assert.ok(!existsSync(join(dir, 'tmp/spaceship1700000000_1_2.log')), 'journal de Spaceship effacé');
+      assert.ok(!existsSync(join(dir, 'home/.appstoreconnect/private_keys')), 'clé effacée');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+// Revue fraîche de #1197 (m2) : Spaceship écrit requêtes et réponses dans $TMPDIR/spaceship*.log.
+test('les journaux de Spaceship ne sortent jamais du runner : ni artefact, ni mode verbeux, effacés après usage', () => {
+  assert.doesNotMatch(actif, /upload-artifact|actions\/cache@|\bVERBOSE\b|--verbose|FASTLANE_VERBOSE|SPACESHIP_DEBUG/);
+  const fastfileActif = fastfile.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
+  assert.doesNotMatch(fastfileActif, /VERBOSE|verbose/);
+  assert.match(job('soumettre'), /if: always\(\)\n {8}run: rm -rf "\$HOME\/\.appstoreconnect\/private_keys" "\$\{TMPDIR:-\/tmp\}"\/spaceship\*\.log\n/);
+  const doc = lire('docs/mobile-swift/APP_STORE.md');
+  for (const fragment of ['spaceship*.log', '--verbose', 'preflight_review_native', 'pièces jointes']) assert.ok(doc.includes(fragment), fragment);
 });
 
 test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {

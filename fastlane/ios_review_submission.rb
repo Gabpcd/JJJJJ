@@ -38,6 +38,26 @@ module IosReviewSubmission
     true
   end
 
+  # Pré-vol des notes pour la revue (lane `ios preflight_review_native`, docs/mobile-swift/APP_STORE.md) : sans
+  # écriture chez Apple, mais il lit la fiche App Store Connect et connecte le compte de démonstration à la
+  # production. Il ne tourne donc que dans le job `gardes` de ios-native-app-store.yml sur main, dans l'un de ses
+  # deux modes ; ni phrase de confirmation ni verdict, puisqu'il précède le verdict.
+  def self.exiger_contexte_prevol!(env:)
+    attendu = {
+      'GITHUB_ACTIONS' => 'true',
+      'GITHUB_REPOSITORY' => 'Gabpcd/JJJJJ',
+      'GITHUB_EVENT_NAME' => 'workflow_dispatch',
+      'GITHUB_REF' => 'refs/heads/main',
+      'GITHUB_WORKFLOW_REF' => WORKFLOW_SOUMISSION
+    }
+    ecarts = attendu.reject { |cle, valeur| env[cle] == valeur }.keys
+    ecarts << 'IOS_NATIVE_MODE' unless %w[verifier soumettre].include?(env['IOS_NATIVE_MODE'])
+    unless ecarts.empty?
+      raise Failure, "preflight_review_native ne tourne que dans le job gardes de ios-native-app-store.yml (écart : #{ecarts.join(', ')}) ; voir docs/mobile-swift/APP_STORE.md"
+    end
+    true
+  end
+
   # Use the current reviewSubmissions API and read every page, including items:
   # the items embedded in a submission response can be truncated.
   class Gateway
