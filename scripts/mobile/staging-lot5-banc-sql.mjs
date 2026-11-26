@@ -273,8 +273,11 @@ export async function parcours(executer, { journal = () => {}, maintenant = new 
   // Suivi de #1188 : même preuve que le script (prouverRefusTauxMinimum), sur le schéma du dépôt. Plancher annoncé et lu
   // sous le JWT d'E1, création SALARIE à un centime sous le plancher refusée à la validation de la transaction (verrou
   // différé), message validé exact, 0 mission à l'intitulé du run.
-  const [plancher] = await pas('plancher annoncé et lu sous le JWT d E1', sousJwt(m.etablissement.id,
-    `SELECT public.fn_param_bool('${CLE_TAUX_MINIMUM}', false) AS annonce, public.fn_taux_horaire_minimum_salarie()::text AS minimum;`));
+  // Lecture au niveau de la session (comme le pré-vol) : la ligne lue est celle de la DERNIÈRE instruction, ce que
+  // les deux moteurs rendent (psql ne relit que la dernière ; un `COMMIT` final ne rendrait aucune ligne).
+  const [plancher] = await pas('plancher annoncé et lu sous le JWT d E1 (rôle authenticated)', `${commeUtilisateur(m.etablissement.id)}
+  SELECT public.fn_param_bool('${CLE_TAUX_MINIMUM}', false) AS annonce, public.fn_taux_horaire_minimum_salarie()::text AS minimum;`);
+  await pas('fin du rôle authenticated (plancher)', FIN_UTILISATEUR);
   if (plancher?.annonce !== true || !(Number(plancher?.minimum) > 0)) {
     throw new Error(`Banc L5 : plancher du taux non annoncé ou illisible (${JSON.stringify(plancher)}).`);
   }
