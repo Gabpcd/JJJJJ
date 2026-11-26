@@ -1191,7 +1191,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_mes_favoris_etablissements"() RETURNS "j
 - **Statut natif** : consommé (lot 1, T4b) par `SupabaseFavorisGateway` (`missionsSauvegardees`,
   `sauvegarder`, `retirer`), comme `BoutonSauvegarderMission.tsx` et `MesFavorisSoignant.tsx`.
 - **Lecture** : `GET /rest/v1/missions_sauvegardees?select=id,mission_id,cree_le,missions(id,intitule,debut_le,fin_le,duree_heures,nb_creneaux,statut)&soignant_id=eq.<uid>&order=cree_le.desc`
-  (RLS `missions_sauvegardees_select`, l.78591 ; restrictive `pol_compte_auth_actif_restrictive`, l.79311).
+  (RLS `missions_sauvegardees_select`, l.78717 ; restrictive `pol_compte_auth_actif_restrictive`, l.79319).
   Jointure `missions` nulle (RLS des missions) : la ligne garde l'étoile allumée, la mission n'est pas
   listée. « Mes favoris » ne liste que les missions `OUVERTE` à début futur (filtre du web,
   `FavorisRegles.missionsAffichees`) ; montants non lus (non affichés par le web).
@@ -3418,7 +3418,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_exclure_utilisateur"("p_exclu_id" "uuid"
 
 ## Jamais `notations_missions` / `evaluations` / `evaluations_publiees` côté natif
 
-- **Règle** (`CLAUDE.md`, « Publication différée = filtre de visibilité centralisé », Finding #3) : une notation non publiée ne transparaît jamais. La source canonique est la vue `evaluations_publiees` (`public.sql` l.69532-69558, `publie_le IS NOT NULL AND masque = false`), mais elle n'est accordée qu'à `service_role` (l.86074) et n'est pas `security_invoker` : le client ne peut pas la lire et ne doit jamais l'obtenir (elle contournerait la RLS).
+- **Règle** (`CLAUDE.md`, « Publication différée = filtre de visibilité centralisé », Finding #3) : une notation non publiée ne transparaît jamais. La source canonique est la vue `evaluations_publiees` (`public.sql` l.70108-70128, `publie_le IS NOT NULL AND masque = false`), mais elle n'est accordée qu'à `service_role` (l.86074) et n'est pas `security_invoker` : le client ne peut pas la lire et ne doit jamais l'obtenir (elle contournerait la RLS).
 - **Sources uniques côté app** : `fn_mes_notations_recues_avec_stats` (cinq lectures de `notations_missions`, toutes filtrées `n.masque = false AND n.publie_le IS NOT NULL`) et `fn_lister_notations_recues` (une lecture, l.40324-40325). La garde compte, dans chaque corps, autant de filtres `publie_le IS NOT NULL` et `masque = false` que de lectures de la table.
 - **Interdits** : aucune requête PostgREST, aucun canal Realtime, aucun littéral Swift égal à `notations_missions`, `evaluations` ou `evaluations_publiees` dans `ios-native/Packages` et `ios-native/Jolene` — garde-fou 18 de `tests/non-regression/guards.sh` et test Swift `EvaluationsSourceGuardTests` (T9), qui construit son motif sans écrire ces noms entre guillemets. `EcranSecondaire.evaluations` garde sa valeur brute implicite et `cleDrapeau` s'écrit `"ios_natif_\(rawValue)_actif"`. Le garde-fou 18 ne lit que les fichiers `*.swift` : une fixture de démo, un vecteur golden (`LinkRouter`), un catalogue de chaînes ou un xcassets peut porter la valeur brute `evaluations` (nom d'écran ou de route), qui n'est pas un lecteur de table ; un dossier absent ou illisible le fait échouer (code 2 de grep), comme le garde-fou 19.
 - **Surfaces web hors natif** : le classement `/soignant/classement` lit `soignants.note_moyenne`, alimentée par la table legacy `evaluations.visible` (`dec_maj_note_moyenne` l.2226-2268), et non `evaluations_publiees` : renvoi web assumé (`LOT4_PLAN.md` §1.3), aucune surface native.
