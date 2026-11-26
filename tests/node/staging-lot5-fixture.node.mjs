@@ -11,6 +11,7 @@ import {
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
   NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur, decrireTemoinSansSession,
   prouverRefusTauxMinimum, chargeRefusTaux, intituleRefusTaux, messageTauxMinimum, CLE_TAUX_MINIMUM,
+  lireManifesteLectures, requetesLectures, decrireLectureRefusee, CHEMIN_LECTURES,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -32,7 +33,7 @@ function banc(t, surcharge = {}) {
   const b = {
     env, dir, appels: [], logs: [], attentes: [], users: new Map(), code: '123456', prochain: 'OUVERTURE', scans: [],
     seeded: false, candidature: null, presence: null, nettoye: false, relu: { ...RELU_CONFORME }, reste: null, fail: null,
-    recherches: 0, residus: {}, sessionEtab: [], permissions: null,
+    recherches: 0, residus: {}, sessionEtab: [], permissions: null, lectures: [], lectureRefusee: null,
     // Plancher du taux (suivi de #1188) : annonce, valeur, verrou serveur (`present` | `absent`), fuite comptée.
     annonceTaux: true, minimumTaux: 12.31, verrouTaux: 'present', fuiteTaux: 0, creationsTaux: [],
     horloge: new Date('2026-11-24T10:00:00.000Z'),
@@ -129,6 +130,19 @@ function banc(t, surcharge = {}) {
       b.prochain = b.prochain === 'OUVERTURE' ? 'FERMETURE' : 'OUVERTURE';
       if (b.scans.length === 2) b.presence = { id: '1c7b3a6f-2d3e-4f40-8b9c-8d7e6f5a4b3c', arrivee: true, depart: true, validee: false };
       return rep({ success: true });
+    }
+    // Lectures du parcours (manifeste) : tables en GET, fonctions de lecture ; `b.lectureRefusee` simule un refus.
+    if (u.pathname.startsWith('/rest/v1/') && opts.method === 'GET') {
+      const table = u.pathname.slice('/rest/v1/'.length);
+      b.lectures.push({ table, select: u.searchParams.get('select'), auth: opts.headers.Authorization, apikey: opts.headers.apikey, q: u.search });
+      if (b.lectureRefusee === table) return rep({ code: '42703', message: `column ${table}.x does not exist (mission 3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c)` }, 400);
+      return rep([]);
+    }
+    if (['fn_lire_candidatures_mission_habilitee', 'fn_etat_pointage_mission', 'fn_contrat_signe_pour_pointage'].some(f => u.pathname === `/rest/v1/rpc/${f}`)) {
+      const fonction = u.pathname.split('/').at(-1);
+      b.lectures.push({ fonction, corps, auth: opts.headers.Authorization });
+      if (b.lectureRefusee === fonction) return rep({ success: false, error: 'Accès refusé à cette mission' });
+      return rep(fonction === 'fn_lire_candidatures_mission_habilitee' ? [] : { success: true });
     }
     throw new Error(`URL inattendue ${url}`);
   };
@@ -557,6 +571,7 @@ test('journal du stockage de session (revue de #1191, M1) : même préfixe dans 
   const lire = f => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8');
   assert.ok(lire('ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/SupabaseGateways.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
   assert.ok(lire('ios-native/JoleneUITests/StagingEtabParcoursTests.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
+  assert.ok(lire('ios-native/JoleneUITests/StagingEtabParcoursTests.swift').includes('prefixeJournalEchec = "Jolene diagnostic échec :"'));
   const workflow = lire('.github/workflows/ios-swift-lot5-staging.yml');
   const filtres = [...workflow.matchAll(/filter\(l => (\/.*?\/)\.test\(l\)\)/g)].map(m => m[1]);
   assert.equal(filtres.length, 2, 'un filtre par phase XCUITest');
@@ -564,6 +579,8 @@ test('journal du stockage de session (revue de #1191, M1) : même préfixe dans 
     const re = new RegExp(f.slice(1, -1));
     assert.ok(re.test(`${prefixe} stockage=memoire;sonde=-34018`), `ligne publiée par le filtre ${f}`);
     assert.ok(re.test(`${prefixe} stockage=trousseau;sonde=ok`));
+    // Quatrième parcours STAGING : la ligne d'échec d'une attente est publiée elle aussi.
+    assert.ok(re.test('Jolene diagnostic échec : attente « x » | dernier-echec=aucun | erreurs=aucune'));
   }
 });
 
@@ -691,4 +708,51 @@ test('plancher : charge, intitulé et message, fonctions pures', async () => {
   assert.equal(messageTauxMinimum(12.5), "Le taux horaire doit être d'au moins 12,50 €/h.");
   const ignore = await prouverRefusTauxMinimum({ doc: m, rpc: async () => false, sql: async () => { throw new Error('jamais'); } });
   assert.deepEqual(ignore, { ignore: true });
+// MARK: - Quatrième parcours STAGING (26/11/2026) : lectures du parcours rejouées au pré-vol
+
+const MANIFESTE_LECTURES = lireManifesteLectures(readFileSync(CHEMIN_LECTURES, 'utf8'));
+
+test('pré-vol des lectures : toutes celles du manifeste, sous le JWT d E1 avec la clé de l app, avant le XCUITest', async t => {
+  const b = banc(t, { JOLENE_STAGING_PUBLISHABLE_KEY: 'sb_publishable_CANARIcleDeLApp000000' });
+  await b.run('preparer');
+  assert.equal(b.lectures.length, MANIFESTE_LECTURES.lectures.length, 'une requête par lecture du manifeste');
+  assert.ok(b.lectures.every(l => l.auth === 'Bearer jwt-CANARI-ETABLISSEMENT'), 'JWT d E1, jamais la clé seule');
+  assert.ok(b.lectures.filter(l => l.table).every(l => l.apikey === 'sb_publishable_CANARIcleDeLApp000000'), 'clé de l app');
+  const tables = MANIFESTE_LECTURES.lectures.filter(l => l.table);
+  assert.deepEqual(b.lectures.filter(l => l.table).map(l => [l.table, l.select]), tables.map(l => [l.table, l.select]), 'même ordre, même select');
+  assert.ok(b.logs.some(l => /^Pré-vol des lectures du parcours : \d+ lecture\(s\) acceptée\(s\) sous le JWT d'E1/.test(l)));
+  assert.ok(!b.lectures.some(l => /\{[A-Z0-9]+\}/.test(l.q ?? JSON.stringify(l.corps))), 'aucun jeton de place envoyé');
+  assert.equal(existsSync(b.env.LOT5_XCUITEST_JSON), true);
+});
+
+test('pré-vol des lectures : la première refusée arrête la préparation, nommée avec statut, code et message masqué', async t => {
+  const b = banc(t);
+  b.lectureRefusee = 'mission_creneaux';
+  await assert.rejects(b.run('preparer'), e => /Lecture du parcours refusée par le serveur \(pré-vol, clé .*\) : « missions — créneaux » — HTTP 400, code 42703 — /.test(e.message)
+    && /<uuid>/.test(e.message) && !e.message.includes('3f2b9c1e') && /XCUITest non lancé/.test(e.message));
+  assert.equal(existsSync(b.env.LOT5_XCUITEST_JSON), false, 'aucune entrée de XCUITest');
+  const c = banc(t);
+  c.lectureRefusee = 'fn_etat_pointage_mission';
+  await assert.rejects(c.run('preparer'), /« pointage — état » — HTTP 200, message serveur « Accès refusé à cette mission »/);
+});
+
+test('manifeste des lectures : forme validée, jetons connus et remplacés, tables et fonctions présentes dans le Swift', () => {
+  assert.throws(() => lireManifesteLectures('{"purpose":"autre","lectures":[]}'), /illisible/);
+  assert.throws(() => lireManifesteLectures(JSON.stringify({ purpose: 'lot5-lectures-parcours-etab-v1', lectures: [{ nom: 'x', table: 'missions' }] })), /mal formée/);
+  const ids = { e1: 'e1', m1: 'm1', m2: 'm2', candidature: 'c', contrat: 'k' };
+  const requetes = requetesLectures(MANIFESTE_LECTURES, ids);
+  assert.ok(requetes.every(r => r.url ? !/%7B|\{/.test(r.url) : Object.values(r.params).every(v => !v.includes('{'))));
+  assert.throws(() => requetesLectures(MANIFESTE_LECTURES, { ...ids, candidature: null }), /\{CANDIDATURE\} sans valeur/);
+  assert.throws(() => requetesLectures({ lectures: [{ nom: 'x', table: 't', select: 'a', filtres: [['id', 'eq.{AUTRE}']] }] }, ids), /\{AUTRE\}/);
+  const swift = ['SupabaseEtabMissionsGateway', 'SupabaseEtabCandidaturesGateway', 'SupabaseEtabPointageGateway', 'SupabaseEtabPresencesGateway']
+    .map(f => readFileSync(new URL(`../../ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Etablissement/${f}.swift`, import.meta.url), 'utf8'))
+    .concat(readFileSync(new URL('../../ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Contrats/SupabaseContratsGateway.swift', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/Pointage/PointageQuery.swift', import.meta.url), 'utf8')).join('\n');
+  for (const l of MANIFESTE_LECTURES.lectures) {
+    if (l.table) assert.ok(swift.includes(`"${l.table}"`), `table ${l.table} lue par une passerelle`);
+    if (l.fonction) assert.ok(swift.includes(`"${l.fonction}"`), `fonction ${l.fonction} appelée par une passerelle`);
+    for (const p of Object.keys(l.params ?? {})) assert.ok(swift.includes(`"${p}"`), `paramètre ${p}`);
+  }
+  assert.ok(MANIFESTE_LECTURES.lectures.every(l => !/creer|valider|traiter|contester|declarer|postuler|scanner/.test(l.fonction ?? '')), 'aucune écriture');
+  assert.match(decrireLectureRefusee('x', { http: 0 }), /« x » — HTTP 0\. /);
 });

@@ -24,6 +24,8 @@ on:
       # Lot 5, T0 : garde des littéraux juridiques du Swift livré (LOT5_PLAN §2.9).
       - 'scripts/mobile/check-litteraux-juridiques.mjs'
       - 'scripts/mobile/check-litteraux-juridiques.test.mjs'
+      # Quatrième parcours STAGING du lot 5 : manifeste des lectures du parcours, relu par LecturesParcoursEtabManifesteTests.
+      - 'scripts/mobile/staging-lot5-lectures.json'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'
@@ -206,6 +208,8 @@ on:
       # Lot 5, T0 : garde des littéraux juridiques du Swift livré (LOT5_PLAN §2.9).
       - 'scripts/mobile/check-litteraux-juridiques.mjs'
       - 'scripts/mobile/check-litteraux-juridiques.test.mjs'
+      # Quatrième parcours STAGING du lot 5 : manifeste des lectures du parcours, relu par LecturesParcoursEtabManifesteTests.
+      - 'scripts/mobile/staging-lot5-lectures.json'
       - 'src/lib/date-heure-paris.ts'
       - 'src/lib/format-mission.ts'
       - 'src/lib/heures-hebdomadaires-mission.ts'

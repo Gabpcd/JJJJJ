@@ -47,7 +47,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const STAGING_REF = 'mejpriaetwgtcstbgfid';
 export const PRODUCTION_REF = 'flripxtsyegjshnhzjkz';
@@ -864,6 +864,60 @@ export function decrireTemoinSansSession(resultat) {
   return `${tete} refusée, HTTP ${http}${e.code ? `, code ${e.code}` : ''} (refus attendu du rôle anon).`;
 }
 
+/**
+ * Manifeste des lectures du parcours (quatrième parcours STAGING, 26/11/2026) : produit par le test Swift
+ * `LecturesParcoursEtabManifesteTests` depuis les constantes réelles des passerelles (tables, `select`, filtres,
+ * fonctions et paramètres), jamais recopié à la main. Validé ici avant tout appel ; une forme inattendue est refusée.
+ */
+export const CHEMIN_LECTURES = resolve(dirname(fileURLToPath(import.meta.url)), 'staging-lot5-lectures.json');
+const JETONS_LECTURES = ['{E1}', '{M1}', '{M2}', '{CANDIDATURE}', '{CONTRAT}'];
+
+export function lireManifesteLectures(texte) {
+  const m = JSON.parse(texte);
+  if (m?.purpose !== 'lot5-lectures-parcours-etab-v1' || !Array.isArray(m.lectures) || !m.lectures.length) {
+    throw new Error('Manifeste des lectures du parcours illisible : régénérer par LecturesParcoursEtabManifesteTests.');
+  }
+  for (const l of m.lectures) {
+    const table = typeof l.table === 'string' && /^[a-z_]+$/.test(l.table) && typeof l.select === 'string' && l.select
+      && Array.isArray(l.filtres) && l.filtres.every(f => Array.isArray(f) && f.length === 2 && f.every(x => typeof x === 'string'));
+    const fonction = typeof l.fonction === 'string' && /^fn_[a-z0-9_]+$/.test(l.fonction) && l.params && typeof l.params === 'object';
+    if (typeof l.nom !== 'string' || table === fonction) throw new Error(`Lecture du manifeste mal formée : ${JSON.stringify(l.nom ?? null)}.`);
+  }
+  return m;
+}
+
+/** Requêtes concrètes d'un manifeste : jetons remplacés par les identifiants de la cohorte, jamais de jeton inconnu. */
+export function requetesLectures(manifeste, ids) {
+  const valeurs = { '{E1}': ids.e1, '{M1}': ids.m1, '{M2}': ids.m2, '{CANDIDATURE}': ids.candidature, '{CONTRAT}': ids.contrat };
+  const remplacer = (texte) => {
+    const resultat = String(texte).replace(/\{[A-Z0-9]+\}/g, j => {
+      if (!JETONS_LECTURES.includes(j) || !valeurs[j]) throw new Error(`Jeton de lecture ${j} sans valeur dans la cohorte.`);
+      return valeurs[j];
+    });
+    return resultat;
+  };
+  return manifeste.lectures.map(l => {
+    if (l.fonction) {
+      return { nom: l.nom, fonction: l.fonction, params: Object.fromEntries(Object.entries(l.params).map(([k, v]) => [k, remplacer(v)])) };
+    }
+    const q = new URLSearchParams();
+    q.set('select', l.select);
+    for (const [colonne, valeur] of l.filtres) q.append(colonne, remplacer(valeur));
+    if (l.order) q.set('order', l.order);
+    if (l.limit) q.set('limit', String(l.limit));
+    return { nom: l.nom, url: `${STAGING_URL}/rest/v1/${l.table}?${q.toString()}` };
+  });
+}
+
+/** Message d'arrêt de la première lecture refusée : nom, statut HTTP, code brut, message masqué ; aucune valeur. */
+export function decrireLectureRefusee(nom, echec, origineCle = 'non précisée') {
+  const detail = echec?.corps !== undefined
+    ? refusCorps(echec.corps)
+    : `HTTP ${Number(echec?.http) || 0}${echec?.code ? `, code ${echec.code}` : ''}${echec?.message ? ` — ${messageServeur(echec.message, 240)}` : ''}`;
+  return `Lecture du parcours refusée par le serveur (pré-vol, clé ${origineCle}) : « ${nom} » — ${detail}. `
+    + "L'écran correspondant de l'app échouerait de même : XCUITest non lancé.";
+}
+
 /** Total des objets marqués ; une colonne absente ou non entière n'est jamais un zéro. */
 export function totalMarques(ligne) {
   let total = 0;
@@ -898,7 +952,7 @@ export function validerRelectures(r) {
 
 export async function executer({ action, env = process.env, fetchImpl = fetch, log = console.log,
   attendre = ms => new Promise(r => setTimeout(r, ms)), maintenant = () => new Date(),
-  genererMotDePasse = () => `Aa1!${randomBytes(36).toString('base64url')}` } = {}) {
+  genererMotDePasse = () => `Aa1!${randomBytes(36).toString('base64url')}`, lecturesTexte = null } = {}) {
   if (!ACTIONS.includes(action)) throw new Error(`Action L5 inconnue (attendu : ${ACTIONS.join(', ')}).`);
   verifierProjet(env); // verrou : avant tout appel réseau
   if (!env.STAGING_SUPABASE_ACCESS_TOKEN) throw new Error('STAGING_SUPABASE_ACCESS_TOKEN requis.');
@@ -1115,6 +1169,24 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
     }
     // Suivi de #1188 : refus du plancher du taux horaire à travers le vrai PostgREST, sous le JWT d'E1.
     await prouverRefusTauxMinimum({ doc, rpc: (fonction, params) => rpc(fonction, params, cleApp.cle, jwtE1), sql, log });
+    // Quatrième parcours STAGING : toutes les lectures que fera le parcours (manifeste produit depuis le Swift), sous le
+    // JWT d'E1 avec la clé de l'app, dans l'ordre du parcours ; la première refusée arrête la préparation, nommée.
+    const manifesteLectures = lireManifesteLectures(lecturesTexte ?? readFileSync(CHEMIN_LECTURES, 'utf8'));
+    const lectures = requetesLectures(manifesteLectures, { e1: doc.etablissement.id, m1: doc.m1.id, m2: doc.m2.id,
+      candidature: doc.candidatureId, contrat: doc.m2.contratId });
+    for (const l of lectures) {
+      let corps;
+      try {
+        corps = l.fonction ? await rpc(l.fonction, l.params, cleApp.cle, jwtE1)
+          : await requete(l.url, { cle: cleApp.cle, bearer: jwtE1 });
+      } catch (e) {
+        throw new Error(decrireLectureRefusee(l.nom, { http: e?.http ?? 0, code: e?.code ?? '', message: e?.message }, cleApp.origine));
+      }
+      if (corps && typeof corps === 'object' && !Array.isArray(corps) && (corps.success === false || typeof corps.error === 'string')) {
+        throw new Error(decrireLectureRefusee(l.nom, { corps }, cleApp.origine));
+      }
+    }
+    log(`Pré-vol des lectures du parcours : ${lectures.length} lecture(s) acceptée(s) sous le JWT d'E1 (manifeste ${manifesteLectures.purpose}).`);
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);

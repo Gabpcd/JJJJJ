@@ -27,6 +27,9 @@ public enum SupabaseErrorMapping {
     /// `fallback` est le message métier générique affiché quand l'erreur n'entre dans
     /// aucune catégorie (ex. « Impossible de charger les missions. Réessayez. »).
     public static func map(_ error: any Error, fallback: String) -> JoleneError {
+        #if DEBUG
+        noterDernierEchec(error)
+        #endif
         if let jolene = error as? JoleneError { return jolene }
         if error is CancellationError { return JoleneError(.cancelled, cancelledMessage) }
         if let urlError = error as? URLError {
@@ -45,6 +48,30 @@ public enum SupabaseErrorMapping {
         }
         return JoleneError(.unknown, fallback)
     }
+
+    #if DEBUG
+    /// DEBUG seulement : description sans secret du dernier échec serveur (`DiagnosticDernierEchec`) ; une erreur déjà
+    /// traduite (`JoleneError`) ou une annulation ne remplace pas l'échec d'origine.
+    static func noterDernierEchec(_ error: any Error, dans journal: DiagnosticDernierEchec = .partage) {
+        let texte: String
+        switch error {
+        case let postgrest as PostgrestError:
+            let message = DiagnosticServeur.masquer(postgrest.message)
+            texte = "postgrest=\(postgrest.code ?? "-")" + (message.isEmpty ? "" : ";message=\(message)")
+        case let http as HTTPError:
+            texte = "http=\(http.response.statusCode)"
+        case let url as URLError where url.code != .cancelled:
+            texte = "reseau=\(url.code.rawValue)"
+        case is DecodingError:
+            texte = "decodage=\(SupabaseEtabSessionGateway.cleFautive(error))"
+        case is AuthError:
+            texte = "auth"
+        default:
+            return
+        }
+        journal.noter(texte)
+    }
+    #endif
 
     public static func map(postgrestCode code: String?, fallback: String) -> JoleneError {
         guard let code else { return JoleneError(.unknown, fallback) }

@@ -194,6 +194,31 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
     /// Préfixe de la ligne de journal du stockage de session : le même que `SupabaseGateways.prefixeJournalStockage`
     /// et que le filtre du journal publié de `ios-swift-lot5-staging.yml` (garde : `staging-lot5-fixture.node.mjs`).
     static let prefixeJournalStockage = "Jolene diagnostic stockage-session :"
+    /// Préfixe de la ligne de journal d'un échec du parcours (quatrième parcours STAGING du lot 5, 26/11/2026).
+    static let prefixeJournalEchec = "Jolene diagnostic échec :"
+
+    /// Quatrième parcours STAGING : une attente échouée nomme, dans le journal publié du job, le dernier échec serveur
+    /// noté par l'app (`debug-dernier-echec`, DEBUG, sans secret) et les états d'erreur affichés (`*-error`), ou
+    /// l'absence de tout échec serveur. Uuid et adresses masqués.
+    override func record(_ issue: XCTIssue) {
+        if app.state == .runningForeground {
+            let dernier = element("debug-dernier-echec")
+            let echec = dernier.exists ? ((dernier.value as? String) ?? "illisible") : "élément absent"
+            let erreurs = app.descendants(matching: .any).matching(NSPredicate(format: "identifier ENDSWITH %@", "-error"))
+                .allElementsBoundByIndex.prefix(5).map { "\($0.identifier)=\($0.label)" }
+            let texte = "attente « \(issue.compactDescription.prefix(160)) » | dernier-echec=\(echec) | erreurs="
+                + (erreurs.isEmpty ? "aucune" : erreurs.joined(separator: ", "))
+            print("\(Self.prefixeJournalEchec) \(Self.masquer(texte))")
+        }
+        super.record(issue)
+    }
+
+    static func masquer(_ texte: String) -> String {
+        texte.replacingOccurrences(of: #"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"#,
+                                   with: "<uuid>", options: .regularExpression)
+            .replacingOccurrences(of: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#, with: "<adresse>", options: .regularExpression)
+            .replacingOccurrences(of: "\n", with: " ")
+    }
 
     private func lancerEtConnecter() {
         // 1re session imposée (DEBUG) : le pré-prompt de notification ne recouvre jamais le parcours.
@@ -254,8 +279,17 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
 
     private func ouvrirMissions(filtre: String, carte id: String) {
         if !containerVisible(element("etab-missions-screen")) { tabButton("tab-etab-missions", label: "Missions").tap() }
+        // Quatrième parcours STAGING (run 45737490974) : après l'acceptation de M1, le filtre « Ouvertes » resté choisi est
+        // vide ; l'écran rend alors `etab-missions-empty`, jamais `etab-missions-count` (EtabMissionsScreen, liste vide).
+        // La liste est relue dès qu'elle est chargée, pleine ou vide ; un état d'erreur arrête l'attente et la nomme.
+        let erreurListe = element("etab-missions-error")
         require("La liste des missions est relue", timeout: 45) {
-            self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
+            self.containerVisible(self.element("etab-missions-screen"))
+                && (self.element("etab-missions-count").exists || self.element("etab-missions-empty").exists || erreurListe.exists)
+        }
+        if erreurListe.exists {
+            XCTFail("Liste des missions en erreur : « \(erreurListe.label) »")
+            return
         }
         tap("etab-missions-filtre-\(filtre)")
         let carte = element("etab-mission-card-\(id)")
