@@ -191,6 +191,10 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
 
     // MARK: Étapes
 
+    /// Préfixe de la ligne de journal du stockage de session : le même que `SupabaseGateways.prefixeJournalStockage`
+    /// et que le filtre du journal publié de `ios-swift-lot5-staging.yml` (garde : `staging-lot5-fixture.node.mjs`).
+    static let prefixeJournalStockage = "Jolene diagnostic stockage-session :"
+
     private func lancerEtConnecter() {
         // 1re session imposée (DEBUG) : le pré-prompt de notification ne recouvre jamais le parcours.
         app.launchArguments = ["-JOLENE_MODE", "staging", "-JOLENE_SESSION_COUNT", "1"]
@@ -203,8 +207,16 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
             require("L'espace établissement ou la connexion est affiché", timeout: 60) {
                 self.visible(scroll) || self.containerVisible(self.element("etab-accueil-screen"))
             }
-            if !visible(scroll) { return }
+            if !visible(scroll) {
+                print("\(Self.prefixeJournalStockage) session restaurée, écran de connexion non affiché")
+                return
+            }
         }
+        // Revue de #1191, M1 : stockage de session retenu par l'app (valeur d'accessibilité DEBUG de `login-scroll` :
+        // `stockage=memoire|trousseau;sonde=ok|<OSStatus>`), une ligne du journal publié du job, que la connexion
+        // réussisse ou échoue. Aucun secret.
+        let stockage = (scroll.value as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "absent"
+        print("\(Self.prefixeJournalStockage) \(stockage)")
         XCTAssertFalse(element("env-blocked").exists, "la garde d'environnement accepte la configuration STAGING")
         let email = element("login-email")
         focus(email, in: scroll)

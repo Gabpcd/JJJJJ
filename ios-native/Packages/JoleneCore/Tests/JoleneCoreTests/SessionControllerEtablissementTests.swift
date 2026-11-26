@@ -409,6 +409,37 @@ final class SessionControllerEtablissementTests: XCTestCase {
         return [segment(#"{"alg":"HS256"}"#), segment(#"{"sub":"x"}"#), segment("signature")].joined(separator: ".")
     }
 
+    /// Troisième parcours STAGING : une session acceptée par Auth mais non enregistrée (trousseau refusé) arrête la
+    /// connexion avec son propre message, jamais celui des identifiants, et un diagnostic qui la nomme.
+    func testSessionNonEnregistreeArreteLaConnexionNommement() async {
+        var fixture = EtabFixture()
+        fixture.signInResult = .failure(JoleneError(.unknown, "Impossible d'enregistrer votre session sur cet appareil. Réessayez.",
+                                                    detail: JoleneError.detailSessionNonEnregistree))
+        let controleur = fixture.controller(espace: .ouvert)
+        let etat = await controleur.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        XCTAssertEqual(etat, .signedOut(message: "Impossible d'enregistrer votre session sur cet appareil. Réessayez."))
+        let diagnostic = await controleur.diagnostic
+        XCTAssertEqual(diagnostic, "connexion:unknown:session-non-enregistree")
+        let appels = await fixture.log.entries
+        XCTAssertTrue(appels.allSatisfy { !$0.contains("permissions") }, "aucune lecture de session")
+    }
+
+    /// Revue de #1191, M1 : le stockage retenu est lisible avant toute connexion et joint à chaque diagnostic d'échec ;
+    /// sans stockage décrit (doubles de test, démo), le diagnostic est inchangé.
+    func testStockageRetenuLisibleEtJointAuDiagnostic() async {
+        var gateways = EtabFixture(permissions: [.failure(JoleneError(.unauthorized, "Votre session a expiré. Reconnectez-vous.",
+                                                                      detail: "postgrest=42501;jwt=non;exp=-;hote=-"))]).gateways()
+        gateways.diagnosticStockage = "stockage=memoire;sonde=-34018"
+        let controleur = SessionController(gateways: gateways, espaceEtablissement: .ouvert)
+        XCTAssertEqual(controleur.diagnosticStockage, "stockage=memoire;sonde=-34018", "lisible avant la connexion")
+        _ = await controleur.signIn(email: "membre-1@example.invalid", password: "mot-de-passe")
+        let diagnostic = await controleur.diagnostic
+        XCTAssertEqual(diagnostic, "permissions:unauthorized:postgrest=42501;jwt=non;exp=-;hote=- | stockage=memoire;sonde=-34018")
+
+        let sansStockage = EtabFixture().controller(espace: .ouvert)
+        XCTAssertNil(sansStockage.diagnosticStockage)
+    }
+
     /// Revue de #1187, r2 : masquage avant troncature, 160 caractères au plus, jamais un fragment d'identifiant.
     func testDiagnosticServeurMasqueAvantDeTronquer() {
         let uuid = "3f2b9c1e-8a4d-4c2e-9b7a-1d2e3f4a5b6c"

@@ -9,7 +9,7 @@ import {
   executer, verifierProjet, destinationAdmise, sqlPreparer, sqlNettoyer, sqlCompter, sqlVerifier, manifeste,
   totalMarques, validerRelectures, COMPTES, STAGING_REF, PRODUCTION_REF, STAGING_URL, ECART_SCANS_MS, sha256,
   GRAPHE_NETTOYAGE, grapheNettoyage, lireGraphe, RACINES_COHORTE, sqlRetrouverRun, cibleDepuisRecherche, emailsDuRun,
-  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur,
+  NON_SUPPRIMABLES, sqlResidus, lireResidus, debutIntitule, controlerSessionEtablissement, choisirCleApp, messageServeur, decrireTemoinSansSession,
 } from '../../scripts/mobile/staging-lot5-fixture.mjs';
 
 const ZERO = Object.fromEntries(COMPTES.map(c => [c, 0]));
@@ -89,6 +89,11 @@ function banc(t, surcharge = {}) {
       return rep({ user_id: e1().id, role: 'ADMIN_ETABLISSEMENT', etablissement_id: e1().id });
     }
     if (u.pathname === '/rest/v1/rpc/fn_mes_permissions_etab') {
+      // Clé publishable en Authorization : ce que l'app envoie sans session enregistrée (rôle anon) → 401 42501.
+      if (opts.headers.Authorization === `Bearer ${opts.headers.apikey}`) {
+        b.sessionEtab.push({ rpc: 'temoin', apikey: opts.headers.apikey, auth: opts.headers.Authorization });
+        return rep({ code: '42501', message: 'permission denied for function fn_mes_permissions_etab' }, 401);
+      }
       b.sessionEtab.push({ rpc: 'permissions', apikey: opts.headers.apikey, corps });
       if (b.permissions === 'HTTP401') return rep({ code: 'PGRST301', message: 'JWT invalide' }, 401);
       return rep(b.permissions ?? { success: true, role: 'PROPRIETAIRE', etablissement_id: e1().id, permissions: {
@@ -503,7 +508,10 @@ test('m-B : SQL des résidus en lecture seule ; suppression ligne à ligne sur r
 test('pré-vol : les trois lectures, sous le JWT d E1, avec la clé que reçoit l app ; la clé employée est dite, jamais montrée', async t => {
   const b = banc(t, { JOLENE_STAGING_PUBLISHABLE_KEY: 'sb_publishable_CANARIcleDeLApp000000' });
   await b.run('preparer');
-  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil']);
+  assert.deepEqual(b.sessionEtab.map(x => x.rpc), ['role', 'permissions', 'profil', 'temoin']);
+  // Témoin (troisième parcours STAGING) : en-têtes de l'app sans session enregistrée, refus nommé, non bloquant.
+  assert.equal(b.sessionEtab[3].auth, 'Bearer sb_publishable_CANARIcleDeLApp000000');
+  assert.ok(b.logs.some(l => /^Témoin sans session .*: fn_mes_permissions_etab refusée, HTTP 401, code 42501 \(refus attendu du rôle anon\)\.$/.test(l)));
   assert.ok(b.sessionEtab.every(x => !x.apikey || x.apikey === 'sb_publishable_CANARIcleDeLApp000000'), 'clé de l app');
   assert.equal(b.sessionEtab[0].auth, 'Bearer jwt-CANARI-ETABLISSEMENT', 'JWT d E1');
   assert.deepEqual(b.sessionEtab[1].corps, { p_etablissement_id: null }, 'même corps que SupabaseEtabSessionGateway');
@@ -513,6 +521,34 @@ test('pré-vol : les trois lectures, sous le JWT d E1, avec la clé que reçoit 
   assert.match(choisirCleApp({}, { publishable: 'sb_publishable_x', anon: 'a' }).origine, /Management API/);
   assert.match(choisirCleApp({}, { anon: 'a' }).origine, /l'app ne l'emploie pas/);
   assert.match(choisirCleApp({ JOLENE_STAGING_PUBLISHABLE_KEY: 'pas-une-cle' }, { anon: 'a' }).origine, /anon/);
+});
+
+test('témoin sans session (revue de #1191, m3) : 2xx lu dans le corps ; réseau sans conclusion ; refus avec son code', () => {
+  assert.match(decrireTemoinSansSession({ corps: { success: true, role: 'PROPRIETAIRE', etablissement_id: 'e1' } }), /ACCEPTÉE avec un périmètre — le mécanisme supposé est démenti\.$/);
+  assert.match(decrireTemoinSansSession({ corps: { success: false, error: 'Non authentifié' } }),
+    /HTTP 2xx sans périmètre \(success false, HTTP 200, message serveur « Non authentifié »\) — refus porté par le corps/);
+  assert.match(decrireTemoinSansSession({ corps: null }), /HTTP 2xx sans périmètre \(success null\)/);
+  assert.match(decrireTemoinSansSession({ echec: { http: 401, code: 'PGRST301' } }), /refusée, HTTP 401, code PGRST301 \(refus attendu du rôle anon\)\.$/);
+  for (const echec of [{ http: 0 }, {}]) {
+    const m = decrireTemoinSansSession({ echec });
+    assert.match(m, /échec réseau ou délai dépassé, sans statut HTTP — aucune conclusion sur le rôle anon\.$/);
+    assert.doesNotMatch(m, /refus attendu/);
+  }
+});
+
+test('journal du stockage de session (revue de #1191, M1) : même préfixe dans l app, le XCUITest et le filtre du workflow', () => {
+  const prefixe = 'Jolene diagnostic stockage-session :';
+  const lire = f => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8');
+  assert.ok(lire('ios-native/Packages/JoleneSupabase/Sources/JoleneSupabase/SupabaseGateways.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
+  assert.ok(lire('ios-native/JoleneUITests/StagingEtabParcoursTests.swift').includes(`prefixeJournalStockage = "${prefixe}"`));
+  const workflow = lire('.github/workflows/ios-swift-lot5-staging.yml');
+  const filtres = [...workflow.matchAll(/filter\(l => (\/.*?\/)\.test\(l\)\)/g)].map(m => m[1]);
+  assert.equal(filtres.length, 2, 'un filtre par phase XCUITest');
+  for (const f of filtres) {
+    const re = new RegExp(f.slice(1, -1));
+    assert.ok(re.test(`${prefixe} stockage=memoire;sonde=-34018`), `ligne publiée par le filtre ${f}`);
+    assert.ok(re.test(`${prefixe} stockage=trousseau;sonde=ok`));
+  }
 });
 
 test('pré-vol : un refus arrête la préparation, nomme l écart, son statut HTTP et son code brut', async t => {

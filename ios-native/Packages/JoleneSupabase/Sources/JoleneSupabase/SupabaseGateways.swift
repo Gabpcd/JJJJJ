@@ -21,11 +21,27 @@ public enum SupabaseGateways {
         guard let url = environment.supabaseURL, let key = environment.publishableKey else {
             throw JoleneError(.environment, "Configuration Supabase incomplète.")
         }
-        let client = makeClient(url: url, publishableKey: key, storage: KeychainSessionStorage())
+        let choix = choixStockage(mode: environment.mode)
+        let client = makeClient(url: url, publishableKey: key, storage: choix.stockage)
         // Reste de L1-T10 : récupération du mot de passe sur un client d'authentification isolé (quarantaine).
-        return make(client: client, clock: clock, enrich: enrich,
-                    recovery: SupabaseRecoveryGateway.fabrique(url: url, publishableKey: key))
+        let gateways = make(client: client, clock: clock, enrich: enrich,
+                            recovery: SupabaseRecoveryGateway.fabrique(url: url, publishableKey: key))
+        #if DEBUG
+        // Revue de #1191, M1 : stockage retenu observable, au démarrage du client et dans chaque diagnostic de session.
+        var observables = gateways
+        observables.diagnosticStockage = choix.diagnostic
+        print("\(Self.prefixeJournalStockage) \(choix.diagnostic ?? "-")")
+        return observables
+        #else
+        return gateways
+        #endif
     }
+
+    #if DEBUG
+    /// Préfixe de la ligne de journal DEBUG du stockage de session, repris tel quel par le XCUITest STAGING et par le
+    /// filtre du journal publié de `ios-swift-lot5-staging.yml`.
+    public static let prefixeJournalStockage = "Jolene diagnostic stockage-session :"
+    #endif
 
     /// Assemble les ports autour d'un client existant (tests : transport injecté, stockage
     /// en mémoire). Aucune validation d'environnement ici : elle a déjà eu lieu.
@@ -95,6 +111,33 @@ public enum SupabaseGateways {
         gateways.paiements = SupabasePaiementsGateway(client: client)      // T13
         gateways.iban = SupabaseIbanGateway(client: client)                // T14b
         gateways.stripeConnect = SupabaseStripeConnectGateway(client: client) // T14a
+    }
+
+    /// Stockage de la session du client. Toujours le Keychain (`KeychainSessionStorage`, plan §4.3), sauf dans un
+    /// build DEBUG en mode `staging` dont le trousseau refuse l'écriture (`statutSonde` ≠ `errSecSuccess`) : mémoire du
+    /// processus, rien ne survit à l'arrêt de l'app. Cause du troisième parcours STAGING du lot 5 (25/11/2026) : l'app
+    /// de simulateur des workflows STAGING est construite avec `CODE_SIGNING_ALLOWED=NO`, sans `application-identifier`,
+    /// le trousseau répond -34018, supabase-swift journalise l'échec sans le lever et chaque requête PostgREST part avec
+    /// la clé publishable en `Authorization` (rôle `anon`). En Release, jamais de mémoire : un trousseau qui refuse
+    /// est détecté à la connexion (`SupabaseAuthGateway.signIn`, `JoleneError.detailSessionNonEnregistree`).
+    static func stockageSession(mode: JoleneMode,
+                                sonde: () -> OSStatus = { KeychainSessionStorage.statutSonde() }) -> any AuthLocalStorage {
+        choixStockage(mode: mode, sonde: sonde).stockage
+    }
+
+    /// Stockage retenu et, en DEBUG, sa description sans secret (revue de #1191, M1) :
+    /// `stockage=memoire;sonde=<OSStatus>` (staging, trousseau refusé), `stockage=trousseau;sonde=ok` (staging, trousseau
+    /// accepté), `stockage=trousseau;sonde=non-lancee` (autres modes : aucune écriture témoin). nil en Release.
+    static func choixStockage(mode: JoleneMode, sonde: () -> OSStatus = { KeychainSessionStorage.statutSonde() })
+        -> (stockage: any AuthLocalStorage, diagnostic: String?) {
+        #if DEBUG
+        guard mode == .staging else { return (KeychainSessionStorage(), "stockage=trousseau;sonde=non-lancee") }
+        let statut = sonde()
+        if statut != errSecSuccess { return (StockageMemoire(), "stockage=memoire;sonde=\(statut)") }
+        return (KeychainSessionStorage(), "stockage=trousseau;sonde=ok")
+        #else
+        return (KeychainSessionStorage(), nil)
+        #endif
     }
 
     /// Construction du client : options vérifiées dans `SupabaseClientOptions` de 2.55.5

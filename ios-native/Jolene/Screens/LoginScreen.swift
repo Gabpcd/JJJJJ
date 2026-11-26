@@ -23,6 +23,9 @@ struct LoginScreen: View {
     /// valeur d'accessibilité de `login-error` pour les XCUITest STAGING ; jamais affiché (second parcours STAGING du
     /// lot 5, 25/11/2026).
     var diagnostic: String? = nil
+    /// DEBUG seulement : stockage de session retenu (`SessionStore.diagnosticStockage`), valeur d'accessibilité de
+    /// `login-scroll`, lue par le XCUITest STAGING avant la connexion (revue de #1191, M1) ; jamais affiché.
+    var diagnosticStockage: String? = nil
     let submit: (String, String) async -> Void
 
     @State private var password = ""
@@ -105,6 +108,7 @@ struct LoginScreen: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .accessibilityIdentifier("login-scroll")
+            .modifier(DiagnosticConnexionDebug(diagnostic: diagnosticStockage))
         }
         .onAppear { password = "" }
     }

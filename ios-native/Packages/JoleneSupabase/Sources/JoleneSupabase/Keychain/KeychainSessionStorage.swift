@@ -124,6 +124,16 @@ public struct KeychainSessionStorage: AuthLocalStorage {
         }
     }
 
+    /// Statut d'écriture d'un élément témoin (écrit puis supprimé) : `errSecSuccess` si le trousseau accepte la
+    /// session ; `errSecMissingEntitlement` (-34018) pour une app de simulateur construite sans signature, donc sans
+    /// `application-identifier` (`CODE_SIGNING_ALLOWED=NO` des workflows STAGING ; troisième parcours STAGING du lot 5).
+    public static func statutSonde(store: any KeychainItemStore = SecurityKeychainStore()) -> OSStatus {
+        let key = "app.jolene.session.probe.\(UUID().uuidString)"
+        let statut = store.add(KeychainQueryBuilder.add(key: key, value: Data([0x01])))
+        if statut == errSecSuccess { _ = store.delete(KeychainQueryBuilder.base(key: key)) }
+        return statut
+    }
+
     /// Sonde de disponibilité : écrit puis supprime un élément témoin. Faux quand le processus
     /// n'a pas d'entitlement Keychain (`errSecMissingEntitlement`) ou que le trousseau est
     /// inaccessible. Sert à isoler le test d'intégration réel sur macOS.

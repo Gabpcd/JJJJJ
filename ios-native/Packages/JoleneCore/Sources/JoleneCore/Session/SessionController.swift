@@ -45,19 +45,30 @@ public actor SessionController {
     public private(set) var diagnostic: String?
     #endif
 
+    #if DEBUG
+    /// DEBUG seulement : stockage de session retenu (`Gateways.diagnosticStockage`), lisible que la connexion réussisse
+    /// ou échoue (revue de #1191, M1) ; joint à chaque diagnostic d'échec après « | ».
+    public nonisolated var diagnosticStockage: String? { configured.diagnosticStockage }
+
+    private func avecStockage(_ texte: String) -> String {
+        guard let stockage = configured.diagnosticStockage else { return texte }
+        return "\(texte) | \(stockage)"
+    }
+    #endif
+
     private func noter(_ etape: String, _ error: Error) {
         #if DEBUG
         if let jolene = error as? JoleneError {
-            diagnostic = "\(etape):\(jolene.kind):\(jolene.detail ?? DiagnosticServeur.masquer(jolene.message))"
+            diagnostic = avecStockage("\(etape):\(jolene.kind):\(jolene.detail ?? DiagnosticServeur.masquer(jolene.message))")
         } else {
-            diagnostic = "\(etape):\(type(of: error))"
+            diagnostic = avecStockage("\(etape):\(type(of: error))")
         }
         #endif
     }
 
     private func noter(_ texte: String?) {
         #if DEBUG
-        diagnostic = texte
+        diagnostic = texte.map(avecStockage)
         #endif
     }
 
@@ -66,9 +77,9 @@ public actor SessionController {
     private func noterPerimetre(_ perimetre: PerimetreEtablissement, _ reponse: PermissionsEtabResult) {
         #if DEBUG
         if !reponse.success, let message = reponse.messageServeur {
-            diagnostic = "permissions:refus:\(DiagnosticServeur.masquer(message))"
+            diagnostic = avecStockage("permissions:refus:\(DiagnosticServeur.masquer(message))")
         } else {
-            diagnostic = "permissions:perimetre:\(perimetre)"
+            diagnostic = avecStockage("permissions:perimetre:\(perimetre)")
         }
         #endif
     }
@@ -455,6 +466,7 @@ public actor SessionController {
         if let jolene = error as? JoleneError {
             switch jolene.kind {
             case .network: return "Connexion impossible pour le moment. Vérifiez votre réseau puis réessayez."
+            case .unknown where jolene.detail == JoleneError.detailSessionNonEnregistree: return jolene.message
             case .invalidCredentials, .unauthorized: return genericSignInMessage
             default: return genericSignInMessage
             }

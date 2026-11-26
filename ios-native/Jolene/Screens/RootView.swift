@@ -68,6 +68,15 @@ private struct SessionRootView: View {
         return { await controller.gateways(for: await controller.epoch)?.recovery }
     }
 
+    /// DEBUG seulement : stockage de session retenu (revue de #1191, M1) ; nil en Release.
+    private var diagnosticStockageDebug: String? {
+        #if DEBUG
+        session.diagnosticStockage
+        #else
+        nil
+        #endif
+    }
+
     var body: some View {
         Group {
             switch session.state {
@@ -93,7 +102,8 @@ private struct SessionRootView: View {
                                 retryRestore: session.canRetryRestore ? { await session.start() } : nil,
                                 creerCompte: { inscription = EtapeInscription(page: .soignant, query: nil) },
                                 motDePasseOublie: { demandeReinitialisation = true },
-                                diagnostic: session.diagnosticConnexion) { email, password in
+                                diagnostic: session.diagnosticConnexion,
+                                diagnosticStockage: diagnosticStockageDebug) { email, password in
                         await session.signIn(email: email, password: password)
                     }
                     // Reste de L1-T10 : demande d'un lien de réinitialisation (« Mot de passe oublié ? »).

@@ -10,6 +10,8 @@ public struct SupabaseAuthGateway: AuthPort {
     public static let tooManyAttemptsMessage = "Trop de tentatives. Réessayez dans quelques minutes."
     public static let signInFallbackMessage = "La connexion a échoué. Réessayez."
     public static let signOutFallbackMessage = "La déconnexion n'a pas pu être confirmée. Réessayez."
+    public static let sessionNonEnregistreeMessage = "Impossible d'enregistrer votre session sur cet appareil. Réessayez."
+
 
     private let client: SupabaseClient
 
@@ -46,14 +48,21 @@ public struct SupabaseAuthGateway: AuthPort {
         guard !trimmedEmail.isEmpty, !password.isEmpty else {
             throw JoleneError(.invalidCredentials, Self.invalidCredentialsMessage)
         }
+        let session: Session
         do {
-            let session = try await client.auth.signIn(email: trimmedEmail, password: password)
-            return Self.user(from: session.user)
+            session = try await client.auth.signIn(email: trimmedEmail, password: password)
         } catch let error as AuthError {
             throw Self.signInError(error)
         } catch {
             throw SupabaseErrorMapping.map(error, fallback: Self.signInFallbackMessage)
         }
+        // supabase-swift journalise un échec d'écriture du stockage sans le lever, puis envoie chaque requête avec la clé
+        // publishable en `Authorization` (rôle `anon`) : une session acceptée mais non relue est refusée ici, nommément,
+        // jamais laissée filer en « session expirée » sur la première lecture (troisième parcours STAGING du lot 5).
+        guard client.auth.currentSession?.accessToken == session.accessToken else {
+            throw JoleneError(.unknown, Self.sessionNonEnregistreeMessage, detail: JoleneError.detailSessionNonEnregistree)
+        }
+        return Self.user(from: session.user)
     }
 
     /// Le SDK supprime la session locale avant d'appeler le serveur ; un échec serveur

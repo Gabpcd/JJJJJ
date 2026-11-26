@@ -778,6 +778,30 @@ export function controlerSessionEtablissement(doc, { role, permissions, profil }
   throw new Error(parties.join('\n'));
 }
 
+/**
+ * Témoin du troisième parcours STAGING (25/11/2026) : la lecture de `fn_mes_permissions_etab` rejouée avec les en-têtes
+ * que l'app envoie quand son trousseau refuse la session (supabase-swift garde alors la clé publishable en `apikey` ET en
+ * `Authorization`, rôle `anon`). Non bloquant : un refus confirme le mécanisme côté serveur, une acceptation le dément.
+ * Entrée : `{ corps }` (réponse 2xx) ou `{ echec: { http, code } }` ; aucune valeur de clé ni de jeton.
+ */
+export function decrireTemoinSansSession(resultat) {
+  const tete = "Témoin sans session (clé publishable en Authorization, comme l'app quand le trousseau refuse) : fn_mes_permissions_etab";
+  if (resultat && 'corps' in resultat) {
+    // Revue de #1191, m3 : une réponse 2xx n'est « acceptée » que si le corps ouvre un périmètre (comme l'app le lirait).
+    const c = resultat.corps;
+    if (c && typeof c === 'object' && c.success === true && c.role && c.etablissement_id) {
+      return `${tete} ACCEPTÉE avec un périmètre — le mécanisme supposé est démenti.`;
+    }
+    return `${tete} : HTTP 2xx sans périmètre (success ${JSON.stringify(c?.success ?? null)}${typeof c?.error === 'string' ? `, ${refusCorps(c)}` : ''}) `
+      + '— refus porté par le corps, cohérent avec le rôle anon.';
+  }
+  const e = resultat?.echec ?? {};
+  const http = Number(e.http) || 0;
+  // Revue de #1191, m3 : sans statut HTTP (réseau, délai), aucune conclusion sur le rôle anon.
+  if (!http) return `${tete} : échec réseau ou délai dépassé, sans statut HTTP — aucune conclusion sur le rôle anon.`;
+  return `${tete} refusée, HTTP ${http}${e.code ? `, code ${e.code}` : ''} (refus attendu du rôle anon).`;
+}
+
 /** Total des objets marqués ; une colonne absente ou non entière n'est jamais un zéro. */
 export function totalMarques(ligne) {
   let total = 0;
@@ -1020,6 +1044,13 @@ export async function executer({ action, env = process.env, fetchImpl = fetch, l
       permissions: await lire('fn_mes_permissions_etab', { p_etablissement_id: null }),
       profil: await lire('fn_mon_etablissement_complet', {}),
     }, cleApp.origine);
+    // Témoin non bloquant (troisième parcours STAGING) : mêmes en-têtes que l'app sans session enregistrée.
+    try {
+      const corps = await rpc('fn_mes_permissions_etab', { p_etablissement_id: null }, cleApp.cle, cleApp.cle);
+      log(decrireTemoinSansSession({ corps }));
+    } catch (e) {
+      log(decrireTemoinSansSession({ echec: { http: e?.http ?? 0, code: e?.code ?? '' } }));
+    }
     const code = await codeActuel();
     if (code.statut !== 'ASSIGNEE' || code.prochain_type_scan !== 'OUVERTURE') throw new Error('M2 n est pas prête au pointage.');
     doc.codeSha256 = sha256(code.code);

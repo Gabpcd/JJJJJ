@@ -25,6 +25,28 @@ public struct SupabaseEtabSessionGateway: EtabSessionPort {
     }
 
     public func permissions(etablissementId: String?) async throws -> PermissionsEtabResult {
+        try await diagnostiquer { try await lirePermissions(etablissementId: etablissementId) }
+    }
+
+    public func profil() async throws -> EtablissementProfil {
+        try await diagnostiquer { try await lireProfil() }
+    }
+
+    /// Un refus « non autorisé » emporte, en DEBUG, le diagnostic du transport (`DiagnosticTransport`) en `detail` :
+    /// code brut, forme du jeton envoyé, secondes avant `exp`, hôte émetteur = hôte REST. Rien en Release.
+    private func diagnostiquer<T>(_ lecture: () async throws -> T) async throws -> T {
+        do {
+            return try await lecture()
+        } catch let erreur as JoleneError where erreur.kind == .unauthorized {
+            #if DEBUG
+            throw JoleneError(erreur.kind, erreur.message, detail: DiagnosticTransport.decrire(client: client, code: erreur.detail))
+            #else
+            throw erreur
+            #endif
+        }
+    }
+
+    private func lirePermissions(etablissementId: String?) async throws -> PermissionsEtabResult {
         let parametre: AnyJSON
         if let etablissementId {
             // Un identifiant explicite doit être un uuid valide (jamais l'uuid nul) : refusé avant réseau.
@@ -48,7 +70,7 @@ public struct SupabaseEtabSessionGateway: EtabSessionPort {
         return resultat
     }
 
-    public func profil() async throws -> EtablissementProfil {
+    private func lireProfil() async throws -> EtablissementProfil {
         let reponse = try await RPCResponse.appeler(
             client, Self.profilRPC, fallback: Self.fallbackProfil,
             interceptions: ListesBlanchesEtablissement.interceptions(rpc: Self.profilRPC))

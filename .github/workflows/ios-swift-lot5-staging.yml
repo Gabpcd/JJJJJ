@@ -255,7 +255,7 @@ jobs:
             let texte = fs.readFileSync(`${e.RUNNER_TEMP}/${e.PHASE}.private.log`, "utf8");
             for (const v of [c.etablissement.password, c.etablissement.email]) if (v) texte = texte.split(v).join("[PRIVATE]");
             fs.writeFileSync(`${e.JOLENE_UI_OUTPUT}/test-without-building-${e.PHASE}.log`, texte);
-            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: /.test(l)).slice(-60).join("\n"));
+            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: |Jolene diagnostic stockage-session :/.test(l)).slice(-60).join("\n"));
           ' || true
           rm -f "$RUNNER_TEMP/$PHASE.private.log"
           echo "xcodebuild test-without-building ($PHASE) : code $code"
@@ -318,7 +318,7 @@ jobs:
             let texte = fs.readFileSync(`${e.RUNNER_TEMP}/${e.PHASE}.private.log`, "utf8");
             for (const v of [c.etablissement.password, c.etablissement.email]) if (v) texte = texte.split(v).join("[PRIVATE]");
             fs.writeFileSync(`${e.JOLENE_UI_OUTPUT}/test-without-building-${e.PHASE}.log`, texte);
-            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: /.test(l)).slice(-60).join("\n"));
+            console.log(texte.split("\n").filter(l => /Test Case|Test Suite|\*\* TEST|error: |Jolene diagnostic stockage-session :/.test(l)).slice(-60).join("\n"));
           ' || true
           rm -f "$RUNNER_TEMP/$PHASE.private.log"
           echo "xcodebuild test-without-building ($PHASE) : code $code"
