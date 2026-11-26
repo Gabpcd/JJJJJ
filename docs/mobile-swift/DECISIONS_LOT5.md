@@ -1215,9 +1215,10 @@ juridiques du point 4). La PR n'est pas mergeable tant que le parcours STAGING n
    - **Parcours STAGING vert** (`ios-swift-lot5-staging.yml`, section T13, points 5 et 6) sur le commit de `main` dont
      part la PR. **État au 25/11/2026 : TOUJOURS NON VERT.** Trois runs ont échoué. Le troisième (45677331174, `main`
      `b95c84ff`) a nommé la cause côté app : le pré-vol serveur est passé, mais l'app reçoit « non autorisé » sur
-     `fn_mes_permissions_etab` juste après une connexion acceptée (diagnostic `permissions:unauthorized`). La cause est
-     en cours d'instruction dans une autre branche ; un défaut qui toucherait aussi la production n'est ni prouvé ni
-     exclu. **T14 ne se merge pas avant un parcours vert.**
+     `fn_mes_permissions_etab` juste après une connexion acceptée (diagnostic `permissions:unauthorized`). Ce refus est
+     instruit par la section « Troisième parcours STAGING » ci-dessus et par #1191 (mergée sur `main`, `338df39b`) ;
+     aucun parcours vert n'est connu de cette tranche à ce jour, et un défaut qui toucherait aussi la production n'est
+     ni prouvé ni exclu ici. **T14 ne se merge pas avant un parcours vert.**
    - **Validation juridique de la fondatrice** (HARD STOP n°4) : **validé le 25/11/2026**. À une liste de neuf points
      juridiques avec recommandations, la fondatrice a répondu « Oui, tout valider » (réponse rapportée par la session
      de coordination, non relue ici). Pour T14, cela couvre, mot pour mot de la liste :
