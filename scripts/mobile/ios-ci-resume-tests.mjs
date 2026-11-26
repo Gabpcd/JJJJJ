@@ -15,14 +15,20 @@
  *   - le temps passé des tests échoués, restés sans conclusion ou de plus de 5 min : marques d'attente d'inactivité de
  *     XCTest comptées dans le journal (« App event loop idle notification not received »…) et plus longs silences entre
  *     deux lignes d'activité, attribués à l'activité qui précède ;
+ *   - la garde de repos XCUITest (`ios-native/JoleneUITests/GardeRepos.swift`, « Garde de repos XCUITest — 26/11/2026 »
+ *     de `docs/mobile-swift/DECISIONS_LOT2.md`) : lignes « Jolene diagnostic repos-xcuitest » du journal, en
+ *     avertissement (attentes des animations expirées puis suspendues pour un processus d'app ; garde non installée) ;
  *   - les relevés du veilleur (`scripts/mobile/ios-ci-gel-simulateur.sh veiller`) : passes, pile la plus fréquente du fil
  *     principal de chaque `sample` ; et les Spindump que XCTest joint à un test qui dépasse son délai d'exécution, copiés
  *     dans `diagnostic/` pour l'artefact léger du job.
  * L'arbre lu est gardé dans `xctest-tests-<éclat>.json` (durée de chaque test), publié par le même artefact léger.
  *
- * Relevé d'information seulement : il ne décide jamais du statut du job. Le script rend toujours 0 ; l'étape l'appelle
- * par `trap … EXIT`, pour qu'il tourne quelle que soit l'issue de l'étape (bundle absent, tests en échec) sans en
- * changer le code de sortie. Garde : `tests/node/ios-swift-ci-eclats.node.mjs` ; tests :
+ * Relevé d'information, à une exception près : il ne décide du statut du job que si la garde de repos a absorbé plus de
+ * `SEUIL_ABSORPTIONS_PAR_JOB` processus d'app dans le job. Il rend alors
+ * `CODE_ABSORPTIONS_EXCESSIVES`, avec une erreur qui nomme les tests (« probable animation sans fin dans l'app ») ;
+ * sinon toujours 0. L'étape l'appelle par `trap … EXIT`, pour qu'il tourne quelle que soit l'issue de l'étape (bundle
+ * absent, tests en échec) ; le trap ne propage que `CODE_ABSORPTIONS_EXCESSIVES`, et seulement si l'étape réussissait
+ * (un test échoué reste échoué dans tous les cas). Garde : `tests/node/ios-swift-ci-eclats.node.mjs` ; tests :
  * `scripts/mobile/ios-ci-resume-tests.test.mjs` (job « Cœur »).
  *
  * Usage : node scripts/mobile/ios-ci-resume-tests.mjs <éclat> [<éclat>…]
@@ -55,6 +61,18 @@ export const MARQUES_INACTIVITE = [
   'Timed out while evaluating UI query',
   'exceeded execution time allowance',
 ];
+/** Marque des lignes de la garde de repos XCUITest (`GardeReposDecision.marque`). */
+export const MARQUE_GARDE_REPOS = 'Jolene diagnostic repos-xcuitest';
+/**
+ * Absorptions de la garde tolérées par job (processus d'app suspendus, une ligne chacun), tous éclats du job.
+ * Comptage du 26/11/2026 sur les 103 jobs UI terminés des 120 dernières séries : au plus UNE
+ * attente des animations expirée par job (5 jobs sur 103, chacun un seul test : `clavier-ok` sur iPad, plus un cas
+ * isolé de la messagerie). Une animation sans fin introduite dans l'app frapperait au contraire chaque test qui passe
+ * par son écran : au-delà de trois par job, la série doit rougir.
+ */
+export const SEUIL_ABSORPTIONS_PAR_JOB = 3;
+/** Code de sortie du relevé quand le seuil est dépassé (le seul que le trap de l'étape propage). */
+export const CODE_ABSORPTIONS_EXCESSIVES = 8;
 const MAX_ECHOUES = 40;
 const MAX_DETAILS = 15;
 const MAX_ANNOTATIONS = 10;
@@ -151,6 +169,7 @@ const MARQUES_MINUSCULES = MARQUES_INACTIVITE.map(m => [m, m.toLowerCase()]);
  */
 export function lireJournal(texte) {
   const tests = new Map();
+  const installation = [];
   let courant = null;
   let precedent = null;
   const noter = (info, silence) => {
@@ -176,7 +195,7 @@ export function lireJournal(texte) {
       courant = {
         cle: `${debut[2]}.${debut[3]}`, cible: debut[1], classe: debut[2], nom: debut[3], issue: null, duree: null, erreur: null,
         marques: new Map(), silences: [], silencesTotal: 0, activites: 0, dernierT: null, derniereActivite: null,
-        sansConclusion: true, enCoursALaFin: false,
+        sansConclusion: true, enCoursALaFin: false, gardeRepos: [],
       };
       tests.set(courant.cle, courant);
       precedent = null;
@@ -194,10 +213,23 @@ export function lireJournal(texte) {
     for (const [marque, cherchee] of MARQUES_MINUSCULES) {
       if (minuscules.includes(cherchee)) courant.marques.set(marque, (courant.marques.get(marque) ?? 0) + 1);
     }
+    // Ligne de la garde écrite par `print` hors du fil principal (sans « t = … s ») : lue aussi, sans instant.
+    if (!ACTIVITE.test(ligne) && ligne.trim().startsWith(MARQUE_GARDE_REPOS)) {
+      const libre = ligne.trim();
+      if (libre.includes('garde de repos')) installation.push(libre);
+      else courant.gardeRepos.push({ t: null, ligne: libre });
+      continue;
+    }
     const activite = ACTIVITE.exec(ligne);
     if (activite) {
       const t = Number(activite[1]);
       const libelle = activite[2].trim();
+      // Garde de repos : une ligne par processus d'app suspendu (attente des animations expirée), et son état de pose
+      // au premier test de l'éclat.
+      if (libelle.startsWith(MARQUE_GARDE_REPOS)) {
+        if (libelle.includes('garde de repos')) installation.push(libelle);
+        else courant.gardeRepos.push({ t, ligne: libelle });
+      }
       if (precedent) noter(courant, { duree: t - precedent.t, apres: precedent.texte, t: precedent.t, fin: false });
       precedent = { t, texte: libelle };
       courant.activites += 1;
@@ -214,7 +246,7 @@ export function lireJournal(texte) {
     clore(courant, null, null);
     courant.enCoursALaFin = true;
   }
-  return { tests };
+  return { tests, installation };
 }
 
 // MARK: - Relevés du veilleur (`sample`)
@@ -269,7 +301,8 @@ const tronquer = texte => {
  * toujours les tests de l'arbre, et un test resté sans conclusion au journal mais absent de l'arbre est ajouté.
  */
 export function resumerEclat({ nom, arbre = null, lecture = null, journal = null, veilleur = null, spindumps = [] }) {
-  const duJournal = journal === null || journal === undefined ? null : lireJournal(journal).tests;
+  const lu = journal === null || journal === undefined ? null : lireJournal(journal);
+  const duJournal = lu?.tests ?? null;
   const deLArbre = testsDeLArbre(arbre);
   let source = null;
   let motif = lecture;
@@ -312,6 +345,10 @@ export function resumerEclat({ nom, arbre = null, lecture = null, journal = null
     details: tests.filter(t => t.journal && (t.echoue || t.sansConclusion || (Number.isFinite(t.duree) && t.duree >= SEUIL_TEST_LONG_S))),
     veilleur: veilleur ?? { passes: [], piles: [] },
     spindumps,
+    gardeRepos: {
+      installation: lu?.installation ?? [],
+      expirations: [...(duJournal?.values() ?? [])].flatMap(info => info.gardeRepos.map(g => ({ test: info.cle, ...g }))),
+    },
   };
 }
 
@@ -411,13 +448,40 @@ export function rendre({ format, eclats, racine = RACINE }) {
     if (details.length > MAX_DETAILS) lignes.push(`- … et ${details.length - MAX_DETAILS} autres tests (journaux des éclats dans l’artefact léger du job).`);
   }
 
+  // Garde de repos XCUITest : avertissements, jamais une erreur (on doit voir la fréquence, pas masquer un échec).
+  const garde = eclats.flatMap(e => (e.gardeRepos?.expirations ?? []).map(g => ({ e, g })));
+  const nonPosee = eclats.flatMap(e => (e.gardeRepos?.installation ?? []).filter(l => l.includes('non installée')).map(l => ({ e, l })));
+  if (garde.length || nonPosee.length) {
+    const tests = [...new Set(garde.map(({ g }) => g.test))];
+    lignes.push('', `**Garde de repos XCUITest** : ${garde.length} attente${garde.length > 1 ? 's' : ''} des animations expirée${garde.length > 1 ? 's' : ''} puis suspendue${garde.length > 1 ? 's' : ''} pour le processus d’app${tests.length ? ` (${tests.length} test${tests.length > 1 ? 's' : ''})` : ''}`, '');
+    for (const { e, g } of garde.slice(0, MAX_DETAILS)) {
+      lignes.push(`- ${e.nom} — \`${cell(g.test)}\`${Number.isFinite(g.t) ? ` (${instant(g.t)})` : ''} : ${replier(g.ligne)}`);
+    }
+    if (garde.length > MAX_DETAILS) lignes.push(`- … et ${garde.length - MAX_DETAILS} autres (journaux des éclats dans l’artefact léger du job).`);
+    for (const { e, l } of nonPosee) lignes.push(`- ${e.nom} — ${replier(l)}`);
+    for (const { e, g } of garde.slice(0, MAX_ANNOTATIONS)) {
+      annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${g.test} — ${replier(g.ligne)}`)}`);
+    }
+    for (const { e, l } of nonPosee.slice(0, MAX_ANNOTATIONS)) annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${replier(l)}`)}`);
+  }
+  // Absorption bornée : au-delà du seuil, erreur nette et code de sortie non nul.
+  const absorptions = garde;
+  const excessif = absorptions.length > SEUIL_ABSORPTIONS_PAR_JOB;
+  if (excessif) {
+    const noms = [...new Set(absorptions.map(({ g }) => g.test))];
+    const message = `Garde de repos (${format}) : ${absorptions.length} processus d’app absorbés dans ce job, au-delà de ${SEUIL_ABSORPTIONS_PAR_JOB} — `
+      + `probable animation sans fin dans l’app, la garde ne doit pas l’absorber. Tests : ${noms.join(', ')}`;
+    lignes.push('', `**${message}**`);
+    annotations.unshift(`::error::${esc(message)}`);
+  }
+
   const releves = eclats.flatMap(e => [
     ...e.veilleur.passes.map(passe => `- ${e.nom} — ${replier(passe)}`),
     ...e.veilleur.piles.map(({ fichier, pile }) => `- ${e.nom} — \`${fichier}\`, fil principal : ${pile.feuille} échantillons sur ${pile.echantillons} dans ${pile.cadres.slice(0, MAX_CADRES).join(' ← ')}`),
     ...e.spindumps.map(s => `- ${e.nom} — Spindump de XCTest (délai d’exécution dépassé) joint à \`${s.test}\` : \`${s.copie ?? s.fichier}\``),
   ]);
   if (releves.length) lignes.push('', '**Relevés du veilleur et de XCTest** (fichiers dans l’artefact léger du job)', '', ...releves);
-  return { lignes, annotations };
+  return { lignes, annotations, code: excessif ? CODE_ABSORPTIONS_EXCESSIVES : 0 };
 }
 
 // MARK: - Lecture des fichiers de l'étape
@@ -493,8 +557,12 @@ export function collecter({ eclats, format, sortie, bundles, env = process.env }
 
 const AVERTISSEMENT = 'Résumé des tests par éclat non établi';
 
-/** Rend toujours 0 : un relevé manquant est un avertissement, jamais un échec de l'étape. */
+/**
+ * Rend 0, sauf absorptions de la garde au-delà du seuil (`CODE_ABSORPTIONS_EXCESSIVES`) : un relevé manquant reste un
+ * avertissement, jamais un échec de l'étape.
+ */
 export function main(argv = process.argv.slice(2), env = process.env) {
+  let code = 0;
   try {
     const eclats = argv.filter(a => !a.startsWith('-'));
     const { JOLENE_UI_OUTPUT: sortie, RUNNER_TEMP: bundles } = env;
@@ -503,14 +571,16 @@ export function main(argv = process.argv.slice(2), env = process.env) {
       return 0;
     }
     const format = env.JOLENE_UI_FORMAT || '?';
-    const { lignes, annotations } = rendre({ format, eclats: collecter({ eclats, format, sortie, bundles, env }) });
+    const rendu = rendre({ format, eclats: collecter({ eclats, format, sortie, bundles, env }) });
+    const { lignes, annotations } = rendu;
+    code = rendu.code;
     console.log(lignes.join('\n'));
     for (const annotation of annotations) console.log(annotation);
     if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${lignes.join('\n')}\n`);
   } catch (erreur) {
     console.log(`::warning::${esc(`${AVERTISSEMENT} : ${erreur?.message ?? erreur} (scripts/mobile/ios-ci-resume-tests.mjs).`)}`);
   }
-  return 0;
+  return code;
 }
 
 const lanceDirectement = () => {

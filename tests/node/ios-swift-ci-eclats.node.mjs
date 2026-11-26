@@ -852,7 +852,11 @@ test('relevé des tests : lancé à la sortie de l étape « Résumé xcresult �
   for (const [nomJob, etapesDuJob, eclats] of [['ui', liste, parEtape], ['ui-lot1', listeLot1, parEtapeLot1]]) {
     const resume = etapesDuJob.find(e => e.nom.startsWith('Résumé xcresult'));
     assert.ok(resume, `job ${nomJob} : étape de résumé absente`);
-    const attendu = `trap 'node ${SCRIPT_RESUME} ${eclats.map(e => e.nom).join(' ')} || echo "::warning::Relevé des tests par éclat non lancé (${SCRIPT_RESUME})."' EXIT`;
+    // Garde de repos XCUITest : seul le code 8 du relevé (absorptions au-delà du seuil) fait échouer une étape qui réussissait.
+    const attendu = `trap 'statut=$?; releve=0; node ${SCRIPT_RESUME} ${eclats.map(e => e.nom).join(' ')} || releve=$?; `
+      + `if [ "$releve" -eq 8 ]; then [ "$statut" -ne 0 ] || statut=8; elif [ "$releve" -ne 0 ]; `
+      + `then echo "::warning::Relevé des tests par éclat non lancé (${SCRIPT_RESUME})."; fi; exit "$statut"' EXIT`;
+    assert.ok(read(SCRIPT_RESUME).includes('export const CODE_ABSORPTIONS_EXCESSIVES = 8;'), 'code 8 du trap = CODE_ABSORPTIONS_EXCESSIVES');
     // Première commande de l'étape : le relevé est armé avant la boucle qui sort sur un bundle absent.
     assert.equal(commandes(resume)[0], attendu, `job ${nomJob} : relevé des tests absent, incomplet ou précédé d une autre commande`);
     assert.equal(resume.texte.split(SCRIPT_RESUME).length - 1, 3, `job ${nomJob} : un seul lancement (deux mentions dans le trap, une en commentaire)`);
@@ -864,7 +868,7 @@ test('relevé des tests : lancé à la sortie de l étape « Résumé xcresult �
   }
 });
 
-test('relevé des tests : le trap ne change jamais le code de sortie de l étape, même si le relevé échoue', () => {
+test('relevé des tests : le trap ne change le code de sortie de l étape que sur absorptions excessives de la garde', () => {
   const resume = liste.find(e => e.nom.startsWith('Résumé xcresult'));
   const piege = commandes(resume)[0];
   const dir = mkdtempSync(join(tmpdir(), 'jolene-trap-'));
@@ -890,11 +894,13 @@ test('relevé des tests : le trap ne change jamais le code de sortie de l étape
     // en échec sous `-e`, commande introuvable. Le relevé tourne une fois dans chaque cas, le code est celui de l'étape.
     for (const [corps, code] of [['true', 0], ['exit 1', 1], ['for e in a b; do [ -d /absent ] || { echo absent; exit 1; }; done', 1],
       ['false', 1], ['exit 7', 7], ['commande_absente_du_runner', 127]]) {
-      for (const codeNode of [0, 3]) {
+      for (const codeNode of [0, 3, 8]) {
         const r = lancer(corps, codeNode);
-        assert.equal(r.status, code, `« ${corps} », relevé en code ${codeNode} : code de l étape ${r.status} (${r.stderr})`);
+        // Code 8 (CODE_ABSORPTIONS_EXCESSIVES) : une étape qui réussissait échoue en 8 ; une étape en échec garde son code.
+        const attenduEtape = codeNode === 8 && code === 0 ? 8 : code;
+        assert.equal(r.status, attenduEtape, `« ${corps} », relevé en code ${codeNode} : code de l étape ${r.status} (${r.stderr})`);
         assert.deepEqual(r.appels, [lancement], `« ${corps} » : le relevé tourne une fois, à la sortie`);
-        assert.equal(r.stdout.includes('::warning::Relevé des tests par éclat non lancé'), codeNode !== 0, 'avertissement si et seulement si le relevé échoue');
+        assert.equal(r.stdout.includes('::warning::Relevé des tests par éclat non lancé'), codeNode === 3, 'avertissement si et seulement si le relevé échoue');
         assert.equal(r.stdout.includes('fin de l étape'), corps === 'true', 'le relevé ne fait pas continuer une étape en échec');
       }
     }

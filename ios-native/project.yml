@@ -62,6 +62,10 @@ targets:
       # fonctions pures testées par PasDeDefilementTests (intégration du lot 3, run 42579729412).
       - path: Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/PasDeDefilement.swift
         group: JoleneUITests
+      # Décisions de la garde de repos XCUITest (GardeRepos.swift), fonctions pures testées par
+      # GardeReposDecisionTests (« Garde de repos XCUITest — 26/11/2026 », DECISIONS_LOT2).
+      - path: Packages/JoleneCore/Tests/JoleneCoreTests/PartageUITests/GardeReposDecision.swift
+        group: JoleneUITests
     dependencies:
       - target: Jolene
     settings:
