@@ -1,5 +1,6 @@
 require 'json'
 require_relative 'ios_review_submission'
+require_relative 'ios_review_notes'
 ROOT = File.expand_path('..', __dir__)
 
 default_platform(:ios)
@@ -8,6 +9,20 @@ default_platform(:ios)
 # (docs/mobile-swift/DECISIONS_LOT6.md) : « ios » (app Swift) et « android » (coquille Capacitor).
 def release_config(platform)
   JSON.parse(File.read(File.join(ROOT, 'config/mobile-release.json'))).fetch(platform)
+end
+
+# Notes pour la revue et compte de démonstration (fastlane/ios_review_notes.rb, docs/mobile-swift/APP_STORE.md) :
+# blocs par rôle dans config/, URL et clé publishable de production lues dans la config de l'app native (publiques).
+def review_notes(app, marketing)
+  lire = ->(chemin) { File.read(File.join(ROOT, chemin), encoding: 'UTF-8') }
+  production = IosReviewSubmission::CompteDemo.lire_config!(lire.call(IosReviewSubmission::CompteDemo::CONFIG))
+  IosReviewSubmission::ReviewNotes.new(
+    gateway: IosReviewSubmission::ReviewNotesGateway.new(client: Spaceship::ConnectAPI, app: app),
+    marketing_version: marketing,
+    blocs: IosReviewSubmission::ReviewNotes::FICHIERS.transform_values(&lire),
+    compte_demo: IosReviewSubmission::CompteDemo.new(url: production.fetch(:url), cle: production.fetch(:cle)),
+    journal: ->(message) { UI.important(message) }
+  )
 end
 
 platform :ios do
@@ -21,9 +36,12 @@ platform :ios do
 
   # App Swift (ios-native/), workflow ios-native-app-store.yml : soumet à la revue Apple un build
   # déjà envoyé sur TestFlight et déjà VALID. Aucun binaire n'est envoyé ici. La fiche (description,
-  # captures, notes pour la revue, confidentialité, classification) reste saisie dans App Store
-  # Connect ; seules les « Nouveautés » fr-FR viennent de config/mobile-release-notes-ios.txt.
-  # Publication progressive sur sept jours (docs/mobile-swift/APP_STORE.md).
+  # captures, confidentialité, classification) reste celle d'App Store Connect ; les « Nouveautés » fr-FR
+  # viennent de config/mobile-release-notes-ios.txt ; le champ « notes » des informations pour la
+  # vérification reçoit en tête le bloc config/ios-review-notes-2.0-<rôle>.txt du rôle vérifié du compte de
+  # démonstration, et ces informations ne sont copiées de la version distribuée que si la 2.0.0 n'a pas
+  # d'identifiants (fastlane/ios_review_notes.rb). Les pièces jointes de la fiche sont supprimées à la soumission
+  # (comportement de fastlane 2.240.1, APP_STORE.md). Publication progressive sur sept jours (APP_STORE.md).
   desc 'Submit an existing TestFlight build of the Swift app to App Review with a phased release'
   lane :submit_native do
     release = release_config('ios')
@@ -56,23 +74,50 @@ platform :ios do
       gateway: IosReviewSubmission::Gateway.new(client: Spaceship::ConnectAPI, app_id: app&.id),
       marketing_version: marketing, build_number: number
     )
-    # Le bloc ne s'exécute que si le build est absent d'App Store Connect : rien n'est envoyé d'ici.
-    result = guard.prepare! do
-      raise IosReviewSubmission::Failure, "Build #{marketing} (#{number}) absent de TestFlight : lancer d'abord ios-native-testflight.yml"
+    result = begin
+      # Notes pour la revue : jamais `app_review_information` (deliver y remettrait demoAccountRequired à faux) ;
+      # champ `notes` écrit, fiche copiée de la version distribuée seulement si la 2.0.0 n'a pas d'identifiants,
+      # compte de démonstration connecté à la production au pré-vol (docs/mobile-swift/APP_STORE.md).
+      notes = review_notes(app, marketing)
+      # Pré-vol des notes (sans écriture chez Apple), gardes de la revue en cours, écriture des notes, soumission.
+      IosReviewSubmission.enchainer!(notes: notes, guard: guard,
+        # Ne s'exécute que si le build est absent d'App Store Connect : rien n'est envoyé d'ici.
+        build_absent: -> { raise IosReviewSubmission::Failure, "Build #{marketing} (#{number}) absent de TestFlight : lancer d'abord ios-native-testflight.yml" },
+        soumettre: lambda do
+          upload_to_app_store(
+            api_key: api, app_identifier: 'app.jolene', app_version: marketing,
+            build_number: number, skip_binary_upload: true,
+            skip_screenshots: true, skip_metadata: false,
+            release_notes: { 'fr-FR' => release_notes },
+            submit_for_review: true, automatic_release: automatic, phased_release: true, force: true,
+            reject_if_possible: false,
+            run_precheck_before_submit: false
+          )
+        end)
+    rescue IosReviewSubmission::Failure => error
+      UI.user_error!(error.message)
     end
-    if result == :already_submitted
-      UI.success('This exact Apple build is already submitted')
-      next
+    UI.success('This exact Apple build is already submitted') if result == :already_submitted
+  end
+
+  # Job `gardes` de ios-native-app-store.yml, dans les deux modes (`verifier` compris) : le pré-vol des notes pour
+  # la revue, seul. Aucune écriture chez Apple : fiche lue, compte de démonstration connecté à la production puis
+  # déconnecté, rôle relu, notes composées et mesurées (docs/mobile-swift/APP_STORE.md).
+  desc 'Read-only pre-flight of the App Review notes and demo account of the Swift app'
+  lane :preflight_review_native do
+    marketing = release_config('ios').fetch('marketingVersion')
+    begin
+      IosReviewSubmission.exiger_contexte_prevol!(env: ENV)
+      app_store_connect_api_key(
+        key_id: ENV.fetch('ASC_KEY_ID'), issuer_id: ENV.fetch('ASC_ISSUER_ID'),
+        key_content: ENV.fetch('ASC_PRIVATE_KEY_BASE64'), is_key_content_base64: true
+      )
+      app = Spaceship::ConnectAPI::App.find('app.jolene')
+      etat = review_notes(app, marketing).verifier!
+      UI.success("Pré-vol des notes pour la revue : #{etat}")
+    rescue IosReviewSubmission::Failure => error
+      UI.user_error!(error.message)
     end
-    upload_to_app_store(
-      api_key: api, app_identifier: 'app.jolene', app_version: marketing,
-      build_number: number, skip_binary_upload: true,
-      skip_screenshots: true, skip_metadata: false,
-      release_notes: { 'fr-FR' => release_notes },
-      submit_for_review: true, automatic_release: automatic, phased_release: true, force: true,
-      reject_if_possible: false,
-      run_precheck_before_submit: false
-    )
   end
 
   # App Swift (ios-native/), workflow ios-native-testflight.yml : envoi TestFlight interne

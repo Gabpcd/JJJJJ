@@ -199,6 +199,9 @@ jobs:
       - name: Remplacement contrôlé d’une soumission Apple sans réseau ni secrets
         run: ruby fastlane/ios_review_submission.test.rb
 
+      - name: Notes pour la revue Apple et verrou du compte de démonstration, sans réseau ni secrets
+        run: ruby fastlane/ios_review_notes.test.rb
+
       - name: Valider les formats de captures stores
         run: npm run screenshots:play:check && npm run screenshots:app-store:check
 

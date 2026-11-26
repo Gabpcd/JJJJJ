@@ -1,0 +1,11 @@
+Jolene 2.0 is a native (Swift) rewrite of the app and replaces version 1.0.7. After updating, existing users sign in once again with their email and password.
+
+Jolene connects healthcare professionals with healthcare facilities for short assignments. It provides no diagnosis, medical advice or care. The review accounts contain fictitious data only and are isolated from real users.
+
+Healthcare professional account: the credentials in the "Sign-in required" fields. Tabs: Accueil (home), Explorer (three demo assignments in Paris), Mes missions, Revenus, Profil.
+
+Facility account: credentials in the previous notes below. Dashboard, assignments, applications, attendance and check-in, contracts, messaging. Publishing a new assignment is disabled on this demo facility (verification pending). Some management actions (billing, editing, duplicating or cancelling an assignment, other contract types) open the jolene.app website; none of them is a purchase. Administrator and group accounts are web-only: the app tells them to use the website.
+
+Check-in needs the location (foreground only) and a code shown on site by the facility, so it cannot be completed outside a facility. The camera is only used to photograph a document or scan a code; the calendar only to add a chosen assignment. No in-app purchase: payments concern services physically performed; facilities pay by SEPA direct debit collected by Jolene, which pays the professional by bank transfer, outside the app. Please do not complete payment, SMS signature or Pro Santé Connect flows.
+
+Account deletion, professional: Profil > "Suppression de compte" > "Supprimer mon compte". Facility: Compte > Aide & légal > "Supprimer mon compte", which opens the account deletion page of the jolene.app website (sign in there with the same credentials). Forgot password: link on the sign-in screen.
