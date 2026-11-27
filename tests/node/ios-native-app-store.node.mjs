@@ -934,6 +934,26 @@ test('les journaux de Spaceship ne sortent jamais du runner : ni artefact, ni mo
   for (const fragment of ['spaceship*.log', '--verbose', 'preflight_review_native', 'pièces jointes']) assert.ok(doc.includes(fragment), fragment);
 });
 
+// Run `verifier` n° 2 (27/11/2026) : « rôle illisible (HTTP 200) ». Lecture tolérante, diagnostic sans valeur, transport
+// qui garde la décompression de Net::HTTP.
+test('compte de démo : lecture du rôle tolérante, diagnostic en liste blanche, décompression de Net::HTTP gardée', () => {
+  const compte = lire('fastlane/ios_review_demo_account.rb');
+  const actif = compte.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
+  assert.match(compte, /CLES_ROLE_CONNUES = %w\[role user_id etablissement_id fn_get_my_role\]\.freeze/, 'liste blanche exacte des clés citées');
+  assert.match(compte, /ENTETES_REPONSE = %w\[content-type content-encoding\]\.freeze/);
+  assert.match(compte, /ENTETES_INTERDITS = %w\[accept-encoding range\]\.freeze/);
+  assert.match(compte, /requete = Net::HTTP::Post\.new\(uri\)\n/, 'requête sans en-têtes initiaux : decode_content reste vrai');
+  assert.match(compte, /raise Failure, 'Transport refusé : décompression de Net::HTTP désactivée' unless requete\.decode_content/);
+  assert.doesNotMatch(actif, /'Accept-Encoding'|set_debug_output|decode_content\s*=/, 'ni Accept-Encoding posé, ni journal HTTP, ni décodage coupé');
+  const lecture = compte.slice(compte.indexOf('    def lire_role(jeton)'), compte.indexOf('    def deconnecter(jeton)'));
+  assert.match(lecture, /CompteDemo\.extraire_role\(corps\)/);
+  assert.match(lecture, /CompteDemo\.diagnostic_role\(corps, entetes\)/);
+  assert.doesNotMatch(lecture, /corps\)?\s*\}|#\{corps|#\{role|#\{entetes/, 'le message ne recopie ni corps, ni rôle, ni en-tête bruts');
+  const doc = lire('docs/mobile-swift/APP_STORE.md');
+  for (const fragment of ['CompteDemo.extraire_role', 'diagnostic sans aucune valeur', 'decode_content']) assert.ok(doc.includes(fragment), fragment);
+  assert.doesNotMatch(doc, /de 1\.0\.1 à 1\.0\.7/, 'la liste exacte des versions distribuées n\'est pas prouvée par le run');
+});
+
 // Revue n° 2 de #1197 (m1 à m4) : relance pendant la revue, avertissement en mode `verifier`, session unique, libellé.
 test('les gardes se disent sans écriture chez Apple, et la doc nomme relance en revue, avertissement et session unique', () => {
   assert.doesNotMatch(jobs.gardes.cles.name, /lecture seule/, 'le pré-vol ouvre puis révoque une session en production');

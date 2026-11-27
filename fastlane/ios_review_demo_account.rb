@@ -56,17 +56,112 @@ module IosReviewSubmission
     end
 
     # Requêtes HTTPS de la vérification ; seul ce transport touche le réseau. Ni journal ni nouvelle tentative.
+    # Rend [statut, corps, en-têtes], ces derniers réduits à ENTETES_REPONSE (diagnostic d'une réponse illisible).
+    #
+    # Compression : la requête est construite sans en-têtes initiaux, donc Net::HTTP pose lui-même
+    # `Accept-Encoding: gzip;q=1.0,deflate;q=0.6,identity;q=0.3` et garde `decode_content` vrai : un corps gzip ou
+    # deflate est décompressé à la lecture, puis Net::HTTP retire `Content-Encoding`. Un `Accept-Encoding` ou un `Range`
+    # fournis par l'appelant désactiveraient ce décodage : ils sont refusés.
     class TransportHttps
+      ENTETES_REPONSE = %w[content-type content-encoding].freeze
+      ENTETES_INTERDITS = %w[accept-encoding range].freeze
+
+      # Fonction pure : la requête, décompression automatique comprise.
+      def self.construire(uri, entetes, corps)
+        interdits = entetes.keys.map { |nom| nom.to_s.downcase } & ENTETES_INTERDITS
+        raise Failure, "Transport refusé : en-tête #{interdits.join(', ')} (décompression de Net::HTTP)" unless interdits.empty?
+        requete = Net::HTTP::Post.new(uri)
+        entetes.each { |nom, valeur| requete[nom] = valeur }
+        requete.body = corps
+        raise Failure, 'Transport refusé : décompression de Net::HTTP désactivée' unless requete.decode_content
+        requete
+      end
+
+      def self.executer(http, requete)
+        reponse = http.request(requete)
+        [reponse.code.to_i, reponse.body.to_s, ENTETES_REPONSE.to_h { |nom| [nom, reponse[nom]] }.compact]
+      end
+
       def post(url, entetes, corps)
         uri = URI(url)
         raise Failure, 'Transport refusé : HTTPS seulement' unless uri.scheme == 'https'
         Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20, write_timeout: 20) do |http|
-          requete = Net::HTTP::Post.new(uri)
-          entetes.each { |nom, valeur| requete[nom] = valeur }
-          requete.body = corps
-          reponse = http.request(requete)
-          [reponse.code.to_i, reponse.body.to_s]
+          TransportHttps.executer(http, TransportHttps.construire(uri, entetes, corps))
         end
+      end
+    end
+
+    # Formes admises de la réponse de `fn_get_my_role` (RETURNS jsonb, non SETOF), et leurs combinaisons, trois déballages
+    # au plus : objet portant `role` texte ; tableau d'un seul élément (forme SETOF ou vnd.pgrst) ; objet à la seule clé
+    # `fn_get_my_role` ; chaîne JSON qui encode l'une de ces formes. Toute autre forme est refusée.
+    CLES_ROLE_CONNUES = %w[role user_id etablissement_id fn_get_my_role].freeze
+
+    # Fonction pure : le rôle (texte) ou nil. Rien n'est recopié ni journalisé.
+    def self.extraire_role(corps)
+      valeur = lire_json_brut(corps)
+      4.times do
+        case valeur
+        when Hash
+          return valeur['role'] if valeur['role'].is_a?(String)
+          return nil unless valeur.keys == ['fn_get_my_role']
+          valeur = valeur['fn_get_my_role']
+        when Array
+          return nil unless valeur.length == 1
+          valeur = valeur.first
+        when String
+          valeur = lire_json_brut(valeur)
+        else
+          return nil
+        end
+      end
+      nil
+    end
+
+    # Fonction pure : diagnostic d'une réponse de rôle illisible, sans aucune valeur. Type JSON racine ; pour un objet,
+    # les noms de clés de premier niveau de la liste blanche, et le nombre des autres ; pour un tableau, le nombre
+    # d'éléments ; pour une chaîne, le type JSON qu'elle encode ; puis le type MIME, la taille du corps et l'encodage
+    # restant après la décompression de Net::HTTP.
+    def self.diagnostic_role(corps, entetes)
+      valeur = lire_json_brut(corps)
+      elements = ["JSON racine : #{type_json(valeur)}"]
+      case valeur
+      when Hash
+        connues = CLES_ROLE_CONNUES & valeur.keys
+        autres = valeur.keys.length - connues.length
+        elements << (connues.empty? ? 'aucune clé connue' : "clés : #{connues.join(', ')}")
+        elements << "autres clés : #{autres}" if autres.positive?
+      when Array
+        elements << "éléments : #{valeur.length}"
+      when String
+        elements << "contenu : #{type_json(lire_json_brut(valeur))}"
+      end
+      entetes = (entetes || {}).to_h { |nom, v| [nom.to_s.downcase, v.to_s] }
+      mime = entetes['content-type'].to_s.split(';').first.to_s.strip.downcase
+      mime = 'absent' if mime.empty?
+      mime = 'illisible' unless mime == 'absent' || mime.match?(%r{\A[a-z0-9.+-]+/[a-z0-9.+-]+\z})
+      encodage = entetes['content-encoding'].to_s.strip.downcase
+      encodage = 'aucun' if encodage.empty?
+      encodage = 'illisible' unless encodage.match?(/\A[a-z0-9-]+\z/)
+      elements << "type : #{mime}" << "corps : #{corps.to_s.bytesize} octets" << "encodage : #{encodage}"
+      elements.join(' ; ')
+    end
+
+    # Fonction pure : la valeur JSON, ou :invalide.
+    def self.lire_json_brut(texte)
+      JSON.parse(texte.to_s)
+    rescue JSON::ParserError
+      :invalide
+    end
+
+    def self.type_json(valeur)
+      case valeur
+      when Hash then 'objet'
+      when Array then 'tableau'
+      when String then 'chaîne'
+      when Integer, Float then 'nombre'
+      when true, false then 'booléen'
+      when nil then 'null'
+      else 'invalide'
       end
     end
 
@@ -119,11 +214,10 @@ module IosReviewSubmission
     end
 
     def lire_role(jeton)
-      statut, corps = appeler('/rest/v1/rpc/fn_get_my_role', {}, jeton: jeton)
-      raise Failure, refus("connexion OK, rôle illisible (HTTP #{statut})") unless statut == 200
-      role = CompteDemo.lire_json(corps)['role']
-      raise Failure, refus('connexion OK, rôle illisible (HTTP 200)') unless role.is_a?(String)
-      role
+      statut, corps, entetes = appeler('/rest/v1/rpc/fn_get_my_role', {}, jeton: jeton)
+      role = statut == 200 ? CompteDemo.extraire_role(corps) : nil
+      return role if role
+      raise Failure, refus("connexion OK, rôle illisible (HTTP #{statut} ; #{CompteDemo.diagnostic_role(corps, entetes)})")
     end
 
     def deconnecter(jeton)

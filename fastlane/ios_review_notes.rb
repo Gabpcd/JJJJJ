@@ -195,8 +195,9 @@ module IosReviewSubmission
     # Fonction pure. La version distribuée (READY_FOR_DISTRIBUTION) de plus haut numéro, strictement inférieure à la
     # cible, seule à ce numéro, et égale à la coquille figée ; nil s'il n'y a aucune version distribuée.
     def self.choisir_source(versions, marketing, coquille:)
-      # Apple laisse READY_FOR_DISTRIBUTION sur toutes les versions déjà publiées (run `verifier` du 27/11/2026 : sept,
-      # de 1.0.1 à 1.0.7), pas seulement sur celle en vente : aucune unicité n'est supposée ici.
+      # Apple laisse READY_FOR_DISTRIBUTION sur toutes les versions déjà publiées (run `verifier` du 27/11/2026 : sept
+      # versions, dont 1.0.7 ; le journal n'en donne que le nombre), pas seulement sur celle en vente : aucune unicité
+      # n'est supposée ici.
       distribuees = Array(versions).select { |v| v.platform == 'IOS' && v.app_version_state == 'READY_FOR_DISTRIBUTION' }
       return nil if distribuees.empty?
       illisibles = distribuees.reject { |v| v.version_string.to_s.match?(VERSION) }
