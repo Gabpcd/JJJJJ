@@ -178,6 +178,9 @@ jobs:
       - name: Missions de revue App Store (B9) — envois cloisonnés par cohorte, corps LIVE, désignation et câblage sans réseau
         run: node --test tests/node/revue-store-missions.node.mjs
 
+      - name: Suppression du compte soignant (B9) — pièces vérifiées, corps LIVE et câblage sans réseau
+        run: node --test tests/node/suppression-compte-soignant-preuves.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
@@ -753,7 +756,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 68 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 69 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -827,6 +830,7 @@ jobs:
             tests/security/connect-onboarding-payout-acl.test.sql
             tests/security/dpae-contrats-cddu-vacation.test.sql
             tests/security/agents-croissance-brouillons.test.sql
+            tests/security/suppression-compte-soignant-preuves.test.sql
             tests/security/revue-store-missions-isolees.test.sql
             tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
@@ -1038,6 +1042,11 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE revue_store_banc'
           PGDATABASE=revue_store_banc node --test tests/postgres/revue-store-missions.pg17.mjs
+      - name: Suppression du compte soignant — pièces vérifiées sur le schéma du dépôt (base dédiée)
+        # Migration 20261127100000 : refus 42501 reproduit sur le corps LIVE, puis la suite SQL du staging telle quelle.
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE suppression_preuves_banc'
+          PGDATABASE=suppression_preuves_banc node --test tests/postgres/suppression-compte-soignant-preuves.pg17.mjs
       - name: Alignement staging — résolution des alias du catalogue
         run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
       - name: Factures — émission atomique et reprise email PostgreSQL 17 isolé
