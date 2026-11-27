@@ -167,14 +167,9 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
 
     /// Profil remis à sa racine, puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        toucherOnglet("tab-profil", label: "Profil")
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list",
+                         empiles: ["pool-screen", "exclusions-screen"])
         let liste = element("profile-list")
-        for ecran in ["pool-screen", "exclusions-screen"] where element(ecran).exists {
-            let back = app.navigationBars.buttons.firstMatch
-            require("Le bouton retour est disponible") { self.visible(back) }
-            back.tap()
-            require("L'écran \(ecran) est retiré") { !self.element(ecran).exists }
-        }
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")
         scrollTo(sentinelle, in: liste, downward: false)

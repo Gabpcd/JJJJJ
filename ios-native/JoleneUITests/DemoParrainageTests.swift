@@ -144,13 +144,7 @@ final class DemoParrainageTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran du parrainage y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        toucherOnglet("tab-profil", label: "Profil")
-        if element("parrainage-screen").exists {
-            let back = app.navigationBars.buttons.firstMatch
-            require("Le bouton retour est disponible") { self.visible(back) }
-            back.tap()
-            require("L'écran du parrainage est retiré") { !self.element("parrainage-screen").exists }
-        }
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list", empiles: ["parrainage-screen"])
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")

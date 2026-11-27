@@ -138,13 +138,7 @@ final class DemoBulletinsTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran des copies y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        toucherOnglet("tab-profil", label: "Profil")
-        if element("bulletins-screen").exists {
-            let back = app.navigationBars.buttons.firstMatch
-            require("Le bouton retour est disponible") { self.visible(back) }
-            back.tap()
-            require("L'écran des copies est retiré") { !self.element("bulletins-screen").exists }
-        }
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list", empiles: ["bulletins-screen"])
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")

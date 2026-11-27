@@ -290,10 +290,8 @@ final class DemoMessagerieTests: JoleneUITestCase {
         }
         let profil = tabButton("tab-profil", label: "Profil")
         require("L'onglet Profil est touchable") { profil.isHittable && !self.app.keyboards.firstMatch.exists }
-        toucherOnglet("tab-profil", label: "Profil")
-        for ecran in ["chat-screen", "messagerie-screen"] where element(ecran).exists {
-            retour(depuis: ecran)
-        }
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list",
+                         empiles: ["chat-screen", "messagerie-screen"], boutonRetour: boutonRetour())
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")

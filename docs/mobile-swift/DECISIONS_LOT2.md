@@ -2277,12 +2277,23 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   de la publication. Les interrupteurs de la complétion et de la publication gardent trois essais, désormais budgétés
   et consignés.
 - **Témoin prouvé, pas supposé** (revue B8 de #1203, M1) : `exigerTemoinOnglet` exige sur les trois formats, côté
-  soignant (`DemoConsultationTests`, cinq onglets exposés) et établissement (`DemoEtabSessionTests`), que seul l'onglet
-  courant soit lu « Selected ». Un témoin illisible pendant un test est consigné (`consignerNonRejeu`, « Nature : geste
-  non rejoué »), comme tout geste sans effet non rejoué ; le relevé de la CI les annonce « Geste non rejoué » (m5).
-- **Anomalie d'iPadOS 26.2, iPad portrait, espace établissement** (run 45967481048, barre paginée, `TabView` standard sans
-  trait posé par l'app) : « Présences » reste lu « Selected » quel que soit l'onglet courant. Règle : l'onglet courant
-  reste exigé « Selected » partout ; l'exclusivité aussi, sauf là, où seul un ensemble stable d'onglets en trop est
-  toléré (déduit de la première lecture du test, consigné « Témoin d'onglet ambigu ») ; plus d'un onglet lu « Selected »
-  rend le témoin ambigu, et `toucherOnglet` ne rejoue alors jamais (consigné).
+  soignant (`DemoConsultationTests`, cinq onglets exposés) et établissement (`DemoEtabSessionTests`), que l'onglet
+  courant soit lu « Selected », et lui seul, sauf l'exception ci-dessous. Un témoin illisible pendant un test est
+  consigné (`consignerNonRejeu`, « Nature : geste non rejoué »), comme tout geste sans effet non rejoué ; le relevé de
+  la CI les annonce « Geste non rejoué » (m5).
+- **Anomalie attribuée à iPadOS 26.2, iPad portrait ET paysage, espace établissement** (runs 45967481048 et
+  45995190132, `TabView` standard sans trait posé par l'app) : « Présences » reste lu « Selected » quel que soit l'onglet
+  courant, alors qu'à l'écran seul l'onglet courant est en surbrillance (capture vérifiée en paysage). Attribution par
+  élimination, non reproduite sur un `TabView` minimal ; témoin : côté soignant, sur le même simulateur, l'exclusivité
+  passe. Règle : l'onglet courant reste exigé « Selected » partout ; l'exclusivité aussi, sauf sur iPad dans l'espace
+  établissement, où seul un ensemble stable d'onglets en trop est toléré (déduit de la première lecture du test,
+  consigné « Témoin d'onglet ambigu »). Quand plus d'un onglet est lu « Selected », `toucherOnglet` ne rejoue jamais
+  (consigné). Quand la page de la barre masque l'onglet courant, un seul onglet peut être lu « Selected » (l'onglet en
+  trop) : le rejeu reste alors armé, sans danger, car l'effet est lu sur l'onglet visé et l'instantané doit être
+  identique (revue B8 de #1203, delta court, m1).
+- **Onglet courant touché pour revenir à la racine** (run 45995190132, `DemoLitigesTests.swift:239` : Profil touché,
+  écran des litiges empilé, 15 s sans la liste du profil, sans rejeu par conception) : `revenirALaRacine` attend la
+  racine 3 s, puis fait les retours par le bouton retour tant qu'un écran connu reste empilé ; un retour sans effet est
+  rejoué une fois au plus, consigné, puis l'écran est exigé retiré. Appliqué aux 9 nettoyages « Profil remis à sa
+  racine » (bulletins, évaluations, recherches, litiges, réclamations, parrainage, pool urgence, série, messagerie).
 - **Restent sans rejeu** : 14 entrées du hub Profil et 25 sélections (onglets internes, segments, motifs).

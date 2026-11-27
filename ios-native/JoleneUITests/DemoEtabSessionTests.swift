@@ -114,13 +114,14 @@ final class DemoEtabSessionTests: JoleneUITestCase {
 
     /// Onglet ouvert, contenu exigé, puis témoin du rejeu d'onglet exigé lisible sur ce format (revue B8 de #1203, M1) :
     /// l'onglet courant est lu « Selected ». La présence des cinq onglets n'est pas exigée : en iPad portrait, la barre
-    /// paginée n'expose que la page affichée (`amenerOngletDansLaPage`), et un ensemble stable d'onglets lus en trop y est
-    /// toléré (anomalie d'iPadOS 26.2, run 45967481048 : `barrePagineeEtablissement`).
+    /// paginée n'expose que la page affichée (`amenerOngletDansLaPage`). Sur iPad, en portrait et en paysage, un ensemble
+    /// stable d'onglets lus en trop est toléré (anomalie attribuée à iPadOS 26.2, runs 45967481048 et 45995190132 :
+    /// `espaceEtablissement`).
     private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String,
                               file: StaticString = #filePath, line: UInt = #line) {
         toucherOnglet(identifiant, label: label, file: file, line: line)
         require("L'onglet \(label) affiche son contenu", file: file, line: line) { self.containerVisible(self.element(contenu)) }
-        exigerTemoinOnglet(identifiant, label: label, barrePagineeEtablissement: true, file: file, line: line)
+        exigerTemoinOnglet(identifiant, label: label, espaceEtablissement: true, file: file, line: line)
     }
 
     private func ouvrirCompte(file: StaticString = #filePath, line: UInt = #line) {
@@ -128,7 +129,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         require("Le compte de l'établissement est affiché", file: file, line: line) {
             self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }
-        exigerTemoinOnglet("tab-etab-compte", label: "Compte", barrePagineeEtablissement: true, file: file, line: line)
+        exigerTemoinOnglet("tab-etab-compte", label: "Compte", espaceEtablissement: true, file: file, line: line)
     }
 }
 

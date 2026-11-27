@@ -151,13 +151,7 @@ final class DemoFiltresTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran des recherches y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        toucherOnglet("tab-profil", label: "Profil")
-        if element("recherches-screen").exists {
-            let back = app.navigationBars.buttons.firstMatch
-            require("Le bouton retour est disponible") { self.visible(back) }
-            back.tap()
-            require("L'écran des recherches est retiré") { !self.element("recherches-screen").exists }
-        }
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list", empiles: ["recherches-screen"])
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")
