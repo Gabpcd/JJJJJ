@@ -66,8 +66,12 @@ without another account's address is logged at pre-flight too, hence in `verifie
 Leaving a reviewer's session open assumes Supabase Auth "single session per user" is off.
 
 After this guard, the version is found or created (same request as `ensure_version!`). Only
-if it has no demo credentials, the review detail of the single distributed version is
-copied API to API: credentials as a whole with `demoAccountRequired` set to true, then
+if it has no demo credentials, the review detail of the source is copied API to API. Apple
+keeps `READY_FOR_DISTRIBUTION` on every published version (seven in the first real run), so the
+source is the distributed version with the highest number below the target (`Gem::Version`),
+refused if a number is not numeric, if one is not below the target, if two share the maximum,
+or if it is not exactly the frozen shell `COQUILLE_IOS_FIGEE` of
+`scripts/mobile/release-config.mjs`. Copied: credentials as a whole with `demoAccountRequired` set to true, then
 contacts and notes only where the target is empty; credentials already present are never
 overwritten. An unknown (`null`) `demoAccountRequired` next to present credentials is written
 true. The submitted detail must carry the credentials signed in at pre-flight. Then the

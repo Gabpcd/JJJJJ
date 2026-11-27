@@ -226,8 +226,23 @@ revue (`WAITING_FOR_REVIEW`, état modifiable, contrôlé en entier), quand aucu
 le risque se limite à ces runs.
 
 **Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou n'a pas
-d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la version distribuée
-(`READY_FOR_DISTRIBUTION`, unique et plus ancienne : aujourd'hui 1.0.7) :
+d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la dernière version
+distribuée avant la 2.0.0, qui doit être la coquille Capacitor figée : aujourd'hui 1.0.7.
+
+**Choix de la source** (`ReviewNotes.choisir_source`). Apple laisse `appVersionState = READY_FOR_DISTRIBUTION` sur
+**toutes** les versions déjà publiées, pas seulement sur celle en vente : le premier run `verifier` réel (27/11/2026)
+en a lu sept, de 1.0.1 à 1.0.7. La lane ne suppose donc aucune unicité et :
+
+- refuse si une version distribuée a un numéro non numérique (un à trois entiers attendus) ;
+- refuse si une version distribuée n'est pas antérieure à la 2.0.0 ;
+- prend la version distribuée de plus haut numéro (comparaison `Gem::Version`, donc 1.0.10 > 1.0.7) ;
+- refuse si deux versions portent ce même numéro maximal ;
+- **verrou** : refuse si cette version n'est pas exactement la coquille figée, `COQUILLE_IOS_FIGEE.marketingVersion`
+  de `scripts/mobile/release-config.mjs` (source unique, lue côté Ruby par `ReviewNotes.lire_coquille_figee!`,
+  qui refuse toute autre forme de la déclaration). C'est la version dont les notes décrivent l'app précédente, et
+  que le séparateur nomme.
+
+Puis la lane copie :
 
 - les identifiants, d'un bloc : `demoAccountName`, `demoAccountPassword`, et `demoAccountRequired` écrit à `true`
   (la connexion de ces identifiants a réussi au pré-vol) ;
@@ -330,8 +345,9 @@ vraie qu'une fois cette PR mergée et son cron passé. **Ordre à tenir** : merg
 avant le run `soumettre`.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
-lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée plus récente que 2.0.0, l'arrêtent
-aussi. Une version qui change entre le pré-vol et l'écriture, des identifiants différents de ceux connectés, une
+lane au pré-vol. Une version distribuée au numéro non numérique, non antérieure à 2.0.0, deux versions au numéro
+distribué maximal, ou un maximum autre que la coquille figée l'arrêtent aussi (« Choix de la source », ci-dessus).
+Une version qui change entre le pré-vol et l'écriture, des identifiants différents de ceux connectés, une
 fiche relue différente de la copie, ou des notes relues différentes de celles écrites, arrêtent la lane avant la
 soumission.
 
@@ -360,7 +376,8 @@ elles se vérifient sur les comptes eux-mêmes.
 **Prouvé seulement au vrai run.** Le run `verifier` prouve, sans rien écrire : la lecture de la fiche et du mot de
 passe par l'API (probable : `download_metadata` de deliver, `deliver/lib/deliver/setup.rb`, relit
 `demo_account_password` par la même requête), la connexion et le rôle du compte, la longueur des notes de 1.0.7,
-l'état et l'unicité des versions. Restent à prouver au run `soumettre` : qu'Apple réponde `data: null` pour une
+l'état des versions et le choix de la source parmi les versions distribuées (le premier run réel en a révélé
+sept). Restent à prouver au run `soumettre` : qu'Apple réponde `data: null` pour une
 version sans fiche (une erreur est tenue pour « illisible » et arrête la lane sans copie) ; qu'une version créée
 par l'API reprenne ou non la fiche de 1.0.7 (les deux cas sont traités) ; qu'Apple accepte la création ou la copie
 de la fiche, l'écriture de `demoAccountRequired` et celle des notes dans l'état de la version, sans rien modifier
