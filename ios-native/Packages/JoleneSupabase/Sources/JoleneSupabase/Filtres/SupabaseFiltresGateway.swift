@@ -5,10 +5,10 @@ import Supabase
 /// `FiltresSauvegardesPort` (L4-T4), port de `PageRecherchesSauvegardees.tsx` et de l'alerte rapide de
 /// `RechercheMissions.tsx` (l.172-226). Quatre RPC SECURITY DEFINER, GRANT `authenticated` (`public.sql` l.83737,
 /// l.82694, l.84077, l.85499 ; manifeste `RPC_UTILISATEUR_AUTH_INTERNE`), identité `auth.uid()` lue en interne, sur la
-/// table `filtres_sauvegardes` (RLS `fs_*_own` et restrictive « compte actif », l.78531-78543, l.79207 ; jamais lue en
+/// table `filtres_sauvegardes` (RLS `fs_*_own` et restrictive « compte actif », l.78591-78603, l.79271 ; jamais lue en
 /// direct) :
 /// - `fn_lister_mes_filtres_sauvegardes(p_audience)` — toujours `SOIGNANT_RECHERCHE_MISSIONS` ; tableau trié par
-///   `mis_a_jour_le` décroissant, `[]` sans session (l.40489) ; une réponse qui n'est pas un tableau lisible est une
+///   `mis_a_jour_le` décroissant, `[]` sans session (l.40506) ; une réponse qui n'est pas un tableau lisible est une
 ///   erreur (`FiltresSauvegardesEncodage.liste`), jamais une liste vide ;
 /// - `fn_creer_filtre_sauvegarde(p_nom, p_audience, p_filtres, p_alerte_active, p_frequence_alerte)` — `p_audience`
 ///   obligatoire ; `p_filtres` = les sept clés camelCase d'Explorer, nombres entiers sans décimale ; des critères que

@@ -20,13 +20,13 @@ public actor DemoEtabLecturesPointage {
 /// contrat signé, M6 attend son second créneau.
 ///
 /// Mêmes règles que le serveur : contexte cohérent et compte fictif seulement (`.demoOnly`), mission de l'établissement
-/// confirmé sinon `{error}` verbatim (`Mission introuvable`, `Accès interdit`, l.35692 et l.35701), code servi aux seuls
+/// confirmé sinon `{error}` verbatim (`Mission introuvable`, `Accès interdit`, l.35700 et l.35709), code servi aux seuls
 /// membres habilités au pointage (B5b, l.35617-35620) ; signature lue seulement avec cette permission (le serveur lève
 /// alors 42501, que la gateway Supabase rend `false`).
 public struct DemoEtabPointageGateway: EtabPointagePort {
-    // source: supabase/schema/public.sql l.35692 (fn_etat_pointage_mission)
+    // source: supabase/schema/public.sql l.35700 (fn_etat_pointage_mission)
     static let erreurMissionIntrouvable = "Mission introuvable"
-    // source: supabase/schema/public.sql l.35701 (fn_etat_pointage_mission)
+    // source: supabase/schema/public.sql l.35709 (fn_etat_pointage_mission)
     static let erreurAccesInterdit = "Accès interdit"
     static let planningIllisible = "Le planning de cette mission n'a pas pu être relu."
 

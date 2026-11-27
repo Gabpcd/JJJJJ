@@ -30,7 +30,7 @@ public struct LigneExclusionEnvoyee: Decodable, Equatable, Sendable {
     }
 }
 
-/// Ligne de `fn_mes_exclusions_recues` (`public.sql` l.42278-42285) : `{id, exclu_par, type_exclu_par, motif,
+/// Ligne de `fn_mes_exclusions_recues` (`public.sql` l.42295-42302) : `{id, exclu_par, type_exclu_par, motif,
 /// etablissement_nom, cree_le}`, triée par `cree_le` décroissant.
 public struct LigneExclusionRecue: Decodable, Equatable, Sendable {
     public var id: String

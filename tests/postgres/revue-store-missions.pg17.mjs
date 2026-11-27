@@ -9,6 +9,9 @@
 //
 // Le banc enregistre les appels net.http_post dans net.http_request_queue (corps en bytea, comme pg_net) et pose un
 // jeton de service fictif dans vault : les branches push et e-mail s'exécutent et sont observées.
+// Schéma chargé : le dump d'une révision épinglée antérieure aux migrations (tests/postgres/schema-avant-migration.mjs),
+// jamais le dump courant, qui contient les corps APRÈS migration dès la re-baseline suivant le déploiement (#1204) ;
+// un test sans base vérifie que le dump courant est, pour les fonctions redéfinies, tout AVANT ou tout APRÈS.
 // Le chargeur du banc installe la dernière définition de chaque fonction private de TOUTES les migrations, donc
 // déjà celles des migrations candidates : les définitions antérieures (état LIVE) sont rejouées avant d'appliquer
 // les migrations, dont le préflight vérifie l'empreinte LIVE.
@@ -21,6 +24,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { charger, decouper, moteurPglite, moteurPsql, parametresRequis, RACINE } from '../../scripts/mobile/staging-lot5-banc-sql.mjs';
+import { DUMP_AVANT_REVUE_ET_SUPPRESSION, dumpEpingle, etatDuDumpCourant, racineAvant } from './schema-avant-migration.mjs';
 
 export const MIGRATIONS = [
   'supabase/migrations/20261126100000_cloisonner_missions_cohorte_et_revue.sql',
@@ -98,11 +102,42 @@ INSERT INTO public.soignants (id, prenom, nom, email, profession, est_compte_tes
 VALUES ('${SOIGNANT_REVUE}', 'Banc', 'Revue', 'banc-soignant-revue@example.invalid', 'IDE', ${soignantTest});
 UPDATE public.parametres_systeme SET valeur = 0 WHERE cle = 'inscriptions_publiques_actives';`;
 
+/** Fonctions public redéfinies par les deux migrations : corps LIVE d'avant (préflight) et corps installé (post-condition). */
+export const REDEFINITIONS_PUBLIQUES = [
+  ['fn_soignant_eligible_mission', 'f10aeb9ced376cae6ef5a4a863a2cf6b', '6db2aebbc7342bb721108b66688b62bc'],
+  ['fn_resoudre_contrat_mission', 'e39388880b3e026e8b81b0d94d0de777', '91bf0908b53aaca7b5b4ea2cefaf4110'],
+  ['fn_pool_urgence_etablissement', '178dbb066ceb8720c38c30ab0fb74f7d', 'a4308cb167e6c0d895efda615c5da297'],
+  ['fn_notifier_favoris_expirants', 'd44ae13e1e450ab85942c1863d107b7e', '8d3fa4597fb5835e8658bc4f31a3730c'],
+  ['fn_relancer_missions_sans_candidat', '49ae7d9e38110b4009e70af2d3a77c9f', '6d9af12f3446ccdabe4f840d93debfc7'],
+  ['fn_mes_favoris_etablissements', '26c080a4e6e197018a5b27195981473a', '100f3988e20a0446673267ce804bb3b0'],
+  ['fn_admin_generer_posts', 'fd4a9e677fa1cdae1c0a75a061b789c4', 'f822983bb47bd93f1d984cdcb41a4b15'],
+  ['fn_cleanup_missions_test', '5a25967b3550051aedbd5cd02dec44e6', 'ee0c90c2fa777643b8261956ef7e3d6f'],
+  ['fn_supprimer_mon_compte_etablissement', 'a43978aee09ef1ae4a157dbee9911b2f', 'a5dd6e6858e7ad641f4bd353753f3223'],
+].map(([nom, avant, apres]) => ({ schema: 'public', nom, avant, apres }));
+
+test('dump épinglé tout AVANT les migrations ; dump courant tout AVANT ou tout APRÈS (sans base)', () => {
+  const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
+  try {
+    assert.equal(etatDuDumpCourant(REDEFINITIONS_PUBLIQUES, readFileSync(join(avant.racine, 'supabase/schema/public.sql'), 'utf8')).etat, 'AVANT');
+  } finally {
+    avant.nettoyer();
+  }
+  const courant = etatDuDumpCourant(REDEFINITIONS_PUBLIQUES);
+  assert.ok(['AVANT', 'APRES'].includes(courant.etat), `dump courant incohérent avec les migrations : ${JSON.stringify(courant.fonctions)}`);
+  console.log(`Dump courant : corps ${courant.etat === 'APRES' ? 'post-condition (re-baseline faite)' : 'LIVE d’avant (re-baseline à venir)'}.`);
+  // Le dump épinglé n'est accepté que vérifié : commit présent, blob attendu, SHA-256 attendu.
+  const epingle = DUMP_AVANT_REVUE_ET_SUPPRESSION;
+  assert.throws(() => dumpEpingle(epingle, () => { throw new Error('absent'); }), /--depth=1 origin 739f3fcb4/);
+  assert.throws(() => dumpEpingle(epingle, args => (args[0] === 'rev-parse' ? `${'0'.repeat(40)}\n` : '')), /blob/);
+  assert.throws(() => dumpEpingle(epingle, args => (args[0] === 'rev-parse' ? `${epingle.blob}\n` : 'dump altéré')), /SHA-256/);
+});
+
 test('missions de revue des stores : stock garanti, diffusées à personne, lues par le seul soignant de revue', { timeout: 900_000 }, async () => {
   const m = await moteur();
   const executer = m.executer;
+  const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
   try {
-    const { instructions, passe } = await charger(executer, { lot: m.lot, journal: console.log });
+    const { instructions, passe } = await charger(executer, { racine: avant.racine, lot: m.lot, journal: console.log });
     assert.ok(passe > instructions * 0.98, `schéma chargé : ${passe}/${instructions}`);
     // Paramètre du staging (0 : cohorte test forcée) relu dans sa migration, puis file HTTP et jeton fictifs.
     for (const instr of parametresRequis(RACINE, ['inscriptions_publiques_actives'])) await executer(instr);
@@ -164,6 +199,7 @@ test('missions de revue des stores : stock garanti, diffusées à personne, lues
     assert.deepEqual(residus, { comptes: 0, missions: 0, etablissements_designes: 1, soignants_designes: 1, stock: 3, http: 0 });
     console.log('Banc revue store : refus réels à la migration, premier remplissage, suite SQL complète, aucun résidu.');
   } finally {
+    avant.nettoyer();
     await m.fermer?.();
   }
 });

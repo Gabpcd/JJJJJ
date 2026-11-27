@@ -18,8 +18,8 @@ import Supabase
 ///   `.nonConfirmee`, jamais un succès. Une réponse sans `mission_id` exploitable est un refus de contrat ;
 /// - refus du verrou différé du taux horaire minimal (`P0001`, migration 20261125120000, levé à la validation de la
 ///   transaction, donc hors des exceptions extraites du dump pour la RPC) → `.refusee`, texte serveur mot pour mot ;
-/// - plancher : `fn_taux_horaire_minimum_salarie()` (`supabase/schema/public.sql` l.61093, `RETURNS numeric`, `NULL` si
-///   le paramètre est absent ; GRANT `authenticated` l.85664), sous le JWT du membre. Fermé : `NULL`, valeur non
+/// - plancher : `fn_taux_horaire_minimum_salarie()` (`supabase/schema/public.sql` l.61149, `RETURNS numeric`, `NULL` si
+///   le paramètre est absent ; GRANT `authenticated` l.85728), sous le JWT du membre. Fermé : `NULL`, valeur non
 ///   numérique ou non positive → `PlancherTauxIndisponible` ; erreur PostgREST ou transport → erreur mappée. Aucune
 ///   valeur de repli n'est rendue par la passerelle.
 public struct SupabaseEtabPublicationGateway: EtabPublicationPort {

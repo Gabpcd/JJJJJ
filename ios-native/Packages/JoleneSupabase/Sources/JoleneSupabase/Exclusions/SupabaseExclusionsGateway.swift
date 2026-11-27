@@ -6,10 +6,10 @@ import Supabase
 /// - envoyées : PostgREST `exclusions` (`exclu_par = auth.uid()`, RLS `pol_exclusion_select`, filtre explicite sur la
 ///   session), `cree_le` décroissant, noms par `fn_etablissements_safe` (lecture complémentaire : en échec, l'écran
 ///   affiche l'identifiant, comme le web l.56) ;
-/// - reçues : `fn_mes_exclusions_recues()` (`public.sql` l.42272), tableau (`[]` sans session) ; une réponse qui n'est pas
+/// - reçues : `fn_mes_exclusions_recues()` (`public.sql` l.42289), tableau (`[]` sans session) ; une réponse qui n'est pas
 ///   un tableau lisible est une erreur, jamais une liste vide ;
-/// - retrait : `fn_retirer_exclusion(p_exclu_id)` (l.55429) — l'identifiant de l'établissement exclu, jamais l'id de
-///   ligne ; exclusion : `fn_exclure_utilisateur(p_exclu_id: etablissement_id, p_type: 'SOIGNANT', p_motif)` (l.36094),
+/// - retrait : `fn_retirer_exclusion(p_exclu_id)` (l.55469) — l'identifiant de l'établissement exclu, jamais l'id de
+///   ligne ; exclusion : `fn_exclure_utilisateur(p_exclu_id: etablissement_id, p_type: 'SOIGNANT', p_motif)` (l.36102),
 ///   motif vide → null comme le web ;
 /// - refus `{success:false, error}` verbatim (`IssueExclusion.refusee`), « Non authentifié » → session expirée ; succès
 ///   `{success:true}` suivi de la relecture des exclusions envoyées (`IssueExclusion.relues`) ; toute autre forme →

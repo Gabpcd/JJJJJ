@@ -249,6 +249,12 @@ test('suite SQL et câblage CI', () => {
     'suite dans SQL_TESTS, juste avant la dernière');
   assert.match(workflow, /createdb revue_store_banc|CREATE DATABASE revue_store_banc/);
   assert.ok(workflow.includes('PGDATABASE=revue_store_banc node --test tests/postgres/revue-store-missions.pg17.mjs'));
+  // Le banc rejoue les migrations sur le dump épinglé d'avant (une re-baseline n'y touche pas) : commit récupéré
+  // avant le banc dans le clone de profondeur 1, même commit que la constante du banc.
+  const epingle = /commit: '([0-9a-f]{40})'/.exec(read('tests/postgres/schema-avant-migration.mjs'))?.[1];
+  assert.ok(epingle && banc.includes('racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION)'), 'banc sur le dump épinglé');
+  const recuperation = workflow.indexOf(`git fetch --no-tags --depth=1 origin ${epingle}`);
+  assert.ok(recuperation > 0 && recuperation < workflow.indexOf('PGDATABASE=revue_store_banc'), 'commit épinglé récupéré avant le banc');
   assert.ok(workflow.includes('node --test tests/node/revue-store-missions.node.mjs'));
   assert.ok(banc.includes("export const SUITE = 'tests/security/revue-store-missions-isolees.test.sql';"));
   for (const f of [M1, M2]) assert.ok(banc.includes(`supabase/migrations/${f}`), `banc : ${f}`);

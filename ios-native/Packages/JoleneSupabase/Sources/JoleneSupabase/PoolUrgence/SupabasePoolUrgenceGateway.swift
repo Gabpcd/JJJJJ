@@ -8,11 +8,11 @@ import Supabase
 ///   sans `success` ; complétée, comme le web (l.70-84), par PostgREST `missions(id, nb_creneaux, duree_heures)` et les
 ///   créneaux PREVISIONNEL hors pauses (`SupabaseMissionsGateway.slots`, pagination contrôlée) ; un planning illisible
 ///   marque la mission « planning non exact » (acceptation impossible), jamais un planning vide accepté ;
-/// - `fn_toggle_pool_urgence(p_actif, p_rayon_km, p_creneaux = [])` (l.62092) : **seule** écriture native de
+/// - `fn_toggle_pool_urgence(p_actif, p_rayon_km, p_creneaux = [])` (l.62148) : **seule** écriture native de
 ///   la disponibilité urgence de `soignants` (D26, correction 17, garde `PoolUrgenceSourceGuardTests`) ; refus `{error}` sans drapeau
 ///   (rayon hors 1-200, documents) restitué verbatim ; un rayon hors bornes serveur n'est jamais envoyé (refus verbatim
 ///   local, mêmes mots que le serveur) ;
-/// - `fn_toggle_pool_urgence_sms(p_actif)` (l.62143) : `{success:true, pool_urgence_sms_opt_in}`.
+/// - `fn_toggle_pool_urgence_sms(p_actif)` (l.62199) : `{success:true, pool_urgence_sms_opt_in}`.
 /// « Non authentifié » → session expirée. Chaque bascule acceptée est suivie de la relecture de l'état (`IssuePool.relu`) ;
 /// toute autre forme → `.contract`. Une seule requête par appel, aucun renvoi.
 public struct SupabasePoolUrgenceGateway: PoolUrgencePort {
