@@ -933,6 +933,18 @@ test('les gardes se disent sans écriture chez Apple, et la doc nomme relance en
     'Applying needs validated documents']) {
     assert.ok(doc.includes(fragment), fragment);
   }
+  // Revue de #1199 (n1, n2, n5) : la doc dit ce qui bloque vraiment, que la branche libérale n'est pas atteignable, et
+  // quels états finissent rouges en mode `soumettre`.
+  assert.doesNotMatch(doc, /le diplôme et le RPPS manquent/);
+  assert.match(doc, /RPPS vérifié/);
+  assert.match(doc, /la carte\s+d'identité et le RIB/);
+  assert.match(doc, /La branche libérale n'est pas atteignable par ce compte/);
+  for (const rouge of ['`PENDING_DEVELOPER_RELEASE`', '`ACCEPTED`', '`REPLACED_WITH_NEW_VERSION`']) {
+    assert.match(doc, new RegExp(`\\| ${rouge.replace(/[`]/g, '`')}[^\\n]*\\| \\*\\*rouge\\*\\*`), rouge);
+  }
+  for (const bloc of ['config/ios-review-notes-2.0-soignant.txt', 'config/ios-review-notes-2.0-etablissement.txt']) {
+    assert.doesNotMatch(lire(bloc), /diploma|RPPS|freelance/, `${bloc} : seulement ce qui bloque ce compte`);
+  }
 });
 
 test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {

@@ -278,11 +278,12 @@ module IosReviewNotesTest
           assert(bloc.include?('Compte > Aide & légal > "Supprimer mon compte"'))
           assert(bloc.include?('facilities pay by SEPA direct debit collected by Jolene, which pays the professional by bank transfer, outside the app.'))
           assert(!bloc.include?('settled between'))
-          # Candidature (fn_postuler_mission, CandidatureModel) : refus en libéral, envoi sans acceptation possible en
-          # salarié ; écran des statuts : Profil › « Mon espace » › « Mes documents ».
-          assert(bloc.include?('Applying needs validated documents (identity, diploma, RPPS…); some are pending or missing on this demo account ' \
-            '(Profil > Mon espace > "Mes documents"): a freelance application is refused with a message saying so, a salaried one is sent ' \
-            'but the facility cannot accept it until they are validated.'))
+          # Candidature (fn_postuler_mission, CandidatureSection) : seul chemin atteignable par le compte de revue, salarié,
+          # candidature envoyée puis non acceptable ; seules la carte d'identité et le RIB bloquent (RPPS vérifié, donc ni
+          # diplôme ni RPPS exigés) ; écran des statuts : Profil › « Mon espace » › « Mes documents ».
+          assert(bloc.include?('Applying needs validated documents (identity, bank details…); some are still under review on this demo account ' \
+            '(Profil > Mon espace > "Mes documents"): an application is sent, but the facility cannot accept it until they are validated.'))
+          assert(!bloc.match?(/diploma|RPPS|freelance|missing/), 'only what really blocks this account')
           assert(bloc.include?('Explorer (three demo assignments in Paris)'))
           assert(N.longueur(bloc) < 2500, "block too long: #{N.longueur(bloc)}")
         end
@@ -550,9 +551,11 @@ module IosReviewNotesTest
         assert(!events.include?(:create_version) && !events.include?(:guard_prepare))
       },
       'relaunch during review, after approval or after release: no 1.0.7 fiche, no sign-in, the review guard concludes' => lambda {
-        # Liste écrite ici, pas relue dans la constante : retirer un état de SOUMISES doit rougir ce test.
-        %w[IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE PROCESSING_FOR_DISTRIBUTION
-           READY_FOR_DISTRIBUTION ACCEPTED REPLACED_WITH_NEW_VERSION].each do |etat|
+        # Liste écrite ici, pas relue dans la constante : retirer ou ajouter un état de SOUMISES doit rougir ce test.
+        soumises = %w[IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE PROCESSING_FOR_DISTRIBUTION
+                      READY_FOR_DISTRIBUTION ACCEPTED REPLACED_WITH_NEW_VERSION]
+        assert(N::SOUMISES.sort == soumises.sort, 'exactly the eight states after a submission; WAITING_FOR_REVIEW is editable')
+        soumises.each do |etat|
           events = []
           journal = []
           vente = etat == 'READY_FOR_DISTRIBUTION' || etat == 'REPLACED_WITH_NEW_VERSION'
@@ -565,6 +568,41 @@ module IosReviewNotesTest
           assert(journal == ["Version 2.0.0 déjà soumise (#{etat}) : aucune fiche à vérifier, la garde de la revue conclut."])
           rejects(/déjà soumise : rien à écrire/) { notes.appliquer! }
           journal_global.concat(journal)
+        end
+      },
+      'relaunch with the real review guard: green on the same build for five states, red without any write for three' => lambda {
+        verts = %w[IN_REVIEW PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE PROCESSING_FOR_DISTRIBUTION READY_FOR_DISTRIBUTION]
+        rouges = {
+          'PENDING_DEVELOPER_RELEASE' => /PENDING_DEVELOPER_RELEASE; automatic release needs separate action/,
+          'ACCEPTED' => /Apple version is ACCEPTED; automatic replacement stopped/,
+          'REPLACED_WITH_NEW_VERSION' => /already distributed or superseded/
+        }
+        (verts + rouges.keys).each do |etat|
+          review = IosReviewSubmissionTest::FakeGateway.new
+          vente = %w[READY_FOR_DISTRIBUTION REPLACED_WITH_NEW_VERSION].include?(etat)
+          review.version_rows.first.app_version_state = 'REPLACED_WITH_NEW_VERSION' if vente
+          review.version_rows[-1] = IosReviewSubmissionTest.version(etat, IosReviewSubmissionTest.build)
+          review.submission_rows = []
+          events = review.events
+          gateway = FakeNotesGateway.new(edit: nil, detail: nil, events: events,
+            source: version('1.0.5', vente ? 'REPLACED_WITH_NEW_VERSION' : 'READY_FOR_DISTRIBUTION', 'v105'),
+            autres: [version('1.0.6', etat, 'v106')])
+          notes = notes(gateway, marketing: '1.0.6')
+          guard = IosReviewSubmissionTest.guard(review)
+          if verts.include?(etat)
+            assert(enchainer(notes, guard, events) == :already_submitted, "#{etat} : déjà soumis, au vert")
+          else
+            erreur = begin
+              enchainer(notes, guard, events)
+              nil
+            rescue IosReviewSubmission::Failure => e
+              e
+            end
+            assert(erreur&.message&.match?(rouges.fetch(etat)), "#{etat} : #{erreur&.message.inspect}")
+          end
+          assert(events.include?(:build_read) && events.include?(:read_versions), "#{etat} : pré-vol puis vraie garde")
+          assert(!events.include?(:read_detail) && !events.include?(:sign_in), "#{etat} : ni fiche lue ni connexion")
+          assert((events & ECRITURES).empty? && !events.include?(:cancel) && !events.include?(:submit), "#{etat} : rien d'écrit")
         end
       },
       'a configured version neither editable nor submitted, or present twice, stops the pre-flight before any read of 1.0.7' => lambda {
@@ -658,6 +696,20 @@ module IosReviewNotesTest
           journal_global.concat(journal)
         end
         assert(N.autre_adresse?(ANCIENNES, DEMO_NOM) && !N.autre_adresse?("#{DEMO_NOM} only", " #{DEMO_NOM.upcase} "))
+        # Adresse du compte collée à de la ponctuation (revue de #1199, n4) : ce n'est pas une autre adresse.
+        ["Login:#{DEMO_NOM}", "`#{DEMO_NOM}`", "«#{DEMO_NOM}»", "**#{DEMO_NOM}**", "mailto:#{DEMO_NOM}", "<#{DEMO_NOM}>",
+         "(#{DEMO_NOM})", "\"#{DEMO_NOM}\"", "'#{DEMO_NOM}'", "#{DEMO_NOM}.", "#{DEMO_NOM},", "#{DEMO_NOM};", "[#{DEMO_NOM}]"].each do |collee|
+          assert(!N.autre_adresse?("Compte : #{collee} / mdp", DEMO_NOM), "glued address counted as another one: #{collee.sub(DEMO_NOM, 'NOM')}")
+        end
+        ['`etab-revue@example.test`', 'Login:etab-revue@example.test', '«etab-revue@example.test»'].each do |autre|
+          assert(N.autre_adresse?("Soignant : `#{DEMO_NOM}` ; établissement : #{autre}", DEMO_NOM))
+        end
+        journal = []
+        gateway = FakeNotesGateway.new(detail: detail(notes: "Login: `#{DEMO_NOM}` / mdp-fictif"))
+        notes = notes(gateway, journal: journal)
+        notes.verifier!
+        assert(avertissement.call(journal) == 1, 'warning shown when the only address is the demo one, in backticks')
+        journal_global.concat(journal)
         journal = []
         gateway = FakeNotesGateway.new
         notes = notes(gateway, journal: journal)
@@ -718,6 +770,8 @@ module IosReviewNotesTest
         gateway = FakeNotesGateway.new(edit: version('2.0.0', 'WAITING_FOR_REVIEW'), events: events)
         assert(enchainer(notes(gateway), StubGuard.new(events, result: :already_submitted), events) == :already_submitted)
         assert((events & ECRITURES).empty? && !events.include?(:submit))
+        # WAITING_FOR_REVIEW est modifiable : fiche lue et compte connecté, avant qu'un relecteur n'ouvre la version.
+        assert(events == %i[edit_version read_detail sign_in guard_prepare])
         events = []
         rejects(/build absent/) { enchainer(notes(FakeNotesGateway.new(events: events)), StubGuard.new(events, build_present: false), events) }
         assert(!events.include?(:submit) && (events & ECRITURES).empty?)

@@ -270,20 +270,29 @@ module IosReviewSubmission
       { statut: statut, notes: notes, anciennes: anciennes }
     end
 
+    # Adresse extraite pour la seule comparaison d'`autre_adresse?` : classe stricte, pour qu'une adresse collée à de la
+    # ponctuation (« ` », « « », « * », `Login:`, `mailto:`) ne compte pas pour une autre. EMAIL, plus large, garde le
+    # verrou des blocs du dépôt public.
+    ADRESSE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/
+
     # Fonction pure. Vrai si les notes précédentes portent une adresse autre que le nom du compte de démonstration :
     # celle de l'autre compte de revue, que le bloc y annonce. Comparaison en mémoire, rien n'est affiché.
     def self.autre_adresse?(anciennes, nom_compte)
       connecte = nom_compte.to_s.strip.downcase
-      anciennes.to_s.scan(EMAIL).map(&:downcase).uniq.any? { |adresse| adresse != connecte }
+      anciennes.to_s.scan(ADRESSE).map(&:downcase).uniq.any? { |adresse| adresse != connecte }
     end
 
     AVERTISSEMENT_NOTES = "Avertissement : les notes de la version précédente ne contiennent aucune adresse e-mail autre " \
       "que celle du compte de démonstration ; le bloc y renvoie pourtant pour les identifiants de l'autre compte de revue " \
       "(voir #{DOC})."
 
-    # Versions iOS hors des six états modifiables de `get_edit_app_store_version` : la configurée y est déjà soumise, en
-    # revue, approuvée ou en vente ; la garde de la revue conclut (« déjà soumis » au vert, ou son refus documenté).
-    SOUMISES = %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE
+    # Les huit états, hors des six modifiables de `get_edit_app_store_version`, qui suivent une soumission : en revue,
+    # approuvée, en attente de publication, en cours de distribution, en vente ou remplacée. Le pré-vol y conclut sans
+    # lire de fiche ni se connecter, et la garde de la revue décide : « déjà soumis » au vert pour le même build en revue,
+    # en attente de publication par Apple, d'export compliance, en distribution ou en vente ; rouge, sans écriture, pour
+    # PENDING_DEVELOPER_RELEASE, ACCEPTED et REPLACED_WITH_NEW_VERSION (APP_STORE.md). `WAITING_FOR_REVIEW` n'y est pas :
+    # c'est un état modifiable, rendu par `edit_version` et contrôlé en entier (fiche, connexion, notes).
+    SOUMISES = %w[IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE
                   PROCESSING_FOR_DISTRIBUTION READY_FOR_DISTRIBUTION ACCEPTED REPLACED_WITH_NEW_VERSION].freeze
 
     # Fonction pure. État de la version configurée quand aucune version n'est modifiable : nil si elle n'existe pas
