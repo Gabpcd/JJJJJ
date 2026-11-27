@@ -232,11 +232,11 @@ public final class ContestationModel: ObservableObject {
 /// reformulés) : borne du motif vérifiée avant l'envoi par `ContestationModel`, et refus simulés par le monde démo.
 /// Garde : `ContestationModelTests.testMessagesServeurPresentsDansLeDump` (chaque texte figure dans le dump versionné).
 public enum MessagesContestationServeur {
-    // source: supabase/schema/public.sql:46959
+    // source: supabase/schema/public.sql:46981
     public static let motifLongueur = "Le motif doit contenir entre 10 et 2 000 caractères."
-    // source: supabase/schema/public.sql:47001
+    // source: supabase/schema/public.sql:47023
     public static let dejaOuvert = "Un litige de ce type est déjà ouvert pour cette mission."
-    // source: supabase/schema/public.sql:47072
+    // source: supabase/schema/public.sql:47094
     public static let fenetreFermee = "Fenêtre de contestation fermée pour ce type de litige. Contactez le support."
 
     public static let tous = [motifLongueur, dejaOuvert, fenetreFermee]

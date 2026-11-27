@@ -146,9 +146,9 @@ public enum PoolUrgenceRegles {
     public static let rayonParDefaut = 15
     /// Statut posé par `fn_accepter_mission_urgence` (l.5368) : seule preuve d'une acceptation rapide relue.
     public static let statutEnAttenteValidation = "EN_ATTENTE_VALIDATION_ETAB"
-    /// Refus de `fn_toggle_pool_urgence` (`public.sql` l.62106), restitué verbatim.
+    /// Refus de `fn_toggle_pool_urgence` (`public.sql` l.62162), restitué verbatim.
     public static let refusRayon = "Le rayon doit être compris entre 1 et 200 km."
-    /// Refus « documents » de `fn_toggle_pool_urgence` (l.62115), restitué verbatim, avec un lien vers les documents.
+    /// Refus « documents » de `fn_toggle_pool_urgence` (l.62171), restitué verbatim, avec un lien vers les documents.
     public static let refusDocuments = "Validez les documents d’au moins un type de mission (salariée ou libérale) pour rejoindre le pool urgence."
     /// Bornes serveur du rayon (`p_rayon_km < 1 OR p_rayon_km > 200`).
     public static let rayonServeur = 1...200
@@ -247,7 +247,7 @@ public enum PoolUrgenceTextes {
     // source: supabase/schema/public.sql l.5385 (`message` du succès de `fn_accepter_mission_urgence`), affiché après la
     // relecture du statut, comme le toast web (l.121)
     public static let acceptationEnregistree = "Acceptation enregistrée. En attente de validation par l'établissement."
-    // source: supabase/schema/public.sql l.55108 (`error` du `choix_requis` de `fn_resoudre_contrat_mission`, relayé par
+    // source: supabase/schema/public.sql l.55148 (`error` du `choix_requis` de `fn_resoudre_contrat_mission`, relayé par
     // `fn_accepter_mission_urgence` et affiché par le toast web l.125) ; l'acceptation rapide ne le rejoue jamais : le
     // choix se fait sur le détail de la mission (lot 1)
     public static let choixContratRequis = "Choisissez votre mode de contrat."

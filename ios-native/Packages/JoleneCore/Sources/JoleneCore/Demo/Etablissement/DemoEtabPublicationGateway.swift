@@ -58,15 +58,15 @@ public actor DemoEtabEtatPublication {
 /// la liste, « Ouverte »). Aucune règle du temps de travail n'est rejouée ici (D9) : seuls les refus structurels du
 /// serveur le sont.
 public struct DemoEtabPublicationGateway: EtabPublicationPort {
-    /// `fn_blocage_publication_etab` (`supabase/schema/public.sql` l.21209-21210), code et texte serveur.
+    /// `fn_blocage_publication_etab` (`supabase/schema/public.sql` l.21213-21214), code et texte serveur.
     static let codeSuspendue = "PUBLICATION_SUSPENDUE"
     static let messageSuspendue = "Publication suspendue en raison d obligations de paiement à régulariser."
-    /// `fn_creer_mission_multi_jours` (l.27579-27580), texte serveur d'une création impossible (droit d'écriture refusé).
+    /// `fn_creer_mission_multi_jours` (l.27587-27588), texte serveur d'une création impossible (droit d'écriture refusé).
     static let codeIndisponible = "CREATION_MISSION_INDISPONIBLE"
     static let messageIndisponible = "La création de la mission est temporairement indisponible."
-    /// `fn_creer_mission_multi_jours` (l.27462), texte serveur.
+    /// `fn_creer_mission_multi_jours` (l.27470), texte serveur.
     static let messagePasse = "La mission ne peut pas commencer dans le passé."
-    /// `fn_valider_creneaux_mission_json` (l.65723), texte serveur.
+    /// `fn_valider_creneaux_mission_json` (l.65779), texte serveur.
     static let messageAucunCreneau = "Ajoutez au moins un créneau travaillé."
 
     private let etat: DemoEtabEtatPublication

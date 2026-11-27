@@ -748,7 +748,7 @@ CORRIGER ». Un commit par constat ou petit groupe ; les réponses constat par c
 - M4 : la publication native applique le plancher du taux horaire du web (`min` du champ hors libéral,
   `FormulaireMission.tsx` l.921), repris par `LibellesWeb.Publication.tauxMinimumHorsLiberal` et épinglé à sa ligne
   (`PublicationPayloadTests`), jamais recopié dans la logique. **Parité provisoire** : le serveur ne refuse qu'un taux
-  ≤ 0 (`fn_creer_mission_multi_jours*`, `public.sql` l.27427) et le dump ne contient aucun contrôle de ce plancher. Un
+  ≤ 0 (`fn_creer_mission_multi_jours*`, `public.sql` l.27435) et le dump ne contient aucun contrôle de ce plancher. Un
   suivi serveur est à ouvrir (contrôle paramétré dans `fn_creer_mission_multi_jours*`, aucun seuil en dur, HARD STOP
   n°4) ; **non fait ici**. Le web n'a pas de texte propre (refus natif du navigateur) : l'avis sous le champ est un
   texte natif neutre, sans référence légale, valeur tirée de la constante (« Le taux horaire doit être d'au moins
