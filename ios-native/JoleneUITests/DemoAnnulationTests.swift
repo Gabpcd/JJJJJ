@@ -67,7 +67,7 @@ final class DemoAnnulationTests: JoleneUITestCase {
         // Reprise : Mes missions relue (la mission quitte « À venir »), puis réouverture du détail depuis Explorer, où la
         // mission est remise en ligne : ni bouton d'annulation, ni annonce, ni entrée des présences.
         retourAMesMissions(sans: "demo-assignee-001")
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         let liste = element("missions-list")
         let compteur = element("missions-count")
         // 30 missions ouvertes de la démo (`DemoExplorerTests.Attendus.total`) + la mission remise en ligne. Sa ligne n'est
@@ -138,8 +138,9 @@ final class DemoAnnulationTests: JoleneUITestCase {
         scrollTo(coche, in: feuille)
         XCTAssertTrue(coche.label.contains(Self.consequences), "HARD STOP n°4 : verbatim du web (l.234) : \(coche.label)")
         XCTAssertFalse(confirmer.isEnabled, "la case n'est pas encore cochée")
-        coche.tap()
-        require("La case est cochée") { coche.isSelected }
+        toucherPuisExiger(coche, "La case est cochée", rienNAChange: { !coche.isSelected && !confirmer.isEnabled }) {
+            coche.isSelected
+        }
         let notification = element("annulation-notification-etablissement")
         scrollTo(notification, in: feuille)
         XCTAssertTrue(notification.label.hasSuffix(Self.notification), "verbatim du web (l.240) : \(notification.label)")
@@ -192,7 +193,7 @@ final class DemoAnnulationTests: JoleneUITestCase {
 
     /// Mes missions › À venir → détail de la mission ; rend le conteneur du détail.
     private func ouvrirMission(_ id: String) -> XCUIElement {
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         let scroll = element("mes-missions-scroll")
         let ligne = element("mes-mission-\(id)")
         require("Mes missions affiche ses missions à venir", timeout: 30) {

@@ -110,7 +110,7 @@ final class DemoEtabCompteTests: JoleneUITestCase {
 
     /// Onglet Compte : sur iPad portrait il est derrière « Page suivante » de la barre d'onglets, que `tabButton` tourne.
     private func ouvrirCompte() {
-        tabButton("tab-etab-compte", label: "Compte").tap()
+        toucherOnglet("tab-etab-compte", label: "Compte")
         require("Le compte de l'établissement est affiché", timeout: 30) {
             self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }

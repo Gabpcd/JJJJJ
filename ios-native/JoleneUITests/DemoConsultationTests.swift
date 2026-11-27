@@ -66,20 +66,20 @@ final class DemoConsultationTests: JoleneUITestCase {
         assertMissionsTabLabelFits()
         attachText(tabBarDescription, name: "\(proofPrefix)-onglets.txt")
 
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         // Lot 1, T5 : l'écran natif remplace l'état « Disponible au lot 1 » (`placeholder-missions`).
         require("Mes missions affiche ses missions à venir", timeout: 30) {
             self.containerVisible(self.element("mes-missions-screen")) && self.element("mes-mission-demo-assignee-001").exists
         }
         XCTAssertFalse(element("placeholder-missions").exists, "plus d'état d'attente pour Mes missions")
-        tabButton("tab-revenus", label: "Revenus").tap()
+        toucherOnglet("tab-revenus", label: "Revenus")
         // Lot 3, T12 (règle 8) : l'onglet Revenus natif remplace le placeholder du lot 0.
         require("Revenus affiche l'onglet natif") { self.containerVisible(self.element("revenus-screen")) }
         XCTAssertFalse(element("placeholder-revenus").exists, "placeholder du lot 0 remplacé par L3-T12")
     }
 
     private func openExplorer() {
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         let count = element("missions-count")
         require("Explorer affiche 30 missions", timeout: 30) {
             self.containerVisible(self.element("missions-list")) && count.exists && count.label == "30 missions"
@@ -118,7 +118,7 @@ final class DemoConsultationTests: JoleneUITestCase {
     }
 
     private func assertNoNetworkRequest() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("Le profil affiche l'email de démonstration") {
             self.visible(self.element("profile-email")) && self.element("profile-email").label.contains(Self.demoEmail)
         }

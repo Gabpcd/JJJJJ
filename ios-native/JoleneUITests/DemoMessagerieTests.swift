@@ -79,7 +79,7 @@ final class DemoMessagerieTests: JoleneUITestCase {
         record("\(proofPrefix)-messagerie-lue")
         verifierAucuneRequete()
         let badge = element("nav-messages")
-        tabButton("tab-accueil", label: "Accueil").tap()
+        toucherOnglet("tab-accueil", label: "Accueil")
         require("Le badge Messages est relu à zéro") { badge.exists && (badge.value as? String ?? "") == "" }
     }
 
@@ -145,7 +145,7 @@ final class DemoMessagerieTests: JoleneUITestCase {
     func testEcrireALEtablissementDepuisUneMissionAttribuee() throws {
         launchDemo()
         connexionDemo()
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         let scroll = element("mes-missions-scroll")
         let ligne = element("mes-mission-\(Attendus.mission)")
         require("Mes missions affiche ses missions à venir", timeout: 30) {
@@ -290,7 +290,7 @@ final class DemoMessagerieTests: JoleneUITestCase {
         }
         let profil = tabButton("tab-profil", label: "Profil")
         require("L'onglet Profil est touchable") { profil.isHittable && !self.app.keyboards.firstMatch.exists }
-        profil.tap()
+        toucherOnglet("tab-profil", label: "Profil")
         for ecran in ["chat-screen", "messagerie-screen"] where element(ecran).exists {
             retour(depuis: ecran)
         }

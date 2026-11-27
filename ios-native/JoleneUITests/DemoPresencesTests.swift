@@ -207,7 +207,7 @@ final class DemoPresencesTests: JoleneUITestCase {
     }
 
     private func ouvrirProfil() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("Le profil est affiché") { self.containerVisible(self.element("profile-list")) }
     }
 

@@ -95,7 +95,7 @@ final class DemoEtabMessagerieTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirMessages() -> XCUIElement {
-        tabButton("tab-etab-messages", label: "Messages").tap()
+        toucherOnglet("tab-etab-messages", label: "Messages")
         let liste = defilement("messagerie-screen")
         require("La messagerie de l'établissement est relue", timeout: 30) {
             self.containerVisible(liste) && self.element("conversation-\(Attendus.active)").exists
@@ -127,7 +127,7 @@ final class DemoEtabMessagerieTests: JoleneUITestCase {
 
     /// Compte de l'établissement, puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        tabButton("tab-etab-compte", label: "Compte").tap()
+        toucherOnglet("tab-etab-compte", label: "Compte")
         let liste = element("etab-compte-screen")
         require("Le compte de l'établissement est affiché") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")

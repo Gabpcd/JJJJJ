@@ -217,8 +217,8 @@ class JoleneUITestCase: XCTestCase {
     /// trace (`traceUncharged`) que `require`, mais une condition encore fausse au terme du délai rend `false` au lieu
     /// d'échouer. Un budget de blocage dépassé échoue toujours, comme dans `require` : un gel n'est jamais absorbé par un
     /// rejeu de geste (revue B8 de la vague 5, 5ᵉ tour, M1). Réservée au choix de rejouer un geste perdu
-    /// (`toucherSeConnecter`, `dragSliderPastMinimum`) ; la preuve passe ensuite par `require` ou par l'assertion de
-    /// l'appelant.
+    /// (`toucherSeConnecter`, `toucherEtRejouerSiPerdu`, `dragSliderPastMinimum`) ; la preuve passe ensuite par `require`
+    /// ou par l'assertion de l'appelant.
     func attendreSansEchec(_ description: String, timeout: TimeInterval,
                            stallBudget: TimeInterval = JoleneUITestCase.defaultStallBudget,
                            file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) -> Bool {
@@ -377,6 +377,58 @@ class JoleneUITestCase: XCTestCase {
         require(description, timeout: timeout - fenetre, file: file, line: line, condition: sessionPrete)
     }
 
+    /// Fenêtre de constat d'un toucher avant de décider d'un rejeu (`toucherEtRejouerSiPerdu`). Les témoins d'un toucher
+    /// reçu (onglet sélectionné, case cochée, étoile désactivée pendant l'appel) apparaissent sans attendre le réseau.
+    static let fenetreToucher: TimeInterval = 5
+
+    /// Socle générique du rejeu d'un toucher perdu, sur le modèle de `toucherSeConnecter` et de
+    /// `DemoPreferencesTests.prefsBasculer`. Série 45799922589 (main `f599cab3`), UI lot 1 — ipad-landscape : tentative 1,
+    /// `DemoFavorisTests.swift:33`, étoile touchée puis 15 s sans sauvegarde ; tentative 2, `DemoFiltresTests.swift:95`,
+    /// onglet Profil touché puis 15 s sans hub. Verts sur les autres formats et à la tentative suivante : toucher
+    /// synthétisé perdu, pas un défaut de l'app.
+    ///
+    /// Le geste `toucher` est fait une fois. Si `effet` n'est pas constaté sur `fenetre` (`attendreSansEchec` : blocages
+    /// décomptés, budgetés et tracés comme dans `require`), le geste est rejoué UNE seule fois, et seulement si
+    /// `rienNAChange` relit l'état d'avant le toucher : aucun écran intermédiaire, contrôle toujours actif, aucune
+    /// erreur. Un toucher reçu, même lent, n'est donc jamais rejoué. Chaque rejeu est consigné (`consignerRejeu`, relevé
+    /// « Geste rejoué » de la CI) ; un effet absent sans rejeu permis est noté en activité XCTest. Rien n'est prouvé ici :
+    /// l'appelant exige l'effet ensuite (`require`), avec le message d'avant ; une double bascule y échouerait. Réservé
+    /// aux gestes dont l'état relu prouve l'absence d'effet (onglets, cases, chips, étoiles) : jamais un envoi, un
+    /// paiement, une signature ou une candidature sans relecture qui prouve que rien n'est parti.
+    func toucherEtRejouerSiPerdu(_ attente: String, fenetre: TimeInterval = JoleneUITestCase.fenetreToucher,
+                                 file: StaticString = #filePath, line: UInt = #line,
+                                 toucher: () -> Void, rienNAChange: () -> Bool, effet: () -> Bool) {
+        toucher()
+        if attendreSansEchec("\(attente) (premier toucher)", timeout: fenetre, file: file, line: line, condition: effet) {
+            return
+        }
+        guard rienNAChange() else {
+            XCTContext.runActivity(named: "Geste non rejoué — « \(attente) » : effet absent en \(Self.seconds(fenetre)), "
+                                   + "mais état relu changé ou contrôle inactif : aucun rejeu") { _ in }
+            return
+        }
+        consignerRejeu(attente, issue: "toucher sans effet en \(Self.seconds(fenetre)), état relu inchangé : "
+                       + "un seul nouveau toucher", file: file, line: line)
+        toucher()
+    }
+
+    /// Touche `cible`, puis exige `effet` sous `description`, sur `timeout` décomptées au total, comme un `require` posé
+    /// juste après le toucher (même message d'échec ; revue B8 de la vague 5, 5ᵉ tour, m1 : le délai n'est pas allongé).
+    /// Un toucher perdu est rejoué une fois (`toucherEtRejouerSiPerdu`) : seulement si `cible` est encore atteignable et
+    /// que `rienNAChange` relit l'état d'avant le toucher.
+    func toucherPuisExiger(_ cible: XCUIElement, _ description: String,
+                           timeout: TimeInterval = JoleneUITestCase.defaultTimeout,
+                           fenetre: TimeInterval = JoleneUITestCase.fenetreToucher,
+                           file: StaticString = #filePath, line: UInt = #line,
+                           rienNAChange: () -> Bool, effet: () -> Bool) {
+        let premiere = min(fenetre, timeout / 2)
+        toucherEtRejouerSiPerdu(description, fenetre: premiere, file: file, line: line,
+                                toucher: { cible.tap() },
+                                rienNAChange: { self.visible(cible) && rienNAChange() },
+                                effet: effet)
+        require(description, timeout: timeout - premiere, file: file, line: line, condition: effet)
+    }
+
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
     func tap(_ identifier: String) {
         let target = element(identifier)
@@ -498,6 +550,50 @@ class JoleneUITestCase: XCTestCase {
             if bySymbol.exists { return bySymbol }
         }
         return buttons[label]
+    }
+
+    /// Touche un onglet de la barre (`tabButton`). Un toucher perdu est rejoué UNE fois (`toucherEtRejouerSiPerdu`) :
+    /// seulement si l'onglet sélectionné avant le toucher est lisible, n'est pas l'onglet visé, et reste le même 5 s plus
+    /// tard, barres de navigation inchangées et onglet visé toujours atteignable (`lireBarreOnglets`). La sélection change
+    /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
+    /// toucher le ramènerait à sa racine). Onglet déjà sélectionné, ou sélection illisible : un seul toucher, jamais de
+    /// rejeu. Rien n'est exigé ici, pas même la sélection : l'appelant exige le contenu de l'onglet, avec son message et
+    /// son délai d'avant. Ce délai ne court qu'après la fenêtre, donc au plus 5 s plus tard, et seulement quand la
+    /// sélection n'a pas été constatée.
+    func toucherOnglet(_ identifier: String, label: String, file: StaticString = #filePath, line: UInt = #line) {
+        let onglet = tabButton(identifier, label: label)
+        let symbole = Self.tabSymbols[identifier]
+        let avant = lireBarreOnglets()
+        guard let selection = avant.selection, !selection.designe(identifier, symbole: symbole, label: label) else {
+            onglet.tap()
+            return
+        }
+        toucherEtRejouerSiPerdu("L'onglet \(label) est sélectionné à la place de \(selection.label)", file: file, line: line,
+                                toucher: { onglet.tap() },
+                                rienNAChange: { self.lireBarreOnglets() == avant && self.visible(onglet) },
+                                effet: {
+                                    self.lireBarreOnglets().selection?.designe(identifier, symbole: symbole, label: label) ?? false
+                                })
+    }
+
+    /// Onglet sélectionné (premier bouton d'onglet `Selected` : dans l'élément `TabBar`, ou identifié par l'un des
+    /// symboles de `tabSymbols` dans la barre haute de l'iPad) et identifiants des barres de navigation, lus dans UN
+    /// instantané de l'app, comme `lirePageDeLaBarre`. Instantané impossible : rien de lisible, donc aucun rejeu.
+    func lireBarreOnglets() -> EtatBarreOnglets {
+        var etat = EtatBarreOnglets()
+        guard let racine = try? app.snapshot() else { return etat }
+        let symboles = Set(Self.tabSymbols.keys).union(Self.tabSymbols.values)
+        func parcourir(_ element: XCUIElementSnapshot, dansLaBarre: Bool) {
+            let barre = dansLaBarre || element.elementType == .tabBar
+            if element.elementType == .navigationBar { etat.barresDeNavigation.append(element.identifier) }
+            if etat.selection == nil, element.elementType == .button, element.isSelected, !element.label.isEmpty,
+               barre || symboles.contains(element.identifier) {
+                etat.selection = OngletSelectionne(identifiant: element.identifier, label: element.label)
+            }
+            element.children.forEach { parcourir($0, dansLaBarre: barre) }
+        }
+        parcourir(racine, dansLaBarre: false)
+        return etat
     }
 
     static let pageSuivante = "Page suivante"
@@ -820,6 +916,24 @@ class JoleneUITestCase: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
         attachText(app.debugDescription, name: "\(name)-accessibilite.txt")
+    }
+}
+
+/// Onglet sélectionné et barres de navigation, lus dans un même instantané (`lireBarreOnglets`) : témoin d'un toucher
+/// d'onglet resté sans effet (`toucherOnglet`).
+struct EtatBarreOnglets: Equatable {
+    var selection: OngletSelectionne?
+    var barresDeNavigation: [String] = []
+}
+
+/// Bouton d'onglet sélectionné : identifiant (`tab-*` ou symbole SF) et libellé.
+struct OngletSelectionne: Equatable {
+    let identifiant: String
+    let label: String
+
+    /// Même règle que `boutonOnglet` : l'identifiant `tab-*`, puis son symbole SF (`tabSymbols`), puis le libellé.
+    func designe(_ identifier: String, symbole: String?, label attendu: String) -> Bool {
+        identifiant == identifier || (symbole != nil && identifiant == symbole) || label == attendu
     }
 }
 

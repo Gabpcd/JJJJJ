@@ -43,7 +43,7 @@ final class DemoEtabAccueilTests: JoleneUITestCase {
         // Intégration de la vague C (revues B8 de #1160 et #1162, m1) : l'action « candidatures »
         // (`/etablissement/missions?statut=OUVERTE`) passe par `EtablissementTabView.ouvrir(_:)`, qui rejoue le filtre
         // `?statut=` de la liste des missions, comme un lien : Missions s'ouvre sur « Ouvertes », jamais sur « Toutes ».
-        tabButton("tab-etab-accueil", label: "Accueil").tap()
+        toucherOnglet("tab-etab-accueil", label: "Accueil")
         ouvrirAccueil()
         toucher("etab-action-candidatures-cta")
         require("L'action « candidatures » ouvre Missions sur le filtre Ouvertes", timeout: 30) {

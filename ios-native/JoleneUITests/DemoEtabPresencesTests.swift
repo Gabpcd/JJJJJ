@@ -199,7 +199,7 @@ final class DemoEtabPresencesTests: JoleneUITestCase {
     }
 
     private func ouvrirPresences() {
-        tabButton("tab-etab-presences", label: "Présences").tap()
+        toucherOnglet("tab-etab-presences", label: "Présences")
         require("Les présences de l'établissement sont relues") {
             self.containerVisible(self.element("etab-presences-screen")) && !self.element("etab-presences-loading").exists
                 && self.element("etab-presences-tab-a_valider").exists

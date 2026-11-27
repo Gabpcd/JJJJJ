@@ -78,7 +78,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_FLAG_ios_natif_etab_presences_actif", "false"])
         connecter(email: Self.emailEtablissement)
         XCTAssertEqual(tabLabels, Self.ongletsEtablissement, "l'onglet coupé garde sa place dans la barre")
-        tabButton("tab-etab-presences", label: "Présences").tap()
+        toucherOnglet("tab-etab-presences", label: "Présences")
         let renvoi = element("etab-renvoi-web")
         require("L'onglet Présences coupé affiche le renvoi web") { self.containerVisible(renvoi) }
         XCTAssertFalse(element("etab-presences-screen").exists, "l'écran natif coupé n'est jamais monté")
@@ -113,12 +113,12 @@ final class DemoEtabSessionTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {
-        tabButton(identifiant, label: label).tap()
+        toucherOnglet(identifiant, label: label)
         require("L'onglet \(label) affiche son contenu") { self.containerVisible(self.element(contenu)) }
     }
 
     private func ouvrirCompte() {
-        tabButton("tab-etab-compte", label: "Compte").tap()
+        toucherOnglet("tab-etab-compte", label: "Compte")
         require("Le compte de l'établissement est affiché") {
             self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }

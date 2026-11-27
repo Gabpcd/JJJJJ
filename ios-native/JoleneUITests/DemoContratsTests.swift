@@ -230,7 +230,7 @@ final class DemoContratsTests: JoleneUITestCase {
 
     /// `attendreListe: false` (coupe-circuit à faux, L2-T10) : la liste native n'est pas attendue, son renvoi la remplace.
     private func openContrats(attendreListe: Bool = true) {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("La liste du profil est affichée") { self.containerVisible(self.element("profile-list")) }
         // « Mes contrats » est dans « Mon espace », sous « Application » (intégration de T4a) : une cellule hors écran
         // d'une `List` n'existe pas encore dans l'arbre, d'où un défilement borné vers le bas avant le tap.

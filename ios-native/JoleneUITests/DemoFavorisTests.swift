@@ -29,8 +29,10 @@ final class DemoFavorisTests: JoleneUITestCase {
         require("L'étoile de la première carte est atteignable et éteinte") {
             self.visible(etoile) && (etoile.value as? String) == "Non sauvegardée"
         }
-        etoile.tap()
-        require("La sauvegarde est relue : l'étoile est allumée") { (etoile.value as? String) == "Sauvegardée" }
+        toucherPuisExiger(etoile, "La sauvegarde est relue : l'étoile est allumée",
+                          rienNAChange: { self.etoileAuRepos(etoile, "Non sauvegardée", erreur: "explorer-favoris-erreur") }) {
+            (etoile.value as? String) == "Sauvegardée"
+        }
         record("\(proofPrefix)-favoris-etoile")
 
         ouvrirFavoris()
@@ -102,8 +104,10 @@ final class DemoFavorisTests: JoleneUITestCase {
         require("L'étoile du détail est allumée") {
             self.visible(etoileDetail) && (etoileDetail.value as? String) == "Sauvegardée"
         }
-        etoileDetail.tap()
-        require("Le retrait est relu depuis le détail") { (etoileDetail.value as? String) == "Non sauvegardée" }
+        toucherPuisExiger(etoileDetail, "Le retrait est relu depuis le détail",
+                          rienNAChange: { self.etoileAuRepos(etoileDetail, "Sauvegardée", erreur: "mission-detail-favoris-erreur") }) {
+            (etoileDetail.value as? String) == "Non sauvegardée"
+        }
         record("\(proofPrefix)-favoris-detail")
 
         let back = app.navigationBars.buttons.firstMatch
@@ -155,7 +159,7 @@ final class DemoFavorisTests: JoleneUITestCase {
     private func ouvrirExplorer() {
         launchDemo()
         seConnecter()
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         attendreCompteur(Attendus.total, timeout: 30)
     }
 
@@ -191,6 +195,12 @@ final class DemoFavorisTests: JoleneUITestCase {
         require("La mission \(id) n'est plus listée") { !self.element("favori-mission-\(id)").exists }
     }
 
+    /// Étoile restée dans son état d'avant le toucher (témoin du rejeu de `toucherPuisExiger`) : même valeur, active
+    /// (`BoutonFavoriMission` la désactive dès le toucher reçu, pendant l'appel), aucune erreur affichée sur sa surface.
+    private func etoileAuRepos(_ etoile: XCUIElement, _ valeur: String, erreur: String) -> Bool {
+        (etoile.value as? String) == valeur && etoile.isEnabled && !element(erreur).exists
+    }
+
     private func attendreCompteur(_ attendu: Int, timeout: TimeInterval = 15) {
         let libelle = "\(attendu) mission\(attendu > 1 ? "s" : "")"
         let count = element("missions-count")
@@ -201,7 +211,7 @@ final class DemoFavorisTests: JoleneUITestCase {
     }
 
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let sentinel = element("network-sentinel")
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "les favoris n'émettent aucune requête en démonstration")

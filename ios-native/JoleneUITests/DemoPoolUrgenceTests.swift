@@ -146,7 +146,7 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirExclusions() -> XCUIElement {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let entree = element("hub-exclusions")
@@ -167,7 +167,7 @@ final class DemoPoolUrgenceTests: JoleneUITestCase {
 
     /// Profil remis à sa racine, puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         for ecran in ["pool-screen", "exclusions-screen"] where element(ecran).exists {
             let back = app.navigationBars.buttons.firstMatch

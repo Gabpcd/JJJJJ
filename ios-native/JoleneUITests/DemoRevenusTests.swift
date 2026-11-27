@@ -177,7 +177,7 @@ final class DemoRevenusTests: JoleneUITestCase {
     func testPresencesDUneMissionRemettentLeProfilASaRacine() throws {
         launchDemo()
         connexionDemo()
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let hub = element("profile-list")
         require("Le hub est affiché") { self.containerVisible(hub) }
         let entree = element("profil-presences")
@@ -217,7 +217,7 @@ final class DemoRevenusTests: JoleneUITestCase {
     func testErreurPuisReprise() throws {
         launchDemo(environment: ["JOLENE_FORCE_REVENUS_ECHEC": "1"])
         connexionDemo()
-        tabButton("tab-revenus", label: "Revenus").tap()
+        toucherOnglet("tab-revenus", label: "Revenus")
         let erreur = element("revenus-error")
         require("L'erreur de chargement est affichée", timeout: 30) { erreur.exists }
         XCTAssertTrue(erreur.label.contains("Impossible de charger tous les revenus"), erreur.label)
@@ -261,7 +261,7 @@ final class DemoRevenusTests: JoleneUITestCase {
 
     @discardableResult
     private func ouvrirRevenus() -> XCUIElement {
-        tabButton("tab-revenus", label: "Revenus").tap()
+        toucherOnglet("tab-revenus", label: "Revenus")
         let ecran = element("revenus-screen")
         require("L'onglet Revenus natif est affiché", timeout: 30) {
             self.containerVisible(ecran) && self.element("revenus-mission-demo-terminee-001").exists

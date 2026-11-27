@@ -108,7 +108,7 @@ final class DemoNotificationsTests: JoleneUITestCase {
         }
         record("\(proofPrefix)-notifications-onglet")
 
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let sentinel = element("network-sentinel")
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "centre de notifications démo : aucune requête réseau")

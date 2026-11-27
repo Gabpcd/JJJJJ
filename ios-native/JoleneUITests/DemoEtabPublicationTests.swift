@@ -187,7 +187,7 @@ final class DemoEtabPublicationTests: JoleneUITestCase {
         connecter(email: DemoEtabSessionTests.emailEtablissement)
         require("L'Accueil établissement est affiché") { self.containerVisible(self.element("etab-accueil-screen")) }
         XCTAssertFalse(element("etab-accueil-publier").exists, "aucune publication sans la permission missions (Accueil)")
-        tabButton("tab-etab-missions", label: "Missions").tap()
+        toucherOnglet("tab-etab-missions", label: "Missions")
         require("La liste des missions est relue") {
             self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
         }
@@ -199,7 +199,7 @@ final class DemoEtabPublicationTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirPublication() {
-        tabButton("tab-etab-missions", label: "Missions").tap()
+        toucherOnglet("tab-etab-missions", label: "Missions")
         require("La liste des missions est relue") {
             self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
         }
@@ -295,16 +295,24 @@ final class DemoEtabPublicationTests: JoleneUITestCase {
     }
 
     /// Coche un interrupteur (`ToggleRow` : commutateur à droite de la ligne) et exige l'état coché ; rejoué seulement si
-    /// la valeur relue vaut encore « 0 », trois fois au plus.
-    private func cocher(_ interrupteur: XCUIElement, in ecran: XCUIElement) {
-        for _ in 0..<3 where (interrupteur.value as? String) != "1" {
+    /// la valeur relue APRÈS le dégagement de la barre vaut encore « 0 », trois fois au plus, chaque rejeu consigné
+    /// (`consignerRejeu`, relevé « Geste rejoué » de la CI), comme `DemoPreferencesTests.prefsBasculer`.
+    private func cocher(_ interrupteur: XCUIElement, in ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let description = "L'interrupteur \(interrupteur.identifier) est coché"
+        for essai in 1...3 {
             if coveredByNavigationBar(interrupteur) { drag(ecran, fromY: 0.4, toY: 0.6) }
-            require("L'interrupteur \(interrupteur.identifier) est activable") { interrupteur.isEnabled }
+            let valeur = interrupteur.value as? String
+            guard valeur != "1", essai == 1 || valeur == "0" else { break }
+            if essai > 1 {
+                consignerRejeu(description, issue: "toucher \(essai - 1)/3 sans effet en 3 s (valeur « 0 » inchangée) : "
+                               + "toucher rejoué", file: file, line: line)
+            }
+            require("L'interrupteur \(interrupteur.identifier) est activable", file: file, line: line) { interrupteur.isEnabled }
             interrupteur.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-            if attendreSansEchec("L'interrupteur \(interrupteur.identifier) est coché", timeout: 3,
+            if attendreSansEchec("\(description) (toucher \(essai)/3)", timeout: 3, file: file, line: line,
                                  condition: { (interrupteur.value as? String) == "1" }) { break }
         }
-        require("L'interrupteur \(interrupteur.identifier) est coché") { (interrupteur.value as? String) == "1" }
+        require(description, file: file, line: line) { (interrupteur.value as? String) == "1" }
     }
 
     private func attendreRecap() {

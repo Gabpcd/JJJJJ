@@ -247,17 +247,25 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
     /// iOS) : run 42664161349, iPhone et iPad paysage, « Le mode salarié est coché » faux à chacune des 14
     /// évaluations, sur deux tests différents. Le toucher n'est rejoué que si la valeur relue vaut encore
     /// « 0 » (jamais un second toucher sur un interrupteur déjà coché), trois fois au plus ; une ligne
-    /// recouverte par la barre de navigation translucide est d'abord redescendue sous la barre.
-    private func cocher(_ interrupteur: XCUIElement, in ecran: XCUIElement, _ description: String) {
-        for _ in 0..<3 where (interrupteur.value as? String) != "1" {
+    /// recouverte par la barre de navigation translucide est d'abord redescendue sous la barre, et la valeur est relue
+    /// APRÈS ce dégagement (un toucher reçu en retard n'est jamais rejoué). Chaque attente passe par `attendreSansEchec`
+    /// (blocages décomptés et budgetés, au lieu d'un `XCTWaiter` brut) et chaque rejeu est consigné (`consignerRejeu`,
+    /// relevé « Geste rejoué » de la CI), comme `DemoPreferencesTests.prefsBasculer`.
+    private func cocher(_ interrupteur: XCUIElement, in ecran: XCUIElement, _ description: String,
+                        file: StaticString = #filePath, line: UInt = #line) {
+        for essai in 1...3 {
             if coveredByNavigationBar(interrupteur) { drag(ecran, fromY: 0.4, toY: 0.6) }
+            let valeur = interrupteur.value as? String
+            guard valeur != "1", essai == 1 || valeur == "0" else { break }
+            if essai > 1 {
+                consignerRejeu(description, issue: "toucher \(essai - 1)/3 sans effet en 3 s (valeur « 0 » inchangée) : "
+                               + "toucher rejoué", file: file, line: line)
+            }
             basculer(interrupteur)
-            // Une attente neuve par essai : XCTest refuse d'attendre deux fois la même.
-            let coche = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (interrupteur.value as? String) == "1" },
-                                                  object: nil)
-            if XCTWaiter.wait(for: [coche], timeout: 3) == .completed { break }
+            if attendreSansEchec("\(description) (toucher \(essai)/3)", timeout: 3, file: file, line: line,
+                                 condition: { (interrupteur.value as? String) == "1" }) { break }
         }
-        require(description) { (interrupteur.value as? String) == "1" }
+        require(description, file: file, line: line) { (interrupteur.value as? String) == "1" }
     }
 
     private func cocherSalarie(_ ecran: XCUIElement) {
@@ -274,7 +282,7 @@ final class DemoCompletionInscriptionTests: JoleneUITestCase {
 
     /// Hub Profil ouvert, sentinelle relue (« 0 requête », revue B8 de T8, m7).
     private func sentinelleSansRequete(_ message: String) {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let hub = element("profile-list")
         require("Le hub Profil est affiché") { self.containerVisible(hub) }
         let sentinel = element("network-sentinel")

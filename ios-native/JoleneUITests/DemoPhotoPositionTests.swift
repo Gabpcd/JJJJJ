@@ -214,7 +214,7 @@ final class DemoPhotoPositionTests: JoleneUITestCase {
 
     /// Onglet Profil → entrée « Mon profil » → écran d'édition chargé.
     private func ouvrirProfil() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let list = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(list) }
         let entree = element("profil-ouvrir")

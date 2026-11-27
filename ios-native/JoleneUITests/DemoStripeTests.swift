@@ -17,7 +17,7 @@ final class DemoStripeTests: JoleneUITestCase {
     func testEntreeDuHubPuisOnboardingRelitLeStatutForce() throws {
         launchDemo()
         connexionDemo()
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let hub = element("profile-list")
         require("Le hub est affiché") { self.containerVisible(hub) }
         // Ligne Stripe montée une fois l'exercice lu (profil MIXTE), en tête de la section « Paiements & facturation »,

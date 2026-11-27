@@ -107,7 +107,7 @@ final class DemoBulletinsTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirBulletins() -> XCUIElement {
-        tabButton("tab-revenus", label: "Revenus").tap()
+        toucherOnglet("tab-revenus", label: "Revenus")
         let revenus = element("revenus-screen")
         require("L'onglet Revenus est affiché", timeout: 30) { self.containerVisible(revenus) }
         let paie = element("revenus-bulletins-web")
@@ -138,7 +138,7 @@ final class DemoBulletinsTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran des copies y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         if element("bulletins-screen").exists {
             let back = app.navigationBars.buttons.firstMatch
             require("Le bouton retour est disponible") { self.visible(back) }

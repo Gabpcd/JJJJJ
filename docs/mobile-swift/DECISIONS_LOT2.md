@@ -2263,3 +2263,18 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   - la valeur est relue après le dégagement : un toucher reçu en retard n'est jamais rejoué ;
   - les `require` des appelants (préférences et `DemoPushTests`) restent inchangés : une double bascule y échouerait.
 - **Non vérifié en CI** : la position du `Switch` imbriqué sous iOS 26.2, et l'absence de rejeu sur les autres formats.
+
+### Touchers perdus sur les onglets et les bascules (série 45799922589, main `f599cab3`)
+
+- **Fait.** UI lot 1 — ipad-landscape : tentative 1, `DemoFavorisTests.swift:33` (étoile touchée, 15 s sans sauvegarde) ;
+  tentative 2, `DemoFiltresTests.swift:95` (onglet Profil touché, 15 s sans hub). Verts ailleurs : toucher perdu.
+- **Correctif** (`UITestSupport.swift`, aucun code de l'app) : `toucherEtRejouerSiPerdu` généralise le modèle de
+  `toucherSeConnecter` et de `prefsBasculer` : un seul rejeu, seulement si l'état relu après 5 s est celui d'avant le
+  toucher, consigné (`consignerRejeu`) ; la preuve reste le `require` de l'appelant, avec le même message.
+  `toucherOnglet` l'applique aux 80 touchers d'onglet (témoin : onglet sélectionné et barres de navigation, lus dans un
+  instantané ; sélection illisible ou onglet déjà choisi, jamais de rejeu) ; `toucherPuisExiger` aux étoiles (valeur,
+  étoile active, aucune erreur), aux cases cochées de l'annulation et de la série, et aux chips d'Explorer. Les
+  interrupteurs de la complétion et de la publication gardent trois essais, désormais budgétés et consignés.
+- **Non vérifié hors CI** : la lecture de `Selected` sur les boutons de la barre haute de l'iPad sous iOS 26.2 (sans
+  elle, aucun rejeu d'onglet n'a lieu), et l'absence de rejeu sur les formats verts. Restent sans rejeu : 14 entrées du
+  hub Profil et 25 sélections (onglets internes, segments, motifs).

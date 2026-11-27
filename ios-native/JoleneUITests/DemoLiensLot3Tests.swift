@@ -83,9 +83,9 @@ final class DemoLiensLot3Tests: JoleneUITestCase {
         XCTAssertEqual(element("deeplink-route").label, "parametresNotifications")
         record("\(proofPrefix)-liens-apres-ready")
         prefsRetourAuProfil()
-        tabButton("tab-accueil", label: "Accueil").tap()
+        toucherOnglet("tab-accueil", label: "Accueil")
         require("L'Accueil est affiché") { self.containerVisible(self.element("accueil-screen")) }
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("Le hub est à sa racine : le lien n'est pas rejoué") {
             self.containerVisible(self.element("profile-list")) && !self.element("prefs-screen").exists
         }

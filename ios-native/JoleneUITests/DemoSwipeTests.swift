@@ -197,7 +197,7 @@ final class DemoSwipeTests: JoleneUITestCase {
         XCTAssertFalse(element("swipe-premiere-candidature").exists, "feuille « première candidature » : une seule fois par compte")
 
         // Mes missions › Candidatures contient les deux missions.
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         tap("missions-tab-candidatures")
         require("Les candidatures du paquet sont dans Mes missions › Candidatures", timeout: 30) {
             self.element("missions-tab-candidatures").isSelected
@@ -231,7 +231,7 @@ final class DemoSwipeTests: JoleneUITestCase {
         XCTAssertFalse(element("swipe-erreur").exists)
         record("\(proofPrefix)-swipe-candidature-retiree")
 
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         tap("missions-tab-candidatures")
         require("L'onglet Candidatures est affiché", timeout: 30) { self.element("missions-tab-candidatures").isSelected }
         requireAbsence("La candidature retirée n'est plus dans Mes missions") { self.element("mes-mission-\(Attendus.premiere)").exists }
@@ -273,7 +273,7 @@ final class DemoSwipeTests: JoleneUITestCase {
         XCTAssertFalse(element("swipe-card-\(Attendus.choix)").exists)
         XCTAssertFalse(element("swipe-erreur").exists)
 
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         tap("missions-tab-candidatures")
         require("La candidature au contrat choisi est dans Mes missions › Candidatures", timeout: 30) {
             self.element("missions-tab-candidatures").isSelected && self.element("mes-mission-\(Attendus.choix)").exists
@@ -369,7 +369,7 @@ final class DemoSwipeTests: JoleneUITestCase {
         require("Le pool urgence est retiré, le Profil à sa racine") {
             !self.element("pool-screen").exists && self.containerVisible(self.element("profile-list"))
         }
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         require("Le paquet est affiché, sans quiz", timeout: 30) {
             !self.element("swipe-quiz").exists && self.element("swipe-restantes").exists
         }
@@ -435,7 +435,7 @@ final class DemoSwipeTests: JoleneUITestCase {
 
     /// Onglet Explorer : la liste du lot 1 et la commande « Swipe · Liste » (coupe-circuit lu), « Liste » sélectionnée.
     private func ouvrirExplorerEnListe() {
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         let swipe = element("explorer-vue-swipe")
         require("Explorer affiche la liste et la commande Swipe · Liste", timeout: 30) {
             self.containerVisible(self.element("missions-list")) && self.visible(swipe)
@@ -524,7 +524,7 @@ final class DemoSwipeTests: JoleneUITestCase {
 
     /// Onglet Profil, puis sentinelle réseau : le swipe n'émet aucune requête en démonstration.
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")

@@ -184,7 +184,7 @@ final class DemoEvaluationsScoreTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete(ecran: String) {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         if element(ecran).exists {
             let back = app.navigationBars.buttons.firstMatch
             require("Le bouton retour est disponible") { self.visible(back) }

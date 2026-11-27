@@ -309,7 +309,7 @@ final class DemoDocumentsTests: JoleneUITestCase {
 
     /// Profil › Mon espace › Mes documents : l'onglet Justificatifs est ouvert par défaut (`MesDocuments.tsx` l.24).
     private func ouvrirMesDocuments() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let entree = element("profil-documents")
         require("Le profil est affiché") { self.containerVisible(self.element("profile-list")) }
         // « Mon espace » est sous « Application » (intégration de T4a) : une cellule hors écran d'une `List` n'existe

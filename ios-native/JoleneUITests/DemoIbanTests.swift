@@ -74,7 +74,7 @@ final class DemoIbanTests: JoleneUITestCase {
     // MARK: - Parcours
 
     private func ouvrirIban() -> XCUIElement {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         require("Le hub est affiché") { self.containerVisible(liste) }
         let entree = element("iban-ouvrir")

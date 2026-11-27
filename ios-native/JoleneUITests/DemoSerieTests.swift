@@ -42,10 +42,15 @@ final class DemoSerieTests: JoleneUITestCase {
         scrollTo(case28, in: ecran)
         XCTAssertTrue(case28.isSelected)
         XCTAssertEqual(case28.label, "Sélectionner la mission du 30 novembre 2026")
-        case28.tap()
-        require("La mission est décochée") { !case28.isSelected && accepter.label == "★ Accepter la sélection (4)" }
-        case28.tap()
-        require("La mission est recochée") { case28.isSelected && accepter.label == "★ Accepter la sélection (5)" }
+        // Bascules locales : un toucher perdu est rejoué une fois, seulement si la case et le compte sont inchangés.
+        toucherPuisExiger(case28, "La mission est décochée",
+                          rienNAChange: { case28.isSelected && accepter.label == "★ Accepter la sélection (5)" }) {
+            !case28.isSelected && accepter.label == "★ Accepter la sélection (4)"
+        }
+        toucherPuisExiger(case28, "La mission est recochée",
+                          rienNAChange: { !case28.isSelected && accepter.label == "★ Accepter la sélection (4)" }) {
+            case28.isSelected && accepter.label == "★ Accepter la sélection (5)"
+        }
 
         scrollTo(accepter, in: ecran)
         accepter.tap()
@@ -131,8 +136,7 @@ final class DemoSerieTests: JoleneUITestCase {
         for id in ["demo-mission-008", "demo-mission-002"] {
             let coche = element("serie-selection-\(id)")
             scrollTo(coche, in: ecran)
-            coche.tap()
-            require("\(id) est décochée") { !coche.isSelected }
+            toucherPuisExiger(coche, "\(id) est décochée", rienNAChange: { coche.isSelected }) { !coche.isSelected }
         }
         scrollTo(accepter, in: ecran)
         require("L'action reprend sur la mission restante") { accepter.label == "★ Accepter la sélection (1)" && accepter.isEnabled }
@@ -228,7 +232,7 @@ final class DemoSerieTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran de série y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         if element("serie-screen").exists {
             let back = app.navigationBars.buttons.firstMatch
             require("Le bouton retour est disponible") { self.visible(back) }

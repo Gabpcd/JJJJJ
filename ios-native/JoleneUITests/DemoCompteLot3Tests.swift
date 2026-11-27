@@ -265,7 +265,7 @@ final class DemoCompteLot3Tests: JoleneUITestCase {
     }
 
     private func compteOuvrirProfil() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("Le profil affiche l'email de démonstration") {
             self.visible(self.element("profile-email")) && self.element("profile-email").label.contains(Self.demoEmail)
         }

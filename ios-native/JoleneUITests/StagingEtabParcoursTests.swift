@@ -163,7 +163,7 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
     func testPhase2ValidationDeLaPresenceApresLesScansDuSoignant() throws {
         let presence = try XCTUnwrap(cohorte.presence, "présence absente : la phase 2 suit l'étape « scanner » du job")
         lancerEtConnecter()
-        tabButton("tab-etab-presences", label: "Présences").tap()
+        toucherOnglet("tab-etab-presences", label: "Présences")
         require("Les présences de l'établissement sont relues", timeout: 45) {
             self.containerVisible(self.element("etab-presences-screen")) && !self.element("etab-presences-loading").exists
                 && self.element("etab-presences-tab-a_valider").exists
@@ -317,7 +317,7 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
     }
 
     private func ouvrirMissions(filtre: String, carte id: String) {
-        if !containerVisible(element("etab-missions-screen")) { tabButton("tab-etab-missions", label: "Missions").tap() }
+        if !containerVisible(element("etab-missions-screen")) { toucherOnglet("tab-etab-missions", label: "Missions") }
         // Quatrième parcours STAGING (run 45737490974) : après l'acceptation de M1, le filtre « Ouvertes » resté choisi est
         // vide ; l'écran rend alors `etab-missions-empty`, jamais `etab-missions-count` (EtabMissionsScreen, liste vide).
         // La liste est relue dès qu'elle est chargée, pleine ou vide ; un état d'erreur arrête l'attente et la nomme.
