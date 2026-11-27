@@ -568,9 +568,10 @@ class JoleneUITestCase: XCTestCase {
     /// seulement si l'onglet sélectionné avant le toucher est lisible, n'est pas l'onglet visé, et reste le même 5 s plus
     /// tard, barres de navigation inchangées et onglet visé toujours atteignable (`lireBarreOnglets`). La sélection change
     /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
-    /// toucher le ramènerait à sa racine). Onglet déjà sélectionné, ou sélection illisible : un seul toucher, jamais de
-    /// rejeu ; une sélection illisible est consignée (`consignerNonRejeu`), pour qu'un rejeu désactivé se voie au relevé
-    /// de la CI, et `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
+    /// toucher le ramènerait à sa racine). Onglet visé déjà lu sélectionné (lecture juste ou non), sélection illisible, ou
+    /// ambiguë (plus d'un onglet lu « Selected ») : un seul toucher, jamais de rejeu ; une sélection illisible ou ambiguë
+    /// est consignée (`consignerNonRejeu`), pour qu'un rejeu désactivé se voie au relevé de la CI, et
+    /// `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
     /// Rien n'est exigé ici, pas même la sélection : l'appelant exige le contenu de l'onglet, avec son message et
     /// son délai d'avant. Ce délai ne court qu'après la fenêtre, donc au plus 5 s plus tard, et seulement quand la
     /// sélection n'a pas été constatée.
@@ -585,16 +586,25 @@ class JoleneUITestCase: XCTestCase {
             onglet.tap()
             return
         }
-        guard !selection.designe(identifier, symbole: symbole, label: label) else {
+        // Plus d'un onglet lu « Selected » (iPadOS 26.2, iPad portrait, barre paginée de l'espace établissement : un
+        // onglet reste lu sélectionné quel que soit l'onglet courant, run 45967481048) : témoin ambigu, aucun rejeu.
+        let selectionnes = avant.libellesSelectionnes
+        guard selectionnes.count == 1 else {
+            consignerNonRejeu("Témoin d'onglet ambigu avant le toucher de \(label)",
+                              issue: "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
+                                  + "un seul toucher, rejeu d'onglet désactivé", file: file, line: line)
+            onglet.tap()
+            return
+        }
+        // Onglet visé déjà lu « Selected », que la lecture soit juste ou non : un seul toucher, jamais de rejeu.
+        guard !avant.estSelectionne(identifier, symbole: symbole, label: label) else {
             onglet.tap()
             return
         }
         toucherEtRejouerSiPerdu("L'onglet \(label) est sélectionné à la place de \(selection.label)", file: file, line: line,
                                 toucher: { onglet.tap() },
                                 rienNAChange: { self.lireBarreOnglets() == avant && self.visible(onglet) },
-                                effet: {
-                                    self.lireBarreOnglets().selection?.designe(identifier, symbole: symbole, label: label) ?? false
-                                })
+                                effet: { self.lireBarreOnglets().estSelectionne(identifier, symbole: symbole, label: label) })
     }
 
     /// Boutons d'onglet (dans l'élément `TabBar`, ou identifiés par l'un des symboles de `tabSymbols` dans la barre haute
@@ -621,29 +631,61 @@ class JoleneUITestCase: XCTestCase {
     /// courant est lu « Selected », aucun autre onglet ne l'est, et chaque onglet de `presents` est exposé dans
     /// l'instantané. Sans cette preuve, un témoin illisible désactiverait le rejeu d'onglet sans aucun échec. La lecture
     /// est jointe en texte (`<préfixe>-temoin-onglet-<identifiant>.txt`).
+    ///
+    /// `barrePagineeEtablissement` : seule exception à l'exclusivité, l'espace établissement en iPad portrait. Run
+    /// 45967481048 (iPadOS 26.2, barre paginée, `TabView` standard sans trait posé par l'app) : « Présences » y reste lu
+    /// « Selected » quel que soit l'onglet courant, anomalie d'accessibilité d'iPadOS. Là seulement, des onglets lus en trop
+    /// sont tolérés s'ils forment un ensemble STABLE : déduit de la première lecture du test (jamais codé en dur), il doit
+    /// se retrouver, onglet courant mis à part, à chaque lecture suivante. L'onglet courant reste exigé « Selected ».
+    /// L'ensemble est consigné au relevé de la CI (« Témoin d'onglet ambigu »). `toucherOnglet` ne rejoue jamais sur un
+    /// témoin ambigu.
     func exigerTemoinOnglet(_ identifier: String, label: String, presents: [(String, String)] = [],
+                            barrePagineeEtablissement: Bool = false,
                             file: StaticString = #filePath, line: UInt = #line) {
         let symbole = Self.tabSymbols[identifier]
         var lu = EtatBarreOnglets()
         _ = attendreSansEchec("Le témoin du rejeu d'onglet lit « \(label) » sélectionné", timeout: 5, file: file, line: line) {
             lu = self.lireBarreOnglets()
-            return lu.selection?.designe(identifier, symbole: symbole, label: label) ?? false
+            return lu.estSelectionne(identifier, symbole: symbole, label: label)
         }
         let lecture = lu.onglets.map { "\($0.label) [\($0.identifiant)]\($0.selectionne ? " Selected" : "")" }
             .joined(separator: ", ")
         attachText("Onglet courant : \(label) (\(identifier))\nBoutons d'onglet lus : \(lecture)",
                    name: "\(proofPrefix)-temoin-onglet-\(identifier).txt")
-        XCTAssertTrue(lu.onglets.contains { $0.selectionne && $0.designe(identifier, symbole: symbole, label: label) },
+        XCTAssertTrue(lu.estSelectionne(identifier, symbole: symbole, label: label),
                       "témoin du rejeu d'onglet illisible sur ce format : « \(label) » n'est pas lu sélectionné (\(lecture))",
                       file: file, line: line)
-        XCTAssertFalse(lu.onglets.contains { $0.selectionne && !$0.designe(identifier, symbole: symbole, label: label) },
-                       "un autre onglet que « \(label) » est lu sélectionné (\(lecture))", file: file, line: line)
+        let enTrop = Set(lu.onglets.filter { $0.selectionne && !$0.designe(identifier, symbole: symbole, label: label) }
+            .map(\.label))
+        if barrePagineeEtablissement && proofPrefix == "ipad-portrait" {
+            if let ensemble = ongletsLusEnTrop {
+                XCTAssertEqual(enTrop, ensemble.subtracting([label]),
+                               "témoin d'onglet ambigu instable : onglets lus « Selected » en plus de « \(label) » différents de "
+                                   + "la première lecture du test (\(ensemble.sorted().joined(separator: ", "))) (\(lecture))",
+                               file: file, line: line)
+            } else {
+                ongletsLusEnTrop = enTrop
+                if !enTrop.isEmpty {
+                    consignerNonRejeu("Témoin d'onglet ambigu (iPad portrait, établissement) : "
+                                          + enTrop.sorted().joined(separator: ", "),
+                                      issue: "lu(s) « Selected » en plus de l'onglet courant \(label) : toléré tant que "
+                                          + "l'ensemble reste stable dans le test ; aucun rejeu d'onglet sur ce témoin",
+                                      file: file, line: line)
+                }
+            }
+        } else {
+            XCTAssertTrue(enTrop.isEmpty, "un autre onglet que « \(label) » est lu sélectionné (\(lecture))", file: file, line: line)
+        }
         for (autre, libelle) in presents {
             let symboleAutre = Self.tabSymbols[autre]
             XCTAssertTrue(lu.onglets.contains { $0.designe(autre, symbole: symboleAutre, label: libelle) },
                           "l'onglet « \(libelle) » n'est pas exposé au témoin (\(lecture))", file: file, line: line)
         }
     }
+
+    /// Onglets lus « Selected » en plus de l'onglet courant à la première lecture du test (`exigerTemoinOnglet`, espace
+    /// établissement en iPad portrait) : chaque test a sa propre instance, donc son propre ensemble.
+    private var ongletsLusEnTrop: Set<String>?
 
     static let pageSuivante = "Page suivante"
     static let pagePrecedente = "Page précédente"
@@ -977,6 +1019,14 @@ struct EtatBarreOnglets: Equatable {
 
     /// Premier bouton d'onglet lu « Selected », de libellé non vide.
     var selection: BoutonOngletLu? { onglets.first { $0.selectionne && !$0.label.isEmpty } }
+
+    /// Libellés distincts des onglets lus « Selected » (deux nœuds par onglet sur iPad) : plus d'un, témoin ambigu.
+    var libellesSelectionnes: Set<String> { Set(onglets.filter { $0.selectionne && !$0.label.isEmpty }.map(\.label)) }
+
+    /// L'onglet désigné (règle de `BoutonOngletLu.designe`) est lu « Selected », seul ou non.
+    func estSelectionne(_ identifier: String, symbole: String?, label: String) -> Bool {
+        onglets.contains { $0.selectionne && $0.designe(identifier, symbole: symbole, label: label) }
+    }
 }
 
 /// Bouton d'onglet lu : identifiant (`tab-*` ou symbole SF), libellé et état « Selected ».

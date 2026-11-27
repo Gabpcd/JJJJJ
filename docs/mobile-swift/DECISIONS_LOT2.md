@@ -2280,4 +2280,9 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   soignant (`DemoConsultationTests`, cinq onglets exposés) et établissement (`DemoEtabSessionTests`), que seul l'onglet
   courant soit lu « Selected ». Un témoin illisible pendant un test est consigné (`consignerNonRejeu`, « Nature : geste
   non rejoué »), comme tout geste sans effet non rejoué ; le relevé de la CI les annonce « Geste non rejoué » (m5).
+- **Anomalie d'iPadOS 26.2, iPad portrait, espace établissement** (run 45967481048, barre paginée, `TabView` standard sans
+  trait posé par l'app) : « Présences » reste lu « Selected » quel que soit l'onglet courant. Règle : l'onglet courant
+  reste exigé « Selected » partout ; l'exclusivité aussi, sauf là, où seul un ensemble stable d'onglets en trop est
+  toléré (déduit de la première lecture du test, consigné « Témoin d'onglet ambigu ») ; plus d'un onglet lu « Selected »
+  rend le témoin ambigu, et `toucherOnglet` ne rejoue alors jamais (consigné).
 - **Restent sans rejeu** : 14 entrées du hub Profil et 25 sélections (onglets internes, segments, motifs).
