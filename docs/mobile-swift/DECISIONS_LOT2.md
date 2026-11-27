@@ -2292,8 +2292,17 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   trop) : le rejeu reste alors armé, sans danger, car l'effet est lu sur l'onglet visé et l'instantané doit être
   identique (revue B8 de #1203, delta court, m1).
 - **Onglet courant touché pour revenir à la racine** (run 45995190132, `DemoLitigesTests.swift:239` : Profil touché,
-  écran des litiges empilé, 15 s sans la liste du profil, sans rejeu par conception) : `revenirALaRacine` attend la
-  racine 3 s, puis fait les retours par le bouton retour tant qu'un écran connu reste empilé ; un retour sans effet est
-  rejoué une fois au plus, consigné, puis l'écran est exigé retiré. Appliqué aux 9 nettoyages « Profil remis à sa
-  racine » (bulletins, évaluations, recherches, litiges, réclamations, parrainage, pool urgence, série, messagerie).
+  déjà courant, donc jamais rejoué, puis 15 s sans la liste du profil). Cause NON établie ; hypothèses : toucher de
+  l'onglet ou retour perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre ». L'échec est
+  à la ligne de la racine, pas à celle du retrait : l'écran des litiges a été lu retiré, ou pas lu, juste après le
+  toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult. `revenirALaRacine` :
+  - attend la racine 3 s ;
+  - puis, tant qu'un écran connu reste empilé, touche le SEUL bouton retour du système (`BackButton`), après avoir lu
+    sur un même instantané l'écran encore présent et ce bouton dans la barre ; jamais un autre bouton (`nav-messages`,
+    seul bouton de la racine du Profil ; revue B8 de #1203, M2, même règle pour `DemoMessagerieTests.boutonRetour`) ;
+  - rejoue un retour sans effet une fois au plus par appel, consigné, puis exige l'écran retiré ;
+  - sans racine ni écran connu, ne fait aucun geste (M1) : consigné avec les barres lues, l'appelant échoue sur son
+    message d'avant.
+  Appliqué aux 9 nettoyages « Profil remis à sa racine » (bulletins, évaluations, recherches, litiges, réclamations,
+  parrainage, pool urgence, série, messagerie).
 - **Restent sans rejeu** : 14 entrées du hub Profil et 25 sélections (onglets internes, segments, motifs).

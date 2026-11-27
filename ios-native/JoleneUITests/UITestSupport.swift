@@ -613,34 +613,31 @@ class JoleneUITestCase: XCTestCase {
     }
 
     /// Ramène à sa racine un onglet souvent déjà COURANT, pile chargée (écran du test empilé sur le hub). Run 45995190132,
-    /// UI lot 1 — ipad-landscape, `DemoLitigesTests.swift:239` : Profil touché avec l'écran des litiges empilé, puis 15 s
-    /// sans la liste du profil, sans rejeu (onglet déjà sélectionné, par conception) : le toucher ou le retour a été perdu.
+    /// UI lot 1 — ipad-landscape, `DemoLitigesTests.swift:239` : Profil touché, onglet déjà sélectionné (jamais rejoué,
+    /// par conception), puis 15 s sans la liste du profil. Cause NON établie, hypothèses : toucher de l'onglet ou retour
+    /// perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre » ; l'échec est à la ligne de la
+    /// racine, pas à celle du retrait de l'écran, donc l'écran des litiges a été lu retiré, ou pas lu du tout, juste après
+    /// le toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult de ce job.
     ///
     /// 1. Toucher de l'onglet (`toucherOnglet`), puis 3 s (`attendreSansEchec`) pour la racine : `racine` affichée, aucun
     ///    écran de `empiles`. Qu'un toucher sur l'onglet courant ramène sa pile à la racine ou non, les deux sont normaux.
-    /// 2. Sinon, tant qu'un écran de `empiles` est lu (le plus haut d'abord), retour par le bouton retour de la barre, puis
-    ///    5 s pour que cet écran disparaisse. Un retour vers la racine est idempotent : resté sans effet (même écran
-    ///    toujours lu), il est rejoué UNE fois au plus, et consigné (`consignerRejeu`) ; encore sans effet, l'écran est
-    ///    exigé retiré (`require`, échec net). Jamais de retour sans écran empilé : à la racine, la barre n'a pas de bouton
-    ///    retour, et un autre bouton serait touché.
-    /// 3. Ni racine ni écran connu : un écran empilé inconnu n'est retiré que par le bouton `BackButton` du système (absent
-    ///    à la racine), une fois, et consigné ; sinon, consigné sans geste (`consignerNonRejeu`).
-    /// L'appelant exige ensuite la racine, avec son message d'avant : rien n'est masqué. `boutonRetour` : bouton retour
-    /// propre à l'appelant (par défaut, `BackButton` puis le premier bouton de la barre, comme les retours d'avant).
+    /// 2. Sinon, tant qu'un écran de `empiles` est lu (le plus haut d'abord), retour par le SEUL bouton retour du système
+    ///    (`BackButton`), puis 5 s pour que cet écran disparaisse. Juste avant le toucher, UN instantané doit montrer
+    ///    l'écran empilé encore présent et `BackButton` dans une barre de navigation (`lireRetourSysteme`) : jamais un
+    ///    autre bouton de la barre (`nav-messages`, seul bouton de la racine du Profil, déjà touché à la place du retour,
+    ///    `DemoMessagerieTests.retour`). Un retour vers la racine est idempotent : resté sans effet (même écran toujours
+    ///    lu), il est rejoué UNE fois au plus par appel, et consigné (`consignerRejeu`) ; encore sans effet, l'écran est
+    ///    exigé retiré (`require`, échec net). Bouton retour du système absent : échec net.
+    /// 3. Ni racine ni écran connu : aucun geste (revue B8 de #1203, M1 : un retour à l'aveugle dépilerait un écran inconnu
+    ///    ou un autre onglet, et masquerait le défaut). Consigné (`consignerNonRejeu`), avec les barres de navigation lues ;
+    ///    l'appelant exige ensuite la racine, avec son message d'avant, et échoue s'il le faut : rien n'est masqué.
     func revenirALaRacine(_ identifier: String, label: String, racine: String, empiles: [String],
-                          boutonRetour: (() -> XCUIElement?)? = nil,
                           file: StaticString = #filePath, line: UInt = #line) {
         toucherOnglet(identifier, label: label, file: file, line: line)
         let empile = { empiles.first { self.element($0).exists } }
         let aLaRacine = { empile() == nil && self.containerVisible(self.element(racine)) }
         if attendreSansEchec("L'onglet \(label) revient à sa racine", timeout: 3, file: file, line: line, condition: aLaRacine) {
             return
-        }
-        let retour: () -> XCUIElement? = boutonRetour ?? {
-            let systeme = self.app.navigationBars.buttons["BackButton"]
-            if systeme.exists, systeme.isHittable { return systeme }
-            let premier = self.app.navigationBars.buttons.firstMatch
-            return self.visible(premier) ? premier : nil
         }
         var precedent: String?
         var rejoue = false
@@ -655,23 +652,57 @@ class JoleneUITestCase: XCTestCase {
                 consignerRejeu("L'écran \(ecran) est retiré par le retour", issue: "retour sans effet en 5 s (écran "
                                + "toujours lu) : un seul nouveau retour", file: file, line: line)
             }
-            require("Le bouton retour est disponible", file: file, line: line) { retour() != nil }
-            retour()?.tap()
+            // Bouton lu une fois par tour, sur un instantané où l'écran empilé est encore présent.
+            var lu = RetourSystemeLu()
+            _ = attendreSansEchec("Le bouton retour du système est lu sur \(ecran)", timeout: 5, file: file, line: line) {
+                lu = self.lireRetourSysteme(sur: ecran)
+                return lu.lisible && (!lu.ecranPresent || lu.boutonPresent)
+            }
+            guard lu.lisible else {
+                XCTFail("Le bouton retour du système est lu sur \(ecran) — instantané de l'app illisible pendant 5 s : "
+                        + "aucun retour à l'aveugle", file: file, line: line)
+                return
+            }
+            guard lu.ecranPresent else {
+                precedent = nil // écran retiré de lui-même pendant la lecture : aucun retour à faire pour lui
+                continue
+            }
+            guard lu.boutonPresent else {
+                XCTFail("Le bouton retour du système (BackButton) est disponible sur \(ecran) — absent de l'instantané "
+                        + "pendant 5 s : aucun autre bouton de la barre n'est touché", file: file, line: line)
+                return
+            }
+            app.navigationBars.buttons.matching(identifier: "BackButton").firstMatch.tap()
             precedent = ecran
             _ = attendreSansEchec("L'écran \(ecran) est retiré par le retour", timeout: 5, file: file, line: line) {
                 !self.element(ecran).exists
             }
         }
         guard !aLaRacine(), empile() == nil else { return }
-        let systeme = app.navigationBars.buttons["BackButton"]
-        if systeme.exists, systeme.isHittable {
-            consignerRejeu("L'onglet \(label) revient à sa racine", issue: "\(racine) absent, aucun écran connu lu, bouton "
-                           + "retour du système présent : un seul retour", file: file, line: line)
-            systeme.tap()
-        } else {
-            consignerNonRejeu("L'onglet \(label) revient à sa racine", issue: "\(racine) absent, aucun écran connu lu ("
-                              + empiles.joined(separator: ", ") + "), aucun bouton retour : aucun geste", file: file, line: line)
+        let barres = lireBarreOnglets().barresDeNavigation.map { "« \($0) »" }.joined(separator: ", ")
+        consignerNonRejeu("L'onglet \(label) revient à sa racine",
+                          issue: "\(racine) absent et aucun écran connu lu (\(empiles.joined(separator: ", "))) ; barres "
+                              + "de navigation lues : \(barres.isEmpty ? "aucune" : barres) : aucun geste", file: file, line: line)
+    }
+
+    /// Sur UN instantané : l'écran `ecran` est présent, et une barre de navigation porte le bouton retour du système
+    /// (identifiant `BackButton`, actif, cadre dans la fenêtre). Aucun autre bouton n'est jamais retenu comme retour.
+    func lireRetourSysteme(sur ecran: String) -> RetourSystemeLu {
+        var lu = RetourSystemeLu()
+        guard let racine = try? app.snapshot() else { return lu }
+        lu.lisible = true
+        let fenetre = racine.frame
+        func parcourir(_ element: XCUIElementSnapshot, dansUneBarre: Bool) {
+            if element.identifier == ecran { lu.ecranPresent = true }
+            let barre = dansUneBarre || element.elementType == .navigationBar
+            if barre, element.elementType == .button, element.identifier == "BackButton", element.isEnabled,
+               !element.frame.isEmpty, fenetre.intersects(element.frame) {
+                lu.boutonPresent = true
+            }
+            element.children.forEach { parcourir($0, dansUneBarre: barre) }
         }
+        parcourir(racine, dansUneBarre: false)
+        return lu
     }
 
     /// Boutons d'onglet (dans l'élément `TabBar`, ou identifiés par l'un des symboles de `tabSymbols` dans la barre haute
@@ -757,7 +788,7 @@ class JoleneUITestCase: XCTestCase {
     }
 
     /// Onglets lus « Selected » en plus de l'onglet courant à la première lecture du test (`exigerTemoinOnglet`, espace
-    /// établissement en iPad portrait) : chaque test a sa propre instance, donc son propre ensemble.
+    /// établissement sur iPad, portrait et paysage) : chaque test a sa propre instance, donc son propre ensemble.
     private var ongletsLusEnTrop: Set<String>?
 
     static let pageSuivante = "Page suivante"
@@ -1112,6 +1143,14 @@ struct BoutonOngletLu: Equatable {
     func designe(_ identifier: String, symbole: String?, label attendu: String) -> Bool {
         identifiant == identifier || (symbole != nil && identifiant == symbole) || label == attendu
     }
+}
+
+/// Écran empilé et bouton retour du système (`BackButton`), lus dans un même instantané (`lireRetourSysteme`).
+struct RetourSystemeLu {
+    /// Instantané obtenu : sans lui, rien n'est lu, et aucun retour n'est fait.
+    var lisible = false
+    var ecranPresent = false
+    var boutonPresent = false
 }
 
 /// Page affichée de la barre d'onglets haute de l'iPad : cadres lus dans un même instantané (`lirePageDeLaBarre`).

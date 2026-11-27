@@ -251,7 +251,9 @@ final class DemoMessagerieTests: JoleneUITestCase {
     /// Retour arrière par le bouton retour de la barre, jamais par « le premier bouton d'une barre ». Ce premier bouton
     /// n'est pas toujours le retour : en local (iOS 18.6, code de `main`),
     /// `testArchiveeBlocageEtSignalement` touchait `nav-messages` au lieu du retour, et `messagerie-screen` restait affiché.
-    /// Ordre de choix : `BackButton` s'il est touchable, sinon le bouton touchable le plus à gauche des barres.
+    /// Seul le bouton retour du système (`BackButton`, touchable) est retenu, sans repli : à la racine du Profil,
+    /// `nav-messages` est le seul bouton de la barre, et le « plus à gauche » d'avant pouvait le désigner (revue B8 de
+    /// #1203, M2). Absent, le retour échoue net (« Le bouton retour est disponible »).
     private func retour(depuis identifiant: String) {
         let back = boutonRetour()
         require("Le bouton retour est disponible") { back().map { self.visible($0) && $0.isHittable } ?? false }
@@ -261,11 +263,8 @@ final class DemoMessagerieTests: JoleneUITestCase {
 
     private func boutonRetour() -> () -> XCUIElement? {
         {
-            let nomme = self.app.navigationBars.buttons["BackButton"]
-            if nomme.exists, nomme.isHittable { return nomme }
-            return self.app.navigationBars.buttons.allElementsBoundByIndex
-                .filter { $0.exists && $0.isHittable && !$0.frame.isEmpty }
-                .min { $0.frame.minX < $1.frame.minX }
+            let systeme = self.app.navigationBars.buttons.matching(identifier: "BackButton").firstMatch
+            return systeme.exists && systeme.isHittable ? systeme : nil
         }
     }
 
@@ -291,7 +290,7 @@ final class DemoMessagerieTests: JoleneUITestCase {
         let profil = tabButton("tab-profil", label: "Profil")
         require("L'onglet Profil est touchable") { profil.isHittable && !self.app.keyboards.firstMatch.exists }
         revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list",
-                         empiles: ["chat-screen", "messagerie-screen"], boutonRetour: boutonRetour())
+                         empiles: ["chat-screen", "messagerie-screen"])
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")
