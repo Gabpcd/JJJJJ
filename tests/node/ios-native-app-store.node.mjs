@@ -936,21 +936,45 @@ test('les journaux de Spaceship ne sortent jamais du runner : ni artefact, ni mo
 
 // Run `verifier` n° 2 (27/11/2026) : « rôle illisible (HTTP 200) ». Lecture tolérante, diagnostic sans valeur, transport
 // qui garde la décompression de Net::HTTP.
-test('compte de démo : lecture du rôle tolérante, diagnostic en liste blanche, décompression de Net::HTTP gardée', () => {
+// Revue de #1202 (B1, M1) : la cause était la compression. PostgREST pose `Content-Range: 0-0/*`, Cloudflare compresse en
+// gzip, et Net::HTTP ne décompresse jamais une réponse qui porte `Content-Range`. Le transport demande donc `identity`,
+// refuse une réponse encore encodée, et lit le rôle strictement, comme l'app.
+test('compte de démo : Accept-Encoding identity exact, réponse encodée refusée, lecture stricte, vocabulaire fermé', () => {
   const compte = lire('fastlane/ios_review_demo_account.rb');
   const actif = compte.split('\n').filter((ligne) => !/^\s*#/.test(ligne)).join('\n');
   assert.match(compte, /CLES_ROLE_CONNUES = %w\[role user_id etablissement_id fn_get_my_role\]\.freeze/, 'liste blanche exacte des clés citées');
-  assert.match(compte, /ENTETES_REPONSE = %w\[content-type content-encoding\]\.freeze/);
+  assert.match(compte, /ENTETES_REPONSE = %w\[content-type content-encoding content-range\]\.freeze/);
   assert.match(compte, /ENTETES_INTERDITS = %w\[accept-encoding range\]\.freeze/);
-  assert.match(compte, /requete = Net::HTTP::Post\.new\(uri\)\n/, 'requête sans en-têtes initiaux : decode_content reste vrai');
-  assert.match(compte, /raise Failure, 'Transport refusé : décompression de Net::HTTP désactivée' unless requete\.decode_content/);
-  assert.doesNotMatch(actif, /'Accept-Encoding'|set_debug_output|decode_content\s*=/, 'ni Accept-Encoding posé, ni journal HTTP, ni décodage coupé');
+  assert.match(compte, /MIMES = %w\[application\/json text\/html text\/plain\]\.freeze/, 'type MIME pris dans une liste fermée');
+  assert.match(compte, /ENCODAGES = %w\[gzip br deflate identity\]\.freeze/, 'encodage pris dans une liste fermée');
+  // `identity` exact, posé à la construction et contrôlé ; aucun autre Accept-Encoding.
+  assert.match(compte, /requete = Net::HTTP::Post\.new\(uri, \{ 'Accept-Encoding' => 'identity' \}\)\n/);
+  assert.match(compte, /unless requete\['accept-encoding'\] == 'identity'/);
+  assert.deepEqual([...actif.matchAll(/'Accept-Encoding' => '([^']*)'/g)].map((m) => m[1]), ['identity'], 'seul Accept-Encoding : identity');
+  assert.doesNotMatch(actif, /set_debug_output|decode_content/, 'ni journal HTTP, ni dépendance au décodage de Net::HTTP');
+  // Une réponse encore encodée est refusée dans `appeler`, seule entrée des trois appels.
+  const appeler = compte.slice(compte.indexOf('    def appeler('), compte.indexOf('    def lire_role(jeton)'));
+  assert.match(appeler, /unless %w\[aucun identity\]\.include\?\(encodage\)\n\s+raise Failure, refus\("réponse encodée \(#\{etape\}, HTTP #\{reponse\[0\]\} ; encodage : #\{encodage\}\)"\)/);
+  for (const etape of ["etape: 'connexion'", "etape: 'lecture du rôle'", "etape: 'déconnexion'"]) assert.ok(compte.includes(etape), etape);
+  // Lecture stricte, comme SupabaseRoleGateway.roleResult : objet racine, `role` texte, rien d'autre.
+  const extraire = compte.slice(compte.indexOf('    def self.extraire_role(corps)'), compte.indexOf('    # Noms de clés que le diagnostic'));
+  assert.match(extraire, /valeur\.is_a\?\(Hash\) && valeur\['role'\]\.is_a\?\(String\) \? valeur\['role'\] : nil/);
+  assert.doesNotMatch(extraire, /times|Array|fn_get_my_role|when String/, 'aucune forme tolérée');
   const lecture = compte.slice(compte.indexOf('    def lire_role(jeton)'), compte.indexOf('    def deconnecter(jeton)'));
   assert.match(lecture, /CompteDemo\.extraire_role\(corps\)/);
   assert.match(lecture, /CompteDemo\.diagnostic_role\(corps, entetes\)/);
   assert.doesNotMatch(lecture, /corps\)?\s*\}|#\{corps|#\{role|#\{entetes/, 'le message ne recopie ni corps, ni rôle, ni en-tête bruts');
+  const diagnostic = compte.slice(compte.indexOf('    def self.diagnostic_role('), compte.indexOf('    # Fonction pure : la valeur JSON, ou :invalide.'));
+  assert.match(diagnostic, /mime_ferme\(entete\(entetes, 'content-type'\)\)/);
+  assert.match(diagnostic, /encodage_ferme\(entete\(entetes, 'content-encoding'\)\)/);
+  assert.match(diagnostic, /Content-Range : /);
+  assert.doesNotMatch(diagnostic, /#\{entete\(entetes, '[a-z-]+'\)\}/, 'aucune valeur brute d\'en-tête');
+  assert.match(compte, /raise Failure, CompteDemo\.refus_ferme\("transport refusé : en-tête/, 'refus de construire préfixés « compte de démo : »');
   const doc = lire('docs/mobile-swift/APP_STORE.md');
-  for (const fragment of ['CompteDemo.extraire_role', 'diagnostic sans aucune valeur', 'decode_content']) assert.ok(doc.includes(fragment), fragment);
+  for (const fragment of ['Accept-Encoding: identity', 'Content-Range: 0-0/*', 'réponse encodée', 'SupabaseRoleGateway', 'diagnostic sans aucune valeur']) {
+    assert.ok(doc.includes(fragment), fragment);
+  }
+  assert.doesNotMatch(doc, /garde `decode_content` vrai|formes plausibles/, 'plus de principe « laisser Net::HTTP décompresser » ni de lecture tolérante');
   assert.doesNotMatch(doc, /de 1\.0\.1 à 1\.0\.7/, 'la liste exacte des versions distribuées n\'est pas prouvée par le run');
 });
 

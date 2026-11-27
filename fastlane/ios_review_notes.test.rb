@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
-# Fixtures only: no Fastlane load, no credentials, no outside network (one loopback server on 127.0.0.1 checks
-# Net::HTTP decompression). Every account value below is fictitious.
+# Fixtures only: no Fastlane load, no credentials, no outside network (loopback servers on 127.0.0.1 check the real
+# transport: Accept-Encoding identity, gzip with Content-Range). Every account value below is fictitious.
 require 'json'
 require 'ostruct'
 require 'socket'
@@ -162,6 +162,49 @@ module IosReviewNotesTest
       reponse = @reponses.fetch(@reponses.keys.find { |chemin| url.include?(chemin) })
       raise reponse if reponse.is_a?(Exception)
       reponse
+    end
+  end
+
+  # Serveur HTTP en boucle locale (127.0.0.1) : une réponse [statut, en-têtes, corps] par requête, dans l'ordre ; rend
+  # le serveur, son fil et les en-têtes reçus. Aucun réseau extérieur.
+  def self.boucle(reponses)
+    serveur = TCPServer.new('127.0.0.1', 0)
+    recues = []
+    fil = Thread.new do
+      reponses.each do |statut, entetes, corps|
+        client = serveur.accept
+        tete = +''
+        while (ligne = client.gets) && ligne != "\r\n"
+          tete << ligne
+        end
+        client.read(tete[/content-length: (\d+)/i, 1].to_i)
+        recues << tete
+        lignes = entetes.map { |nom, valeur| "#{nom}: #{valeur}\r\n" }.join
+        client.write("HTTP/1.1 #{statut} R\r\n#{lignes}Content-Length: #{corps.bytesize}\r\nConnection: close\r\n\r\n")
+        client.write(corps)
+        client.close
+      end
+    rescue IOError, SystemCallError
+      nil
+    end
+    [serveur, fil, recues]
+  end
+
+  def self.fermer(serveur, fil)
+    fil.join(3)
+    fil.kill
+    serveur.close
+  end
+
+  # Transport de test : la requête de TransportHttps.construire, exécutée par TransportHttps.executer, vers la boucle.
+  class TransportBoucle
+    def initialize(port) = @port = port
+    def post(url, entetes, corps)
+      chemin = URI(url).request_uri
+      Net::HTTP.start('127.0.0.1', @port, open_timeout: 5, read_timeout: 5) do |connexion|
+        IosReviewSubmission::CompteDemo::TransportHttps.executer(connexion,
+          IosReviewSubmission::CompteDemo::TransportHttps.construire(URI("http://127.0.0.1:#{@port}#{chemin}"), entetes, corps))
+      end
     end
   end
 
@@ -445,111 +488,142 @@ module IosReviewNotesTest
         etab = http(role: [200, { user_id: USER_ID, role: 'ADMIN_ETABLISSEMENT', etablissement_id: ETAB_ID }.to_json])
         assert(C.new(url: URL, cle: CLE, transport: etab).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) == :etablissement)
       },
-      'role read: every plausible fn_get_my_role shape is accepted, any other is refused' => lambda {
+      'role read is STRICT, like the app (SupabaseRoleGateway): a root object with a text role, nothing else' => lambda {
         objet = { user_id: USER_ID, role: 'SOIGNANT', etablissement_id: nil }
-        admises = {
-          'objet' => objet.to_json,
-          'tableau d’un objet (SETOF, vnd.pgrst)' => [objet].to_json,
-          'objet à la seule clé fn_get_my_role' => { fn_get_my_role: objet }.to_json,
-          'chaîne JSON de l’objet' => objet.to_json.to_json,
-          'tableau d’un objet fn_get_my_role' => [{ fn_get_my_role: objet }].to_json,
-          'chaîne JSON du tableau' => [objet].to_json.to_json,
-          'fn_get_my_role portant une chaîne JSON' => { fn_get_my_role: objet.to_json }.to_json,
-          'trois déballages' => [[[objet]]].to_json
-        }
-        admises.each { |forme, corps| assert(C.extraire_role(corps) == 'SOIGNANT', forme) }
-        refusees = ['[]', [objet, objet].to_json, '{}', { role: 1 }.to_json, { role: nil }.to_json, { user_id: USER_ID }.to_json,
-                    { fn_get_my_role: objet, autre: 1 }.to_json, 'null', '42', 'true', '"SOIGNANT"', 'pas du JSON', '',
-                    [[[[objet]]]].to_json, { fn_get_my_role: 'SOIGNANT' }.to_json]
-        refusees.each { |corps| assert(C.extraire_role(corps).nil?, "forme refusée : #{corps[0, 30]}") }
+        assert(C.extraire_role(objet.to_json) == 'SOIGNANT')
+        assert(C.extraire_role({ role: 'INCONNU' }.to_json) == 'INCONNU', 'a text role is read, then judged by ROLES')
+        # Formes que l'app lirait INCONNU : refusées ici aussi (revue de #1202, M1).
+        refusees = [[objet].to_json, { fn_get_my_role: objet }.to_json, objet.to_json.to_json, [{ fn_get_my_role: objet }].to_json,
+                    '[]', '{}', { role: 1 }.to_json, { role: nil }.to_json, { role: { nom: 'SOIGNANT' } }.to_json, { user_id: USER_ID }.to_json,
+                    'null', '42', 'true', '"SOIGNANT"', 'pas du JSON', '', Zlib.gzip(objet.to_json)]
+        refusees.each { |corps| assert(C.extraire_role(corps).nil?, "forme refusée : #{corps.b[0, 30].inspect}") }
+        # De bout en bout, une forme non stricte donne « rôle illisible », avec son diagnostic, puis la déconnexion.
+        { [objet].to_json => /JSON racine : tableau ; éléments : 1 ; type de l'élément : objet ;/,
+          { fn_get_my_role: objet }.to_json => /JSON racine : objet ; clés : fn_get_my_role ;/,
+          objet.to_json.to_json => /JSON racine : chaîne ; contenu : objet ;/,
+          { role: nil, user_id: USER_ID }.to_json => /clés : role, user_id ; type de role : null ;/ }.each do |corps, motif|
+          transport = http(role: [200, corps, { 'content-type' => 'application/json; charset=utf-8', 'content-range' => '0-0/*' }])
+          rejects(motif) { C.new(url: URL, cle: CLE, transport: transport).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) }
+          assert(transport.calls.last[:url].end_with?('/auth/v1/logout?scope=local'))
+        end
         # Hors HTTP 200, même un corps qui porte un rôle est refusé.
         [401, 500, 204].each do |statut|
           transport = http(role: [statut, objet.to_json])
-          rejects(/rôle illisible \(HTTP #{statut} ; JSON racine : objet ; clés : role, user_id, etablissement_id ;/) do
+          rejects(/rôle illisible \(HTTP #{statut} ; JSON racine : objet ; clés : role, user_id, etablissement_id ; type de role : chaîne ;/) do
             C.new(url: URL, cle: CLE, transport: transport).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
           end
         end
-        # De bout en bout : chaque forme admise mène au rôle, puis à la déconnexion.
-        admises.each_value do |corps|
-          transport = http(role: [200, corps.gsub('SOIGNANT', 'ADMIN_ETABLISSEMENT'), { 'content-type' => 'application/json' }])
-          assert(C.new(url: URL, cle: CLE, transport: transport).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) == :etablissement)
-          assert(transport.calls.last[:url].end_with?('/auth/v1/logout?scope=local'))
-        end
       },
-      'unreadable role diagnostic: JSON type, whitelisted key names, MIME type, size and encoding, never a value' => lambda {
+      'unreadable role diagnostic: closed vocabulary only (JSON type, listed key names, role type, MIME, encoding, Content-Range)' => lambda {
         d = ->(corps, entetes = {}) { C.diagnostic_role(corps, entetes) }
         corps = { user_id: USER_ID, etablissement_id: ETAB_ID, cle_secrete_inconnue: DEMO_MDP, jeton: JETON }.to_json
-        diag = d.call(corps, { 'Content-Type' => 'application/vnd.pgrst.object+json; charset=utf-8', 'Content-Encoding' => 'GZIP' })
-        assert(diag == "JSON racine : objet ; clés : user_id, etablissement_id ; autres clés : 2 ; type : application/vnd.pgrst.object+json ; " \
-          "corps : #{corps.bytesize} octets ; encodage : gzip", diag)
-        (SECRETS + %w[cle_secrete_inconnue jeton]).each { |secret| assert(!diag.include?(secret), "diagnostic echoes #{secret}") }
-        assert(d.call('{}').start_with?('JSON racine : objet ; aucune clé connue ; type : absent ; corps : 2 octets ; encodage : aucun'))
-        assert(d.call([1, 2, 3].to_json).start_with?('JSON racine : tableau ; éléments : 3 ; '))
+        diag = d.call(corps, { 'Content-Type' => 'application/json; charset=utf-8', 'Content-Encoding' => 'GZIP', 'Content-Range' => '0-0/*' })
+        assert(diag == "JSON racine : objet ; clés : user_id, etablissement_id ; autres clés : 2 ; type : application/json ; " \
+          "corps : #{corps.bytesize} octets ; encodage : gzip ; Content-Range : oui", diag)
+        (SECRETS + %w[cle_secrete_inconnue jeton 0-0]).each { |secret| assert(!diag.include?(secret), "diagnostic echoes #{secret}") }
+        assert(d.call('{}') == 'JSON racine : objet ; aucune clé connue ; type : absent ; corps : 2 octets ; encodage : aucun ; Content-Range : non')
+        { nil => 'null', 1 => 'nombre', 'x' => 'chaîne', [1] => 'tableau', { a: 1 } => 'objet', true => 'booléen' }.each do |role, type|
+          assert(d.call({ role: role }.to_json).include?("clés : role ; type de role : #{type} ;"), type)
+        end
+        assert(d.call([1, 2, 3].to_json).start_with?('JSON racine : tableau ; éléments : 3 ; type : '))
+        assert(d.call([{ a: 1 }].to_json).start_with?("JSON racine : tableau ; éléments : 1 ; type de l'élément : objet ; "))
         assert(d.call({ role: 'x' }.to_json.to_json).start_with?('JSON racine : chaîne ; contenu : objet ; '))
-        assert(d.call('"pas du JSON"').start_with?('JSON racine : chaîne ; contenu : invalide ; '))
-        { '12' => 'nombre', '1.5' => 'nombre', 'null' => 'null', 'false' => 'booléen', 'pas du JSON' => 'invalide', '' => 'invalide' }.each do |brut, type|
+        { '12' => 'nombre', 'null' => 'null', 'false' => 'booléen', 'pas du JSON' => 'invalide', '' => 'invalide' }.each do |brut, type|
           assert(d.call(brut).start_with?("JSON racine : #{type} ; type : "), brut)
         end
-        assert(d.call('{}', { 'content-type' => "text/html; x=#{DEMO_NOM}" }).include?('type : text/html ;'))
-        assert(d.call('{}', { 'content-type' => "valeur #{DEMO_NOM}" }).include?('type : illisible ;'))
-        assert(d.call('{}', { 'content-encoding' => 'b r' }).end_with?('encodage : illisible'))
-        assert(d.call('{}', nil).end_with?('type : absent ; corps : 2 octets ; encodage : aucun'))
+        # Type MIME et encodage pris dans des listes fermées, jamais la valeur du serveur.
+        { 'application/json' => 'application/json', 'TEXT/HTML; charset=utf-8' => 'text/html', 'text/plain' => 'text/plain',
+          'application/vnd.pgrst.object+json' => 'autre', "application/#{USER_ID}" => 'autre', "valeur #{DEMO_NOM}" => 'autre', '' => 'absent' }.each do |brut, ferme|
+          assert(d.call('{}', { 'content-type' => brut }).include?("type : #{ferme} ;"), brut)
+        end
+        { 'gzip' => 'gzip', 'BR' => 'br', 'deflate' => 'deflate', 'identity' => 'identity', '' => 'aucun', 'zstd' => 'autre', USER_ID => 'autre' }.each do |brut, ferme|
+          assert(d.call('{}', { 'content-encoding' => brut }).include?("encodage : #{ferme} ;"), brut)
+        end
+        assert(d.call('{}', nil).end_with?('type : absent ; corps : 2 octets ; encodage : aucun ; Content-Range : non'))
         assert(d.call('"é"').include?('corps : 4 octets'), 'size in bytes')
         # De bout en bout, dans le message de refus : aucune valeur, aucun jeton, aucun identifiant.
-        transport = http(role: [200, corps, { 'content-type' => 'application/json; charset=utf-8' }])
-        error = rejects(/rôle illisible \(HTTP 200 ; JSON racine : objet ; clés : user_id, etablissement_id ; autres clés : 2 ; type : application\/json ; corps : \d+ octets ; encodage : aucun\)/) do
+        transport = http(role: [200, corps, { 'content-type' => 'application/json; charset=utf-8', 'content-range' => '0-0/*' }])
+        error = rejects(/rôle illisible \(HTTP 200 ; JSON racine : objet ; clés : user_id, etablissement_id ; autres clés : 2 ; type : application\/json ; corps : \d+ octets ; encodage : aucun ; Content-Range : oui\)/) do
           C.new(url: URL, cle: CLE, transport: transport).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
         end
         assert(!error.message.include?('cle_secrete_inconnue') && transport.calls.last[:url].end_with?('/auth/v1/logout?scope=local'))
       },
-      'transport: Net::HTTP keeps automatic decompression, refuses Accept-Encoding or Range, returns MIME and encoding' => lambda {
+      'transport: Accept-Encoding identity on every call, encoded answers refused, closed and prefixed refusals' => lambda {
         uri = URI("#{URL}/rest/v1/rpc/fn_get_my_role")
         requete = C::TransportHttps.construire(uri, { 'apikey' => CLE, 'Accept' => 'application/json' }, '{}')
-        assert(requete.decode_content && requete['accept-encoding'] == 'gzip;q=1.0,deflate;q=0.6,identity;q=0.3' && requete.body == '{}')
+        assert(requete['accept-encoding'] == 'identity' && requete.body == '{}')
         %w[Accept-Encoding accept-encoding Range].each do |nom|
-          rejects(/Transport refusé : en-tête #{nom.downcase}/) { C::TransportHttps.construire(uri, { nom => 'br' }, '{}') }
+          rejects(/\Acompte de démo : transport refusé : en-tête #{nom.downcase} fourni par l'appelant ; rien n'est écrit ni soumis/) do
+            C::TransportHttps.construire(uri, { nom => 'gzip' }, '{}')
+          end
         end
-        rejects(/HTTPS seulement/) { C::TransportHttps.new.post('http://127.0.0.1:9/rest/v1/rpc/fn_get_my_role', {}, '{}') }
-        # Un Net::HTTP qui ne décompresserait plus (decode_content faux) est refusé à la construction, avant tout envoi.
+        rejects(/\Acompte de démo : transport refusé : HTTPS seulement/) { C::TransportHttps.new.post('http://127.0.0.1:9/rest/v1/rpc/fn_get_my_role', {}, '{}') }
+        # Une requête qui perdrait `identity` est refusée à la construction, avant tout envoi.
         origine = Net::HTTP::Post.method(:new)
         Net::HTTP::Post.define_singleton_method(:new) do |*arguments, **options, &bloc|
-          origine.call(*arguments, **options, &bloc).tap { |requete_brute| requete_brute.instance_variable_set(:@decode_content, false) }
+          origine.call(*arguments, **options, &bloc).tap { |brute| brute.delete('accept-encoding') }
         end
         begin
-          rejects(/décompression de Net::HTTP désactivée/) { C::TransportHttps.construire(uri, { 'apikey' => CLE }, '{}') }
+          rejects(/\Acompte de démo : transport refusé : corps non compressé non demandé/) { C::TransportHttps.construire(uri, { 'apikey' => CLE }, '{}') }
         ensure
           Net::HTTP::Post.singleton_class.send(:remove_method, :new)
         end
-        assert(C::TransportHttps.construire(uri, { 'apikey' => CLE }, '{}').decode_content, 'Net::HTTP::Post.new restored')
-        # Boucle locale seulement : une réponse gzip est décompressée par le chemin même du transport.
-        json = { user_id: USER_ID, role: 'SOIGNANT', etablissement_id: nil }.to_json
-        %w[gzip deflate].each do |algorithme|
-          compresse = algorithme == 'gzip' ? Zlib.gzip(json) : Zlib::Deflate.deflate(json)
-          serveur = TCPServer.new('127.0.0.1', 0)
-          recu = +''
-          fil = Thread.new do
-            client = serveur.accept
-            while (ligne = client.gets) && ligne != "\r\n"
-              recu << ligne
-            end
-            client.read(recu[/content-length: (\d+)/i, 1].to_i)
-            client.write("HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Encoding: #{algorithme}\r\n" \
-              "Content-Length: #{compresse.bytesize}\r\nConnection: close\r\n\r\n")
-            client.write(compresse)
-            client.close
-          end
-          port = serveur.addr[1]
-          statut, corps, entetes = Net::HTTP.start('127.0.0.1', port, open_timeout: 5, read_timeout: 5) do |connexion|
-            C::TransportHttps.executer(connexion, C::TransportHttps.construire(URI("http://127.0.0.1:#{port}/rest/v1/rpc/fn_get_my_role"),
-              { 'apikey' => CLE, 'Accept' => 'application/json' }, '{}'))
-          end
-          fil.join(5)
-          serveur.close
-          assert(recu.match?(/^accept-encoding: gzip;q=1\.0,deflate;q=0\.6,identity;q=0\.3\r$/i), "#{algorithme} : demande de compression")
-          assert(statut == 200 && corps == json, "#{algorithme} : corps décompressé")
-          assert(entetes == { 'content-type' => 'application/json; charset=utf-8' }, "#{algorithme} : Content-Encoding retiré après décodage")
-          assert(C.extraire_role(corps) == 'SOIGNANT')
+        assert(C::TransportHttps.construire(uri, { 'apikey' => CLE }, '{}')['accept-encoding'] == 'identity', 'Net::HTTP::Post.new restored')
+        # Une réponse encore encodée est refusée à chaque étape, motif fermé ; à la déconnexion, elle n'est pas confirmée.
+        { token: /réponse encodée \(connexion, HTTP 200 ; encodage : gzip\)/, role: /réponse encodée \(lecture du rôle, HTTP 200 ; encodage : br\)/ }.each do |etape, motif|
+          reponses = { token: [200, { access_token: JETON }.to_json], role: [200, { role: 'SOIGNANT' }.to_json] }
+          reponses[etape] = reponses[etape] + [{ 'Content-Encoding' => etape == :token ? 'gzip' : 'BR' }]
+          rejects(motif) { C.new(url: URL, cle: CLE, transport: http(**reponses)).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) }
         end
+        rejects(/déconnexion non confirmée \(réponse encodée\)/) do
+          C.new(url: URL, cle: CLE, transport: http(logout: [204, '', { 'content-encoding' => 'deflate' }])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
+        end
+        assert(C.new(url: URL, cle: CLE, transport: http(role: [200, { role: 'SOIGNANT' }.to_json, { 'content-encoding' => 'identity' }])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) == :soignant)
+      },
+      'loopback: the real cause (gzip + Content-Range: 0-0/*) and the fix, through the very transport' => lambda {
+        json = { user_id: USER_ID, role: 'SOIGNANT', etablissement_id: nil }.to_json
+        pgrst = { 'Content-Type' => 'application/json; charset=utf-8', 'Content-Range' => '0-0/*' }
+        # 1. La cause : Net::HTTP par défaut (decode_content) ne décompresse pas une réponse qui porte Content-Range.
+        serveur, fil, recues = boucle([[200, pgrst.merge('Content-Encoding' => 'gzip'), Zlib.gzip(json)]])
+        port = serveur.addr[1]
+        brut = Net::HTTP.start('127.0.0.1', port, open_timeout: 5, read_timeout: 5) do |connexion|
+          connexion.request(Net::HTTP::Post.new(URI("http://127.0.0.1:#{port}/rest/v1/rpc/fn_get_my_role")).tap { |r| r.body = '{}' }).body
+        end
+        fermer(serveur, fil)
+        assert(recues.first.match?(/^accept-encoding: gzip;q=1\.0,deflate;q=0\.6,identity;q=0\.3\r$/i), 'default Net::HTTP asks for gzip')
+        assert(brut.b.start_with?("\x1F\x8B".b) && C.extraire_role(brut).nil?, 'body left gzip, hence the old « rôle illisible (HTTP 200) »')
+        # 2. Un serveur qui compresse malgré `identity`, avec Content-Range, comme au run n° 2 : refus net à la lecture du rôle
+        #    (l'ancien code aurait rendu « rôle illisible »), puis déconnexion.
+        serveur, fil, recues = boucle([[200, { 'Content-Type' => 'application/json' }, { access_token: JETON }.to_json],
+                                       [200, pgrst.merge('Content-Encoding' => 'gzip'), Zlib.gzip(json)], [204, {}, '']])
+        rejects(/\Acompte de démo : réponse encodée \(lecture du rôle, HTTP 200 ; encodage : gzip\)/) do
+          C.new(url: URL, cle: CLE, transport: TransportBoucle.new(serveur.addr[1])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
+        end
+        fermer(serveur, fil)
+        assert(recues.length == 3 && recues.all? { |tete| tete.match?(/^accept-encoding: identity\r$/i) }, 'identity on every call')
+        assert(recues.last.start_with?('POST /auth/v1/logout?scope=local '), 'logged out after the refusal')
+        # 3. Supabase respecte `identity` : corps nu malgré Content-Range, rôle lu, déconnexion.
+        serveur, fil, recues = boucle([[200, { 'Content-Type' => 'application/json' }, { access_token: JETON }.to_json],
+                                       [200, pgrst, json], [204, {}, '']])
+        assert(C.new(url: URL, cle: CLE, transport: TransportBoucle.new(serveur.addr[1])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) == :soignant)
+        fermer(serveur, fil)
+        assert(recues.map { |tete| tete.lines.first.split[1] } == ['/auth/v1/token?grant_type=password', '/rest/v1/rpc/fn_get_my_role', '/auth/v1/logout?scope=local'])
+        assert(recues.all? { |tete| tete.match?(/^accept-encoding: identity\r$/i) })
+        # 4. `Content-Encoding: identity` explicite est accepté ; deflate sans Content-Range est refusé (encodage, pas forme).
+        serveur, fil, = boucle([[200, {}, { access_token: JETON }.to_json], [200, pgrst.merge('Content-Encoding' => 'identity'), json], [204, {}, '']])
+        assert(C.new(url: URL, cle: CLE, transport: TransportBoucle.new(serveur.addr[1])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) == :soignant)
+        fermer(serveur, fil)
+        serveur, fil, = boucle([[200, {}, { access_token: JETON }.to_json], [200, { 'Content-Encoding' => 'deflate' }, Zlib::Deflate.deflate(json)], [204, {}, '']])
+        rejects(/réponse encodée \(lecture du rôle, HTTP 200 ; encodage : deflate\)/) do
+          C.new(url: URL, cle: CLE, transport: TransportBoucle.new(serveur.addr[1])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
+        end
+        fermer(serveur, fil)
+        # 5. Le transport rend Content-Range et le type MIME au diagnostic : corps nu mais non strict (tableau), refusé.
+        serveur, fil, = boucle([[200, {}, { access_token: JETON }.to_json], [200, pgrst, "[#{json}]"], [204, {}, '']])
+        rejects(/rôle illisible \(HTTP 200 ; JSON racine : tableau ; éléments : 1 ; type de l'élément : objet ; type : application\/json ; corps : \d+ octets ; encodage : aucun ; Content-Range : oui\)/) do
+          C.new(url: URL, cle: CLE, transport: TransportBoucle.new(serveur.addr[1])).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP)
+        end
+        fermer(serveur, fil)
       },
       'demo sign-in refusals: other roles, HTTP 400, captcha, network, unreadable answers, logout not confirmed' => lambda {
         verifier = ->(transport) { C.new(url: URL, cle: CLE, transport: transport).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) }

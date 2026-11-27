@@ -55,25 +55,31 @@ module IosReviewSubmission
       { url: url, cle: cle }
     end
 
+    # Fonction pure : message d'un refus, toujours préfixé et fermé.
+    def self.refus_ferme(motif)
+      "compte de démo : #{motif} ; rien n'est écrit ni soumis (voir #{DOC_NOTES})"
+    end
+
     # Requêtes HTTPS de la vérification ; seul ce transport touche le réseau. Ni journal ni nouvelle tentative.
-    # Rend [statut, corps, en-têtes], ces derniers réduits à ENTETES_REPONSE (diagnostic d'une réponse illisible).
+    # Rend [statut, corps, en-têtes], ces derniers réduits à ENTETES_REPONSE.
     #
-    # Compression : la requête est construite sans en-têtes initiaux, donc Net::HTTP pose lui-même
-    # `Accept-Encoding: gzip;q=1.0,deflate;q=0.6,identity;q=0.3` et garde `decode_content` vrai : un corps gzip ou
-    # deflate est décompressé à la lecture, puis Net::HTTP retire `Content-Encoding`. Un `Accept-Encoding` ou un `Range`
-    # fournis par l'appelant désactiveraient ce décodage : ils sont refusés.
+    # Compression : chaque appel demande `Accept-Encoding: identity`, un corps non compressé. Net::HTTP ne décompresse
+    # jamais une réponse qui porte `Content-Range` (net-http 0.9.1 comme 0.4.x, `response.rb`, `inflater` :
+    # `return yield @socket if self['content-range']`). Or PostgREST pose `Content-Range: 0-0/*` sur ses réponses RPC,
+    # que Cloudflare compresse ensuite en gzip : le corps de `fn_get_my_role` arrivait compressé (run `verifier` n° 2).
+    # Une réponse encore encodée est refusée par `CompteDemo#appeler` (« réponse encodée »).
     class TransportHttps
-      ENTETES_REPONSE = %w[content-type content-encoding].freeze
+      ENTETES_REPONSE = %w[content-type content-encoding content-range].freeze
       ENTETES_INTERDITS = %w[accept-encoding range].freeze
 
-      # Fonction pure : la requête, décompression automatique comprise.
+      # Fonction pure : la requête, `Accept-Encoding: identity` posé à la construction.
       def self.construire(uri, entetes, corps)
         interdits = entetes.keys.map { |nom| nom.to_s.downcase } & ENTETES_INTERDITS
-        raise Failure, "Transport refusé : en-tête #{interdits.join(', ')} (décompression de Net::HTTP)" unless interdits.empty?
-        requete = Net::HTTP::Post.new(uri)
+        raise Failure, CompteDemo.refus_ferme("transport refusé : en-tête #{interdits.join(', ')} fourni par l'appelant") unless interdits.empty?
+        requete = Net::HTTP::Post.new(uri, { 'Accept-Encoding' => 'identity' })
         entetes.each { |nom, valeur| requete[nom] = valeur }
         requete.body = corps
-        raise Failure, 'Transport refusé : décompression de Net::HTTP désactivée' unless requete.decode_content
+        raise Failure, CompteDemo.refus_ferme('transport refusé : corps non compressé non demandé') unless requete['accept-encoding'] == 'identity'
         requete
       end
 
@@ -84,43 +90,47 @@ module IosReviewSubmission
 
       def post(url, entetes, corps)
         uri = URI(url)
-        raise Failure, 'Transport refusé : HTTPS seulement' unless uri.scheme == 'https'
+        raise Failure, CompteDemo.refus_ferme('transport refusé : HTTPS seulement') unless uri.scheme == 'https'
         Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20, write_timeout: 20) do |http|
           TransportHttps.executer(http, TransportHttps.construire(uri, entetes, corps))
         end
       end
     end
 
-    # Formes admises de la réponse de `fn_get_my_role` (RETURNS jsonb, non SETOF), et leurs combinaisons, trois déballages
-    # au plus : objet portant `role` texte ; tableau d'un seul élément (forme SETOF ou vnd.pgrst) ; objet à la seule clé
-    # `fn_get_my_role` ; chaîne JSON qui encode l'une de ces formes. Toute autre forme est refusée.
-    CLES_ROLE_CONNUES = %w[role user_id etablissement_id fn_get_my_role].freeze
-
-    # Fonction pure : le rôle (texte) ou nil. Rien n'est recopié ni journalisé.
+    # Lecture STRICTE, comme l'app (`SupabaseRoleGateway.roleResult`) : objet racine portant `role` texte, et rien
+    # d'autre. `fn_get_my_role` est scalaire (RETURNS jsonb, non SETOF) : PostgREST rend l'objet nu.
     def self.extraire_role(corps)
       valeur = lire_json_brut(corps)
-      4.times do
-        case valeur
-        when Hash
-          return valeur['role'] if valeur['role'].is_a?(String)
-          return nil unless valeur.keys == ['fn_get_my_role']
-          valeur = valeur['fn_get_my_role']
-        when Array
-          return nil unless valeur.length == 1
-          valeur = valeur.first
-        when String
-          valeur = lire_json_brut(valeur)
-        else
-          return nil
-        end
-      end
+      valeur.is_a?(Hash) && valeur['role'].is_a?(String) ? valeur['role'] : nil
+    end
+
+    # Noms de clés que le diagnostic peut citer ; les autres ne sont que comptées.
+    CLES_ROLE_CONNUES = %w[role user_id etablissement_id fn_get_my_role].freeze
+    # Vocabulaires fermés : jamais la valeur brute d'un en-tête du serveur.
+    MIMES = %w[application/json text/html text/plain].freeze
+    ENCODAGES = %w[gzip br deflate identity].freeze
+
+    def self.entete(entetes, nom)
+      (entetes || {}).each { |cle, valeur| return valeur.to_s if cle.to_s.downcase == nom }
       nil
     end
 
+    def self.mime_ferme(valeur)
+      mime = valeur.to_s.split(';').first.to_s.strip.downcase
+      return 'absent' if mime.empty?
+      MIMES.include?(mime) ? mime : 'autre'
+    end
+
+    def self.encodage_ferme(valeur)
+      encodage = valeur.to_s.strip.downcase
+      return 'aucun' if encodage.empty?
+      ENCODAGES.include?(encodage) ? encodage : 'autre'
+    end
+
     # Fonction pure : diagnostic d'une réponse de rôle illisible, sans aucune valeur. Type JSON racine ; pour un objet,
-    # les noms de clés de premier niveau de la liste blanche, et le nombre des autres ; pour un tableau, le nombre
-    # d'éléments ; pour une chaîne, le type JSON qu'elle encode ; puis le type MIME, la taille du corps et l'encodage
-    # restant après la décompression de Net::HTTP.
+    # les noms de clés de la liste blanche, le nombre des autres et le type de `role` s'il est présent ; pour un tableau,
+    # le nombre d'éléments et le type d'un élément unique ; pour une chaîne, le type JSON qu'elle encode ; puis le type
+    # MIME et l'encodage pris dans des listes fermées, la taille du corps et la présence de `Content-Range`.
     def self.diagnostic_role(corps, entetes)
       valeur = lire_json_brut(corps)
       elements = ["JSON racine : #{type_json(valeur)}"]
@@ -130,19 +140,16 @@ module IosReviewSubmission
         autres = valeur.keys.length - connues.length
         elements << (connues.empty? ? 'aucune clé connue' : "clés : #{connues.join(', ')}")
         elements << "autres clés : #{autres}" if autres.positive?
+        elements << "type de role : #{type_json(valeur['role'])}" if valeur.key?('role')
       when Array
         elements << "éléments : #{valeur.length}"
+        elements << "type de l'élément : #{type_json(valeur.first)}" if valeur.length == 1
       when String
         elements << "contenu : #{type_json(lire_json_brut(valeur))}"
       end
-      entetes = (entetes || {}).to_h { |nom, v| [nom.to_s.downcase, v.to_s] }
-      mime = entetes['content-type'].to_s.split(';').first.to_s.strip.downcase
-      mime = 'absent' if mime.empty?
-      mime = 'illisible' unless mime == 'absent' || mime.match?(%r{\A[a-z0-9.+-]+/[a-z0-9.+-]+\z})
-      encodage = entetes['content-encoding'].to_s.strip.downcase
-      encodage = 'aucun' if encodage.empty?
-      encodage = 'illisible' unless encodage.match?(/\A[a-z0-9-]+\z/)
-      elements << "type : #{mime}" << "corps : #{corps.to_s.bytesize} octets" << "encodage : #{encodage}"
+      elements << "type : #{mime_ferme(entete(entetes, 'content-type'))}" << "corps : #{corps.to_s.bytesize} octets" <<
+        "encodage : #{encodage_ferme(entete(entetes, 'content-encoding'))}" <<
+        "Content-Range : #{entete(entetes, 'content-range').to_s.strip.empty? ? 'non' : 'oui'}"
       elements.join(' ; ')
     end
 
@@ -173,7 +180,7 @@ module IosReviewSubmission
     def verifier!(nom:, mot_de_passe:)
       email = nom.to_s.strip
       raise Failure, refus('identifiants absents') if email.empty? || mot_de_passe.to_s.empty?
-      statut, corps = appeler('/auth/v1/token?grant_type=password', { 'email' => email, 'password' => mot_de_passe.to_s })
+      statut, corps = appeler('/auth/v1/token?grant_type=password', { 'email' => email, 'password' => mot_de_passe.to_s }, etape: 'connexion')
       jeton = statut == 200 ? CompteDemo.lire_json(corps)['access_token'] : nil
       unless statut == 200 && jeton.is_a?(String) && !jeton.empty?
         raise Failure, refus(statut == 200 ? 'réponse illisible (HTTP 200)' : CompteDemo.motif_refus(statut, corps))
@@ -200,13 +207,20 @@ module IosReviewSubmission
     private
 
     def refus(motif)
-      "compte de démo : #{motif} ; rien n'est écrit ni soumis (voir #{DOC_NOTES})"
+      CompteDemo.refus_ferme(motif)
     end
 
-    def appeler(chemin, corps, jeton: nil)
+    # Seule entrée des trois appels. Une réponse dont `Content-Encoding` n'est ni absent ni `identity` est refusée :
+    # son corps n'a pas été décompressé (voir TransportHttps).
+    def appeler(chemin, corps, etape:, jeton: nil)
       entetes = { 'apikey' => @cle, 'Content-Type' => 'application/json', 'Accept' => 'application/json' }
       entetes['Authorization'] = "Bearer #{jeton}" if jeton
-      @transport.post("#{@url}#{chemin}", entetes, JSON.generate(corps))
+      reponse = @transport.post("#{@url}#{chemin}", entetes, JSON.generate(corps))
+      encodage = CompteDemo.encodage_ferme(CompteDemo.entete(reponse[2], 'content-encoding'))
+      unless %w[aucun identity].include?(encodage)
+        raise Failure, refus("réponse encodée (#{etape}, HTTP #{reponse[0]} ; encodage : #{encodage})")
+      end
+      reponse
     rescue Failure
       raise
     rescue StandardError => error
@@ -214,17 +228,17 @@ module IosReviewSubmission
     end
 
     def lire_role(jeton)
-      statut, corps, entetes = appeler('/rest/v1/rpc/fn_get_my_role', {}, jeton: jeton)
+      statut, corps, entetes = appeler('/rest/v1/rpc/fn_get_my_role', {}, etape: 'lecture du rôle', jeton: jeton)
       role = statut == 200 ? CompteDemo.extraire_role(corps) : nil
       return role if role
       raise Failure, refus("connexion OK, rôle illisible (HTTP #{statut} ; #{CompteDemo.diagnostic_role(corps, entetes)})")
     end
 
     def deconnecter(jeton)
-      statut, = appeler('/auth/v1/logout?scope=local', {}, jeton: jeton)
+      statut, = appeler('/auth/v1/logout?scope=local', {}, etape: 'déconnexion', jeton: jeton)
       (200..299).cover?(statut) ? :ok : "HTTP #{statut}"
     rescue Failure => error
-      error.message[/réseau : [A-Za-z0-9:_]+/] || 'réseau'
+      error.message[/réseau : [A-Za-z0-9:_]+|réponse encodée/] || 'réseau'
     end
   end
 end
