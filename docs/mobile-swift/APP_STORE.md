@@ -215,30 +215,46 @@ Journal : « compte de démo : connexion OK, rôle soignant » (ou établissemen
 de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
 identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
 
-**Lecture du rôle** (`CompteDemo.extraire_role`). `fn_get_my_role` est une fonction scalaire (`RETURNS jsonb`, non
-`SETOF`) qui rend un objet `{user_id, role, etablissement_id}` ; l'app la lit en `AnyJSON`. Le run `verifier` n° 2
-(27/11/2026, run 45952839306) s'est arrêté sur « rôle illisible (HTTP 200) » sans que la forme exacte de la réponse
-soit connue : la lane admet donc les formes plausibles, et leurs combinaisons, trois déballages au plus :
+**Lecture du rôle** (`CompteDemo.extraire_role`), **stricte, comme l'app** (`SupabaseRoleGateway.roleResult`) :
+`fn_get_my_role` est une fonction scalaire (`RETURNS jsonb`, non `SETOF`), et PostgREST rend l'objet nu
+`{user_id, role, etablissement_id}`. Seul un objet racine portant `role` texte est lu ; toute autre forme (tableau,
+enveloppe `{"fn_get_my_role": …}`, chaîne JSON…) est refusée, puisque l'app la lirait `INCONNU`. Le pré-vol prouve
+ainsi que le compte ouvre un espace dans l'app, et rien de plus.
 
-- objet portant `role` texte ;
-- tableau d'un seul élément (forme `SETOF` ou `vnd.pgrst`) ;
-- objet à la seule clé `fn_get_my_role` ;
-- chaîne JSON qui encode l'une de ces formes.
+Le refus porte un **diagnostic sans aucune valeur** (`CompteDemo.diagnostic_role`), fait d'un vocabulaire fermé :
+- type JSON racine (objet, tableau, chaîne, nombre, booléen, null, invalide) ;
+- pour un objet, les noms de clés de premier niveau de la liste blanche `role`, `user_id`, `etablissement_id`,
+  `fn_get_my_role`, le nombre des autres, et le type de `role` s'il est présent ;
+- pour un tableau, le nombre d'éléments et le type d'un élément unique ; pour une chaîne, le type qu'elle encode ;
+- le type MIME (`application/json`, `text/html`, `text/plain`, sinon « autre », ou « absent ») ;
+- la taille du corps en octets ;
+- l'encodage (`gzip`, `br`, `deflate`, `identity`, aucun, sinon « autre ») ;
+- la présence de `Content-Range` (oui ou non).
 
-Toute autre forme est refusée. Le refus porte un **diagnostic sans aucune valeur** (`CompteDemo.diagnostic_role`) :
-type JSON racine (objet, tableau, chaîne, nombre, booléen, null, invalide) ; pour un objet, les noms de clés de
-premier niveau de la liste blanche `role`, `user_id`, `etablissement_id`, `fn_get_my_role`, et le nombre des
-autres ; pour un tableau, le nombre d'éléments ; pour une chaîne, le type qu'elle encode ; puis le type MIME de
-`Content-Type`, la taille du corps en octets et le `Content-Encoding` restant. Par exemple : « rôle illisible
-(HTTP 200 ; JSON racine : tableau ; éléments : 0 ; type : application/json ; corps : 2 octets ; encodage :
-aucun) ».
+Jamais la valeur brute d'un en-tête. Par exemple : « rôle illisible (HTTP 200 ; JSON racine : tableau ; éléments :
+1 ; type de l'élément : objet ; type : application/json ; corps : N octets ; encodage : aucun ; Content-Range :
+oui) ».
 
-**Compression.** Le transport (`CompteDemo::TransportHttps`) construit la requête sans en-têtes initiaux : Net::HTTP
-pose lui-même `Accept-Encoding: gzip;q=1.0,deflate;q=0.6,identity;q=0.3`, garde `decode_content` vrai, décompresse un
-corps gzip ou deflate à la lecture, puis retire `Content-Encoding`. Un `Accept-Encoding` ou un `Range` fournis par
-l'appelant désactiveraient ce décodage : le transport les refuse. Un test le prouve sur une réponse gzip et une
-réponse deflate servies en boucle locale (127.0.0.1). Un encodage encore présent dans le diagnostic signifierait
-donc un corps non décompressé.
+**Compression : `Accept-Encoding: identity`.** Le run `verifier` n° 2 (27/11/2026, run 45952839306) s'est arrêté sur
+« rôle illisible (HTTP 200) ». La cause, trouvée par la revue de #1202 et prouvée par une sonde sur une RPC publique :
+
+- PostgREST pose `Content-Range: 0-0/*` sur ses réponses RPC, puis Cloudflare les compresse en gzip ;
+- or Net::HTTP ne décompresse **jamais** une réponse qui porte `Content-Range` (net-http 0.9.1 comme 0.4.x,
+  `lib/net/http/response.rb`, `inflater` : `return yield @socket if self['content-range']`) ;
+- le corps arrivait donc gzip, et `JSON.parse` échouait. La connexion, elle, passait : GoTrue ne pose pas
+  `Content-Range`.
+
+Le transport (`CompteDemo::TransportHttps`) demande donc un corps non compressé sur **tous** ses appels :
+`Accept-Encoding: identity`, posé à la construction de la requête et contrôlé. Il refuse un `Accept-Encoding` ou un
+`Range` fournis par l'appelant. Une réponse dont `Content-Encoding` n'est ni absent ni `identity` est refusée, motif
+fermé : « réponse encodée (connexion | lecture du rôle | déconnexion, HTTP … ; encodage : gzip | br | deflate |
+autre) ». Les tests le prouvent en boucle locale (127.0.0.1) :
+- Net::HTTP par défaut laisse un corps gzip qui porte `Content-Range` compressé ;
+- un serveur qui compresse malgré `identity` est refusé (l'ancien code rendait « rôle illisible ») ;
+- un serveur qui respecte `identity` donne le rôle, `Content-Range` compris, avec `identity` envoyé sur les trois
+  appels.
+
+Les refus du transport sont préfixés « compte de démo : », comme tous les autres.
 
 **Dépendance : réglage Supabase de session unique.** `scope=local` ne révoque que la session du pré-vol. Cela ne
 préserve la session d'un relecteur Apple que si le réglage Supabase Auth « session unique par utilisateur »
