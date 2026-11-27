@@ -215,6 +215,31 @@ Journal : « compte de démo : connexion OK, rôle soignant » (ou établissemen
 de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
 identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
 
+**Lecture du rôle** (`CompteDemo.extraire_role`). `fn_get_my_role` est une fonction scalaire (`RETURNS jsonb`, non
+`SETOF`) qui rend un objet `{user_id, role, etablissement_id}` ; l'app la lit en `AnyJSON`. Le run `verifier` n° 2
+(27/11/2026, run 45952839306) s'est arrêté sur « rôle illisible (HTTP 200) » sans que la forme exacte de la réponse
+soit connue : la lane admet donc les formes plausibles, et leurs combinaisons, trois déballages au plus :
+
+- objet portant `role` texte ;
+- tableau d'un seul élément (forme `SETOF` ou `vnd.pgrst`) ;
+- objet à la seule clé `fn_get_my_role` ;
+- chaîne JSON qui encode l'une de ces formes.
+
+Toute autre forme est refusée. Le refus porte un **diagnostic sans aucune valeur** (`CompteDemo.diagnostic_role`) :
+type JSON racine (objet, tableau, chaîne, nombre, booléen, null, invalide) ; pour un objet, les noms de clés de
+premier niveau de la liste blanche `role`, `user_id`, `etablissement_id`, `fn_get_my_role`, et le nombre des
+autres ; pour un tableau, le nombre d'éléments ; pour une chaîne, le type qu'elle encode ; puis le type MIME de
+`Content-Type`, la taille du corps en octets et le `Content-Encoding` restant. Par exemple : « rôle illisible
+(HTTP 200 ; JSON racine : tableau ; éléments : 0 ; type : application/json ; corps : 2 octets ; encodage :
+aucun) ».
+
+**Compression.** Le transport (`CompteDemo::TransportHttps`) construit la requête sans en-têtes initiaux : Net::HTTP
+pose lui-même `Accept-Encoding: gzip;q=1.0,deflate;q=0.6,identity;q=0.3`, garde `decode_content` vrai, décompresse un
+corps gzip ou deflate à la lecture, puis retire `Content-Encoding`. Un `Accept-Encoding` ou un `Range` fournis par
+l'appelant désactiveraient ce décodage : le transport les refuse. Un test le prouve sur une réponse gzip et une
+réponse deflate servies en boucle locale (127.0.0.1). Un encodage encore présent dans le diagnostic signifierait
+donc un corps non décompressé.
+
 **Dépendance : réglage Supabase de session unique.** `scope=local` ne révoque que la session du pré-vol. Cela ne
 préserve la session d'un relecteur Apple que si le réglage Supabase Auth « session unique par utilisateur »
 (*single session per user*, tableau de bord → Authentication → Sessions) est **désactivé** : s'il est actif, c'est
@@ -231,7 +256,8 @@ distribuée avant la 2.0.0, qui doit être la coquille Capacitor figée : aujour
 
 **Choix de la source** (`ReviewNotes.choisir_source`). Apple laisse `appVersionState = READY_FOR_DISTRIBUTION` sur
 **toutes** les versions déjà publiées, pas seulement sur celle en vente : le premier run `verifier` réel (27/11/2026)
-en a lu sept, de 1.0.1 à 1.0.7. La lane ne suppose donc aucune unicité et :
+en a compté sept, dont 1.0.7 (son journal ne donne que le nombre ; la liste exacte n'est pas prouvée). La lane ne
+suppose donc aucune unicité et :
 
 - refuse si une version distribuée a un numéro non numérique (un à trois entiers attendus) ;
 - refuse si une version distribuée n'est pas antérieure à la 2.0.0 ;
