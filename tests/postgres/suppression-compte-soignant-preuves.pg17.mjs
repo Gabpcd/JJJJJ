@@ -4,6 +4,9 @@
 //      fn_supprimer_compte_rate_limited (chemin de l'edge delete-account) est refusé (42501), rien n'est écrit ;
 //   2. la migration, puis la suite SQL tests/security/suppression-compte-soignant-preuves.test.sql telle que le
 //      staging l'exécute (BEGIN … ROLLBACK), puis aucun résidu.
+// Schéma chargé : le dump d'une révision épinglée antérieure à la migration (tests/postgres/schema-avant-migration.mjs),
+// jamais le dump courant, qui contient le corps APRÈS migration dès la re-baseline suivant le déploiement (#1204) ;
+// un test sans base vérifie que le dump courant est AVANT ou APRÈS, rien d'autre.
 // Moteurs : PostgreSQL 17 éphémère de la CI (job « Paiements — verrous PostgreSQL 17 éphémère », base dédiée
 // suppression_preuves_banc) ou PGlite local (`JOLENE_PGLITE_MODULES=<dossier node_modules contenant @electric-sql/pglite>`).
 // Aucun réseau, aucune donnée hors du dépôt. La preuve sur le schéma réel reste la suite sur le staging.
@@ -13,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { charger, moteurPglite, moteurPsql, parametresRequis, RACINE } from '../../scripts/mobile/staging-lot5-banc-sql.mjs';
+import { DUMP_AVANT_REVUE_ET_SUPPRESSION, etatDuDumpCourant, racineAvant } from './schema-avant-migration.mjs';
 
 export const MIGRATION = 'supabase/migrations/20261127100000_suppression_compte_soignant_sans_revalidation.sql';
 export const SUITE = 'tests/security/suppression-compte-soignant-preuves.test.sql';
@@ -70,11 +74,26 @@ SELECT set_config('request.jwt.claims', '{"sub":"${SOIGNANT}","role":"authentica
 SELECT public.fn_supprimer_compte_rate_limited() AS resultat;
 COMMIT;`;
 
+const REDEFINITION = [{ schema: 'public', nom: 'fn_invalider_preuves_identite_sur_changement',
+  avant: '121864acbb7a1bd4c800de32eaa75292', apres: 'bb93c49d6187ee007b964acab6bf0809' }];
+
+test('dump épinglé AVANT la migration ; dump courant AVANT ou APRÈS (sans base)', () => {
+  const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
+  try {
+    assert.equal(etatDuDumpCourant(REDEFINITION, readFileSync(join(avant.racine, 'supabase/schema/public.sql'), 'utf8')).etat, 'AVANT');
+  } finally {
+    avant.nettoyer();
+  }
+  const courant = etatDuDumpCourant(REDEFINITION);
+  assert.ok(['AVANT', 'APRES'].includes(courant.etat), `dump courant incohérent avec la migration : ${JSON.stringify(courant.fonctions)}`);
+});
+
 test('suppression du compte soignant : pièces vérifiées, anonymisation aboutie, protections intactes', { timeout: 900_000 }, async () => {
   const m = await moteur();
   const executer = m.executer;
+  const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
   try {
-    const { instructions, passe } = await charger(executer, { lot: m.lot, journal: console.log });
+    const { instructions, passe } = await charger(executer, { racine: avant.racine, lot: m.lot, journal: console.log });
     assert.ok(passe > instructions * 0.98, `schéma chargé : ${passe}/${instructions}`);
     for (const instr of parametresRequis(RACINE, ['inscriptions_publiques_actives'])) await executer(instr);
 
@@ -101,6 +120,7 @@ test('suppression du compte soignant : pièces vérifiées, anonymisation abouti
     assert.deepEqual(residus, { comptes: 0, soignants: 0, pieces: 0 });
     console.log('Banc suppression soignant : constat reproduit avant migration, suite SQL complète après, aucun résidu.');
   } finally {
+    avant.nettoyer();
     await m.fermer?.();
   }
 });

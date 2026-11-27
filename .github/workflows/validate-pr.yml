@@ -1036,6 +1036,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE taux_minimum_banc'
           PGDATABASE=taux_minimum_banc node --test tests/postgres/taux-horaire-minimum-salarie.pg17.mjs
+      - name: Dump de schéma épinglé, antérieur aux migrations rejouées par les bancs suivants
+        # tests/postgres/schema-avant-migration.mjs : le dump courant est re-baseliné après déploiement (corps APRÈS
+        # migration) ; les bancs revue store et suppression soignant chargent cette révision, vérifiée par blob et SHA-256.
+        run: git fetch --no-tags --depth=1 origin 739f3fcb4a97cbbc2fb8ec8734f74bd03f7a4a11
       - name: Missions de revue App Store — stock garanti et envois cloisonnés sur le schéma du dépôt (base dédiée)
         # Migrations 20261126100000 et 20261126100100 : refus d'un établissement réel à la migration, premier
         # remplissage, puis la suite SQL du staging telle quelle (appels HTTP observés en file, jeton fictif).
