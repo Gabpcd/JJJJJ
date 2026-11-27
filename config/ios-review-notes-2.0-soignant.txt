@@ -2,7 +2,7 @@ Jolene 2.0 is a native (Swift) rewrite of the app and replaces version 1.0.7. Af
 
 Jolene connects healthcare professionals with healthcare facilities for short assignments. It provides no diagnosis, medical advice or care. The review accounts contain fictitious data only and are isolated from real users.
 
-Healthcare professional account: the credentials in the "Sign-in required" fields. Tabs: Accueil (home), Explorer (three demo assignments in Paris), Mes missions, Revenus, Profil.
+Healthcare professional account: the credentials in the "Sign-in required" fields. Tabs: Accueil (home), Explorer (three demo assignments in Paris), Mes missions, Revenus, Profil. Applying needs validated documents (identity, bank details…); some are still under review on this demo account (Profil > Mon espace > "Mes documents"): an application is sent, but the facility cannot accept it until they are validated.
 
 Facility account: credentials in the previous notes below. Dashboard, assignments, applications, attendance and check-in, contracts, messaging. Publishing a new assignment is disabled on this demo facility (verification pending). Some management actions (billing, editing, duplicating or cancelling an assignment, other contract types) open the jolene.app website; none of them is a purchase. Administrator and group accounts are web-only: the app tells them to use the website.
 

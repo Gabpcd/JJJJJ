@@ -63,7 +63,8 @@ GitHub → Actions → « iOS Swift — soumission App Store » → *Run workflo
 
 Trois jobs s'enchaînent :
 
-- `gardes` (Ubuntu, sans écriture chez Apple) : toutes les gardes ci-dessous, pré-vol des notes compris, puis
+- `gardes` (Ubuntu, « Gardes avant soumission (sans écriture chez Apple ; compte de démonstration connecté puis
+  déconnecté) ») : toutes les gardes ci-dessous, pré-vol des notes compris, puis
   un verdict posé seulement si toutes ont réussi ; aucune de ses étapes n'est conditionnelle ;
 - `soumettre` (macOS 26), en mode `soumettre` et sur verdict des gardes seulement : lane
   `fastlane ios submit_native` ;
@@ -152,11 +153,22 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 - Suivre l'état par `mobile-store-status.yml` (lecture seule) ou dans App Store Connect.
 - Relancer le workflow avec le même build ne soumet pas deux fois : si ce build est déjà soumis (en
   attente de revue ou en revue) ou déjà en vente, publication progressive comprise, la lane s'arrête sur
-  « déjà soumis » et le job finit vert. Une fois la 2.0.0 en vente, le pré-vol des notes constate qu'elle est
-  distribuée et laisse conclure la garde de la revue, sans rien lire ni écrire de plus.
-  **Exception** : en publication `manuelle`, une fois la version approuvée (« Pending Developer
-  Release »), la lane lève une erreur (`ios_review_submission.rb`) et le job finit **rouge** : rien n'a
-  été changé chez Apple ; la mise en vente se fait par le bouton « Release this version ».
+  « déjà soumis » et le job finit vert. Dès que la 2.0.0 n'est plus modifiable, c'est-à-dire dans l'un des huit
+  états qui suivent une soumission (`ReviewNotes::SOUMISES`), le pré-vol des notes constate qu'elle est déjà
+  soumise. Il ne lit alors ni la fiche de 1.0.7 ni celle de la 2.0.0, et ne connecte pas le compte de
+  démonstration, que le relecteur peut être en train d'utiliser. En mode `verifier`, le run finit donc vert. En
+  mode `soumettre`, la garde de la revue décide, toujours sans rien écrire chez Apple :
+
+  | État de la 2.0.0 (même build) | Mode `soumettre` |
+  |---|---|
+  | `IN_REVIEW`, `PENDING_APPLE_RELEASE`, `WAITING_FOR_EXPORT_COMPLIANCE`, `PROCESSING_FOR_DISTRIBUTION`, `READY_FOR_DISTRIBUTION` (publication progressive comprise) | vert : « déjà soumis » |
+  | `PENDING_DEVELOPER_RELEASE` (publication `manuelle`, version approuvée) | **rouge** : la mise en vente se fait par le bouton « Release this version » |
+  | `ACCEPTED` (état hérité d'une version approuvée) | **rouge** : « automatic replacement stopped and review preserved » |
+  | `REPLACED_WITH_NEW_VERSION` (2.0.0 remplacée par une version plus récente) | **rouge** : « already distributed or superseded » ; soumettre une version plus récente |
+
+  `WAITING_FOR_REVIEW` n'est pas dans cette liste : la version reste modifiable, et le pré-vol la contrôle en
+  entier (fiche, connexion, notes) avant que la garde conclue « déjà soumis ». Une 2.0.0 dans un autre état non
+  modifiable (par exemple `READY_FOR_REVIEW`) arrête le pré-vol, nommément.
 - Pour remplacer un build en attente de revue par un build plus récent, relancer avec le nouveau numéro.
 - Publication progressive : 1 %, 2 %, 5 %, 10 %, 20 %, 50 % puis 100 % sur sept jours ; pause possible
   jusqu'à 30 jours ; chacun peut toujours mettre à jour à la main depuis l'App Store.
@@ -194,8 +206,8 @@ mot de passe de la fiche (celle de la 2.0.0, ou celle de 1.0.7 si la reprise doi
 connecte à Supabase de production exactement comme l'app native (`SupabaseAuthGateway.signIn`) :
 `POST /auth/v1/token?grant_type=password`, clé publishable en en-tête `apikey`, sans jeton captcha (l'app n'en
 envoie pas à la connexion). Elle relit le rôle par la même RPC que l'app (`fn_get_my_role`), puis révoque
-aussitôt cette session seulement (`POST /auth/v1/logout?scope=local`, jamais les sessions d'un relecteur en
-cours). Rôles admis : soignant (`SOIGNANT`, le compte attendu) ou établissement (`ADMIN_ETABLISSEMENT`). Tout
+aussitôt cette session seulement (`POST /auth/v1/logout?scope=local`). Rôles admis : soignant (`SOIGNANT`, le
+compte attendu) ou établissement (`ADMIN_ETABLISSEMENT`). Tout
 autre rôle (`ADMIN_PLATEFORME`, `ADMIN_GROUPE`, `INCONNU`) arrête la lane : l'app ne sert pas ces comptes.
 Journal : « compte de démo : connexion OK, rôle soignant » (ou établissement) ; en échec, un motif fermé :
 « connexion refusée (HTTP 400) », « connexion refusée, captcha exigé (HTTP 400) », « connexion impossible
@@ -203,9 +215,34 @@ Journal : « compte de démo : connexion OK, rôle soignant » (ou établissemen
 de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
 identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
 
+**Dépendance : réglage Supabase de session unique.** `scope=local` ne révoque que la session du pré-vol. Cela ne
+préserve la session d'un relecteur Apple que si le réglage Supabase Auth « session unique par utilisateur »
+(*single session per user*, tableau de bord → Authentication → Sessions) est **désactivé** : s'il est actif, c'est
+la connexion du pré-vol elle-même qui ferme les autres sessions du compte. Le dépôt ne fixe pas ce réglage
+(`supabase/config.toml` n'a pas de section `[auth]`) ; il se constate dans le tableau de bord, et doit rester
+désactivé. Le pré-vol ne se connecte pas quand la 2.0.0 est en revue, approuvée, en attente de publication ou en
+vente (`ReviewNotes::SOUMISES`, ci-dessus). Il se connecte en revanche avant la soumission et pendant l'attente de
+revue (`WAITING_FOR_REVIEW`, état modifiable, contrôlé en entier), quand aucun relecteur n'est encore connecté :
+le risque se limite à ces runs.
+
 **Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou n'a pas
-d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la version distribuée
-(`READY_FOR_DISTRIBUTION`, unique et plus ancienne : aujourd'hui 1.0.7) :
+d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la dernière version
+distribuée avant la 2.0.0, qui doit être la coquille Capacitor figée : aujourd'hui 1.0.7.
+
+**Choix de la source** (`ReviewNotes.choisir_source`). Apple laisse `appVersionState = READY_FOR_DISTRIBUTION` sur
+**toutes** les versions déjà publiées, pas seulement sur celle en vente : le premier run `verifier` réel (27/11/2026)
+en a lu sept, de 1.0.1 à 1.0.7. La lane ne suppose donc aucune unicité et :
+
+- refuse si une version distribuée a un numéro non numérique (un à trois entiers attendus) ;
+- refuse si une version distribuée n'est pas antérieure à la 2.0.0 ;
+- prend la version distribuée de plus haut numéro (comparaison `Gem::Version`, donc 1.0.10 > 1.0.7) ;
+- refuse si deux versions portent ce même numéro maximal ;
+- **verrou** : refuse si cette version n'est pas exactement la coquille figée, `COQUILLE_IOS_FIGEE.marketingVersion`
+  de `scripts/mobile/release-config.mjs` (source unique, lue côté Ruby par `ReviewNotes.lire_coquille_figee!`,
+  qui refuse toute autre forme de la déclaration). C'est la version dont les notes décrivent l'app précédente, et
+  que le séparateur nomme.
+
+Puis la lane copie :
 
 - les identifiants, d'un bloc : `demoAccountName`, `demoAccountPassword`, et `demoAccountRequired` écrit à `true`
   (la connexion de ces identifiants a réussi au pré-vol) ;
@@ -227,7 +264,8 @@ retourné : la lane s'arrête.
 1. pré-vol, sans écriture chez Apple, avant la garde « revue en cours » (donc avant toute annulation) : si une
    version modifiable existe, elle doit être `2.0.0` ; sa fiche est lue et, s'il lui manque les identifiants,
    celle de la version distribuée aussi ; si la 2.0.0 n'existe pas encore, la fiche de la version distribuée sert
-   de prévision ; si la 2.0.0 est déjà distribuée, rien de plus n'est lu et la garde conclut. Puis : verrou sur la
+   de prévision ; si la 2.0.0 est déjà soumise (en revue, approuvée ou en vente), rien de plus n'est lu, aucune
+   connexion n'est faite et la garde conclut. Puis : verrou sur la
    fiche telle qu'elle sera après la copie, connexion du compte, choix du bloc par le rôle, notes composées et
    mesurées. Rien n'est écrit, pas même la copie ;
 2. garde « revue en cours » (`ios_review_submission.rb`) ;
@@ -255,14 +293,61 @@ séparation : arrêt (composition ambiguë).
 
 **Marge sous la limite d'Apple.** Apple limite le champ à 4 000 caractères. La lane s'arrête au-delà de 3 900,
 comptés en unités UTF-16 (un émoji en compte deux), fins de ligne `\r\n` ramenées à `\n`, dès le pré-vol. Chaque
-bloc fait 1 854 unités, 1 911 avec le séparateur : il reste 1 989 unités pour les notes de 1.0.7.
+bloc fait 2 090 unités, 2 147 avec le séparateur : il reste 1 753 unités pour les notes de 1.0.7.
 
-**Avertissement sans échec.** Si les notes de la version précédente ne contiennent aucune adresse e-mail (donc
-pas d'identifiants de l'autre compte de revue), le journal l'écrit et la soumission continue.
+**Avertissement sans échec, dès le pré-vol.** Si les notes de la version précédente ne contiennent aucune adresse
+e-mail autre que celle du compte de démonstration (comparaison en mémoire, rien n'est affiché ; une adresse collée à
+de la ponctuation, entre accents graves, guillemets ou après `Login:`, est reconnue comme telle), elles ne donnent
+pas les identifiants de l'autre compte de revue, que le bloc y annonce. Le journal l'écrit au pré-vol, donc aussi
+en mode `verifier`, puis de nouveau à l'écriture ; la soumission continue. Qu'une adresse soit accompagnée de son
+mot de passe ne se contrôle pas dans un texte libre : c'est une vérification à faire à la main (`LOT6_PLAN.md`
+§3, action 3).
+
+**Candidature sur le compte de démonstration.** Profil du soignant de revue en production, relevé en lecture seule
+le 26-27/11/2026 (booléens et statuts seulement) :
+
+- IDE, exercice `LIBERAL` ; SIRET au bon format mais **non vérifié** (`fn_soignant_liberal_actif_verifie` faux) ;
+- **RPPS vérifié** : le serveur dispense alors du diplôme et du RPPS (`fn_documents_ok_pour_mission`, hors IADE et
+  IBODE), et l'app les masque dans « Mes documents » (`ExigencesDocuments`) ;
+- assurance RCP vérifiée ; carte d'identité, RIB et attestation URSSAF en revue manuelle.
+
+Aucun faux document n'est fabriqué. Ce qui bloque vraiment l'acceptation d'une candidature salariée : **la carte
+d'identité et le RIB**, en attente de vérification. Le bloc ne cite que cela :
+
+> Applying needs validated documents (identity, bank details…); some are still under review on this demo account
+> (Profil > Mon espace > "Mes documents"): an application is sent, but the facility cannot accept it until they
+> are validated.
+
+Le seul chemin atteignable aujourd'hui par ce compte, vérifié dans `ios-native/` et dans les fonctions du serveur :
+
+- l'app affiche « Postuler », envoie la demande sans choix de contrat (`fn_confirmer_action_planning_v1`, puis
+  `fn_postuler_mission_rate_limited`, puis `fn_postuler_mission`) ;
+- sur une mission `TOUS`, un profil libéral non vérifié se résout en **salarié** (`fn_resoudre_contrat_mission`,
+  branche « sinon ») : la candidature est enregistrée en attente, avec la notification « Complétez vos documents
+  salariés » ;
+- l'app affiche « ✅ Candidature envoyée — En attente de réponse », puis « Prochaine étape : validez vos documents
+  pour que l'établissement puisse vous accepter. » et le bouton « 📄 Valider mes documents (2 min) » vers
+  « Mes documents » (`CandidatureSection`) ;
+- côté établissement, l'app renvoie l'acceptation d'une mission `TOUS` au site (`CandidaturesEtabRules`,
+  `contratNonSalarie`), où `fn_finaliser_attribution_mission` refuse tant que les documents salariés ne sont pas
+  validés.
+
+**La branche libérale n'est pas atteignable par ce compte** : elle suppose un SIRET vérifié, et aucun choix de
+contrat n'est proposé (`choixRequis` ne vient qu'à un profil `MIXTE` libéral vérifié). Si un choix libéral était
+envoyé aujourd'hui, le refus viendrait de `fn_resoudre_contrat_mission` (« Votre profil libéral doit être actif,
+avec SIRET et identité vérifiés. ») ; une fois le SIRET vérifié, de `fn_postuler_mission` (« Les documents
+requis pour candidater en libéral sont manquants ou expirés. », la carte d'identité étant en revue). Le bloc n'en
+parle donc pas.
+
+Les trois missions (IDE, `TOUS`, sur candidature, à l'adresse de l'établissement de revue, à Paris, début entre
+J+7 et J+21) sont créées et entretenues par la PR #1198 : la phrase « three demo assignments in Paris » n'est
+vraie qu'une fois cette PR mergée et son cron passé. **Ordre à tenir** : merger #1198 et attendre son cron
+avant le run `soumettre`.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
-lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée plus récente que 2.0.0, l'arrêtent
-aussi. Une version qui change entre le pré-vol et l'écriture, des identifiants différents de ceux connectés, une
+lane au pré-vol. Une version distribuée au numéro non numérique, non antérieure à 2.0.0, deux versions au numéro
+distribué maximal, ou un maximum autre que la coquille figée l'arrêtent aussi (« Choix de la source », ci-dessus).
+Une version qui change entre le pré-vol et l'écriture, des identifiants différents de ceux connectés, une
 fiche relue différente de la copie, ou des notes relues différentes de celles écrites, arrêtent la lane avant la
 soumission.
 
@@ -291,7 +376,8 @@ elles se vérifient sur les comptes eux-mêmes.
 **Prouvé seulement au vrai run.** Le run `verifier` prouve, sans rien écrire : la lecture de la fiche et du mot de
 passe par l'API (probable : `download_metadata` de deliver, `deliver/lib/deliver/setup.rb`, relit
 `demo_account_password` par la même requête), la connexion et le rôle du compte, la longueur des notes de 1.0.7,
-l'état et l'unicité des versions. Restent à prouver au run `soumettre` : qu'Apple réponde `data: null` pour une
+l'état des versions et le choix de la source parmi les versions distribuées (le premier run réel en a révélé
+sept). Restent à prouver au run `soumettre` : qu'Apple réponde `data: null` pour une
 version sans fiche (une erreur est tenue pour « illisible » et arrête la lane sans copie) ; qu'une version créée
 par l'API reprenne ou non la fiche de 1.0.7 (les deux cas sont traités) ; qu'Apple accepte la création ou la copie
 de la fiche, l'écriture de `demoAccountRequired` et celle des notes dans l'état de la version, sans rien modifier

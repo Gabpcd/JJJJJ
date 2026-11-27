@@ -21,6 +21,8 @@ def review_notes(app, marketing)
     marketing_version: marketing,
     blocs: IosReviewSubmission::ReviewNotes::FICHIERS.transform_values(&lire),
     compte_demo: IosReviewSubmission::CompteDemo.new(url: production.fetch(:url), cle: production.fetch(:cle)),
+    # Seule source admise de la fiche reprise : la coquille figée de scripts/mobile/release-config.mjs.
+    coquille: IosReviewSubmission::ReviewNotes.lire_coquille_figee!(lire.call(IosReviewSubmission::ReviewNotes::RELEASE_CONFIG)),
     journal: ->(message) { UI.important(message) }
   )
 end

@@ -55,11 +55,23 @@ production Supabase exactly like the native app (password grant, publishable `ap
 captcha), the role is read with `fn_get_my_role` (soignant or établissement only), and that
 session is revoked at once (`logout?scope=local`). The verified role picks the block,
 `config/ios-review-notes-2.0-soignant.txt` or `-etablissement.txt`. The same pre-flight alone
-runs in the `gardes` job, in both modes (`fastlane ios preflight_review_native`).
+runs in the `gardes` job, in both modes (`fastlane ios preflight_review_native`). When no
+version is editable but the configured one is in review, approved, pending release, being
+distributed, for sale or replaced (`ReviewNotes::SOUMISES`, eight states), the pre-flight reads
+no review detail and signs nothing in: it ends with `:deja_soumise` and this guard concludes
+(green on the same build, red without any write for PENDING_DEVELOPER_RELEASE, ACCEPTED and
+REPLACED_WITH_NEW_VERSION). `WAITING_FOR_REVIEW` is editable: it is fully checked, sign-in
+included. The warning about previous notes
+without another account's address is logged at pre-flight too, hence in `verifier` mode.
+Leaving a reviewer's session open assumes Supabase Auth "single session per user" is off.
 
 After this guard, the version is found or created (same request as `ensure_version!`). Only
-if it has no demo credentials, the review detail of the single distributed version is
-copied API to API: credentials as a whole with `demoAccountRequired` set to true, then
+if it has no demo credentials, the review detail of the source is copied API to API. Apple
+keeps `READY_FOR_DISTRIBUTION` on every published version (seven in the first real run), so the
+source is the distributed version with the highest number below the target (`Gem::Version`),
+refused if a number is not numeric, if one is not below the target, if two share the maximum,
+or if it is not exactly the frozen shell `COQUILLE_IOS_FIGEE` of
+`scripts/mobile/release-config.mjs`. Copied: credentials as a whole with `demoAccountRequired` set to true, then
 contacts and notes only where the target is empty; credentials already present are never
 overwritten. An unknown (`null`) `demoAccountRequired` next to present credentials is written
 true. The submitted detail must carry the credentials signed in at pre-flight. Then the

@@ -54,9 +54,10 @@ module IosReviewSubmission
       @client.post_app_store_version(app_id: @app.id, attributes: { versionString: marketing, platform: 'IOS' })
     end
 
-    # Source de la copie : toutes les pages, filtrées encore une fois par ReviewNotes.choisir_source.
-    def distributed_versions
-      @app.get_app_store_versions(filter: { appVersionState: 'READY_FOR_DISTRIBUTION', platform: 'IOS' })
+    # Toutes les versions iOS, tous états, toutes pages : la source de la copie (ReviewNotes.choisir_source) et la
+    # 2.0.0 déjà soumise, en revue ou en vente (ReviewNotes.etat_hors_edition), s'y lisent.
+    def versions_ios
+      @app.get_app_store_versions(filter: { platform: 'IOS' })
     end
 
     # nil quand Apple répond sans fiche (`data: null`) ; toute erreur arrête la lane : une fiche illisible n'est
@@ -103,6 +104,8 @@ module IosReviewSubmission
     # fins de ligne ramenées à `\n`.
     LIMITE = 3900
     EMAIL = /[^\s@<>"'()]+@[^\s@<>"'()]+\.[A-Za-z]{2,}/
+    VERSION = /\A\d+(?:\.\d+){0,2}\z/
+    RELEASE_CONFIG = 'scripts/mobile/release-config.mjs'
     # Copie depuis la version distribuée : attribut Apple → attribut du modèle Spaceship. Les identifiants sont copiés
     # d'un bloc ; contacts et notes seulement là où la cible est vide. Aucun autre attribut n'est écrit.
     CHAMPS_DEMO = {
@@ -189,18 +192,51 @@ module IosReviewSubmission
       Digest::SHA256.hexdigest("#{detail.demo_account_name.to_s.strip}\u0000#{detail.demo_account_password}")
     end
 
-    # Fonction pure. La version distribuée (READY_FOR_DISTRIBUTION) unique, plus ancienne que la cible ; nil s'il n'y
-    # en a pas.
-    def self.choisir_source(versions, marketing)
+    # Fonction pure. La version distribuée (READY_FOR_DISTRIBUTION) de plus haut numéro, strictement inférieure à la
+    # cible, seule à ce numéro, et égale à la coquille figée ; nil s'il n'y a aucune version distribuée.
+    def self.choisir_source(versions, marketing, coquille:)
+      # Apple laisse READY_FOR_DISTRIBUTION sur toutes les versions déjà publiées (run `verifier` du 27/11/2026 : sept,
+      # de 1.0.1 à 1.0.7), pas seulement sur celle en vente : aucune unicité n'est supposée ici.
       distribuees = Array(versions).select { |v| v.platform == 'IOS' && v.app_version_state == 'READY_FOR_DISTRIBUTION' }
       return nil if distribuees.empty?
-      raise Failure, "#{distribuees.length} versions iOS distribuées : source de la fiche de vérification ambiguë, rien n'est soumis (voir #{DOC})" if distribuees.length > 1
-      source = distribuees.first
-      unless source.version_string.to_s.match?(/\A\d+(?:\.\d+){0,2}\z/) && Gem::Version.new(source.version_string) < Gem::Version.new(marketing)
-        raise Failure, "La version distribuée #{source.version_string.inspect} n'est pas antérieure à #{marketing} : rien n'est copié ni soumis (voir #{DOC})"
+      illisibles = distribuees.reject { |v| v.version_string.to_s.match?(VERSION) }
+      unless illisibles.empty?
+        raise Failure, "Version(s) iOS distribuée(s) au numéro non numérique (un à trois entiers attendus : " \
+          "#{illisibles.map { |v| v.version_string.to_s.inspect }.join(', ')}) : " \
+          "source de la fiche de vérification indécidable, rien n'est copié ni soumis (voir #{DOC})"
+      end
+      cible = Gem::Version.new(marketing)
+      posterieures = distribuees.select { |v| Gem::Version.new(v.version_string) >= cible }
+      unless posterieures.empty?
+        raise Failure, "Version(s) distribuée(s) #{posterieures.map(&:version_string).sort.join(', ')} non antérieure(s) à #{marketing} : " \
+          "rien n'est copié ni soumis (voir #{DOC})"
+      end
+      sommet = distribuees.map { |v| Gem::Version.new(v.version_string) }.max
+      au_sommet = distribuees.select { |v| Gem::Version.new(v.version_string) == sommet }
+      if au_sommet.length > 1
+        raise Failure, "#{au_sommet.length} versions iOS distribuées portent le numéro maximal #{sommet} : source de la fiche de vérification " \
+          "ambiguë, rien n'est copié ni soumis (voir #{DOC})"
+      end
+      source = au_sommet.first
+      # Verrou : la source est exactement la coquille Capacitor figée (COQUILLE_IOS_FIGEE), celle dont les notes
+      # décrivent l'app précédente et que le séparateur nomme.
+      unless source.version_string == coquille
+        raise Failure, "La dernière version distribuée avant #{marketing} est #{source.version_string}, pas #{coquille}, la coquille figée " \
+          "(COQUILLE_IOS_FIGEE, #{RELEASE_CONFIG}) : rien n'est copié ni soumis (voir #{DOC})"
       end
       raise Failure, "Version distribuée #{source.version_string} sans identifiant Apple : rien n'est soumis (voir #{DOC})" if source.id.to_s.empty?
       source
+    end
+
+    # Fonction pure : version de la coquille Capacitor iOS figée, lue dans `COQUILLE_IOS_FIGEE` de
+    # scripts/mobile/release-config.mjs (source unique, côté Node), sans exécuter de JavaScript. Refus si la déclaration
+    # est absente, répétée ou d'une autre forme.
+    def self.lire_coquille_figee!(texte)
+      lignes = texte.to_s.lines.grep(/\bCOQUILLE_IOS_FIGEE\s*=/)
+      forme = /\Aexport const COQUILLE_IOS_FIGEE = Object\.freeze\(\{ marketingVersion: '(\d+\.\d+\.\d+)', buildNumber: \d+ \}\);\s*\z/
+      trouve = lignes.one? && forme.match(lignes.first)
+      raise Failure, "#{RELEASE_CONFIG} : déclaration COQUILLE_IOS_FIGEE absente, répétée ou illisible (voir #{DOC})" unless trouve
+      trouve[1]
     end
 
     # Fonction pure. Attributs à écrire dans la fiche cible, nil si la cible a déjà des identifiants (jamais écrasés).
@@ -266,13 +302,55 @@ module IosReviewSubmission
         raise Failure, "Notes pour la revue trop longues : #{longueur(notes)} unités UTF-16 pour #{LIMITE} au plus " \
           "(bloc #{longueur(bloc)}, notes précédentes #{longueur(anciennes)}) ; raccourcir le bloc, rien n'est soumis (voir #{DOC})"
       end
-      { statut: statut, notes: notes, anciennes_avec_email: anciennes.match?(EMAIL) }
+      { statut: statut, notes: notes, anciennes: anciennes }
     end
 
-    def initialize(gateway:, marketing_version:, blocs:, compte_demo:, journal: ->(_message) {})
+    # Adresse extraite pour la seule comparaison d'`autre_adresse?` : classe stricte, pour qu'une adresse collée à de la
+    # ponctuation (« ` », « « », « * », `Login:`, `mailto:`) ne compte pas pour une autre. EMAIL, plus large, garde le
+    # verrou des blocs du dépôt public.
+    ADRESSE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/
+
+    # Fonction pure. Vrai si les notes précédentes portent une adresse autre que le nom du compte de démonstration :
+    # celle de l'autre compte de revue, que le bloc y annonce. Comparaison en mémoire, rien n'est affiché.
+    def self.autre_adresse?(anciennes, nom_compte)
+      connecte = nom_compte.to_s.strip.downcase
+      anciennes.to_s.scan(ADRESSE).map(&:downcase).uniq.any? { |adresse| adresse != connecte }
+    end
+
+    AVERTISSEMENT_NOTES = "Avertissement : les notes de la version précédente ne contiennent aucune adresse e-mail autre " \
+      "que celle du compte de démonstration ; le bloc y renvoie pourtant pour les identifiants de l'autre compte de revue " \
+      "(voir #{DOC})."
+
+    # Les huit états, hors des six modifiables de `get_edit_app_store_version`, qui suivent une soumission : en revue,
+    # approuvée, en attente de publication, en cours de distribution, en vente ou remplacée. Le pré-vol y conclut sans
+    # lire de fiche ni se connecter, et la garde de la revue décide : « déjà soumis » au vert pour le même build en revue,
+    # en attente de publication par Apple, d'export compliance, en distribution ou en vente ; rouge, sans écriture, pour
+    # PENDING_DEVELOPER_RELEASE, ACCEPTED et REPLACED_WITH_NEW_VERSION (APP_STORE.md). `WAITING_FOR_REVIEW` n'y est pas :
+    # c'est un état modifiable, rendu par `edit_version` et contrôlé en entier (fiche, connexion, notes).
+    SOUMISES = %w[IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE
+                  PROCESSING_FOR_DISTRIBUTION READY_FOR_DISTRIBUTION ACCEPTED REPLACED_WITH_NEW_VERSION].freeze
+
+    # Fonction pure. État de la version configurée quand aucune version n'est modifiable : nil si elle n'existe pas
+    # encore (elle sera créée), son état sinon.
+    def self.etat_hors_edition(versions, marketing)
+      cibles = Array(versions).select do |v|
+        v.platform == 'IOS' && v.version_string.to_s.match?(/\A\d+(?:\.\d+){0,2}\z/) &&
+          Gem::Version.new(v.version_string) == Gem::Version.new(marketing)
+      end
+      raise Failure, "#{cibles.length} versions iOS #{marketing} dans App Store Connect : rien n'est soumis (voir #{DOC})" if cibles.length > 1
+      cibles.first&.app_version_state
+    end
+
+    # `coquille` : version de la coquille Capacitor figée (ReviewNotes.lire_coquille_figee!), seule source admise de la
+    # fiche reprise.
+    def initialize(gateway:, marketing_version:, blocs:, compte_demo:, coquille:, journal: ->(_message) {})
       @gateway, @marketing, @compte_demo, @journal = gateway, marketing_version.to_s, compte_demo, journal
+      @coquille = coquille.to_s
       @blocs = ReviewNotes.valider_blocs!(blocs)
-      raise Failure, 'Invalid iOS release configuration' unless @marketing.match?(/\A\d+(?:\.\d+){0,2}\z/)
+      raise Failure, 'Invalid iOS release configuration' unless @marketing.match?(VERSION)
+      unless @coquille.match?(VERSION) && Gem::Version.new(@coquille) < Gem::Version.new(@marketing)
+        raise Failure, "Coquille figée #{@coquille.inspect} illisible ou non antérieure à #{@marketing} (#{RELEASE_CONFIG}, voir #{DOC})"
+      end
     end
 
     # Pré-vol, sans écriture chez Apple : avant les gardes de la revue en cours (donc avant toute annulation), et seul
@@ -283,21 +361,26 @@ module IosReviewSubmission
       @verifie, @role, @empreinte = false, nil, nil
       @version_vue = @gateway.edit_version
       exiger_version!(@version_vue) if @version_vue
-      distribuees = @version_vue ? nil : @gateway.distributed_versions
-      if distribuees && deja_distribuee?(distribuees)
-        # Relance après la mise en vente (publication progressive comprise) : la garde de la revue conclut.
-        @journal.call("Version #{@marketing} déjà distribuée : aucune fiche à vérifier, la garde de la revue conclut.")
-        @verifie, @etat = true, :deja_distribuee
-        return :deja_distribuee
+      versions = @version_vue ? nil : @gateway.versions_ios
+      if versions && (etat = ReviewNotes.etat_hors_edition(versions, @marketing))
+        unless SOUMISES.include?(etat)
+          raise Failure, "La version #{@marketing} est #{etat} dans App Store Connect, ni modifiable ni soumise : rien n'est soumis (voir #{DOC})"
+        end
+        # Relance pendant la revue, après l'approbation ou après la mise en vente : ni la fiche de 1.0.7 ni le compte
+        # (pas de connexion pendant que le relecteur l'utilise) ; la garde de la revue conclut.
+        @journal.call("Version #{@marketing} déjà soumise (#{etat}) : aucune fiche à vérifier, la garde de la revue conclut.")
+        @verifie, @etat = true, :deja_soumise
+        return :deja_soumise
       end
       cible = @version_vue && @gateway.review_detail(@version_vue.id)
-      attributs, source = planifier_copie(cible, distribuees)
+      attributs, source = planifier_copie(cible, versions)
       prevue = attributs ? ReviewNotes.fusionner(cible, attributs) : cible
       ReviewNotes.exiger_compte_demo!(prevue, @marketing, null_admis: true)
       @role = @compte_demo.verifier!(nom: prevue.demo_account_name, mot_de_passe: prevue.demo_account_password)
       raise Failure, "compte de démo : rôle non pris en charge (voir #{DOC})" unless @blocs.key?(@role)
       @journal.call("compte de démo : connexion OK, rôle #{CompteDemo::LIBELLES.fetch(@role)}")
-      ReviewNotes.composer(bloc: @blocs.fetch(@role), existantes: prevue.notes)
+      composition = ReviewNotes.composer(bloc: @blocs.fetch(@role), existantes: prevue.notes)
+      @journal.call(AVERTISSEMENT_NOTES) unless ReviewNotes.autre_adresse?(composition[:anciennes], prevue.demo_account_name)
       @empreinte = ReviewNotes.empreinte(prevue)
       @journal.call(plan(prevue, attributs, source))
       @verifie, @etat = true, (@version_vue ? :pret : :a_creer)
@@ -309,7 +392,7 @@ module IosReviewSubmission
     # inconnu, le verrou rejoué, puis le champ `notes` écrit et relu.
     def appliquer!
       raise Failure, 'Notes pour la revue appliquées sans pré-vol' unless @verifie
-      raise Failure, "Version #{@marketing} déjà distribuée : rien à écrire (voir #{DOC})" if @etat == :deja_distribuee
+      raise Failure, "Version #{@marketing} déjà soumise : rien à écrire (voir #{DOC})" if @etat == :deja_soumise
       version = @gateway.edit_version
       if version.nil?
         raise Failure, "La version #{@marketing} vue au pré-vol n'est plus modifiable : rien n'est soumis (voir #{DOC})" if @version_vue
@@ -325,9 +408,7 @@ module IosReviewSubmission
       detail = exiger_meme_compte!(requis_si_inconnu(version, detail))
       ReviewNotes.exiger_compte_demo!(detail, @marketing)
       composition = ReviewNotes.composer(bloc: @blocs.fetch(@role), existantes: detail.notes)
-      unless composition[:anciennes_avec_email]
-        @journal.call("Avertissement : les notes de la version précédente ne contiennent aucune adresse e-mail ; le bloc y renvoie pourtant pour les identifiants de l'autre compte (voir #{DOC}).")
-      end
+      @journal.call(AVERTISSEMENT_NOTES) unless ReviewNotes.autre_adresse?(composition[:anciennes], detail.demo_account_name)
       if composition[:statut] == :inchange
         @journal.call('Notes pour la revue déjà à jour (bloc 2.0 en tête) : aucune écriture.')
         return :inchange
@@ -363,18 +444,11 @@ module IosReviewSubmission
       detail
     end
 
-    def deja_distribuee?(versions)
-      Array(versions).any? do |v|
-        v.platform == 'IOS' && v.app_version_state == 'READY_FOR_DISTRIBUTION' &&
-          v.version_string.to_s.match?(/\A\d+(?:\.\d+){0,2}\z/) && Gem::Version.new(v.version_string) == Gem::Version.new(@marketing)
-      end
-    end
-
     # [attributs à copier ou nil, version source ou nil]. Lecture seule. Une cible qui a des identifiants ne lit pas
     # la source.
-    def planifier_copie(cible, distribuees = nil)
+    def planifier_copie(cible, versions = nil)
       return [nil, nil] if ReviewNotes.identifiants_presents?(cible)
-      source_version = ReviewNotes.choisir_source(distribuees || @gateway.distributed_versions, @marketing)
+      source_version = ReviewNotes.choisir_source(versions || @gateway.versions_ios, @marketing, coquille: @coquille)
       if source_version.nil?
         raise Failure, "Compte de démonstration absent de la version #{@marketing} (#{ReviewNotes.manques_compte_demo(cible).join(', ')}) " \
           "et aucune version distribuée d'où le copier : rien n'est soumis. Le saisir par l'API avant de relancer (voir #{DOC})"

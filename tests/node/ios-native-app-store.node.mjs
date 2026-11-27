@@ -15,7 +15,7 @@ import {
   lireCablageEtablissement, lireModes, lireOuvertureEtablissement, lireRolesEtablissement, loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
 } from '../../scripts/mobile/ios-native-app-store.mjs';
 import { APP, GuardFailure, ascClient } from '../../scripts/mobile/ios-native-testflight.mjs';
-import { lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
+import { COQUILLE_IOS_FIGEE, lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const lire = (chemin) => readFileSync(join(root, chemin), 'utf8');
@@ -842,6 +842,16 @@ test('la lane n\'écrit que les notes pour la revue, après le verrou du compte 
   assert.ok(lane.includes('notes = review_notes(app, marketing)'), 'notes construites par le seul assembleur');
   assert.match(fastfile, /def review_notes\(app, marketing\)\n[\s\S]*blocs: IosReviewSubmission::ReviewNotes::FICHIERS\.transform_values\(&lire\)/);
   assert.match(fastfile, /IosReviewSubmission::CompteDemo\.lire_config!\(lire\.call\(IosReviewSubmission::CompteDemo::CONFIG\)\)/);
+  // Source de la fiche reprise : la coquille figée de release-config.mjs, source unique côté Node (run `verifier` du
+  // 27/11/2026 : sept versions READY_FOR_DISTRIBUTION).
+  assert.match(fastfile, /coquille: IosReviewSubmission::ReviewNotes\.lire_coquille_figee!\(lire\.call\(IosReviewSubmission::ReviewNotes::RELEASE_CONFIG\)\)/);
+  assert.match(module, /RELEASE_CONFIG = 'scripts\/mobile\/release-config\.mjs'/);
+  assert.ok(module.includes(`SEPARATEUR = '--- Notes from version ${COQUILLE_IOS_FIGEE.marketingVersion} (previous hybrid app) ---'`),
+    'le séparateur nomme la coquille figée de release-config.mjs');
+  assert.match(lire('scripts/mobile/release-config.mjs'),
+    /^export const COQUILLE_IOS_FIGEE = Object\.freeze\(\{ marketingVersion: '\d+\.\d+\.\d+', buildNumber: \d+ \}\);$/m,
+    'la forme stricte que lit ReviewNotes.lire_coquille_figee!');
+  assert.doesNotMatch(module, /distribuees\.length > 1/, 'aucune unicité supposée des versions distribuées');
   assert.match(module, /soignant: 'config\/ios-review-notes-2\.0-soignant\.txt',\n\s+etablissement: 'config\/ios-review-notes-2\.0-etablissement\.txt'/);
   for (const bloc of ['config/ios-review-notes-2.0-soignant.txt', 'config/ios-review-notes-2.0-etablissement.txt']) assert.ok(existsSync(join(root, bloc)), bloc);
   assert.ok(!existsSync(join(root, 'config/ios-review-notes-2.0.txt')), 'plus de bloc unique qui affirmerait un rôle non vérifié');
@@ -922,6 +932,29 @@ test('les journaux de Spaceship ne sortent jamais du runner : ni artefact, ni mo
   assert.match(job('soumettre'), /if: always\(\)\n {8}run: rm -rf "\$HOME\/\.appstoreconnect\/private_keys" "\$\{TMPDIR:-\/tmp\}"\/spaceship\*\.log\n/);
   const doc = lire('docs/mobile-swift/APP_STORE.md');
   for (const fragment of ['spaceship*.log', '--verbose', 'preflight_review_native', 'pièces jointes']) assert.ok(doc.includes(fragment), fragment);
+});
+
+// Revue n° 2 de #1197 (m1 à m4) : relance pendant la revue, avertissement en mode `verifier`, session unique, libellé.
+test('les gardes se disent sans écriture chez Apple, et la doc nomme relance en revue, avertissement et session unique', () => {
+  assert.doesNotMatch(jobs.gardes.cles.name, /lecture seule/, 'le pré-vol ouvre puis révoque une session en production');
+  assert.match(jobs.gardes.cles.name, /sans écriture chez Apple/);
+  const doc = lire('docs/mobile-swift/APP_STORE.md');
+  for (const fragment of ['déjà soumise', 'IN_REVIEW', 'session unique par utilisateur', 'autre que celle du compte de démonstration',
+    'Applying needs validated documents']) {
+    assert.ok(doc.includes(fragment), fragment);
+  }
+  // Revue de #1199 (n1, n2, n5) : la doc dit ce qui bloque vraiment, que la branche libérale n'est pas atteignable, et
+  // quels états finissent rouges en mode `soumettre`.
+  assert.doesNotMatch(doc, /le diplôme et le RPPS manquent/);
+  assert.match(doc, /RPPS vérifié/);
+  assert.match(doc, /la carte\s+d'identité et le RIB/);
+  assert.match(doc, /La branche libérale n'est pas atteignable par ce compte/);
+  for (const rouge of ['`PENDING_DEVELOPER_RELEASE`', '`ACCEPTED`', '`REPLACED_WITH_NEW_VERSION`']) {
+    assert.match(doc, new RegExp(`\\| ${rouge.replace(/[`]/g, '`')}[^\\n]*\\| \\*\\*rouge\\*\\*`), rouge);
+  }
+  for (const bloc of ['config/ios-review-notes-2.0-soignant.txt', 'config/ios-review-notes-2.0-etablissement.txt']) {
+    assert.doesNotMatch(lire(bloc), /diploma|RPPS|freelance/, `${bloc} : seulement ce qui bloque ce compte`);
+  }
 });
 
 test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {
