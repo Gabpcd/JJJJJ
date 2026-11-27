@@ -215,6 +215,47 @@ Journal : « compte de démo : connexion OK, rôle soignant » (ou établissemen
 de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
 identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
 
+**Lecture du rôle** (`CompteDemo.extraire_role`), **stricte, comme l'app** (`SupabaseRoleGateway.roleResult`) :
+`fn_get_my_role` est une fonction scalaire (`RETURNS jsonb`, non `SETOF`), et PostgREST rend l'objet nu
+`{user_id, role, etablissement_id}`. Seul un objet racine portant `role` texte est lu ; toute autre forme (tableau,
+enveloppe `{"fn_get_my_role": …}`, chaîne JSON…) est refusée, puisque l'app la lirait `INCONNU`. Le pré-vol prouve
+ainsi que le compte ouvre un espace dans l'app, et rien de plus.
+
+Le refus porte un **diagnostic sans aucune valeur** (`CompteDemo.diagnostic_role`), fait d'un vocabulaire fermé :
+- type JSON racine (objet, tableau, chaîne, nombre, booléen, null, invalide) ;
+- pour un objet, les noms de clés de premier niveau de la liste blanche `role`, `user_id`, `etablissement_id`,
+  `fn_get_my_role`, le nombre des autres, et le type de `role` s'il est présent ;
+- pour un tableau, le nombre d'éléments et le type d'un élément unique ; pour une chaîne, le type qu'elle encode ;
+- le type MIME (`application/json`, `text/html`, `text/plain`, sinon « autre », ou « absent ») ;
+- la taille du corps en octets ;
+- l'encodage (`gzip`, `br`, `deflate`, `identity`, aucun, sinon « autre ») ;
+- la présence de `Content-Range` (oui ou non).
+
+Jamais la valeur brute d'un en-tête. Par exemple : « rôle illisible (HTTP 200 ; JSON racine : tableau ; éléments :
+1 ; type de l'élément : objet ; type : application/json ; corps : N octets ; encodage : aucun ; Content-Range :
+oui) ».
+
+**Compression : `Accept-Encoding: identity`.** Le run `verifier` n° 2 (27/11/2026, run 45952839306) s'est arrêté sur
+« rôle illisible (HTTP 200) ». La cause, trouvée par la revue de #1202 et prouvée par une sonde sur une RPC publique :
+
+- PostgREST pose `Content-Range: 0-0/*` sur ses réponses RPC, puis Cloudflare les compresse en gzip ;
+- or Net::HTTP ne décompresse **jamais** une réponse qui porte `Content-Range` (net-http 0.9.1 comme 0.4.x,
+  `lib/net/http/response.rb`, `inflater` : `return yield @socket if self['content-range']`) ;
+- le corps arrivait donc gzip, et `JSON.parse` échouait. La connexion, elle, passait : GoTrue ne pose pas
+  `Content-Range`.
+
+Le transport (`CompteDemo::TransportHttps`) demande donc un corps non compressé sur **tous** ses appels :
+`Accept-Encoding: identity`, posé à la construction de la requête et contrôlé. Il refuse un `Accept-Encoding` ou un
+`Range` fournis par l'appelant. Une réponse dont `Content-Encoding` n'est ni absent ni `identity` est refusée, motif
+fermé : « réponse encodée (connexion | lecture du rôle | déconnexion, HTTP … ; encodage : gzip | br | deflate |
+autre) ». Les tests le prouvent en boucle locale (127.0.0.1) :
+- Net::HTTP par défaut laisse un corps gzip qui porte `Content-Range` compressé ;
+- un serveur qui compresse malgré `identity` est refusé (l'ancien code rendait « rôle illisible ») ;
+- un serveur qui respecte `identity` donne le rôle, `Content-Range` compris, avec `identity` envoyé sur les trois
+  appels.
+
+Les refus du transport sont préfixés « compte de démo : », comme tous les autres.
+
 **Dépendance : réglage Supabase de session unique.** `scope=local` ne révoque que la session du pré-vol. Cela ne
 préserve la session d'un relecteur Apple que si le réglage Supabase Auth « session unique par utilisateur »
 (*single session per user*, tableau de bord → Authentication → Sessions) est **désactivé** : s'il est actif, c'est
@@ -231,7 +272,8 @@ distribuée avant la 2.0.0, qui doit être la coquille Capacitor figée : aujour
 
 **Choix de la source** (`ReviewNotes.choisir_source`). Apple laisse `appVersionState = READY_FOR_DISTRIBUTION` sur
 **toutes** les versions déjà publiées, pas seulement sur celle en vente : le premier run `verifier` réel (27/11/2026)
-en a lu sept, de 1.0.1 à 1.0.7. La lane ne suppose donc aucune unicité et :
+en a compté sept, dont 1.0.7 (son journal ne donne que le nombre ; la liste exacte n'est pas prouvée). La lane ne
+suppose donc aucune unicité et :
 
 - refuse si une version distribuée a un numéro non numérique (un à trois entiers attendus) ;
 - refuse si une version distribuée n'est pas antérieure à la 2.0.0 ;
