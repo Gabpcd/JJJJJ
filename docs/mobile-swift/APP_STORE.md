@@ -63,7 +63,8 @@ GitHub → Actions → « iOS Swift — soumission App Store » → *Run workflo
 
 Trois jobs s'enchaînent :
 
-- `gardes` (Ubuntu, sans écriture chez Apple) : toutes les gardes ci-dessous, pré-vol des notes compris, puis
+- `gardes` (Ubuntu, « Gardes avant soumission (sans écriture chez Apple ; compte de démonstration connecté puis
+  déconnecté) ») : toutes les gardes ci-dessous, pré-vol des notes compris, puis
   un verdict posé seulement si toutes ont réussi ; aucune de ses étapes n'est conditionnelle ;
 - `soumettre` (macOS 26), en mode `soumettre` et sur verdict des gardes seulement : lane
   `fastlane ios submit_native` ;
@@ -152,8 +153,11 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 - Suivre l'état par `mobile-store-status.yml` (lecture seule) ou dans App Store Connect.
 - Relancer le workflow avec le même build ne soumet pas deux fois : si ce build est déjà soumis (en
   attente de revue ou en revue) ou déjà en vente, publication progressive comprise, la lane s'arrête sur
-  « déjà soumis » et le job finit vert. Une fois la 2.0.0 en vente, le pré-vol des notes constate qu'elle est
-  distribuée et laisse conclure la garde de la revue, sans rien lire ni écrire de plus.
+  « déjà soumis » et le job finit vert. Dès que la 2.0.0 n'est plus modifiable (en revue `IN_REVIEW`, approuvée,
+  en attente de publication, en cours de distribution ou en vente), le pré-vol des notes constate qu'elle est déjà
+  soumise et laisse conclure la garde de la revue : il ne lit ni la fiche de 1.0.7 ni celle de la 2.0.0, et ne
+  connecte pas le compte de démonstration, que le relecteur peut être en train d'utiliser. Une 2.0.0 dans un
+  autre état non modifiable (par exemple `READY_FOR_REVIEW`) arrête le pré-vol, nommément.
   **Exception** : en publication `manuelle`, une fois la version approuvée (« Pending Developer
   Release »), la lane lève une erreur (`ios_review_submission.rb`) et le job finit **rouge** : rien n'a
   été changé chez Apple ; la mise en vente se fait par le bouton « Release this version ».
@@ -194,14 +198,23 @@ mot de passe de la fiche (celle de la 2.0.0, ou celle de 1.0.7 si la reprise doi
 connecte à Supabase de production exactement comme l'app native (`SupabaseAuthGateway.signIn`) :
 `POST /auth/v1/token?grant_type=password`, clé publishable en en-tête `apikey`, sans jeton captcha (l'app n'en
 envoie pas à la connexion). Elle relit le rôle par la même RPC que l'app (`fn_get_my_role`), puis révoque
-aussitôt cette session seulement (`POST /auth/v1/logout?scope=local`, jamais les sessions d'un relecteur en
-cours). Rôles admis : soignant (`SOIGNANT`, le compte attendu) ou établissement (`ADMIN_ETABLISSEMENT`). Tout
+aussitôt cette session seulement (`POST /auth/v1/logout?scope=local`). Rôles admis : soignant (`SOIGNANT`, le
+compte attendu) ou établissement (`ADMIN_ETABLISSEMENT`). Tout
 autre rôle (`ADMIN_PLATEFORME`, `ADMIN_GROUPE`, `INCONNU`) arrête la lane : l'app ne sert pas ces comptes.
 Journal : « compte de démo : connexion OK, rôle soignant » (ou établissement) ; en échec, un motif fermé :
 « connexion refusée (HTTP 400) », « connexion refusée, captcha exigé (HTTP 400) », « connexion impossible
 (réseau : …) », « rôle ADMIN_PLATEFORME », « déconnexion non confirmée ». Jamais d'adresse, de mot de passe,
 de jeton, d'identifiant ni de corps de réponse. La fiche écrite et soumise doit porter exactement les
 identifiants connectés au pré-vol (empreinte gardée en mémoire), sinon la lane s'arrête.
+
+**Dépendance : réglage Supabase de session unique.** `scope=local` ne révoque que la session du pré-vol. Cela ne
+préserve la session d'un relecteur Apple que si le réglage Supabase Auth « session unique par utilisateur »
+(*single session per user*, tableau de bord → Authentication → Sessions) est **désactivé** : s'il est actif, c'est
+la connexion du pré-vol elle-même qui ferme les autres sessions du compte. Le dépôt ne fixe pas ce réglage
+(`supabase/config.toml` n'a pas de section `[auth]`) ; il se constate dans le tableau de bord, et doit rester
+désactivé. Le pré-vol ne se connecte pas quand la 2.0.0 est déjà soumise ou en revue (ci-dessus) : le risque se
+limite aux runs faits avant la soumission ou pendant l'attente de revue (`WAITING_FOR_REVIEW`), quand aucun
+relecteur n'est encore connecté.
 
 **Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou n'a pas
 d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la version distribuée
@@ -227,7 +240,8 @@ retourné : la lane s'arrête.
 1. pré-vol, sans écriture chez Apple, avant la garde « revue en cours » (donc avant toute annulation) : si une
    version modifiable existe, elle doit être `2.0.0` ; sa fiche est lue et, s'il lui manque les identifiants,
    celle de la version distribuée aussi ; si la 2.0.0 n'existe pas encore, la fiche de la version distribuée sert
-   de prévision ; si la 2.0.0 est déjà distribuée, rien de plus n'est lu et la garde conclut. Puis : verrou sur la
+   de prévision ; si la 2.0.0 est déjà soumise (en revue, approuvée ou en vente), rien de plus n'est lu, aucune
+   connexion n'est faite et la garde conclut. Puis : verrou sur la
    fiche telle qu'elle sera après la copie, connexion du compte, choix du bloc par le rôle, notes composées et
    mesurées. Rien n'est écrit, pas même la copie ;
 2. garde « revue en cours » (`ios_review_submission.rb`) ;
@@ -255,10 +269,35 @@ séparation : arrêt (composition ambiguë).
 
 **Marge sous la limite d'Apple.** Apple limite le champ à 4 000 caractères. La lane s'arrête au-delà de 3 900,
 comptés en unités UTF-16 (un émoji en compte deux), fins de ligne `\r\n` ramenées à `\n`, dès le pré-vol. Chaque
-bloc fait 1 854 unités, 1 911 avec le séparateur : il reste 1 989 unités pour les notes de 1.0.7.
+bloc fait 2 151 unités, 2 208 avec le séparateur : il reste 1 692 unités pour les notes de 1.0.7.
 
-**Avertissement sans échec.** Si les notes de la version précédente ne contiennent aucune adresse e-mail (donc
-pas d'identifiants de l'autre compte de revue), le journal l'écrit et la soumission continue.
+**Avertissement sans échec, dès le pré-vol.** Si les notes de la version précédente ne contiennent aucune adresse
+e-mail autre que celle du compte de démonstration (comparaison en mémoire, rien n'est affiché), elles ne donnent
+pas les identifiants de l'autre compte de revue, que le bloc y annonce. Le journal l'écrit au pré-vol, donc aussi
+en mode `verifier`, puis de nouveau à l'écriture ; la soumission continue. Qu'une adresse soit accompagnée de son
+mot de passe ne se contrôle pas dans un texte libre : c'est une vérification à faire à la main (`LOT6_PLAN.md`
+§3, action 3).
+
+**Candidature sur le compte de démonstration.** Le soignant de revue n'a pas toutes ses pièces validées : au
+26/11/2026, l'assurance RCP est vérifiée ; la carte d'identité, le RIB et l'attestation URSSAF sont en revue
+manuelle ; le diplôme et le RPPS manquent. Aucun faux document n'est fabriqué. Le bloc le dit au relecteur
+(« Applying needs validated documents (identity, diploma, RPPS…); some are pending or missing on this demo account
+(Profil > Mon espace > "Mes documents"): a freelance application is refused with a message saying so, a salaried
+one is sent but the facility cannot accept it until they are validated. »), en collant au comportement réel :
+
+- l'app envoie la candidature (`fn_confirmer_action_planning_v1`, puis `fn_postuler_mission`) et affiche la
+  réponse du serveur telle quelle (`CandidatureModel`) ; elle ne liste pas les pièces manquantes, dont l'état se
+  lit dans Profil › « Mon espace » › « Mes documents » ;
+- en libéral, le serveur refuse : « Les documents requis pour candidater en libéral sont manquants ou expirés. » ;
+- en salarié, la candidature est envoyée, avec une notification « Complétez vos documents salariés », mais
+  l'établissement ne peut pas l'accepter tant que les documents ne sont pas validés
+  (`fn_finaliser_attribution_mission`).
+
+Le contrat est résolu par le serveur (`fn_resoudre_contrat_mission`) : les trois missions de revue sont
+proposées à tous les contrats (`TOUS`), et sans profil libéral vérifié (SIRET), c'est le salarié qui s'applique.
+Les trois missions (IDE, à l'adresse de l'établissement de revue, à Paris, début entre J+7 et J+21) sont créées
+et entretenues par la PR #1198 : la phrase « three demo assignments in Paris » n'est vraie qu'une fois cette PR
+mergée et son cron passé.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
 lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée plus récente que 2.0.0, l'arrêtent

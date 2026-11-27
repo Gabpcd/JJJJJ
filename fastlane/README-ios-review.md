@@ -55,7 +55,12 @@ production Supabase exactly like the native app (password grant, publishable `ap
 captcha), the role is read with `fn_get_my_role` (soignant or établissement only), and that
 session is revoked at once (`logout?scope=local`). The verified role picks the block,
 `config/ios-review-notes-2.0-soignant.txt` or `-etablissement.txt`. The same pre-flight alone
-runs in the `gardes` job, in both modes (`fastlane ios preflight_review_native`).
+runs in the `gardes` job, in both modes (`fastlane ios preflight_review_native`). When no
+version is editable but the configured one is already submitted, in review, approved or for
+sale (`ReviewNotes::SOUMISES`), the pre-flight reads no review detail and signs nothing in:
+it ends with `:deja_soumise` and this guard concludes. The warning about previous notes
+without another account's address is logged at pre-flight too, hence in `verifier` mode.
+Leaving a reviewer's session open assumes Supabase Auth "single session per user" is off.
 
 After this guard, the version is found or created (same request as `ensure_version!`). Only
 if it has no demo credentials, the review detail of the single distributed version is
