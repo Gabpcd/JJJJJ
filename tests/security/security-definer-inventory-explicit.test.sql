@@ -1,7 +1,8 @@
 -- Staging uniquement ; fixtures de métadonnées et rollback intégral.
 -- Algorithme du 30/09 conservé ; successeurs explicitement liés aux migrations :
 -- suppression soignant 20261001131013, suppression établissement 20261017191635
--- puis imputation 20261018140952, résolution salariée 20261018140952.
+-- puis imputation 20261018140952 puis missions de revue 20261126100100,
+-- résolution salariée 20261018140952.
 -- Recherche établissement : projection internat 20261029080849.
 -- Aucun repli vers les anciens corps. Node vérifie les corps, migrations et snapshot.
 BEGIN;
@@ -123,8 +124,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "35b630a12ed0f755592fdc431031b8cc",
-    "definition_md5": "a43978aee09ef1ae4a157dbee9911b2f",
+    "old_md5": "a43978aee09ef1ae4a157dbee9911b2f",
+    "definition_md5": "a5dd6e6858e7ad641f4bd353753f3223",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"
@@ -306,8 +307,8 @@ DECLARE
   },
   {
     "signature": "fn_supprimer_mon_compte_etablissement()",
-    "old_md5": "35b630a12ed0f755592fdc431031b8cc",
-    "definition_md5": "a43978aee09ef1ae4a157dbee9911b2f",
+    "old_md5": "a43978aee09ef1ae4a157dbee9911b2f",
+    "definition_md5": "a5dd6e6858e7ad641f4bd353753f3223",
     "categorie": "RPC_UTILISATEUR_AUTH_INTERNE",
     "proconfig": [
       "search_path=public, extensions"

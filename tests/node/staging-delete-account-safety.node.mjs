@@ -76,6 +76,36 @@ test('SQL definition/ACL drift blocks; returned data is never reflected in error
   await assert.rejects(h.run(), error => error.message === 'DELETE_ACCOUNT_SAFETY_RPC_DRIFT');
 });
 
+test('reviewed successor body (missions de revue) is admitted; any other body, ACL or routine still blocks', async () => {
+  const next = fixture.catalogueSuccesseur;
+  assert.equal(next.migration, 'supabase/migrations/20261126100100_missions_revue_store.sql');
+  assert.ok(readFileSync(new URL(`../../${next.migration}`, import.meta.url), 'utf8')
+    .includes(`CREATE OR REPLACE FUNCTION ${next.signature}\nRETURNS jsonb`));
+  const withBody = (value, signature, md5, patch = {}) => ({ ...value, routines: value.routines.map(row =>
+    row.signature === signature ? { ...row, definition_md5: md5, ...patch } : row) });
+  await harness({ catalogue: value => withBody(value, next.signature, next.definition_md5) }).run();
+  for (const catalogue of [value => withBody(value, next.signature, 'f'.repeat(32)),
+    value => withBody(value, next.signature, next.definition_md5, { acl: '{postgres=X/postgres,anon=X/postgres}' }),
+    value => withBody(value, 'public.fn_supprimer_mon_compte()', next.definition_md5)]) {
+    await assert.rejects(harness({ catalogue }).run(), error => error.message === 'DELETE_ACCOUNT_SAFETY_RPC_DRIFT');
+  }
+});
+
+test('malformed successor declaration refuses before any request', async () => {
+  const actuel = fixture.catalogue.routines.find(row => row.signature === fixture.catalogueSuccesseur.signature).definition_md5;
+  for (const patch of [{ signature: 'public.inconnue()' }, { definition_md5: 'pas-un-md5' }, { migration: '../hors.sql' },
+    { definition_md5: actuel }, { extra: true }]) {
+    const s = source(); s.manifest.catalogueSuccesseur = { ...s.manifest.catalogueSuccesseur, ...patch };
+    const calls = [];
+    const env = { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'Gabpcd/JJJJJ', GITHUB_JOB: 'comptes', GITHUB_EVENT_NAME: 'pull_request',
+      JOLENE_E2E_EXPECTED_SHA: SHA, STAGING_SUPABASE_PROJECT_REF: PROJECT, STAGING_SUPABASE_URL: `https://${PROJECT}.supabase.co`,
+      STAGING_SUPABASE_ACCESS_TOKEN: SECRET };
+    assert.throws(() => createDeletionSafetyGate({ env, source: s, fetchImpl: async url => { calls.push(url); throw new Error('no'); } }),
+      /DELETE_ACCOUNT_SAFETY_SOURCE/);
+    assert.equal(calls.length, 0);
+  }
+});
+
 test('multipart Management response preserves all exact source bytes', async () => {
   await harness({ multipart: true }).run();
 });
