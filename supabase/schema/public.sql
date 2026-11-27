@@ -653,7 +653,7 @@ CREATE TABLE IF NOT EXISTS "public"."missions" (
     CONSTRAINT "chk_taux_horaire_raisonnable" CHECK ((("taux_horaire_base" = (0)::numeric) OR (("taux_horaire_base" > (0)::numeric) AND ("taux_horaire_base" <= (1000)::numeric)))),
     CONSTRAINT "chk_type_contrat_recherche" CHECK (("type_contrat_recherche" = ANY (ARRAY['TOUS'::"text", 'SALARIE'::"text", 'LIBERAL'::"text"]))),
     CONSTRAINT "ck_max_732_creneaux" CHECK ((("nb_creneaux" >= 0) AND ("nb_creneaux" <= 732))),
-    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text"]))),
+    CONSTRAINT "missions_mission_source_check" CHECK (("mission_source" = ANY (ARRAY['SWIPE'::"text", 'CANDIDATURE'::"text", 'REBOOK'::"text", 'PROPOSITION_DIRECTE'::"text", 'REMPLACEMENT'::"text", 'REPUBLICATION'::"text", 'REVUE_STORE'::"text"]))),
     CONSTRAINT "missions_mode_attribution_check" CHECK (("mode_attribution" = ANY (ARRAY['PREMIER_ARRIVE'::"text", 'CANDIDATURE'::"text"]))),
     CONSTRAINT "missions_mode_paiement_soignant_check" CHECK (("mode_paiement_soignant" = ANY (ARRAY['DIRECT'::"text", 'STRIPE_CONNECT'::"text", 'VIREMENT'::"text"]))),
     CONSTRAINT "missions_mode_remuneration_check" CHECK (("mode_remuneration" = ANY (ARRAY['TAUX_HORAIRE'::"text", 'RETROCESSION'::"text"]))),
@@ -9873,9 +9873,13 @@ BEGIN
             FROM (SELECT e3.adresse_ville FROM missions m3
                   JOIN etablissements e3 ON e3.id = m3.etablissement_id
                   WHERE m3.statut='OUVERTE' AND m3.profession_requise = m.profession_requise
+                    AND NOT private.fn_mission_lie_compte_test(m3.id)
                   LIMIT 3) e2(adresse_ville)) AS villes
     FROM missions m
     WHERE m.statut = 'OUVERTE'
+      -- Textes publics : missions réelles seulement, comme fn_missions_publiques_etablissement
+      -- et private.fn_growth_missions_reelles (migration 20261126100000).
+      AND NOT private.fn_mission_lie_compte_test(m.id)
     GROUP BY m.profession_requise
   ) t;
   RETURN v;
@@ -23836,7 +23840,11 @@ BEGIN
   JOIN etablissements e ON e.id = m.etablissement_id
   WHERE e.est_compte_test
     AND m.statut = 'OUVERTE'
-    AND m.cree_le < now() - interval '2 hours';
+    AND m.cree_le < now() - interval '2 hours'
+    -- Stock de revue des stores d'un établissement désigné : jamais purgé ici
+    -- (migration 20261126100100). Ailleurs, REVUE_STORE est nettoyée comme le reste.
+    AND NOT (m.mission_source IS NOT DISTINCT FROM 'REVUE_STORE'
+             AND private.fn_est_etablissement_revue_store(m.etablissement_id));
 
   IF v_ids IS NULL THEN RETURN 0; END IF;
 
@@ -39515,18 +39523,27 @@ BEGIN
   PERFORM set_config('jolene.system_update', 'true', true);
   PERFORM set_config('jolene.siret_liberal_reset', 'true', true);
   BEGIN
-    UPDATE public.documents_soignants
-    SET statut_verification = 'EN_ATTENTE',
-        motif_rejet = 'Profil d’identité modifié après vérification — nouvelle vérification de la preuve requise.',
-        verifie_le = NULL,
-        verifie_par = NULL,
-        valide_depuis = NULL,
-        valide_jusqua = NULL,
-        modifie_le = now()
-    WHERE soignant_id = NEW.id
-      AND statut_verification = 'VERIFIE'
-      AND supprime_le IS NULL;
-    GET DIAGNOSTICS v_documents_invalides = ROW_COUNT;
+    -- Suppression du compte (supprime_le posé dans cette même mise à jour) : les
+    -- pièces ne sont pas repassées en attente, elles n'ont plus d'objet à
+    -- re-vérifier et la suppression les marque elle-même supprimées. Le
+    -- nettoyage du profil ci-dessous (noms RPPS et ADELI, spécialité,
+    -- cohérence, drapeaux de vérification) reste dû. Transition réservée aux
+    -- fonctions serveur : fn_protect_soignant_verification rétablit
+    -- supprime_le pour toute écriture d'un utilisateur (migration 20261127100000).
+    IF NOT (OLD.supprime_le IS NULL AND NEW.supprime_le IS NOT NULL) THEN
+      UPDATE public.documents_soignants
+      SET statut_verification = 'EN_ATTENTE',
+          motif_rejet = 'Profil d’identité modifié après vérification — nouvelle vérification de la preuve requise.',
+          verifie_le = NULL,
+          verifie_par = NULL,
+          valide_depuis = NULL,
+          valide_jusqua = NULL,
+          modifie_le = now()
+      WHERE soignant_id = NEW.id
+        AND statut_verification = 'VERIFIE'
+        AND supprime_le IS NULL;
+      GET DIAGNOSTICS v_documents_invalides = ROW_COUNT;
+    END IF;
 
     UPDATE public.soignants
     SET identite_verifiee = false,
@@ -42393,6 +42410,8 @@ BEGIN
     'nb_missions_ouvertes', (
       SELECT count(*) FROM missions m
       WHERE m.etablissement_id = e.id AND m.statut = 'OUVERTE' AND m.debut_le > NOW()
+        -- Seules les missions que ce soignant peut voir (migration 20261126100000).
+        AND private.fn_soignant_voit_mission(v_uid, m.etablissement_id, m.mission_source)
     ),
     'cree_le', f.cree_le
   ) ORDER BY f.cree_le DESC), '[]'::jsonb)
@@ -45794,6 +45813,9 @@ BEGIN
       AND m.statut = 'OUVERTE'
       AND m.debut_le > now()
       AND m.debut_le <= now() + interval '48 hours'
+      -- Cohorte de test, et jamais une mission de revue des stores (migration 20261126100000).
+      AND private.fn_comptes_meme_cohorte_test(ms.soignant_id, m.etablissement_id)
+      AND m.mission_source IS DISTINCT FROM 'REVUE_STORE'
       AND NOT EXISTS (
         SELECT 1 FROM candidatures c
         WHERE c.mission_id = m.id AND c.soignant_id = ms.soignant_id
@@ -48307,6 +48329,10 @@ BEGIN
     )
   FROM public.soignants s
   WHERE private.fn_soignant_messagerie_actif(s.id)
+    -- Pool = autorisation de send-push, send-sms et de la conversation pool :
+    -- même cohorte de test, et jamais aucun soignant pour un établissement de
+    -- revue des stores (migration 20261126100000).
+    AND private.fn_soignant_contactable_par_etablissement(s.id, p_etablissement_id)
     AND COALESCE(s.disponible_urgence, false) IS TRUE
     AND public.fn_documents_ok_pour_mission(s.id, 'TOUS')
     AND NOT public.fn_est_exclu(s.id, p_etablissement_id)
@@ -53421,6 +53447,9 @@ BEGIN
       JOIN public.etablissements e ON e.id = m.etablissement_id
      WHERE m.statut = 'OUVERTE'
        AND m.mode_attribution = 'CANDIDATURE'
+       -- Mission de revue des stores : aucune relance, ni à l'établissement ni
+       -- aux soignants (migration 20261126100000).
+       AND m.mission_source IS DISTINCT FROM 'REVUE_STORE'
        AND m.debut_le > now()
        AND m.cree_le < now() - interval '24 hours'
        AND COALESCE(m.relances_sans_candidat, 0) < 2
@@ -54999,7 +55028,7 @@ DECLARE
   v_mode jsonb;
   v_liberal_verifie boolean := false;
 BEGIN
-  SELECT id, profession_requise, type_contrat_recherche, etablissement_id
+  SELECT id, profession_requise, type_contrat_recherche, etablissement_id, mission_source
     INTO v_mission
   FROM public.missions
   WHERE id = p_mission_id;
@@ -55039,6 +55068,17 @@ BEGIN
     p_soignant_id,
     v_mission.etablissement_id
   ) THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'error', 'Mission indisponible pour ce compte'
+    );
+  END IF;
+
+  -- Mission de revue des stores : seul un soignant de revue désigné peut y
+  -- répondre, comme le veut la RLS missions_revue_store_soignant_designe
+  -- (migration 20261126100000). Candidature, proposition, rebook, swipe, urgence.
+  IF v_mission.mission_source IS NOT DISTINCT FROM 'REVUE_STORE'
+     AND NOT private.fn_est_soignant_revue_store(p_soignant_id) THEN
     RETURN jsonb_build_object(
       'ok', false,
       'error', 'Mission indisponible pour ce compte'
@@ -57596,16 +57636,24 @@ BEGIN
          COALESCE(m.accepte_non_specialises, true) AS accepte_non_specialises,
          COALESCE(m.type_contrat_recherche::text, 'SALARIE') AS type_contrat_recherche,
          m.remplacement_de_mission_id,
-         COALESCE(e.est_compte_test, false) AS est_compte_test
+         m.etablissement_id,
+         m.mission_source
     INTO v_mission
     FROM public.missions m
     JOIN public.etablissements e ON e.id = m.etablissement_id
    WHERE m.id = p_mission_id AND m.statut = 'OUVERTE';
   IF NOT FOUND THEN RETURN false; END IF;
 
+  -- Mission de revue des stores (REVUE_STORE) : jamais diffusée, à personne,
+  -- pas même au soignant de revue. Cette fonction choisit les destinataires
+  -- des vagues, relances, boost, matching inverse, favoris, pool,
+  -- remplacements, digest et notif-match (migration 20261126100000).
+  IF v_mission.mission_source IS NOT DISTINCT FROM 'REVUE_STORE' THEN
+    RETURN false;
+  END IF;
+
   SELECT profession, specialite_medicale,
-         COALESCE(type_exercice, 'SALARIE') AS type_exercice,
-         COALESCE(est_compte_test, false) AS est_compte_test
+         COALESCE(type_exercice, 'SALARIE') AS type_exercice
     INTO v_soignant
     FROM public.soignants
    WHERE id = p_soignant_id
@@ -57613,7 +57661,9 @@ BEGIN
      AND COALESCE(statut_compte::text, 'ACTIF') = 'ACTIF';
   IF NOT FOUND THEN RETURN false; END IF;
 
-  IF v_soignant.est_compte_test IS DISTINCT FROM v_mission.est_compte_test THEN
+  -- Cohorte de test : le prédicat de la RLS missions_masquer_etabs_test, source
+  -- unique (migration 20261126100000).
+  IF NOT private.fn_comptes_meme_cohorte_test(p_soignant_id, v_mission.etablissement_id) THEN
     RETURN false;
   END IF;
 
@@ -60777,7 +60827,10 @@ BEGIN
   SELECT count(*) INTO v_missions_actives FROM missions
    WHERE etablissement_id = v_etab_id
      AND statut IN ('OUVERTE','ASSIGNEE','EN_COURS','LITIGE')
-     AND fin_le > NOW();
+     AND fin_le > NOW()
+     -- Missions de revue des stores encore ouvertes : retirées plus bas, dans la
+     -- même transaction ; elles ne bloquent pas (migration 20261126100100).
+     AND NOT (statut = 'OUVERTE' AND mission_source IS NOT DISTINCT FROM 'REVUE_STORE');
   IF v_missions_actives > 0 THEN
     RETURN jsonb_build_object('success', false, 'error',
       format('Vous avez %s mission(s) ouverte(s) ou en cours.', v_missions_actives));
@@ -60792,6 +60845,9 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error',
       format('%s facture(s) impayée(s). Réglez-les avant suppression.', v_factures_impayees));
   END IF;
+
+  -- Missions de revue des stores retirées, désignation levée (migration 20261126100100).
+  PERFORM private.fn_liberer_revue_store_etablissement(v_etab_id);
 
   -- Bypass trigger fn_protect_etablissement_commercial pour anonymisation
   PERFORM set_config('app.internal_operation', 'true', true);
@@ -76096,6 +76152,10 @@ CREATE OR REPLACE TRIGGER "trg_00_proteger_heures_externes_soignants" BEFORE INS
 
 
 
+CREATE OR REPLACE TRIGGER "trg_00_proteger_mission_source_revue_store" BEFORE INSERT OR UPDATE OF "mission_source" ON "public"."missions" FOR EACH ROW EXECUTE FUNCTION "private"."fn_trg_proteger_mission_source_revue_store"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_00_verrouiller_attestation_temps_travail" BEFORE INSERT OR UPDATE OF "soignant_id", "semaine_du", "heures_salarie", "employeur_principal", "attestation_honneur" ON "public"."attestations_heures_externes" FOR EACH ROW EXECUTE FUNCTION "public"."trg_verrouiller_attestation_temps_travail"();
 
 
@@ -78700,6 +78760,10 @@ CREATE POLICY "missions_internat_restrictive" ON "public"."missions" AS RESTRICT
 
 
 CREATE POLICY "missions_masquer_etabs_test" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (((NOT ( SELECT "public"."est_soignant"() AS "est_soignant")) OR "private"."fn_comptes_meme_cohorte_test"(( SELECT "auth"."uid"() AS "uid"), "etablissement_id")));
+
+
+
+CREATE POLICY "missions_revue_store_soignant_designe" ON "public"."missions" AS RESTRICTIVE FOR SELECT TO "authenticated" USING ((("mission_source" IS DISTINCT FROM 'REVUE_STORE'::"text") OR (NOT ( SELECT "public"."est_soignant"() AS "est_soignant")) OR ( SELECT "private"."fn_est_soignant_revue_store"(( SELECT "auth"."uid"() AS "uid")) AS "fn_est_soignant_revue_store")));
 
 
 
