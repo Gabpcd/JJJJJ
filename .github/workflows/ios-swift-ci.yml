@@ -1393,6 +1393,9 @@ jobs:
         # Les rejeux de geste (`consignerRejeu`, ligne « Nature : geste rejoué ») partagent ce relevé
         # par appelant mais sont annoncés comme rejeux, sans temps non décompté ni budget (revue B8 de
         # la vague 5, 6ᵉ tour, m3). Une pièce jointe sans aucun champ lisible est annoncée comme telle.
+        # Les gestes restés sans effet mais NON rejoués (`consignerNonRejeu`, ligne « Nature : geste non rejoué » :
+        # toucher reçu sans effet dans la fenêtre, ou témoin du rejeu d’onglet illisible) sont annoncés à part, eux
+        # aussi sans temps non décompté ni budget (revue B8 de #1203, M1 et m5).
         # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
         # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
@@ -1436,16 +1439,18 @@ jobs:
                 const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
                 const rejeu = champ("Nature") === "geste rejoué";
+                const nonRejoue = champ("Nature") === "geste non rejoué";
                 bloquees.push({
                   eclat,
                   rejeu,
+                  nonRejoue,
                   illisible: !champ("Attente") && !champ("Issue"),
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
                   attente: champ("Attente") ?? "?",
-                  nonDecompte: rejeu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
-                  budget: rejeu ? "—" : champ("Budget de blocage") ?? "?",
+                  nonDecompte: rejeu || nonRejoue ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu || nonRejoue ? "—" : champ("Budget de blocage") ?? "?",
                   issue: champ("Issue") ?? "?",
                 });
               }
@@ -1456,9 +1461,10 @@ jobs:
               lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (${releves} éclat(s) relevé(s) sur ${eclats.length})`);
             } else {
               const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
+              const nonRejoues = bloquees.filter(b => b.nonRejoue && !b.illisible).length;
               const illisibles = bloquees.filter(b => b.illisible).length;
-              const attentes = bloquees.length - rejeux - illisibles;
-              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
+              const attentes = bloquees.length - rejeux - nonRejoues - illisibles;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
                 "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
               for (const b of bloquees) {
                 const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
@@ -1467,6 +1473,8 @@ jobs:
                   ? `Trace d’attente illisible (${format}, éclat ${b.eclat}) : pièce jointe sans champ « Attente » ni « Issue » — ${b.test}`
                   : b.rejeu
                     ? `Geste rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
+                    : b.nonRejoue
+                      ? `Geste non rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
                     : `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
                 const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
                 console.log(`::warning${cible}::${esc(message)}`);
@@ -2192,6 +2200,9 @@ jobs:
         # Les rejeux de geste (`consignerRejeu`, ligne « Nature : geste rejoué ») partagent ce relevé
         # par appelant mais sont annoncés comme rejeux, sans temps non décompté ni budget (revue B8 de
         # la vague 5, 6ᵉ tour, m3). Une pièce jointe sans aucun champ lisible est annoncée comme telle.
+        # Les gestes restés sans effet mais NON rejoués (`consignerNonRejeu`, ligne « Nature : geste non rejoué » :
+        # toucher reçu sans effet dans la fenêtre, ou témoin du rejeu d’onglet illisible) sont annoncés à part, eux
+        # aussi sans temps non décompté ni budget (revue B8 de #1203, M1 et m5).
         # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
         # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
@@ -2235,16 +2246,18 @@ jobs:
                 const parRapport = (champ("Appelant") ?? "").match(/^(.+\.swift):(\d+)$/);
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
                 const rejeu = champ("Nature") === "geste rejoué";
+                const nonRejoue = champ("Nature") === "geste non rejoué";
                 bloquees.push({
                   eclat,
                   rejeu,
+                  nonRejoue,
                   illisible: !champ("Attente") && !champ("Issue"),
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
                   attente: champ("Attente") ?? "?",
-                  nonDecompte: rejeu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
-                  budget: rejeu ? "—" : champ("Budget de blocage") ?? "?",
+                  nonDecompte: rejeu || nonRejoue ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu || nonRejoue ? "—" : champ("Budget de blocage") ?? "?",
                   issue: champ("Issue") ?? "?",
                 });
               }
@@ -2255,9 +2268,10 @@ jobs:
               lignes.push(`- aucune : aucun \`require\` n’a mesuré de temps non décompté (${releves} éclat(s) relevé(s) sur ${eclats.length})`);
             } else {
               const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
+              const nonRejoues = bloquees.filter(b => b.nonRejoue && !b.illisible).length;
               const illisibles = bloquees.filter(b => b.illisible).length;
-              const attentes = bloquees.length - rejeux - illisibles;
-              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
+              const attentes = bloquees.length - rejeux - nonRejoues - illisibles;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
                 "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
               for (const b of bloquees) {
                 const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
@@ -2266,6 +2280,8 @@ jobs:
                   ? `Trace d’attente illisible (${format}, éclat ${b.eclat}) : pièce jointe sans champ « Attente » ni « Issue » — ${b.test}`
                   : b.rejeu
                     ? `Geste rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
+                    : b.nonRejoue
+                      ? `Geste non rejoué (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.issue} — ${b.test}`
                     : `Attente bloquée absorbée (${format}, éclat ${b.eclat}) : « ${b.attente} », ${b.nonDecompte} non décomptées (budget de blocage ${b.budget}), ${b.issue} — ${b.test}`;
                 const cible = b.fichier && b.ligne ? ` file=${prop(`ios-native/JoleneUITests/${b.fichier}`)},line=${prop(b.ligne)}` : "";
                 console.log(`::warning${cible}::${esc(message)}`);

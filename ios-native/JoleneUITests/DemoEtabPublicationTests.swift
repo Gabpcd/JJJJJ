@@ -271,16 +271,16 @@ final class DemoEtabPublicationTests: JoleneUITestCase {
         XCTAssertTrue(resume.hasSuffix(" sur \(nombre)"), "\(nombre) jour(s) dérivé(s) de la période : \(resume)")
     }
 
-    /// Bascule un jour (travaillé / repos) et exige l'état relu ; un toucher perdu est rejoué une fois, et consigné.
+    /// Bascule un jour (travaillé / repos) et exige l'état relu. Un toucher perdu est rejoué une fois, et consigné
+    /// (`toucherPuisExiger`), seulement si la valeur relue est encore celle d'avant le toucher et le jour actif : jamais
+    /// de double bascule sur un toucher reçu (revue B8 de #1203, hors diff).
     private func basculer(_ jour: XCUIElement, attendu: String, file: StaticString = #filePath, line: UInt = #line) {
         scrollTo(jour, in: element("publier-screen"), file: file, line: line)
-        let description = "Le jour \(jour.identifier) est « \(attendu) »"
-        jour.tap()
-        if !attendreSansEchec(description, timeout: 5, file: file, line: line, condition: { (jour.value as? String) == attendu }) {
-            consignerRejeu(description, issue: "toucher sans effet en 5 s : un seul nouveau toucher", file: file, line: line)
-            jour.tap()
+        let valeurAvant = jour.value as? String
+        toucherPuisExiger(jour, "Le jour \(jour.identifier) est « \(attendu) »", file: file, line: line,
+                          rienNAChange: { valeurAvant != nil && (jour.value as? String) == valeurAvant && jour.isEnabled }) {
+            (jour.value as? String) == attendu
         }
-        require(description, file: file, line: line) { (jour.value as? String) == attendu }
     }
 
     private func saisirTaux(_ valeur: String) {

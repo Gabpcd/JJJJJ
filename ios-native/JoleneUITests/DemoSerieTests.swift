@@ -136,7 +136,10 @@ final class DemoSerieTests: JoleneUITestCase {
         for id in ["demo-mission-008", "demo-mission-002"] {
             let coche = element("serie-selection-\(id)")
             scrollTo(coche, in: ecran)
-            toucherPuisExiger(coche, "\(id) est décochée", rienNAChange: { coche.isSelected }) { !coche.isSelected }
+            // Témoin complet, comme pour `case28` : case et libellé du bouton « Accepter la sélection » inchangés.
+            let accepterAvant = accepter.label
+            toucherPuisExiger(coche, "\(id) est décochée",
+                              rienNAChange: { coche.isSelected && accepter.label == accepterAvant }) { !coche.isSelected }
         }
         scrollTo(accepter, in: ecran)
         require("L'action reprend sur la mission restante") { accepter.label == "★ Accepter la sélection (1)" && accepter.isEnabled }

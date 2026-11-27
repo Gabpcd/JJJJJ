@@ -349,6 +349,18 @@ class JoleneUITestCase: XCTestCase {
         attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
     }
 
+    /// Consigne un geste resté sans effet que le socle n'a PAS rejoué : toucher reçu (état relu changé) sans effet dans la
+    /// fenêtre, ou témoin du rejeu illisible (`toucherOnglet`). Même format que `consignerRejeu`, ligne « Nature : geste
+    /// non rejoué », annoncée à part par le relevé d'`ios-swift-ci.yml` : un rejeu désactivé ne passe pas inaperçu dans un
+    /// job vert (revue B8 de #1203, M1 et m5).
+    func consignerNonRejeu(_ attente: String, issue: String, file: StaticString, line: UInt) {
+        let fichier = (String(describing: file) as NSString).lastPathComponent
+        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Nature : geste non rejoué", "Issue : \(issue)"]
+            .joined(separator: "\n")
+        XCTContext.runActivity(named: "Geste non rejoué — « \(attente) » : \(issue)") { _ in }
+        attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
+    }
+
     // MARK: Actions
 
     /// Touche « Se connecter » puis exige la session (`sessionPrete`) sur `timeout` décomptées au total. Un toucher resté
@@ -391,7 +403,7 @@ class JoleneUITestCase: XCTestCase {
     /// décomptés, budgetés et tracés comme dans `require`), le geste est rejoué UNE seule fois, et seulement si
     /// `rienNAChange` relit l'état d'avant le toucher : aucun écran intermédiaire, contrôle toujours actif, aucune
     /// erreur. Un toucher reçu, même lent, n'est donc jamais rejoué. Chaque rejeu est consigné (`consignerRejeu`, relevé
-    /// « Geste rejoué » de la CI) ; un effet absent sans rejeu permis est noté en activité XCTest. Rien n'est prouvé ici :
+    /// « Geste rejoué » de la CI) ; un effet absent sans rejeu permis l'est aussi (`consignerNonRejeu`). Rien n'est prouvé ici :
     /// l'appelant exige l'effet ensuite (`require`), avec le message d'avant ; une double bascule y échouerait. Réservé
     /// aux gestes dont l'état relu prouve l'absence d'effet (onglets, cases, chips, étoiles) : jamais un envoi, un
     /// paiement, une signature ou une candidature sans relecture qui prouve que rien n'est parti.
@@ -403,8 +415,8 @@ class JoleneUITestCase: XCTestCase {
             return
         }
         guard rienNAChange() else {
-            XCTContext.runActivity(named: "Geste non rejoué — « \(attente) » : effet absent en \(Self.seconds(fenetre)), "
-                                   + "mais état relu changé ou contrôle inactif : aucun rejeu") { _ in }
+            consignerNonRejeu(attente, issue: "effet absent en \(Self.seconds(fenetre)), mais état relu changé ou contrôle "
+                              + "inactif : aucun rejeu", file: file, line: line)
             return
         }
         consignerRejeu(attente, issue: "toucher sans effet en \(Self.seconds(fenetre)), état relu inchangé : "
@@ -557,14 +569,23 @@ class JoleneUITestCase: XCTestCase {
     /// tard, barres de navigation inchangées et onglet visé toujours atteignable (`lireBarreOnglets`). La sélection change
     /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
     /// toucher le ramènerait à sa racine). Onglet déjà sélectionné, ou sélection illisible : un seul toucher, jamais de
-    /// rejeu. Rien n'est exigé ici, pas même la sélection : l'appelant exige le contenu de l'onglet, avec son message et
+    /// rejeu ; une sélection illisible est consignée (`consignerNonRejeu`), pour qu'un rejeu désactivé se voie au relevé
+    /// de la CI, et `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
+    /// Rien n'est exigé ici, pas même la sélection : l'appelant exige le contenu de l'onglet, avec son message et
     /// son délai d'avant. Ce délai ne court qu'après la fenêtre, donc au plus 5 s plus tard, et seulement quand la
     /// sélection n'a pas été constatée.
     func toucherOnglet(_ identifier: String, label: String, file: StaticString = #filePath, line: UInt = #line) {
         let onglet = tabButton(identifier, label: label)
         let symbole = Self.tabSymbols[identifier]
         let avant = lireBarreOnglets()
-        guard let selection = avant.selection, !selection.designe(identifier, symbole: symbole, label: label) else {
+        guard let selection = avant.selection else {
+            consignerNonRejeu("Le témoin du rejeu d'onglet est lisible avant le toucher de \(label)",
+                              issue: "aucun bouton d'onglet lu « Selected » (\(avant.onglets.count) lu(s)) : un seul toucher, "
+                                  + "rejeu d'onglet désactivé", file: file, line: line)
+            onglet.tap()
+            return
+        }
+        guard !selection.designe(identifier, symbole: symbole, label: label) else {
             onglet.tap()
             return
         }
@@ -576,9 +597,9 @@ class JoleneUITestCase: XCTestCase {
                                 })
     }
 
-    /// Onglet sélectionné (premier bouton d'onglet `Selected` : dans l'élément `TabBar`, ou identifié par l'un des
-    /// symboles de `tabSymbols` dans la barre haute de l'iPad) et identifiants des barres de navigation, lus dans UN
-    /// instantané de l'app, comme `lirePageDeLaBarre`. Instantané impossible : rien de lisible, donc aucun rejeu.
+    /// Boutons d'onglet (dans l'élément `TabBar`, ou identifiés par l'un des symboles de `tabSymbols` dans la barre haute
+    /// de l'iPad), avec leur état `Selected`, et identifiants des barres de navigation, lus dans UN instantané de l'app,
+    /// comme `lirePageDeLaBarre`. Instantané impossible : rien de lisible, donc aucun rejeu.
     func lireBarreOnglets() -> EtatBarreOnglets {
         var etat = EtatBarreOnglets()
         guard let racine = try? app.snapshot() else { return etat }
@@ -586,14 +607,42 @@ class JoleneUITestCase: XCTestCase {
         func parcourir(_ element: XCUIElementSnapshot, dansLaBarre: Bool) {
             let barre = dansLaBarre || element.elementType == .tabBar
             if element.elementType == .navigationBar { etat.barresDeNavigation.append(element.identifier) }
-            if etat.selection == nil, element.elementType == .button, element.isSelected, !element.label.isEmpty,
-               barre || symboles.contains(element.identifier) {
-                etat.selection = OngletSelectionne(identifiant: element.identifier, label: element.label)
+            if element.elementType == .button, barre || symboles.contains(element.identifier) {
+                etat.onglets.append(BoutonOngletLu(identifiant: element.identifier, label: element.label,
+                                                   selectionne: element.isSelected))
             }
             element.children.forEach { parcourir($0, dansLaBarre: barre) }
         }
         parcourir(racine, dansLaBarre: false)
         return etat
+    }
+
+    /// Preuve, sur le format courant, que le témoin de `toucherOnglet` est lisible (revue B8 de #1203, M1) : l'onglet
+    /// courant est lu « Selected », aucun autre onglet ne l'est, et chaque onglet de `presents` est exposé dans
+    /// l'instantané. Sans cette preuve, un témoin illisible désactiverait le rejeu d'onglet sans aucun échec. La lecture
+    /// est jointe en texte (`<préfixe>-temoin-onglet-<identifiant>.txt`).
+    func exigerTemoinOnglet(_ identifier: String, label: String, presents: [(String, String)] = [],
+                            file: StaticString = #filePath, line: UInt = #line) {
+        let symbole = Self.tabSymbols[identifier]
+        var lu = EtatBarreOnglets()
+        _ = attendreSansEchec("Le témoin du rejeu d'onglet lit « \(label) » sélectionné", timeout: 5, file: file, line: line) {
+            lu = self.lireBarreOnglets()
+            return lu.selection?.designe(identifier, symbole: symbole, label: label) ?? false
+        }
+        let lecture = lu.onglets.map { "\($0.label) [\($0.identifiant)]\($0.selectionne ? " Selected" : "")" }
+            .joined(separator: ", ")
+        attachText("Onglet courant : \(label) (\(identifier))\nBoutons d'onglet lus : \(lecture)",
+                   name: "\(proofPrefix)-temoin-onglet-\(identifier).txt")
+        XCTAssertTrue(lu.onglets.contains { $0.selectionne && $0.designe(identifier, symbole: symbole, label: label) },
+                      "témoin du rejeu d'onglet illisible sur ce format : « \(label) » n'est pas lu sélectionné (\(lecture))",
+                      file: file, line: line)
+        XCTAssertFalse(lu.onglets.contains { $0.selectionne && !$0.designe(identifier, symbole: symbole, label: label) },
+                       "un autre onglet que « \(label) » est lu sélectionné (\(lecture))", file: file, line: line)
+        for (autre, libelle) in presents {
+            let symboleAutre = Self.tabSymbols[autre]
+            XCTAssertTrue(lu.onglets.contains { $0.designe(autre, symbole: symboleAutre, label: libelle) },
+                          "l'onglet « \(libelle) » n'est pas exposé au témoin (\(lecture))", file: file, line: line)
+        }
     }
 
     static let pageSuivante = "Page suivante"
@@ -919,17 +968,22 @@ class JoleneUITestCase: XCTestCase {
     }
 }
 
-/// Onglet sélectionné et barres de navigation, lus dans un même instantané (`lireBarreOnglets`) : témoin d'un toucher
-/// d'onglet resté sans effet (`toucherOnglet`).
+/// Boutons d'onglet et barres de navigation, lus dans un même instantané (`lireBarreOnglets`) : témoin d'un toucher
+/// d'onglet resté sans effet (`toucherOnglet`), prouvé lisible par `exigerTemoinOnglet`.
 struct EtatBarreOnglets: Equatable {
-    var selection: OngletSelectionne?
+    /// Boutons d'onglet dans l'ordre de l'arbre (deux nœuds par onglet sur iPad).
+    var onglets: [BoutonOngletLu] = []
     var barresDeNavigation: [String] = []
+
+    /// Premier bouton d'onglet lu « Selected », de libellé non vide.
+    var selection: BoutonOngletLu? { onglets.first { $0.selectionne && !$0.label.isEmpty } }
 }
 
-/// Bouton d'onglet sélectionné : identifiant (`tab-*` ou symbole SF) et libellé.
-struct OngletSelectionne: Equatable {
+/// Bouton d'onglet lu : identifiant (`tab-*` ou symbole SF), libellé et état « Selected ».
+struct BoutonOngletLu: Equatable {
     let identifiant: String
     let label: String
+    let selectionne: Bool
 
     /// Même règle que `boutonOnglet` : l'identifiant `tab-*`, puis son symbole SF (`tabSymbols`), puis le libellé.
     func designe(_ identifier: String, symbole: String?, label attendu: String) -> Bool {

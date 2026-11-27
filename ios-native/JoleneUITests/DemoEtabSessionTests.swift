@@ -112,16 +112,22 @@ final class DemoEtabSessionTests: JoleneUITestCase {
 
     // MARK: Étapes
 
-    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {
-        toucherOnglet(identifiant, label: label)
-        require("L'onglet \(label) affiche son contenu") { self.containerVisible(self.element(contenu)) }
+    /// Onglet ouvert, contenu exigé, puis témoin du rejeu d'onglet exigé lisible sur ce format (revue B8 de #1203, M1) :
+    /// seul l'onglet courant est lu « Selected ». La présence des cinq onglets n'est pas exigée : en iPad portrait, la
+    /// barre paginée n'expose que la page affichée (`amenerOngletDansLaPage`).
+    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String,
+                              file: StaticString = #filePath, line: UInt = #line) {
+        toucherOnglet(identifiant, label: label, file: file, line: line)
+        require("L'onglet \(label) affiche son contenu", file: file, line: line) { self.containerVisible(self.element(contenu)) }
+        exigerTemoinOnglet(identifiant, label: label, file: file, line: line)
     }
 
-    private func ouvrirCompte() {
-        toucherOnglet("tab-etab-compte", label: "Compte")
-        require("Le compte de l'établissement est affiché") {
+    private func ouvrirCompte(file: StaticString = #filePath, line: UInt = #line) {
+        toucherOnglet("tab-etab-compte", label: "Compte", file: file, line: line)
+        require("Le compte de l'établissement est affiché", file: file, line: line) {
             self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }
+        exigerTemoinOnglet("tab-etab-compte", label: "Compte", file: file, line: line)
     }
 }
 

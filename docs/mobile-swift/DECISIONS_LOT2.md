@@ -2273,8 +2273,11 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   toucher, consigné (`consignerRejeu`) ; la preuve reste le `require` de l'appelant, avec le même message.
   `toucherOnglet` l'applique aux 80 touchers d'onglet (témoin : onglet sélectionné et barres de navigation, lus dans un
   instantané ; sélection illisible ou onglet déjà choisi, jamais de rejeu) ; `toucherPuisExiger` aux étoiles (valeur,
-  étoile active, aucune erreur), aux cases cochées de l'annulation et de la série, et aux chips d'Explorer. Les
-  interrupteurs de la complétion et de la publication gardent trois essais, désormais budgétés et consignés.
-- **Non vérifié hors CI** : la lecture de `Selected` sur les boutons de la barre haute de l'iPad sous iOS 26.2 (sans
-  elle, aucun rejeu d'onglet n'a lieu), et l'absence de rejeu sur les formats verts. Restent sans rejeu : 14 entrées du
-  hub Profil et 25 sélections (onglets internes, segments, motifs).
+  étoile active, aucune erreur), aux cases cochées de l'annulation et de la série, aux chips d'Explorer et aux jours
+  de la publication. Les interrupteurs de la complétion et de la publication gardent trois essais, désormais budgétés
+  et consignés.
+- **Témoin prouvé, pas supposé** (revue B8 de #1203, M1) : `exigerTemoinOnglet` exige sur les trois formats, côté
+  soignant (`DemoConsultationTests`, cinq onglets exposés) et établissement (`DemoEtabSessionTests`), que seul l'onglet
+  courant soit lu « Selected ». Un témoin illisible pendant un test est consigné (`consignerNonRejeu`, « Nature : geste
+  non rejoué »), comme tout geste sans effet non rejoué ; le relevé de la CI les annonce « Geste non rejoué » (m5).
+- **Restent sans rejeu** : 14 entrées du hub Profil et 25 sélections (onglets internes, segments, motifs).
