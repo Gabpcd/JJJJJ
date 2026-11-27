@@ -9,8 +9,10 @@
 -- Ce qu'il prouve :
 --   A. un soignant qui a des pièces VERIFIE supprime son compte par le chemin
 --      réel (fn_supprimer_compte_rate_limited, en session utilisateur) : succès,
---      profil anonymisé, pièces marquées supprimées, reçu privé, aucune demande
---      de re-vérification ; une seconde demande est reconnue comme déjà faite ;
+--      profil anonymisé, pièces marquées supprimées, reçu privé, pièces non
+--      repassées en attente ; une seconde demande est reconnue comme déjà faite ;
+--      avec ou sans pièce vérifiée, la suppression vide les noms RPPS et ADELI,
+--      la spécialité et les détails de cohérence (nettoyage du déclencheur) ;
 --   B. un changement d'identité hors suppression invalide toujours les pièces
 --      (EN_ATTENTE, drapeaux remis à faux, audit) ;
 --   C. un profil déjà marqué supprimé (suspension) qui change d'identité voit
@@ -33,6 +35,8 @@ DECLARE
   v_s2 constant uuid := 'a5f1d001-0000-4000-8000-000000000002';  -- change d'identité hors suppression
   v_s3 constant uuid := 'a5f1d001-0000-4000-8000-000000000003';  -- déjà marqué supprimé, change d'identité
   v_s4 constant uuid := 'a5f1d001-0000-4000-8000-000000000004';  -- tente de forger la suppression
+  v_s5 constant uuid := 'a5f1d001-0000-4000-8000-000000000005';  -- supprime son compte, sans pièce vérifiée
+  v_s uuid;
   v_res jsonb;
   v_msg text;
   v_etat text;
@@ -47,7 +51,7 @@ BEGIN
 
   -- ── 2. Catalogue candidat ──────────────────────────────────────────────────
   IF (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_invalider_preuves_identite_sur_changement()'::regprocedure)
-       IS DISTINCT FROM '377be655911e3223b2a22cfdf3956991'
+       IS DISTINCT FROM 'bb93c49d6187ee007b964acab6bf0809'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_proteger_ecriture_document_soignant()'::regprocedure)
        IS DISTINCT FROM 'c490ce823768b0a23cd264ab17601155'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_protect_soignant_verification()'::regprocedure)
@@ -69,11 +73,18 @@ BEGIN
   INSERT INTO auth.users (id, instance_id, email, role, aud, raw_app_meta_data, email_confirmed_at)
   SELECT s, '00000000-0000-0000-0000-000000000000', 'suppression-preuves-' || right(s::text, 1) || '@example.invalid',
          'authenticated', 'authenticated', '{"role":"SOIGNANT"}'::jsonb, now()
-    FROM unnest(ARRAY[v_s1, v_s2, v_s3, v_s4]) s;
+    FROM unnest(ARRAY[v_s1, v_s2, v_s3, v_s4, v_s5]) s;
   INSERT INTO public.soignants (id, prenom, nom, email, profession, date_naissance)
   SELECT s, 'Fixture', 'Preuves ' || right(s::text, 1), 'suppression-preuves-' || right(s::text, 1) || '@example.invalid',
          'IDE', date '1990-01-15'
-    FROM unnest(ARRAY[v_s1, v_s2, v_s3, v_s4]) s;
+    FROM unnest(ARRAY[v_s1, v_s2, v_s3, v_s4, v_s5]) s;
+  -- Identités relues aux registres et détails de cohérence nominatifs (marqueur NOMREGISTRE).
+  UPDATE public.soignants
+     SET rpps_nom_api = 'NOMREGISTRE', rpps_prenom_api = 'PRENOMREGISTRE', rpps_profession_api = 'Infirmier',
+         adeli_nom_api = 'NOMREGISTRE', adeli_prenom_api = 'PRENOMREGISTRE', adeli_profession_api = 'Infirmier',
+         specialite_code = 'NOMREGISTRE-SPE', specialite_source = 'RPPS',
+         coherence_details = jsonb_build_object('nom_profil', 'NOMREGISTRE', 'nom_rpps', 'NOMREGISTRE')
+   WHERE id IN (v_s1, v_s5);
   INSERT INTO public.documents_soignants (soignant_id, type_document, s3_cle, nom_fichier, statut_verification,
     est_critique, valide_jusqua, resultat_ia)
   SELECT s, d.type_document::public.type_document, 'tests/suppression-preuves/' || s || '/' || lower(d.type_document),
@@ -116,9 +127,30 @@ BEGIN
      OR EXISTS (SELECT 1 FROM public.documents_soignants WHERE soignant_id = v_s1 AND supprime_le IS NULL)
      OR private.fn_anonymisation_compte_confirmee(v_s1, 'SOIGNANT') IS NOT TRUE
   THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES A3 : anonymisation incomplète'; END IF;
-  IF EXISTS (SELECT 1 FROM public.journaux_audit WHERE id_ressource = v_s1 AND action = 'IDENTITE_PROFIL_MODIFIEE')
-     OR EXISTS (SELECT 1 FROM public.documents_soignants WHERE soignant_id = v_s1 AND statut_verification = 'EN_ATTENTE')
-  THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES A4 : la suppression a demandé une re-vérification des preuves'; END IF;
+  IF EXISTS (SELECT 1 FROM public.documents_soignants WHERE soignant_id = v_s1 AND statut_verification = 'EN_ATTENTE')
+  THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES A4 : la suppression a repassé les pièces en attente'; END IF;
+  -- Même suppression sans pièce vérifiée (chemin qui aboutissait déjà avant 20261127100000).
+  PERFORM set_config('request.jwt.claim.sub', v_s5::text, true);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+  PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', v_s5, 'role', 'authenticated')::text, true);
+  v_res := public.fn_supprimer_compte_rate_limited();
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  PERFORM set_config('request.jwt.claim.role', '', true);
+  PERFORM set_config('request.jwt.claims', '', true);
+  IF (v_res->>'success')::boolean IS NOT TRUE OR (SELECT supprime_le FROM public.soignants WHERE id = v_s5) IS NULL
+  THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES A5 : suppression sans pièce vérifiée refusée (%)', v_res; END IF;
+  -- Avec ou sans pièce vérifiée : aucune identité relue aux registres ne reste sur le profil supprimé.
+  FOREACH v_s IN ARRAY ARRAY[v_s1, v_s5] LOOP
+    IF (SELECT num_nonnulls(rpps_nom_api, rpps_prenom_api, rpps_profession_api, adeli_nom_api, adeli_prenom_api,
+                            adeli_profession_api, specialite_medicale, specialite_code, specialite_source)
+          FROM public.soignants WHERE id = v_s) <> 0
+       OR (SELECT COALESCE(coherence_details::text, '') FROM public.soignants WHERE id = v_s) LIKE '%NOMREGISTRE%'
+       OR (SELECT rpps_verifie OR adeli_verifie OR COALESCE(specialite_verifiee, false) FROM public.soignants WHERE id = v_s)
+    THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES A6 : identité des registres conservée sur le profil supprimé % (%)', v_s,
+           (SELECT jsonb_build_object('rpps_nom_api', rpps_nom_api, 'adeli_nom_api', adeli_nom_api, 'specialite_code', specialite_code,
+              'coherence_details', coherence_details) FROM public.soignants WHERE id = v_s);
+    END IF;
+  END LOOP;
 
   -- ── B. Changement d'identité hors suppression : pièces invalidées ──────────
   UPDATE public.soignants SET nom = 'Preuves corrigé' WHERE id = v_s2;
@@ -162,7 +194,7 @@ BEGIN
      OR (SELECT count(*) FROM public.documents_soignants WHERE soignant_id = v_s4 AND statut_verification = 'VERIFIE') <> 2
   THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES D3 : état du profil modifié par une écriture refusée'; END IF;
 
-  RAISE NOTICE 'SUPPRESSION_PREUVES : suppression avec pièces vérifiées, invalidation hors suppression, profil suspendu, protections vérifiées.';
+  RAISE NOTICE 'SUPPRESSION_PREUVES : suppression avec et sans pièces vérifiées (anonymisation complète), invalidation hors suppression, profil suspendu, protections vérifiées.';
 END
 $suppression_preuves_suite$;
 ROLLBACK;

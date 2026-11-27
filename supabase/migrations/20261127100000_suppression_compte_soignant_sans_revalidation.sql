@@ -11,18 +11,21 @@
 -- La suppression de compte (droit à l'effacement, exigence des stores) n'aboutit
 -- donc pas pour un soignant vérifié.
 --
--- Correctif, au point de coupure le plus étroit :
--- public.fn_invalider_preuves_identite_sur_changement ne demande plus de
--- re-vérification quand la ligne soignant passe à l'état supprimé dans la même
--- mise à jour (OLD.supprime_le NULL, NEW.supprime_le posé). Cette transition est
--- réservée aux fonctions serveur : fn_protect_soignant_verification rétablit
--- supprime_le pour toute écriture d'un utilisateur (empreinte verrouillée
--- ci-dessous). En production, deux fonctions la posent en changeant l'identité :
--- fn_supprimer_mon_compte (suppression par le soignant) et
--- fn_rgpd_purge_automatique_inactifs (purge, sans identité). Les preuves n'ont
--- plus d'objet à re-vérifier : la suppression les traite elle-même, comme
--- aujourd'hui (pièces marquées supprimées, profil anonymisé, drapeaux de
--- vérification remis à faux, reçu privé d'anonymisation).
+-- Correctif, au point de coupure le plus étroit : dans
+-- public.fn_invalider_preuves_identite_sur_changement, seul l'UPDATE des
+-- pièces (repasse en EN_ATTENTE) est sauté quand la ligne soignant passe à
+-- l'état supprimé dans la même mise à jour (OLD.supprime_le NULL,
+-- NEW.supprime_le posé). Les pièces n'ont plus d'objet à re-vérifier : la
+-- suppression les marque elle-même supprimées. Le reste du déclencheur est
+-- conservé tel quel, car il fait partie de l'anonymisation de toute
+-- suppression : noms RPPS et ADELI, spécialité et détails de cohérence remis à
+-- NULL, drapeaux de vérification remis à faux, audit. fn_supprimer_mon_compte
+-- ne les vide pas elle-même. Cette transition est réservée aux fonctions
+-- serveur : fn_protect_soignant_verification rétablit supprime_le pour toute
+-- écriture d'un utilisateur (empreinte verrouillée ci-dessous). En production,
+-- deux fonctions la posent en changeant l'identité : fn_supprimer_mon_compte
+-- (suppression par le soignant) et fn_rgpd_purge_automatique_inactifs (purge,
+-- sans identité).
 -- Inchangés : fn_proteger_ecriture_document_soignant (aucune autre écriture
 -- relâchée), fn_supprimer_mon_compte, tout changement d'identité hors
 -- suppression (re-vérification demandée comme avant), y compris pour un profil
@@ -30,7 +33,8 @@
 --
 -- Redéfinition : corps LIVE relu en lecture seule le 27/11/2026
 -- (md5 121864acbb7a1bd4c800de32eaa75292, identique à 20260713223000 et à
--- supabase/schema/public.sql) ; seul le bloc cité est ajouté. Préflight
+-- supabase/schema/public.sql) ; seul l'UPDATE des pièces est placé sous la
+-- condition citée (réindenté, inchangé). Préflight
 -- fail-closed et post-condition sur md5(prosrc) ; en-tête, SECURITY DEFINER,
 -- search_path, propriétaire et ACL conservés par CREATE OR REPLACE. Fonction de
 -- déclencheur hors inventaire SECURITY DEFINER (EXECUTE : postgres, service_role).
@@ -108,15 +112,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Suppression du compte (supprime_le posé dans cette même mise à jour) : les
-  -- preuves n'ont plus d'objet à re-vérifier, la suppression les traite
-  -- elle-même. Transition réservée aux fonctions serveur :
-  -- fn_protect_soignant_verification rétablit supprime_le pour toute écriture
-  -- d'un utilisateur (migration 20261127100000).
-  IF OLD.supprime_le IS NULL AND NEW.supprime_le IS NOT NULL THEN
-    RETURN NEW;
-  END IF;
-
   IF NEW.prenom IS DISTINCT FROM OLD.prenom THEN v_champs := array_append(v_champs, 'prenom'); END IF;
   IF NEW.nom IS DISTINCT FROM OLD.nom THEN v_champs := array_append(v_champs, 'nom'); END IF;
   IF NEW.date_naissance IS DISTINCT FROM OLD.date_naissance THEN v_champs := array_append(v_champs, 'date_naissance'); END IF;
@@ -126,18 +121,27 @@ BEGIN
   PERFORM set_config('jolene.system_update', 'true', true);
   PERFORM set_config('jolene.siret_liberal_reset', 'true', true);
   BEGIN
-    UPDATE public.documents_soignants
-    SET statut_verification = 'EN_ATTENTE',
-        motif_rejet = 'Profil d’identité modifié après vérification — nouvelle vérification de la preuve requise.',
-        verifie_le = NULL,
-        verifie_par = NULL,
-        valide_depuis = NULL,
-        valide_jusqua = NULL,
-        modifie_le = now()
-    WHERE soignant_id = NEW.id
-      AND statut_verification = 'VERIFIE'
-      AND supprime_le IS NULL;
-    GET DIAGNOSTICS v_documents_invalides = ROW_COUNT;
+    -- Suppression du compte (supprime_le posé dans cette même mise à jour) : les
+    -- pièces ne sont pas repassées en attente, elles n'ont plus d'objet à
+    -- re-vérifier et la suppression les marque elle-même supprimées. Le
+    -- nettoyage du profil ci-dessous (noms RPPS et ADELI, spécialité,
+    -- cohérence, drapeaux de vérification) reste dû. Transition réservée aux
+    -- fonctions serveur : fn_protect_soignant_verification rétablit
+    -- supprime_le pour toute écriture d'un utilisateur (migration 20261127100000).
+    IF NOT (OLD.supprime_le IS NULL AND NEW.supprime_le IS NOT NULL) THEN
+      UPDATE public.documents_soignants
+      SET statut_verification = 'EN_ATTENTE',
+          motif_rejet = 'Profil d’identité modifié après vérification — nouvelle vérification de la preuve requise.',
+          verifie_le = NULL,
+          verifie_par = NULL,
+          valide_depuis = NULL,
+          valide_jusqua = NULL,
+          modifie_le = now()
+      WHERE soignant_id = NEW.id
+        AND statut_verification = 'VERIFIE'
+        AND supprime_le IS NULL;
+      GET DIAGNOSTICS v_documents_invalides = ROW_COUNT;
+    END IF;
 
     UPDATE public.soignants
     SET identite_verifiee = false,
@@ -200,7 +204,7 @@ DO $suppression_preuves_apres$
 BEGIN
   IF (SELECT pg_catalog.md5(prosrc) FROM pg_catalog.pg_proc
        WHERE oid = 'public.fn_invalider_preuves_identite_sur_changement()'::pg_catalog.regprocedure)
-       IS DISTINCT FROM '377be655911e3223b2a22cfdf3956991'
+       IS DISTINCT FROM 'bb93c49d6187ee007b964acab6bf0809'
      OR (SELECT pg_catalog.md5(prosrc) FROM pg_catalog.pg_proc
        WHERE oid = 'public.fn_proteger_ecriture_document_soignant()'::pg_catalog.regprocedure)
        IS DISTINCT FROM 'c490ce823768b0a23cd264ab17601155'

@@ -18,13 +18,41 @@ export const MIGRATION = 'supabase/migrations/20261127100000_suppression_compte_
 export const SUITE = 'tests/security/suppression-compte-soignant-preuves.test.sql';
 const SOIGNANT = 'a5f1d0ff-0000-4000-8000-000000000001';
 
+/** psql en VERBOSITY verbose : la ligne d'erreur porte le SQLSTATE (« ERROR:  42501: … »), absent sinon. */
+export const avecVerbosite = spawn => (commande, args, options) => spawn(commande, ['-v', 'VERBOSITY=verbose', ...args], options);
+
+/** SQLSTATE d'une erreur des deux moteurs : champ `code` (PGlite), ou ligne psql en VERBOSITY verbose. */
+export function sqlstate(erreur) {
+  if (typeof erreur?.code === 'string' && /^[0-9A-Z]{5}$/.test(erreur.code)) return erreur.code;
+  return /\bERROR:\s+([0-9A-Z]{5}):/.exec(String(erreur?.message ?? ''))?.[1];
+}
+
 async function moteur() {
   if (process.env.JOLENE_PGLITE_MODULES) return moteurPglite(process.env.JOLENE_PGLITE_MODULES);
   assert.equal(process.env.JOLENE_PG_CONCURRENCY, 'CI_EPHEMERE', 'PostgreSQL éphémère de la CI seulement');
   assert.equal(process.env.PGHOST, '127.0.0.1');
   assert.equal(process.env.PGDATABASE, 'suppression_preuves_banc', 'base dédiée, jamais partagée avec les autres étapes');
-  return { ...moteurPsql({ spawn: spawnSync }), fermer: async () => {} };
+  return { ...moteurPsql({ spawn: avecVerbosite(spawnSync) }), fermer: async () => {} };
 }
+
+test('SQLSTATE lu de la même façon par PGlite et par psql de la CI (sans base)', async () => {
+  // PGlite : champ code de l'erreur.
+  assert.equal(sqlstate(Object.assign(new Error('Modification de preuve ou de validation interdite'), { code: '42501' })), '42501');
+  // psql : l'option est bien passée, et l'erreur remontée par moteurPsql garde la ligne « ERROR:  42501: ».
+  const appels = [];
+  const faux = avecVerbosite((commande, args) => {
+    appels.push([commande, args]);
+    return { status: 3, stdout: '', stderr: 'psql:<stdin>:13: ERROR:  42501: Modification de preuve ou de validation interdite\n'
+      + 'CONTEXT:  PL/pgSQL function fn_proteger_ecriture_document_soignant() line 59 at RAISE\n'
+      + 'LOCATION:  exec_stmt_raise, pl_exec.c:3925\n' };
+  });
+  const erreur = await moteurPsql({ spawn: faux }).executer('SELECT 1;').then(() => null, e => e);
+  assert.deepEqual(appels[0][1].slice(0, 2), ['-v', 'VERBOSITY=verbose']);
+  assert.equal(sqlstate(erreur), '42501');
+  assert.match(String(erreur.message), /Modification de preuve ou de validation interdite/);
+  // Sans VERBOSITY verbose (ligne observée sur la CI de 4ecab118), aucun code n'est inventé.
+  assert.equal(sqlstate(new Error('psql:<stdin>:13: ERROR:  Modification de preuve ou de validation interdite')), undefined);
+});
 
 /** Soignant aux pièces vérifiées qui demande la suppression de son compte, en session utilisateur. */
 export const CONSTAT = `
@@ -58,7 +86,7 @@ test('suppression du compte soignant : pièces vérifiées, anonymisation abouti
       refus = e;
     }
     await executer('ROLLBACK;').catch(() => {});
-    assert.equal(refus?.code, '42501', `constat non reproduit (${refus?.message ?? 'suppression acceptée'})`);
+    assert.equal(sqlstate(refus), '42501', `constat non reproduit (${refus?.message ?? 'suppression acceptée'})`);
     assert.match(String(refus?.message), /Modification de preuve ou de validation interdite/);
     const [vide] = await executer(`SELECT (SELECT count(*)::int FROM auth.users WHERE id = '${SOIGNANT}') AS comptes;`);
     assert.deepEqual(vide, { comptes: 0 }, 'aucun effet de la suppression refusée');
