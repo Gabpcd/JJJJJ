@@ -153,14 +153,22 @@ l'accès dès que les secrets sont déplacés. Tant que ce réglage n'est pas fa
 - Suivre l'état par `mobile-store-status.yml` (lecture seule) ou dans App Store Connect.
 - Relancer le workflow avec le même build ne soumet pas deux fois : si ce build est déjà soumis (en
   attente de revue ou en revue) ou déjà en vente, publication progressive comprise, la lane s'arrête sur
-  « déjà soumis » et le job finit vert. Dès que la 2.0.0 n'est plus modifiable (en revue `IN_REVIEW`, approuvée,
-  en attente de publication, en cours de distribution ou en vente), le pré-vol des notes constate qu'elle est déjà
-  soumise et laisse conclure la garde de la revue : il ne lit ni la fiche de 1.0.7 ni celle de la 2.0.0, et ne
-  connecte pas le compte de démonstration, que le relecteur peut être en train d'utiliser. Une 2.0.0 dans un
-  autre état non modifiable (par exemple `READY_FOR_REVIEW`) arrête le pré-vol, nommément.
-  **Exception** : en publication `manuelle`, une fois la version approuvée (« Pending Developer
-  Release »), la lane lève une erreur (`ios_review_submission.rb`) et le job finit **rouge** : rien n'a
-  été changé chez Apple ; la mise en vente se fait par le bouton « Release this version ».
+  « déjà soumis » et le job finit vert. Dès que la 2.0.0 n'est plus modifiable, c'est-à-dire dans l'un des huit
+  états qui suivent une soumission (`ReviewNotes::SOUMISES`), le pré-vol des notes constate qu'elle est déjà
+  soumise. Il ne lit alors ni la fiche de 1.0.7 ni celle de la 2.0.0, et ne connecte pas le compte de
+  démonstration, que le relecteur peut être en train d'utiliser. En mode `verifier`, le run finit donc vert. En
+  mode `soumettre`, la garde de la revue décide, toujours sans rien écrire chez Apple :
+
+  | État de la 2.0.0 (même build) | Mode `soumettre` |
+  |---|---|
+  | `IN_REVIEW`, `PENDING_APPLE_RELEASE`, `WAITING_FOR_EXPORT_COMPLIANCE`, `PROCESSING_FOR_DISTRIBUTION`, `READY_FOR_DISTRIBUTION` (publication progressive comprise) | vert : « déjà soumis » |
+  | `PENDING_DEVELOPER_RELEASE` (publication `manuelle`, version approuvée) | **rouge** : la mise en vente se fait par le bouton « Release this version » |
+  | `ACCEPTED` (état hérité d'une version approuvée) | **rouge** : « automatic replacement stopped and review preserved » |
+  | `REPLACED_WITH_NEW_VERSION` (2.0.0 remplacée par une version plus récente) | **rouge** : « already distributed or superseded » ; soumettre une version plus récente |
+
+  `WAITING_FOR_REVIEW` n'est pas dans cette liste : la version reste modifiable, et le pré-vol la contrôle en
+  entier (fiche, connexion, notes) avant que la garde conclue « déjà soumis ». Une 2.0.0 dans un autre état non
+  modifiable (par exemple `READY_FOR_REVIEW`) arrête le pré-vol, nommément.
 - Pour remplacer un build en attente de revue par un build plus récent, relancer avec le nouveau numéro.
 - Publication progressive : 1 %, 2 %, 5 %, 10 %, 20 %, 50 % puis 100 % sur sept jours ; pause possible
   jusqu'à 30 jours ; chacun peut toujours mettre à jour à la main depuis l'App Store.
@@ -212,9 +220,10 @@ préserve la session d'un relecteur Apple que si le réglage Supabase Auth « se
 (*single session per user*, tableau de bord → Authentication → Sessions) est **désactivé** : s'il est actif, c'est
 la connexion du pré-vol elle-même qui ferme les autres sessions du compte. Le dépôt ne fixe pas ce réglage
 (`supabase/config.toml` n'a pas de section `[auth]`) ; il se constate dans le tableau de bord, et doit rester
-désactivé. Le pré-vol ne se connecte pas quand la 2.0.0 est déjà soumise ou en revue (ci-dessus) : le risque se
-limite aux runs faits avant la soumission ou pendant l'attente de revue (`WAITING_FOR_REVIEW`), quand aucun
-relecteur n'est encore connecté.
+désactivé. Le pré-vol ne se connecte pas quand la 2.0.0 est en revue, approuvée, en attente de publication ou en
+vente (`ReviewNotes::SOUMISES`, ci-dessus). Il se connecte en revanche avant la soumission et pendant l'attente de
+revue (`WAITING_FOR_REVIEW`, état modifiable, contrôlé en entier), quand aucun relecteur n'est encore connecté :
+le risque se limite à ces runs.
 
 **Reprise de la fiche de vérification.** Si la 2.0.0 (retrouvée ou tout juste créée) n'a pas de fiche, ou n'a pas
 d'identifiants de démonstration (nom ou mot de passe vide), la lane la complète depuis la version distribuée
@@ -269,35 +278,56 @@ séparation : arrêt (composition ambiguë).
 
 **Marge sous la limite d'Apple.** Apple limite le champ à 4 000 caractères. La lane s'arrête au-delà de 3 900,
 comptés en unités UTF-16 (un émoji en compte deux), fins de ligne `\r\n` ramenées à `\n`, dès le pré-vol. Chaque
-bloc fait 2 151 unités, 2 208 avec le séparateur : il reste 1 692 unités pour les notes de 1.0.7.
+bloc fait 2 090 unités, 2 147 avec le séparateur : il reste 1 753 unités pour les notes de 1.0.7.
 
 **Avertissement sans échec, dès le pré-vol.** Si les notes de la version précédente ne contiennent aucune adresse
-e-mail autre que celle du compte de démonstration (comparaison en mémoire, rien n'est affiché), elles ne donnent
+e-mail autre que celle du compte de démonstration (comparaison en mémoire, rien n'est affiché ; une adresse collée à
+de la ponctuation, entre accents graves, guillemets ou après `Login:`, est reconnue comme telle), elles ne donnent
 pas les identifiants de l'autre compte de revue, que le bloc y annonce. Le journal l'écrit au pré-vol, donc aussi
 en mode `verifier`, puis de nouveau à l'écriture ; la soumission continue. Qu'une adresse soit accompagnée de son
 mot de passe ne se contrôle pas dans un texte libre : c'est une vérification à faire à la main (`LOT6_PLAN.md`
 §3, action 3).
 
-**Candidature sur le compte de démonstration.** Le soignant de revue n'a pas toutes ses pièces validées : au
-26/11/2026, l'assurance RCP est vérifiée ; la carte d'identité, le RIB et l'attestation URSSAF sont en revue
-manuelle ; le diplôme et le RPPS manquent. Aucun faux document n'est fabriqué. Le bloc le dit au relecteur
-(« Applying needs validated documents (identity, diploma, RPPS…); some are pending or missing on this demo account
-(Profil > Mon espace > "Mes documents"): a freelance application is refused with a message saying so, a salaried
-one is sent but the facility cannot accept it until they are validated. »), en collant au comportement réel :
+**Candidature sur le compte de démonstration.** Profil du soignant de revue en production, relevé en lecture seule
+le 26-27/11/2026 (booléens et statuts seulement) :
 
-- l'app envoie la candidature (`fn_confirmer_action_planning_v1`, puis `fn_postuler_mission`) et affiche la
-  réponse du serveur telle quelle (`CandidatureModel`) ; elle ne liste pas les pièces manquantes, dont l'état se
-  lit dans Profil › « Mon espace » › « Mes documents » ;
-- en libéral, le serveur refuse : « Les documents requis pour candidater en libéral sont manquants ou expirés. » ;
-- en salarié, la candidature est envoyée, avec une notification « Complétez vos documents salariés », mais
-  l'établissement ne peut pas l'accepter tant que les documents ne sont pas validés
-  (`fn_finaliser_attribution_mission`).
+- IDE, exercice `LIBERAL` ; SIRET au bon format mais **non vérifié** (`fn_soignant_liberal_actif_verifie` faux) ;
+- **RPPS vérifié** : le serveur dispense alors du diplôme et du RPPS (`fn_documents_ok_pour_mission`, hors IADE et
+  IBODE), et l'app les masque dans « Mes documents » (`ExigencesDocuments`) ;
+- assurance RCP vérifiée ; carte d'identité, RIB et attestation URSSAF en revue manuelle.
 
-Le contrat est résolu par le serveur (`fn_resoudre_contrat_mission`) : les trois missions de revue sont
-proposées à tous les contrats (`TOUS`), et sans profil libéral vérifié (SIRET), c'est le salarié qui s'applique.
-Les trois missions (IDE, à l'adresse de l'établissement de revue, à Paris, début entre J+7 et J+21) sont créées
-et entretenues par la PR #1198 : la phrase « three demo assignments in Paris » n'est vraie qu'une fois cette PR
-mergée et son cron passé.
+Aucun faux document n'est fabriqué. Ce qui bloque vraiment l'acceptation d'une candidature salariée : **la carte
+d'identité et le RIB**, en attente de vérification. Le bloc ne cite que cela :
+
+> Applying needs validated documents (identity, bank details…); some are still under review on this demo account
+> (Profil > Mon espace > "Mes documents"): an application is sent, but the facility cannot accept it until they
+> are validated.
+
+Le seul chemin atteignable aujourd'hui par ce compte, vérifié dans `ios-native/` et dans les fonctions du serveur :
+
+- l'app affiche « Postuler », envoie la demande sans choix de contrat (`fn_confirmer_action_planning_v1`, puis
+  `fn_postuler_mission_rate_limited`, puis `fn_postuler_mission`) ;
+- sur une mission `TOUS`, un profil libéral non vérifié se résout en **salarié** (`fn_resoudre_contrat_mission`,
+  branche « sinon ») : la candidature est enregistrée en attente, avec la notification « Complétez vos documents
+  salariés » ;
+- l'app affiche « ✅ Candidature envoyée — En attente de réponse », puis « Prochaine étape : validez vos documents
+  pour que l'établissement puisse vous accepter. » et le bouton « 📄 Valider mes documents (2 min) » vers
+  « Mes documents » (`CandidatureSection`) ;
+- côté établissement, l'app renvoie l'acceptation d'une mission `TOUS` au site (`CandidaturesEtabRules`,
+  `contratNonSalarie`), où `fn_finaliser_attribution_mission` refuse tant que les documents salariés ne sont pas
+  validés.
+
+**La branche libérale n'est pas atteignable par ce compte** : elle suppose un SIRET vérifié, et aucun choix de
+contrat n'est proposé (`choixRequis` ne vient qu'à un profil `MIXTE` libéral vérifié). Si un choix libéral était
+envoyé aujourd'hui, le refus viendrait de `fn_resoudre_contrat_mission` (« Votre profil libéral doit être actif,
+avec SIRET et identité vérifiés. ») ; une fois le SIRET vérifié, de `fn_postuler_mission` (« Les documents
+requis pour candidater en libéral sont manquants ou expirés. », la carte d'identité étant en revue). Le bloc n'en
+parle donc pas.
+
+Les trois missions (IDE, `TOUS`, sur candidature, à l'adresse de l'établissement de revue, à Paris, début entre
+J+7 et J+21) sont créées et entretenues par la PR #1198 : la phrase « three demo assignments in Paris » n'est
+vraie qu'une fois cette PR mergée et son cron passé. **Ordre à tenir** : merger #1198 et attendre son cron
+avant le run `soumettre`.
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
 lane au pré-vol. Plusieurs versions distribuées, ou une version distribuée plus récente que 2.0.0, l'arrêtent
