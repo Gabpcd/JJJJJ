@@ -15,7 +15,7 @@ import {
   lireCablageEtablissement, lireModes, lireOuvertureEtablissement, lireRolesEtablissement, loadSourceTree, phraseConfirmation, portsEnAttente, sansCommentaires,
 } from '../../scripts/mobile/ios-native-app-store.mjs';
 import { APP, GuardFailure, ascClient } from '../../scripts/mobile/ios-native-testflight.mjs';
-import { lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
+import { COQUILLE_IOS_FIGEE, lireConfigLivraison } from '../../scripts/mobile/release-config.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const lire = (chemin) => readFileSync(join(root, chemin), 'utf8');
@@ -842,6 +842,16 @@ test('la lane n\'écrit que les notes pour la revue, après le verrou du compte 
   assert.ok(lane.includes('notes = review_notes(app, marketing)'), 'notes construites par le seul assembleur');
   assert.match(fastfile, /def review_notes\(app, marketing\)\n[\s\S]*blocs: IosReviewSubmission::ReviewNotes::FICHIERS\.transform_values\(&lire\)/);
   assert.match(fastfile, /IosReviewSubmission::CompteDemo\.lire_config!\(lire\.call\(IosReviewSubmission::CompteDemo::CONFIG\)\)/);
+  // Source de la fiche reprise : la coquille figée de release-config.mjs, source unique côté Node (run `verifier` du
+  // 27/11/2026 : sept versions READY_FOR_DISTRIBUTION).
+  assert.match(fastfile, /coquille: IosReviewSubmission::ReviewNotes\.lire_coquille_figee!\(lire\.call\(IosReviewSubmission::ReviewNotes::RELEASE_CONFIG\)\)/);
+  assert.match(module, /RELEASE_CONFIG = 'scripts\/mobile\/release-config\.mjs'/);
+  assert.ok(module.includes(`SEPARATEUR = '--- Notes from version ${COQUILLE_IOS_FIGEE.marketingVersion} (previous hybrid app) ---'`),
+    'le séparateur nomme la coquille figée de release-config.mjs');
+  assert.match(lire('scripts/mobile/release-config.mjs'),
+    /^export const COQUILLE_IOS_FIGEE = Object\.freeze\(\{ marketingVersion: '\d+\.\d+\.\d+', buildNumber: \d+ \}\);$/m,
+    'la forme stricte que lit ReviewNotes.lire_coquille_figee!');
+  assert.doesNotMatch(module, /distribuees\.length > 1/, 'aucune unicité supposée des versions distribuées');
   assert.match(module, /soignant: 'config\/ios-review-notes-2\.0-soignant\.txt',\n\s+etablissement: 'config\/ios-review-notes-2\.0-etablissement\.txt'/);
   for (const bloc of ['config/ios-review-notes-2.0-soignant.txt', 'config/ios-review-notes-2.0-etablissement.txt']) assert.ok(existsSync(join(root, bloc)), bloc);
   assert.ok(!existsSync(join(root, 'config/ios-review-notes-2.0.txt')), 'plus de bloc unique qui affirmerait un rôle non vérifié');
