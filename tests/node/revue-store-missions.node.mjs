@@ -69,7 +69,8 @@ test('migrations : horodatage, transaction possédée par l’appelant, délimit
     assert.match(f, /^\d{14}_[a-z0-9_]+\.sql$/);
     assert.ok(f.slice(0, 14) > DERNIERE_VERSION_DISTANTE, `${f} doit suivre la dernière version distante`);
   }
-  assert.deepEqual(versions.slice(-2), [M1, M2], 'les deux migrations ferment la liste, dans cet ordre');
+  // Consécutives et dans cet ordre ; des migrations ultérieures peuvent suivre.
+  assert.equal(versions[versions.indexOf(M1) + 1], M2, 'les deux migrations se suivent, dans cet ordre');
   for (const [nom, sql] of [[M1, m1], [M2, m2]]) {
     assert.doesNotMatch(sql, /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;/im, `${nom} : aucun BEGIN/COMMIT interne`);
     assert.doesNotMatch(sql, /\$\$/, `${nom} : délimiteurs de dollar nommés seulement`);
