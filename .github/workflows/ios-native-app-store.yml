@@ -51,7 +51,7 @@ defaults:
 
 jobs:
   gardes:
-    name: Gardes avant soumission (lecture seule)
+    name: Gardes avant soumission (sans écriture chez Apple ; compte de démonstration connecté puis déconnecté)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:

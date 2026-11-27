@@ -924,6 +924,17 @@ test('les journaux de Spaceship ne sortent jamais du runner : ni artefact, ni mo
   for (const fragment of ['spaceship*.log', '--verbose', 'preflight_review_native', 'pièces jointes']) assert.ok(doc.includes(fragment), fragment);
 });
 
+// Revue n° 2 de #1197 (m1 à m4) : relance pendant la revue, avertissement en mode `verifier`, session unique, libellé.
+test('les gardes se disent sans écriture chez Apple, et la doc nomme relance en revue, avertissement et session unique', () => {
+  assert.doesNotMatch(jobs.gardes.cles.name, /lecture seule/, 'le pré-vol ouvre puis révoque une session en production');
+  assert.match(jobs.gardes.cles.name, /sans écriture chez Apple/);
+  const doc = lire('docs/mobile-swift/APP_STORE.md');
+  for (const fragment of ['déjà soumise', 'IN_REVIEW', 'session unique par utilisateur', 'autre que celle du compte de démonstration',
+    'Applying needs validated documents']) {
+    assert.ok(doc.includes(fragment), fragment);
+  }
+});
+
 test('la coquille Capacitor iOS n\'a plus de lane de soumission', () => {
   const coquille = fastfile.slice(fastfile.indexOf('lane :submit do'), fastfile.indexOf('lane :submit_native'));
   assert.match(coquille, /UI\.user_error!/);

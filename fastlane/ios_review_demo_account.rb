@@ -6,7 +6,9 @@
 # exactement comme l'app native (`SupabaseAuthGateway.signIn` : `POST /auth/v1/token?grant_type=password`, clé
 # publishable en `apikey`, aucun jeton captcha), relit le rôle par la même RPC que l'app (`fn_get_my_role`,
 # `SupabaseRoleGateway`), puis révoque aussitôt la session (`POST /auth/v1/logout?scope=local` : cette session
-# seulement, jamais celles d'un relecteur en cours).
+# seulement). Hypothèse : le réglage Supabase Auth « session unique par utilisateur » est désactivé (il n'est pas fixé
+# par le dépôt) ; s'il était actif, la connexion elle-même fermerait la session d'un relecteur. Le pré-vol ne se
+# connecte jamais quand la version est déjà soumise ou en revue (ReviewNotes::SOUMISES), voir APP_STORE.md.
 #
 # URL et clé publishable : valeurs publiques de `ios-native/Config/Production.xcconfig`, lues dans le dépôt ; aucun
 # secret nouveau. Rien n'est journalisé hors « compte de démo : … » : ni adresse, ni mot de passe, ni jeton, ni

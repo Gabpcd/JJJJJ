@@ -67,11 +67,13 @@ module IosReviewNotesTest
     attr_accessor :edit, :details, :distribuees, :on_patch, :on_edit, :on_copy, :detail_after_create, :illisibles
     attr_reader :events, :patches, :created, :copies, :edit_reads
     def initialize(edit: IosReviewNotesTest.version, detail: IosReviewNotesTest.detail, events: [],
-        source: IosReviewNotesTest.version('1.0.7', 'READY_FOR_DISTRIBUTION', 'v107'), source_detail: IosReviewNotesTest.source_detail)
+        source: IosReviewNotesTest.version('1.0.7', 'READY_FOR_DISTRIBUTION', 'v107'), source_detail: IosReviewNotesTest.source_detail,
+        autres: [])
       @edit, @events, @patches, @created, @copies, @edit_reads, @illisibles = edit, events, [], [], [], 0, []
       @details = {}
       @details[edit.id] = detail if edit
-      @distribuees = source ? [source] : []
+      # Versions iOS hors des états modifiables (versions_ios rend aussi la modifiable, comme Apple).
+      @distribuees = (source ? [source] : []) + autres
       @details[source.id] = source_detail if source
     end
     def cible = @details[@edit&.id]
@@ -87,9 +89,9 @@ module IosReviewNotesTest
       @edit = IosReviewNotesTest.version(marketing)
       @details['v200'] = @detail_after_create
     end
-    def distributed_versions
-      @events << :read_distributed
-      @distribuees.map(&:dup)
+    def versions_ios
+      @events << :read_versions
+      (@distribuees + [@edit].compact).map(&:dup)
     end
     def review_detail(version_id)
       @events << :read_detail
@@ -213,14 +215,14 @@ module IosReviewNotesTest
       'composition puts the block, a blank line and the English separator before untouched previous notes' => lambda {
         assert(SEP == '--- Notes from version 1.0.7 (previous hybrid app) ---')
         result = N.composer(bloc: BLOC, existantes: ANCIENNES)
-        assert(result[:statut] == :ajoute && result[:notes] == "#{BLOC}\n\n#{SEP}\n#{ANCIENNES}" && result[:anciennes_avec_email])
+        assert(result[:statut] == :ajoute && result[:notes] == "#{BLOC}\n\n#{SEP}\n#{ANCIENNES}" && result[:anciennes] == ANCIENNES)
       },
       'composition is idempotent, including after Apple normalises line endings and trailing spaces' => lambda {
         premiere = N.composer(bloc: BLOC, existantes: ANCIENNES)[:notes]
         again = N.composer(bloc: BLOC, existantes: premiere)
         assert(again[:statut] == :inchange && again[:notes] == premiere)
         crlf = N.composer(bloc: "#{BLOC}\n", existantes: "  #{premiere.gsub("\n", "\r\n")}  \r\n")
-        assert(crlf[:statut] == :inchange && crlf[:anciennes_avec_email])
+        assert(crlf[:statut] == :inchange && crlf[:anciennes] == ANCIENNES)
       },
       'a block already at the head without separator is never doubled' => lambda {
         result = N.composer(bloc: BLOC, existantes: "#{BLOC}\n#{ANCIENNES}")
@@ -241,7 +243,7 @@ module IosReviewNotesTest
       'empty previous notes give the block and the separator, without an address' => lambda {
         [nil, '', "  \n"].each do |vide|
           result = N.composer(bloc: BLOC, existantes: vide)
-          assert(result[:statut] == :ajoute && result[:notes] == "#{BLOC}\n\n#{SEP}" && !result[:anciennes_avec_email])
+          assert(result[:statut] == :ajoute && result[:notes] == "#{BLOC}\n\n#{SEP}" && result[:anciennes] == '')
           assert(N.composer(bloc: BLOC, existantes: result[:notes])[:statut] == :inchange)
         end
       },
@@ -276,6 +278,12 @@ module IosReviewNotesTest
           assert(bloc.include?('Compte > Aide & légal > "Supprimer mon compte"'))
           assert(bloc.include?('facilities pay by SEPA direct debit collected by Jolene, which pays the professional by bank transfer, outside the app.'))
           assert(!bloc.include?('settled between'))
+          # Candidature (fn_postuler_mission, CandidatureModel) : refus en libéral, envoi sans acceptation possible en
+          # salarié ; écran des statuts : Profil › « Mon espace » › « Mes documents ».
+          assert(bloc.include?('Applying needs validated documents (identity, diploma, RPPS…); some are pending or missing on this demo account ' \
+            '(Profil > Mon espace > "Mes documents"): a freelance application is refused with a message saying so, a salaried one is sent ' \
+            'but the facility cannot accept it until they are validated.'))
+          assert(bloc.include?('Explorer (three demo assignments in Paris)'))
           assert(N.longueur(bloc) < 2500, "block too long: #{N.longueur(bloc)}")
         end
         assert(blocs[:soignant].include?('Healthcare professional account: the credentials in the "Sign-in required" fields.'))
@@ -397,7 +405,7 @@ module IosReviewNotesTest
         assert(notes.appliquer! == :ajoute)
         assert(gateway.patches == [['d200', "#{BLOC}\n\n#{SEP}\n#{ANCIENNES}"]] && gateway.copies.empty?)
         assert(gateway.cible.to_h.reject { |k, _| k == :notes } == avant.reject { |k, _| k == :notes }, 'only notes change')
-        assert(!gateway.events.include?(:read_distributed))
+        assert(!gateway.events.include?(:read_versions))
         rerun = notes(gateway, journal: journal)
         assert(rerun.verifier! == :pret && rerun.appliquer! == :inchange && gateway.patches.length == 1)
         journal_global.concat(journal)
@@ -441,7 +449,7 @@ module IosReviewNotesTest
         gateway = FakeNotesGateway.new(detail: cible)
         compte = StubCompte.new(gateway.events)
         notes = notes(gateway, journal: journal, compte: compte)
-        assert(notes.verifier! == :pret && (gateway.events & ECRITURES).empty? && gateway.events.include?(:read_distributed))
+        assert(notes.verifier! == :pret && (gateway.events & ECRITURES).empty? && gateway.events.include?(:read_versions))
         assert(compte.appels == [[SRC_NOM, SRC_MDP]], 'the source credentials are the ones signed in')
         assert(notes.appliquer! == :ajoute)
         assert(gateway.copies.length == 1 && gateway.copies.first[0..1] == [:update, 'd200'])
@@ -505,7 +513,7 @@ module IosReviewNotesTest
         gateway.detail_after_create = detail(nom: SRC_NOM, mdp: SRC_MDP)
         notes = notes(gateway, journal: journal_global)
         assert(notes.verifier! == :a_creer && gateway.created.empty? && (events & ECRITURES).empty?)
-        assert(events == %i[edit_version read_distributed read_detail sign_in])
+        assert(events == %i[edit_version read_versions read_detail sign_in])
         assert(notes.appliquer! == :ajoute && gateway.created == ['2.0.0'] && gateway.copies.empty?)
         assert(events.drop(4) == %i[edit_version create_version edit_version read_detail patch_notes read_detail])
         gateway = FakeNotesGateway.new(edit: nil, detail: nil)
@@ -529,7 +537,7 @@ module IosReviewNotesTest
         events = []
         gateway = FakeNotesGateway.new(detail: detail(nom: ''), source_detail: source_detail(mdp: ''), events: events)
         rejects(/et dans la version distribuée 1\.0\.7 \(mot de passe vide\)/) { enchainer(notes(gateway), StubGuard.new(events), events) }
-        assert(events == %i[edit_version read_detail read_distributed read_detail] && gateway.copies.empty?)
+        assert(events == %i[edit_version read_detail read_versions read_detail] && gateway.copies.empty?)
         events = []
         gateway = FakeNotesGateway.new(edit: nil, detail: nil, source_detail: nil, events: events)
         rejects(/version distribuée 1\.0\.7 \(fiche absente\)/) { enchainer(notes(gateway), StubGuard.new(events), events) }
@@ -541,19 +549,39 @@ module IosReviewNotesTest
         rejects(/aucune version distribuée d'où le copier/) { enchainer(notes(gateway), StubGuard.new(events), events) }
         assert(!events.include?(:create_version) && !events.include?(:guard_prepare))
       },
-      'relaunch after release (phased included): the configured version is distributed, the review guard concludes green' => lambda {
+      'relaunch during review, after approval or after release: no 1.0.7 fiche, no sign-in, the review guard concludes' => lambda {
+        # Liste écrite ici, pas relue dans la constante : retirer un état de SOUMISES doit rougir ce test.
+        %w[IN_REVIEW PENDING_DEVELOPER_RELEASE PENDING_APPLE_RELEASE WAITING_FOR_EXPORT_COMPLIANCE PROCESSING_FOR_DISTRIBUTION
+           READY_FOR_DISTRIBUTION ACCEPTED REPLACED_WITH_NEW_VERSION].each do |etat|
+          events = []
+          journal = []
+          vente = etat == 'READY_FOR_DISTRIBUTION' || etat == 'REPLACED_WITH_NEW_VERSION'
+          gateway = FakeNotesGateway.new(edit: nil, detail: nil, events: events,
+            source: version('1.0.7', vente ? 'REPLACED_WITH_NEW_VERSION' : 'READY_FOR_DISTRIBUTION', 'v107'),
+            autres: [version('2.0.0', etat, 'v200')])
+          notes = notes(gateway, journal: journal)
+          assert(enchainer(notes, StubGuard.new(events, result: :already_submitted), events) == :already_submitted, etat)
+          assert(events == %i[edit_version read_versions guard_prepare], "#{etat} : no fiche read, no sign-in, nothing written")
+          assert(journal == ["Version 2.0.0 déjà soumise (#{etat}) : aucune fiche à vérifier, la garde de la revue conclut."])
+          rejects(/déjà soumise : rien à écrire/) { notes.appliquer! }
+          journal_global.concat(journal)
+        end
+      },
+      'a configured version neither editable nor submitted, or present twice, stops the pre-flight before any read of 1.0.7' => lambda {
         events = []
-        gateway = FakeNotesGateway.new(edit: nil, detail: nil, source: version('2.0.0', 'READY_FOR_DISTRIBUTION', 'v200'), events: events)
-        notes = notes(gateway, journal: journal_global)
-        assert(enchainer(notes, StubGuard.new(events, result: :already_submitted), events) == :already_submitted)
-        assert(events == %i[edit_version read_distributed guard_prepare], 'no fiche read, no sign-in, nothing written')
-        rejects(/déjà distribuée : rien à écrire/) { notes.appliquer! }
+        gateway = FakeNotesGateway.new(edit: nil, detail: nil, events: events, autres: [version('2.0.0', 'READY_FOR_REVIEW', 'v200')])
+        rejects(/est READY_FOR_REVIEW dans App Store Connect, ni modifiable ni soumise/) { notes(gateway).verifier! }
+        assert(events == %i[edit_version read_versions])
+        gateway = FakeNotesGateway.new(edit: nil, detail: nil, autres: [version('2.0.0', 'IN_REVIEW', 'a'), version('2.0', 'IN_REVIEW', 'b')])
+        rejects(/2 versions iOS 2\.0\.0/) { notes(gateway).verifier! }
+        assert(N.etat_hors_edition([version('1.0.7', 'READY_FOR_DISTRIBUTION', 'v107')], '2.0.0').nil?)
+        assert(N.etat_hors_edition([version('2.0', 'IN_REVIEW', 'x')], '2.0.0') == 'IN_REVIEW')
       },
       'an unreadable target fiche is never taken for an absent one: nothing is copied' => lambda {
         gateway = FakeNotesGateway.new
         gateway.illisibles << 'v200'
         rejects(/illisible/) { notes(gateway).verifier! }
-        assert(gateway.copies.empty? && !gateway.events.include?(:read_distributed) && !gateway.events.include?(:sign_in))
+        assert(gateway.copies.empty? && !gateway.events.include?(:read_versions) && !gateway.events.include?(:sign_in))
       },
       'the copied fiche is re-read: a mismatch, a vanished fiche or a non-boolean flag stops before the notes' => lambda {
         gateway = FakeNotesGateway.new(detail: detail(nom: ''))
@@ -618,13 +646,18 @@ module IosReviewNotesTest
         notes.verifier!
         rejects(/demoAccountRequired faux/) { notes.appliquer! }
       },
-      'previous notes without an address only log a warning' => lambda {
-        journal = []
-        gateway = FakeNotesGateway.new(detail: detail(notes: 'Version 1.0.7, three roles.'))
-        notes = notes(gateway, journal: journal)
-        notes.verifier!
-        assert(notes.appliquer! == :ajoute && gateway.patches.length == 1)
-        assert(journal.count { |m| m.start_with?('Avertissement : les notes de la version précédente ne contiennent aucune adresse e-mail') } == 1)
+      'previous notes without another account address: a warning at pre-flight (verifier mode) and at write, never a failure' => lambda {
+        avertissement = ->(journal) { journal.count { |m| m == N::AVERTISSEMENT_NOTES } }
+        ['Version 1.0.7, three roles.', "Sign in with #{DEMO_NOM}.", "Sign in with #{DEMO_NOM.upcase}."].each do |anciennes|
+          journal = []
+          gateway = FakeNotesGateway.new(detail: detail(notes: anciennes))
+          notes = notes(gateway, journal: journal)
+          notes.verifier!
+          assert(avertissement.call(journal) == 1, 'shown by the pre-flight alone, hence in verifier mode')
+          assert(notes.appliquer! == :ajoute && gateway.patches.length == 1 && avertissement.call(journal) == 2)
+          journal_global.concat(journal)
+        end
+        assert(N.autre_adresse?(ANCIENNES, DEMO_NOM) && !N.autre_adresse?("#{DEMO_NOM} only", " #{DEMO_NOM.upcase} "))
         journal = []
         gateway = FakeNotesGateway.new
         notes = notes(gateway, journal: journal)
@@ -645,8 +678,8 @@ module IosReviewNotesTest
                                   { app_store_review_detail_id: 'd200', attributes: { 'demoAccountName' => SRC_NOM } }])
         assert(client.posts == [{ app_id: 'app6774672845', attributes: { versionString: '2.0.0', platform: 'IOS' } }])
         assert(client.detail_posts == [{ app_store_version_id: 'v200', attributes: { 'notes' => 'x' } }])
-        assert(gateway.distributed_versions.map(&:id) == ['v107'])
-        assert(app.filters == [{ appVersionState: 'READY_FOR_DISTRIBUTION', platform: 'IOS' }])
+        assert(gateway.versions_ios.map(&:id) == ['v107'])
+        assert(app.filters == [{ platform: 'IOS' }], 'every iOS version, every state')
         assert(gateway.review_detail('v200').demo_account_required == true)
         client.detail_body = { 'data' => nil, 'links' => {} }
         assert(gateway.review_detail('v200').nil?, 'data null means no fiche')
