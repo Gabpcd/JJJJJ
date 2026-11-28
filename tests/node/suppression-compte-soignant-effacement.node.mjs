@@ -141,6 +141,13 @@ test('effacement : contenu lu, noms de fichier et attestations effacés, post-co
   assert.doesNotMatch(effacer, /donnees_originales ->> 'soignant_id'/);
   assert.match(effacer, /f\.type_entite = 'TELEVERSEMENT_DOCUMENT' AND f\.id_entite = ANY/);
   assert.match(effacer, /WHERE r\.revue_id = ANY \(COALESCE\(v_revues, '\{\}'::uuid\[\]\)\);/);
+  // Revues d'identité : cohérence et SIRET (type SOIGNANT, identité déclarée), toutes celles du compte.
+  assert.match(effacer, /OR \(f\.id_entite = p_soignant_id AND f\.type_entite = 'SOIGNANT'\);/);
+  assert.doesNotMatch(effacer, /ALERTE_FRAUDE'\)/, 'alertes de fraude jamais sélectionnées');
+  // Fichiers à classer : consignés avant la réécriture des références, liste privée.
+  assert.ok(effacer.indexOf('INSERT INTO private.rgpd_fichiers_a_classer') < effacer.indexOf('UPDATE public.documents_soignants d'));
+  assert.match(sql2, /REVOKE ALL ON TABLE private\.rgpd_fichiers_a_classer FROM PUBLIC, anon, authenticated, service_role;/);
+  assert.match(sql2, /CONSTRAINT rgpd_fichiers_a_classer_unique UNIQUE NULLS NOT DISTINCT \(bucket, chemin\)/);
   assert.match(miseAJour, /s3_cle = p_soignant_id::text \|\| '\/documents\/efface\/' \|\| d\.id::text/);
   assert.match(effacer, /DELETE FROM public\.heures_externes_soignants h WHERE h\.soignant_id = p_soignant_id;/);
   assert.match(effacer, /UPDATE public\.file_revue_manuelle f/);

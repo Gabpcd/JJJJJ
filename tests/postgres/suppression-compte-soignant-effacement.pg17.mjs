@@ -141,7 +141,7 @@ test('suppression du compte soignant : fichiers et noms lus effacés, audit d’
       (SELECT count(*)::int FROM public.soignants WHERE id::text LIKE 'a5f1d002%') AS soignants,
       (SELECT count(*)::int FROM public.documents_soignants WHERE soignant_id::text LIKE 'a5f1d002%') AS pieces,
       (SELECT count(*)::int FROM storage.objects WHERE name LIKE 'a5f1d002%' OR name LIKE 'invoices/a5f1d002%') AS fichiers,
-      (SELECT count(*)::int FROM private.rgpd_purges_stockage) AS file_effacement,
+      (SELECT count(*)::int FROM private.rgpd_purges_stockage) + (SELECT count(*)::int FROM private.rgpd_fichiers_a_classer) AS file_effacement,
       (SELECT count(*)::int FROM public.alertes_systeme WHERE source = 'rgpd-purge-stockage') AS alertes,
       (SELECT count(*)::int FROM net.http_request_queue) AS appels_reseau;`);
     assert.deepEqual(residus, { comptes: 0, soignants: 0, pieces: 0, fichiers: 0, file_effacement: 0, alertes: 0, appels_reseau: 0 });

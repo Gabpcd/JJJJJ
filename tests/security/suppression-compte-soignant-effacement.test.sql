@@ -52,6 +52,7 @@ DECLARE
   v_d4 constant uuid := 'a5f1d002-0000-4000-8000-0000000000d4';  -- pièce du témoin
   v_r1 constant uuid := 'a5f1d002-0000-4000-8000-0000000000e1';  -- revue de la pièce d1
   v_r2 constant uuid := 'a5f1d002-0000-4000-8000-0000000000e2';  -- alerte de fraude de s1, conservée
+  v_r3 constant uuid := 'a5f1d002-0000-4000-8000-0000000000e3';  -- revue d'identité SIRET de s1 (identité déclarée)
   v_d5 constant uuid := 'a5f1d002-0000-4000-8000-0000000000d5';  -- pièce de s1 qui pointe hors de son préfixe
   v_res jsonb;
   v_msg text;
@@ -77,7 +78,7 @@ BEGIN
   IF (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_supprimer_mon_compte()'::regprocedure)
        IS DISTINCT FROM 'bd8df04463ed3b683de237d78b6ecea3'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'private.fn_rgpd_effacer_pieces_soignant(uuid,text)'::regprocedure)
-       IS DISTINCT FROM 'e0edecd5f37b1b0bae56a16ac59fbf9c'
+       IS DISTINCT FROM '3b1490c3d8ed2ccbba702da0afb77cc8'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_rgpd_purges_stockage_confirmer(uuid[],text)'::regprocedure)
        IS DISTINCT FROM '8ede4e993193615f7e4502bcd17cc76d'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_rgpd_purges_stockage_reserver(integer)'::regprocedure)
@@ -145,6 +146,17 @@ BEGIN
     jeton_cas, source_snapshot)
   VALUES (v_r1, 'APPROUVER', 'Identité NOMIAMARQUEUR confirmée par l''équipe.', v_s2, 'VERIFY_DOCUMENT',
           'TELEVERSEMENT_DOCUMENT', v_d1, repeat('a', 64), jsonb_build_object('nom_extrait_ia', 'NOMIAMARQUEUR'));
+  -- Revue d'identité SIRET (fn_ouvrir_revue_siret_liberal_soignant) : identité déclarée en données d'origine,
+  -- chemin de la pièce d'identité dans l'instantané de la décision.
+  INSERT INTO public.file_revue_manuelle (id, type_entite, id_entite, service_en_echec, motif_echec, donnees_originales, statut, priorite)
+  VALUES (v_r3, 'SOIGNANT', v_s1, 'VERIFY_SIRET_IDENTITE_NON_CONCLUANTE', 'Identité SIRET à confirmer.',
+          jsonb_build_object('soignant_id', v_s1, 'nom_declare', 'NOMIAMARQUEUR', 'prenom_declare', 'PRENOMIAMARQUEUR',
+            'date_naissance_declaree', '1990-01-15'), 'EN_ATTENTE', 3);
+  INSERT INTO private.revue_manuelle_decisions (revue_id, decision, motif, acteur_id, service, type_entite, id_entite,
+    jeton_cas, source_snapshot)
+  VALUES (v_r3, 'REJETER', 'Identité SIRET non confirmée pour NOMIAMARQUEUR.', v_s2, 'VERIFY_SIRET_IDENTITE_NON_CONCLUANTE',
+          'SOIGNANT', v_s1, repeat('b', 64),
+          jsonb_build_object('preuve_identite_s3_cle', v_s1 || '/documents/CARTE_IDENTITE/1700000000000-NOMIAMARQUEUR.pdf'));
   -- Alerte de fraude au pointage du même soignant : preuve conservée (art. 17.3 e), jamais anonymisée.
   INSERT INTO public.file_revue_manuelle (id, type_entite, id_entite, service_en_echec, motif_echec, donnees_originales, statut, priorite)
   VALUES (v_r2, 'ALERTE_FRAUDE', v_s1, 'POINTAGE', 'Alerte de pointage à revoir.',
@@ -226,6 +238,11 @@ BEGIN
   IF (SELECT statut || '|' || motif_echec || '|' || (donnees_originales->>'code') FROM public.file_revue_manuelle WHERE id = v_r2)
        IS DISTINCT FROM 'EN_ATTENTE|Alerte de pointage à revoir.|TELEPORTATION'
   THEN RAISE EXCEPTION 'EFFACEMENT_PIECES A4 : alerte de fraude effacée ou close'; END IF;
+  IF (SELECT statut || '|' || motif_echec || '|' || donnees_originales::text FROM public.file_revue_manuelle WHERE id = v_r3)
+       NOT LIKE 'EXPIRE|Compte supprimé : contenu effacé (RGPD art. 17).|{"rgpd_efface_le":%'
+     OR (SELECT motif || source_snapshot::text FROM private.revue_manuelle_decisions WHERE revue_id = v_r3)
+       IS DISTINCT FROM 'Compte supprimé : motif effacé (RGPD art. 17).{}'
+  THEN RAISE EXCEPTION 'EFFACEMENT_PIECES A4 : revue d''identité SIRET non anonymisée'; END IF;
 
   -- File : exactement les fichiers à effacer de s1.
   SELECT array_agg(bucket || '/' || chemin ORDER BY bucket || '/' || chemin COLLATE "C") INTO v_trouves
@@ -243,6 +260,15 @@ BEGIN
                  AND (details::text LIKE '%MARQUEUR%' OR details::text LIKE '%inconnu%' OR details::text LIKE '%racine%'
                       OR details::text LIKE '%facture%'))
   THEN RAISE EXCEPTION 'EFFACEMENT_PIECES A6 : alerte des fichiers hors périmètre absente ou nominative'; END IF;
+  -- Fichiers à classer consignés (retrouvables après réécriture des références).
+  SELECT array_agg(coalesce(bucket, '?') || '/' || chemin || '|' || origine ORDER BY chemin COLLATE "C") INTO v_trouves
+    FROM private.rgpd_fichiers_a_classer WHERE soignant_id = v_s1;
+  IF v_trouves IS DISTINCT FROM ARRAY[
+       'jolene-documents/' || v_s1 || '/dossier-inconnu/piece.pdf|PREFIXE',
+       'jolene-documents/' || v_s1 || '/fichier-a-la-racine.pdf|PREFIXE',
+       'jolene-documents/invoices/a5f1d002-facture/facture.pdf|DOCUMENT']
+     OR has_table_privilege('service_role', 'private.rgpd_fichiers_a_classer', 'SELECT')
+  THEN RAISE EXCEPTION 'EFFACEMENT_PIECES A6 : liste des fichiers à classer inattendue (%)', v_trouves; END IF;
   -- Une alerte suivante cumule les soignants au lieu d'écraser le précédent.
   PERFORM private.fn_rgpd_signaler_purge_stockage('RGPD_PURGE_STOCKAGE_DOSSIER_INCONNU', 'Fixture',
     jsonb_build_object('soignants', jsonb_build_array(v_s3), 'objets_derniere_suppression', 1, 'motif', 'SUPPRESSION_COMPTE'));
@@ -335,6 +361,7 @@ BEGIN
      OR EXISTS (SELECT 1 FROM public.file_revue_manuelle f WHERE to_jsonb(f)::text LIKE '%IAMARQUEUR%')
      OR EXISTS (SELECT 1 FROM private.revue_manuelle_decisions r WHERE to_jsonb(r)::text LIKE '%IAMARQUEUR%')
      OR EXISTS (SELECT 1 FROM private.rgpd_purges_stockage q WHERE to_jsonb(q)::text LIKE '%IAMARQUEUR%')
+     OR EXISTS (SELECT 1 FROM private.rgpd_fichiers_a_classer a WHERE to_jsonb(a)::text LIKE '%IAMARQUEUR%')
      OR EXISTS (SELECT 1 FROM public.journaux_audit j WHERE j.id_ressource = v_s1 AND to_jsonb(j)::text LIKE '%IAMARQUEUR%')
      OR EXISTS (SELECT 1 FROM public.alertes_systeme a WHERE to_jsonb(a)::text LIKE '%IAMARQUEUR%')
   THEN RAISE EXCEPTION 'EFFACEMENT_PIECES B6 : nom lu par l''IA ou nom de fichier conservé'; END IF;
