@@ -423,7 +423,11 @@ export function LayoutAdmin({ children }: { children: ReactNode }) {
               </div>
             </>
           )}
-          <div className="admin-content mx-auto w-full min-w-0 max-w-[1440px] px-4 py-5 pb-24 md:px-5 md:py-6 md:pb-8 lg:px-8">
+          {/* Sous 600 px (réglages mobiles de sonner), un toast s'affiche à 5rem du bas, au-dessus de la barre de 4rem, et
+              mesure environ 4,5rem : la marge basse laisse remonter la dernière action d'une page au-dessus d'un toast, sinon
+              le toast d'erreur recouvre le bouton qu'on veut relancer (constaté sur la relance du mandat, iPhone 390 × 844).
+              Des toasts empilés ou un message très long peuvent encore toucher le bas de cette action. */}
+          <div className="admin-content mx-auto w-full min-w-0 max-w-[1440px] px-4 py-5 pb-[calc(11rem+env(safe-area-inset-bottom))] md:px-5 md:py-6 md:pb-8 lg:px-8">
             {children}
           </div>
         </main>

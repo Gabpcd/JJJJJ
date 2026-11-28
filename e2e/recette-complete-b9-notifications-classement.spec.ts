@@ -109,6 +109,20 @@ test('ADMIN — relance du mandat : texte posé par le serveur, échec de la not
   await preuveEtablissement(page, 'b9-mandat-avant', info);
   await relancer.click();
   await expect(page.getByText('Email envoyé, mais la notification in-app a échoué. Vérifiez avant de relancer.', { exact: true })).toBeVisible();
+  // Le toast d'erreur, une fois en place, ne recouvre pas le bouton à relancer (sur téléphone il recouvrait le bas de la
+  // carte, et la page ne défilait pas assez pour le dégager) : centre et bas du bouton atteignables par un toucher.
+  const toastEchec = page.locator('[data-sonner-toast][data-mounted="true"]', { hasText: 'la notification in-app a échoué' });
+  await expect(toastEchec).toBeVisible();
+  await toastEchec.evaluate(async el => {
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await Promise.allSettled(el.getAnimations({ subtree: true }).map(a => a.finished));
+  });
+  const pointsCouverts = await relancer.evaluate(b => {
+    const r = b.getBoundingClientRect();
+    return [[r.left + r.width / 2, r.top + r.height / 2], [r.left + 16, r.bottom - 4], [r.left + r.width / 2, r.bottom - 4], [r.right - 16, r.bottom - 4]]
+      .filter(([x, y]) => { const h = document.elementFromPoint(x, y); return !h || !b.contains(h); }).length;
+  });
+  expect(pointsCouverts).toBe(0);
   await preuveEtablissement(page, 'b9-mandat-notification-echec', info);
   panne = false;
   await relancer.click();
