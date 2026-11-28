@@ -1396,6 +1396,10 @@ jobs:
         # Les gestes restés sans effet mais NON rejoués (`consignerNonRejeu`, ligne « Nature : geste non rejoué » :
         # toucher reçu sans effet dans la fenêtre, ou témoin du rejeu d’onglet illisible) sont annoncés à part, eux
         # aussi sans temps non décompté ni budget (revue B8 de #1203, M1 et m5).
+        # Les témoins d’onglet ambigus (`consignerTemoinAmbigu`, ligne « Nature : témoin ambigu » : plus d’un onglet lu
+        # « Selected », attendu sur iPad dans l’espace établissement sous iPadOS 26.2) sont comptés à part et regroupés :
+        # une ligne et une annotation par test, avec leur nombre, pour ne pas masquer les autres annotations (GitHub n’en
+        # affiche que 10 par étape ; revue B8 de #1203, m2).
         # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
         # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
@@ -1440,17 +1444,19 @@ jobs:
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
                 const rejeu = champ("Nature") === "geste rejoué";
                 const nonRejoue = champ("Nature") === "geste non rejoué";
+                const ambigu = champ("Nature") === "témoin ambigu";
                 bloquees.push({
                   eclat,
                   rejeu,
                   nonRejoue,
+                  ambigu,
                   illisible: !champ("Attente") && !champ("Issue"),
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
                   attente: champ("Attente") ?? "?",
-                  nonDecompte: rejeu || nonRejoue ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
-                  budget: rejeu || nonRejoue ? "—" : champ("Budget de blocage") ?? "?",
+                  nonDecompte: rejeu || nonRejoue || ambigu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu || nonRejoue || ambigu ? "—" : champ("Budget de blocage") ?? "?",
                   issue: champ("Issue") ?? "?",
                 });
               }
@@ -1463,10 +1469,27 @@ jobs:
               const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
               const nonRejoues = bloquees.filter(b => b.nonRejoue && !b.illisible).length;
               const illisibles = bloquees.filter(b => b.illisible).length;
-              const attentes = bloquees.length - rejeux - nonRejoues - illisibles;
-              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
+              // Témoins ambigus : regroupés par éclat et test, une ligne et une annotation par groupe (la première trace).
+              const ambigus = bloquees.filter(b => b.ambigu && !b.illisible);
+              const groupes = new Map();
+              for (const b of ambigus) {
+                const cle = `${b.eclat}\u0000${b.test}`;
+                const groupe = groupes.get(cle) ?? { ...b, nombre: 0 };
+                groupe.nombre += 1;
+                groupes.set(cle, groupe);
+              }
+              const attentes = bloquees.length - rejeux - nonRejoues - illisibles - ambigus.length;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${ambigus.length ? `, ${ambigus.length} lecture(s) d’un témoin d’onglet ambigu dans ${groupes.size} test(s) (attendu sur iPad, espace établissement : un seul toucher, aucun rejeu)` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
                 "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
+              for (const g of groupes.values()) {
+                const appelant = g.fichier ? `${g.fichier}:${g.ligne}` : "?";
+                lignes.push(`| ${cell(g.eclat)} | ${cell(g.test)} | \`${cell(appelant)}\` (1re trace) | Témoin d’onglet ambigu ×${g.nombre} | — | — | ${cell(g.issue)} |`);
+                const message = `Témoin d’onglet ambigu (${format}, éclat ${g.eclat}) : ${g.nombre} lecture(s) dans ce test, un seul toucher sans rejeu à chaque fois ; première : « ${g.attente} », ${g.issue} — ${g.test}`;
+                const cible = g.fichier && g.ligne ? ` file=${prop(`ios-native/JoleneUITests/${g.fichier}`)},line=${prop(g.ligne)}` : "";
+                console.log(`::notice${cible}::${esc(message)}`);
+              }
               for (const b of bloquees) {
+                if (b.ambigu && !b.illisible) continue;
                 const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
                 lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
                 const message = b.illisible
@@ -2203,6 +2226,10 @@ jobs:
         # Les gestes restés sans effet mais NON rejoués (`consignerNonRejeu`, ligne « Nature : geste non rejoué » :
         # toucher reçu sans effet dans la fenêtre, ou témoin du rejeu d’onglet illisible) sont annoncés à part, eux
         # aussi sans temps non décompté ni budget (revue B8 de #1203, M1 et m5).
+        # Les témoins d’onglet ambigus (`consignerTemoinAmbigu`, ligne « Nature : témoin ambigu » : plus d’un onglet lu
+        # « Selected », attendu sur iPad dans l’espace établissement sous iPadOS 26.2) sont comptés à part et regroupés :
+        # une ligne et une annotation par test, avec leur nombre, pour ne pas masquer les autres annotations (GitHub n’en
+        # affiche que 10 par étape ; revue B8 de #1203, m2).
         # Intégration du lot 3, puis fusion des lots 2 et 3 : un manifest.json par éclat (`attachments/<éclat>/`, étape
         # « Résumé xcresult », DECISIONS_LOT2 décision 22) ; la boucle reprend la liste des éclats de cette étape
         # (variable ECLATS), un éclat sans manifest.json lisible étant signalé, jamais ignoré en silence.
@@ -2247,17 +2274,19 @@ jobs:
                 const parNom = nom.match(/-attente-bloquee-(.+)-(\d+)(?:_\d+_[0-9A-Fa-f-]+)?\.txt$/);
                 const rejeu = champ("Nature") === "geste rejoué";
                 const nonRejoue = champ("Nature") === "geste non rejoué";
+                const ambigu = champ("Nature") === "témoin ambigu";
                 bloquees.push({
                   eclat,
                   rejeu,
                   nonRejoue,
+                  ambigu,
                   illisible: !champ("Attente") && !champ("Issue"),
                   test: t.testIdentifier ?? "?",
                   fichier: parRapport?.[1] ?? (parNom ? `${parNom[1]}.swift` : null),
                   ligne: parRapport?.[2] ?? parNom?.[2] ?? null,
                   attente: champ("Attente") ?? "?",
-                  nonDecompte: rejeu || nonRejoue ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
-                  budget: rejeu || nonRejoue ? "—" : champ("Budget de blocage") ?? "?",
+                  nonDecompte: rejeu || nonRejoue || ambigu ? "—" : (champ("Temps non décompté") ?? "").match(/^\d+(?:[,.]\d+)? s/)?.[0] ?? "?",
+                  budget: rejeu || nonRejoue || ambigu ? "—" : champ("Budget de blocage") ?? "?",
                   issue: champ("Issue") ?? "?",
                 });
               }
@@ -2270,10 +2299,27 @@ jobs:
               const rejeux = bloquees.filter(b => b.rejeu && !b.illisible).length;
               const nonRejoues = bloquees.filter(b => b.nonRejoue && !b.illisible).length;
               const illisibles = bloquees.filter(b => b.illisible).length;
-              const attentes = bloquees.length - rejeux - nonRejoues - illisibles;
-              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
+              // Témoins ambigus : regroupés par éclat et test, une ligne et une annotation par groupe (la première trace).
+              const ambigus = bloquees.filter(b => b.ambigu && !b.illisible);
+              const groupes = new Map();
+              for (const b of ambigus) {
+                const cle = `${b.eclat}\u0000${b.test}`;
+                const groupe = groupes.get(cle) ?? { ...b, nombre: 0 };
+                groupe.nombre += 1;
+                groupes.set(cle, groupe);
+              }
+              const attentes = bloquees.length - rejeux - nonRejoues - illisibles - ambigus.length;
+              lignes.push("", `${attentes} attente(s) ont mesuré du temps non décompté (blocage de l’observateur ou du thread principal de l’app), ${rejeux} geste(s) ont été rejoués${nonRejoues ? `, ${nonRejoues} geste(s) sans effet n’ont pas été rejoués` : ""}${ambigus.length ? `, ${ambigus.length} lecture(s) d’un témoin d’onglet ambigu dans ${groupes.size} test(s) (attendu sur iPad, espace établissement : un seul toucher, aucun rejeu)` : ""}${illisibles ? `, ${illisibles} trace(s) sont illisibles` : ""}. Relevé d’information : le job n’échoue pas pour cela.`, "",
                 "| Éclat | Test | Appelant | Attente | Non décompté | Budget de blocage | Issue |", "| --- | --- | --- | --- | --- | --- | --- |");
+              for (const g of groupes.values()) {
+                const appelant = g.fichier ? `${g.fichier}:${g.ligne}` : "?";
+                lignes.push(`| ${cell(g.eclat)} | ${cell(g.test)} | \`${cell(appelant)}\` (1re trace) | Témoin d’onglet ambigu ×${g.nombre} | — | — | ${cell(g.issue)} |`);
+                const message = `Témoin d’onglet ambigu (${format}, éclat ${g.eclat}) : ${g.nombre} lecture(s) dans ce test, un seul toucher sans rejeu à chaque fois ; première : « ${g.attente} », ${g.issue} — ${g.test}`;
+                const cible = g.fichier && g.ligne ? ` file=${prop(`ios-native/JoleneUITests/${g.fichier}`)},line=${prop(g.ligne)}` : "";
+                console.log(`::notice${cible}::${esc(message)}`);
+              }
               for (const b of bloquees) {
+                if (b.ambigu && !b.illisible) continue;
                 const appelant = b.fichier ? `${b.fichier}:${b.ligne}` : "?";
                 lignes.push(`| ${cell(b.eclat)} | ${cell(b.test)} | \`${cell(appelant)}\` | ${cell(b.attente)} | ${cell(b.nonDecompte)} | ${cell(b.budget)} | ${cell(b.issue)} |`);
                 const message = b.illisible

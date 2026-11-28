@@ -465,11 +465,10 @@ export function rendre({ format, eclats, racine = RACINE }) {
     for (const { e, l } of nonPosee.slice(0, MAX_ANNOTATIONS)) annotations.push(`::warning::${esc(`Garde de repos (${format}, éclat ${e.nom}) : ${replier(l)}`)}`);
   }
   // Absorption bornée : au-delà du seuil, erreur nette et code de sortie non nul.
-  const absorptions = garde;
-  const excessif = absorptions.length > SEUIL_ABSORPTIONS_PAR_JOB;
+  const excessif = garde.length > SEUIL_ABSORPTIONS_PAR_JOB;
   if (excessif) {
-    const noms = [...new Set(absorptions.map(({ g }) => g.test))];
-    const message = `Garde de repos (${format}) : ${absorptions.length} processus d’app absorbés dans ce job, au-delà de ${SEUIL_ABSORPTIONS_PAR_JOB} — `
+    const noms = [...new Set(garde.map(({ g }) => g.test))];
+    const message = `Garde de repos (${format}) : ${garde.length} processus d’app absorbés dans ce job, au-delà de ${SEUIL_ABSORPTIONS_PAR_JOB} — `
       + `probable animation sans fin dans l’app, la garde ne doit pas l’absorber. Tests : ${noms.join(', ')}`;
     lignes.push('', `**${message}**`);
     annotations.unshift(`::error::${esc(message)}`);
