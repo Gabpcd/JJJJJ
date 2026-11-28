@@ -64,18 +64,19 @@ function expectGuardBeforeEffect(
 
 describe("inventaire explicite d'authentification des Edge Functions", () => {
   it("fige les fonctions distantes et classe les ajouts locaux avant déploiement", () => {
-    expect(manifest.entries).toHaveLength(80);
-    expect(new Set(manifest.entries.map((entry) => entry.slug)).size).toBe(80);
+    expect(manifest.entries).toHaveLength(81);
+    expect(new Set(manifest.entries.map((entry) => entry.slug)).size).toBe(81);
     expect(manifest.snapshot.remote_total).toBe(76);
     expect(manifest.snapshot.remote_verify_jwt_false).toBe(71);
     expect(manifest.snapshot.local_total_after_admin_2fa_retirement).toBe(77);
     expect(manifest.snapshot.local_total_after_copies_bulletins).toBe(78);
     expect(manifest.snapshot.local_total_after_apns_probe).toBe(79);
-    expect(manifest.snapshot.local_verify_jwt_false).toBe(73);
+    expect(manifest.snapshot.local_total_after_purge_stockage_rgpd).toBe(80);
+    expect(manifest.snapshot.local_verify_jwt_false).toBe(74);
   });
 
   it("classe chaque fonction locale et interdit toute dérive config/manifeste", () => {
-    expect(configured.size).toBe(79);
+    expect(configured.size).toBe(80);
     for (const [slug, verifyJwt] of configured) {
       const entry = manifest.entries.find((candidate) => candidate.slug === slug);
       expect(entry, `fonction non classée: ${slug}`).toBeDefined();

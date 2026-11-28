@@ -56,8 +56,10 @@ BEGIN
        IS DISTINCT FROM 'c490ce823768b0a23cd264ab17601155'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_protect_soignant_verification()'::regprocedure)
        IS DISTINCT FROM 'ff5e753f785f2c7ca08ae22771812e95'
+     -- f3af… : corps de 20261001131013 ; bd8d… : successeur de 20261128140100
+     -- (effacement des pièces), dont la suite suppression-compte-soignant-effacement vérifie le comportement.
      OR (SELECT md5(prosrc) FROM pg_proc WHERE oid = 'public.fn_supprimer_mon_compte()'::regprocedure)
-       IS DISTINCT FROM 'f3af23aeeb4e30aba07e422c0e819aeb'
+       NOT IN ('f3af23aeeb4e30aba07e422c0e819aeb', 'bd8df04463ed3b683de237d78b6ecea3')
   THEN RAISE EXCEPTION 'SUPPRESSION_PREUVES : corps candidat ou protection inattendus'; END IF;
   IF (SELECT count(*) FROM pg_trigger t WHERE t.tgenabled = 'O' AND NOT t.tgisinternal AND (
         (t.tgname = 'trg_invalider_preuves_identite_sur_changement'

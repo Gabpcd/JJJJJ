@@ -23,7 +23,8 @@ Elles n'ont PAS de GRANT vers `authenticated` — c'est intentionnel.
 - `fn_nettoyer_missions_fantomes` — Supprime les missions orphelines
 - `fn_nettoyer_partages_rib_expires` — Expire les partages RIB
 - `fn_nettoyer_tokens_push` — Supprime les tokens push invalides
-- `fn_rgpd_purge_automatique_inactifs` — RGPD : anonymise les comptes inactifs > 2 ans
+- `fn_rgpd_purge_automatique_inactifs` — RGPD : purge des inactifs > 2 ans, **verrouillée** (erreur explicite) jusqu'à son réalignement sur la suppression de compte (docs/CONFORMITE.md §6.5, migration 20261128140100)
+- `private.fn_lancer_purge_stockage_rgpd` — RGPD : cron `jolene_rgpd_purge_stockage` (minute 41, toutes les heures), appelle l'edge `purge-stockage-rgpd` qui efface par l'API Storage les fichiers des comptes soignants supprimés ; alerte CRITICAL au-delà de 24 h (docs/CONFORMITE.md §6)
 
 ## Calculs
 - `fn_calculer_bfa` / `fn_calculer_bfa_safe` / `fn_calculer_bfa_tous` — Calcul BFA

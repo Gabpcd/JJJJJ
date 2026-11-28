@@ -302,6 +302,131 @@ sourcée**.
 des wordings finaux tels qu'affichés** et **(2) le seed complet de la table** — relecture
 sur ces deux artefacts uniquement, puis merge + cascade section D.
 
+## 6. Suppression du compte soignant — effacement, anonymisation, conservation (28/11/2026)
+
+> Choix de conservation instruit et proposé par Claude, sources primaires à l'appui, appliqué aux
+> données seulement (migrations `20261128140000` et `20261128140100`) sur délégation de Gabrielle
+> (décider et documenter). **Aucun texte montré à l'utilisateur n'est modifié** : la mise à jour
+> proposée de la politique de confidentialité (§6.7) relève du HARD STOP n°4 et attend la
+> validation de Gabrielle, qui peut aussi revenir sur ce choix.
+
+### 6.1 Sources primaires (relues le 28/11/2026, versions en vigueur)
+
+| Source | Ce qu'elle prévoit | Force |
+|---|---|---|
+| [RGPD](https://eur-lex.europa.eu/legal-content/FR/TXT/HTML/?uri=CELEX:32016R0679) art. 17.1 a | effacement « dans les meilleurs délais » des données qui « ne sont plus nécessaires au regard des finalités » | Règlement (UE) 2016/679 (CELEX 32016R0679) |
+| RGPD art. 17.3 b | pas d'effacement dans la mesure où le traitement est nécessaire « pour respecter une obligation légale » | Règlement |
+| RGPD art. 17.3 e | pas d'effacement dans la mesure où le traitement est nécessaire « à la constatation, à l'exercice ou à la défense de droits en justice » | Règlement |
+| RGPD art. 5.1 c et art. 5.1 e | minimisation des données ; conservation limitée à la durée nécessaire aux finalités | Règlement |
+| RGPD art. 12.3 | réponse à la demande « en tout état de cause dans un délai d'un mois » | Règlement |
+| [C. com. L123-22](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006219327) al. 2 | documents comptables et pièces justificatives conservés dix ans | Loi |
+| [LPF L102 B](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000046869194) I | pièces soumises au contrôle fiscal conservées six ans | Loi |
+| [C. civ. 2224](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000019017112) | prescription de cinq ans des actions personnelles | Loi |
+| [C. trav. L1221-10](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006900849) | la déclaration préalable à l'embauche est accomplie par l'employeur | Loi |
+
+### 6.2 Décision : ce qui est effacé, anonymisé ou conservé
+
+| Donnée du soignant supprimé | Sort | Base | Durée |
+|---|---|---|---|
+| Fichiers des pièces (identité, diplôme, RPPS/ADELI, RCP, RIB, URSSAF, KBIS…), versions remplacées, photos de profil, attestations d'heures externes, justificatifs de réclamation et d'annulation de candidature | **Effacés** (API Storage, cron horaire, alerte à 24 h) | art. 17.1 a : la vérification est faite, la finalité épuisée ; aucune obligation légale ne pèse sur Jolene pour ces copies (la DPAE et la vigilance sont des obligations de l'employeur, L1221-10) | aucune |
+| Données lues par l'IA (noms, prénoms, résultat, score, cohérence, texte de rejet rédigé par l'IA), nom de fichier d'origine, libellé, tentative de vérification en cours ; attestations d'heures externes ; motifs, données d'origine et notes de la revue manuelle des pièces et de l'identité (cohérence, revue d'identité SIRET avec l'identité déclarée), et de ses décisions | **Effacés** dans la transaction de suppression (exception, donc suppression annulée, si un résidu subsiste) | art. 17.1 a, art. 5.1 c | aucune |
+| Trace de vérification de chaque pièce (type, statut, dates de vérification et de validité, vérificateur), rattachée à l'identifiant d'un profil anonymisé, sans copie ni contenu lu | **Conservée, pseudonymisée** | art. 17.3 e : preuve de la vérification si une mise en relation est contestée — *choix de conformité Jolene* | 5 ans (C. civ. 2224) ; purge non automatisée (§6.6) |
+| Factures et avoirs (lignes et PDF, dont le nom du soignant sur une facture émise en son nom) | **Conservés** | art. 17.3 b : L123-22 et L102 B | 10 ans |
+| Relevés de rétrocession (bucket `justificatifs`, dossier `retrocession`) | **Conservés** | art. 17.3 b : pièce justificative d'un montant d'honoraires (L123-22) | 10 ans |
+| Contrats de mission signés (bucket `contrats-signes`) | **Conservés** (inchangé) | art. 17.3 e : C. civ. 2224 | 5 ans |
+| Numéro de DPAE sur la mission | **Conservé** avec la mission (inchangé) | déclaration faite par l'employeur (L1221-10) ; Jolene ne garde que la référence, art. 17.3 e | comme la mission |
+| Copies de bulletins de paie (bucket `copies-bulletins-paie`, déposées par l'établissement) | Inchangées, **hors périmètre** | à instruire (§6.6) | — |
+| Alertes de fraude au pointage et revues de suspension (file de revue manuelle) | **Conservées** (inchangé) | art. 17.3 e : preuve en cas de litige | comme le litige |
+| Journal d'audit | **Conservé, immuable** | art. 17.3 e ; identifiants pseudonymes, compteurs, noms de champs (exception relevée §6.6) | jusqu'à 5 ans (politique de confidentialité, art. 4) |
+
+Un fichier du préfixe du soignant hors des dossiers connus, ou un chemin de pièce saisi hors de ce
+préfixe, n'est **jamais effacé à l'aveugle** : il est conservé et une alerte CRITICAL
+(`RGPD_PURGE_STOCKAGE_DOSSIER_INCONNU`, sans nom de fichier, identifiants des soignants concernés
+cumulés) demande son classement ; il est consigné dans la liste privée `private.rgpd_fichiers_a_classer`
+(seule trace de son chemin une fois les références réécrites). Dossiers effacés : `jolene-documents` `<id>/documents/`,
+`<id>/heures-externes/`, `<id>/seed/` (pièces de démonstration), `<id>/avatar-<horodatage>.<ext>` ;
+`attestations-heures-externes` `<id>/` ; `justificatifs` `<id>/reclamations/`,
+`<id>/annulations-candidature/`. Conservé : `justificatifs` `<id>/retrocession/`.
+
+### 6.3 Mécanisme
+
+- `public.fn_supprimer_mon_compte` (corps LIVE + trois ajouts) appelle
+  `private.fn_rgpd_effacer_pieces_soignant` à la place de la seule pose de `supprime_le` sur les pièces :
+  fichiers mis en file (`private.rgpd_purges_stockage`), contenu des pièces effacé et chemin réécrit,
+  attestations d'heures supprimées, revues anonymisées, post-condition fail-closed.
+- Aucune suppression SQL de `storage.objects` et aucun appel réseau dans la transaction de
+  suppression. Le cron `jolene_rgpd_purge_stockage` (minute 41 de chaque heure) appelle l'edge
+  `purge-stockage-rgpd`, qui efface par l'API Storage ; la base ne tient un fichier pour effacé que
+  s'il a disparu de `storage.objects`, efface alors son chemin de la file (empreinte SHA-256
+  conservée) et écrit l'audit `RGPD_SUPPRESSION_DONNEES`. Un fichier en échec attend le passage
+  suivant et passe derrière les nouveaux. Délai : au plus une heure en marche
+  normale, bien en deçà du mois de l'art. 12.3 ; alerte CRITICAL au-delà de 24 h.
+- Preuves : `tests/security/suppression-compte-soignant-effacement.test.sql` (staging et
+  PostgreSQL 17), `tests/node/suppression-compte-soignant-effacement.node.mjs`,
+  `tests/node/rgpd-purge-stockage.node.mjs`.
+
+### 6.4 Audit des modifications d'identité (`IDENTITE_PROFIL_MODIFIEE`)
+
+Constat (28/11/2026) : l'action, écrite par `fn_invalider_preuves_identite_sur_changement` à chaque
+changement de nom, prénom ou date de naissance, manquait au CHECK `journaux_audit_action_check` ;
+`fn_ecrire_audit_safe` avalait l'erreur, l'audit était muet (aucune ligne en production). Ajoutée par
+`20261128140000`, avec les deux actions de l'edge `delete-account` (retrait d'un collaborateur ou
+d'un administrateur de groupe) refusées pour la même raison.
+
+### 6.5 Purge automatique des inactifs — verrouillée
+
+`public.fn_rgpd_purge_automatique_inactifs` (non planifiée au 28/11/2026, proposée dans
+`docs/actions-gabrielle-pre-pilotes.md`) anonymisait bien moins que la suppression de compte
+(numéro de sécurité sociale, IBAN, adresse, pièces et fichiers conservés) et écrasait le chemin des
+pièces (`s3_cle = 'PURGE'`), rendant leurs fichiers introuvables. Elle lève désormais
+`RGPD_PURGE_INACTIFS_VERROUILLEE` (SQLSTATE 0A000). Avant toute planification : la réaligner sur
+`fn_supprimer_mon_compte` et `private.fn_rgpd_effacer_pieces_soignant`, et fixer la durée
+d'inactivité par une décision documentée.
+
+### 6.6 Limites connues et suivis
+
+1. **Chemin de fichier dans l'audit immuable** : `journaux_audit.cle_s3_ressource` des audits
+   `DOCUMENT_VERIFICATION_AUTO` contient le chemin Storage, dont le nom de fichier d'origine
+   (horodatage suivi du nom choisi par le soignant). Non effaçable (journal immuable) ; correctif à
+   la source : nom d'objet opaque à l'upload (web et iOS).
+2. **Traces de vérification et profils anonymisés** : purge à 5 ans non automatisée.
+3. **Quatorze autres actions d'audit** écrites par des fonctions LIVE sont absentes du CHECK
+   (`BULLETIN_PAIE_EMIS`, `CADRE_ETUDIANT_AS_CONFIRME`, `COMPTE_LEVEE_SUSPENSION`, `COMPTE_SUSPENDU`,
+   `CONDITIONS_SCOLARITE_CONFIRMEES`, `LITIGE_ADMIN_TRANCHE`, `MEDIATION_OUVERTE`,
+   `MEDIATION_REVUE_ADMIN_DEMANDEE`, `MISSION_PROPOSEE_SOIGNANT`, `NOTATION_MASQUEE`,
+   `RAPPEL_NOTATION_J1_ENVOYE`, `REMPLACEMENT_ESCALADE`, `SCORE_ETAB_RECALCULE`,
+   `SIGNALEMENT_UTILISATEUR`) : alignement complet et garde statique à faire.
+4. **Écritures système** : `fn_ecrire_audit_safe` refuse un appelant sans identité ni rôle de
+   service ; l'audit d'un changement d'identité fait par un cron ou une migration reste muet.
+5. **Copies de bulletins de paie** : durée de conservation à instruire.
+6. **Garde du staging** `tests/fixtures/staging-delete-account/safe-v55.json` : empreinte de
+   `fn_supprimer_mon_compte` à recaler au prochain bootstrap du staging.
+7. **Justificatifs de réclamation et d'annulation** : les fichiers sont effacés, mais
+   `reclamations_score.justificatif_storage_path` et `evenements_score_soignant.justificatif_storage_path`
+   gardent leur chemin (nom d'origine assaini) et `reclamations_score.texte_libre` reste (catégories
+   dont l'urgence médicale) : sort à décider (preuve d'une contestation de score, art. 17.3 e, ou
+   effacement), revue de la revue fraîche n°3 de la PR #1207.
+8. **Revue d'une pièce supprimée physiquement** (`pol_doc_delete`, pièce EN_ATTENTE ou REJETE) :
+   sa revue `TELEVERSEMENT_DOCUMENT` n'est plus rattachable par l'identifiant de la pièce ; aucune
+   voie applicative ne fait ce DELETE aujourd'hui.
+9. **Surveillance du cron** `jolene_rgpd_purge_stockage` : ses alertes viennent du job lui-même ;
+   l'ajouter au contrôle de santé des crons (un job inactif ne lève rien).
+10. **Empreinte de la file** : SHA-256 non salé de `bucket/chemin`, conservé après purge ; un lecteur
+    de la base peut confirmer un nom de fichier deviné. HMAC (clé Vault) ou empreinte aléatoire
+    après purge à envisager.
+11. **Rattrapage** : sur une base qui aurait déjà des comptes supprimés (aucun en production au
+    28/11/2026), la suppression des heures externes recrée une ligne `suivi_conversion_3200h` que
+    le rattrapage ne retire pas (la suppression de compte, elle, la retire).
+
+### 6.7 Texte utilisateur — proposition (HARD STOP n°4, non implémentée)
+
+La politique de confidentialité (`src/pages/PageConfidentialite.tsx`, art. 5) indique pour les
+« Documents professionnels » : durée active « Durée de validité », archivage « 5 ans ». Proposition
+soumise à Gabrielle : « Documents professionnels (copies et informations lues sur le document) :
+pendant la durée du compte ; effacés à la suppression du compte. Trace de la vérification (type de
+document, date, résultat, sans copie) : 5 ans. » Rien n'est changé dans l'interface tant que ce
+texte n'est pas validé.
+
 ## Récapitulatif — à câbler avant échéance
 
 | Sujet | Échéance | Type | Statut |
@@ -312,3 +437,7 @@ sur ces deux artefacts uniquement, puis merge + cascade section D.
 | Émission via PA (Factur-X → PA) | 09/2027 | Dev | À planifier |
 | Verrou docs santé (VACCINATIONS/MEDECINE_TRAVAIL) | Fait | Dev (trigger) | ✅ Verrouillé |
 | ARRET_MALADIE : attestation sur l'honneur + verrou | Fait (10/07/2026) | Produit + Dev | ✅ Livré — migration 20260710090000 (§1.4) |
+| Suppression compte soignant : fichiers et noms lus par l'IA effacés | Fait (28/11/2026) | Dev | ✅ Migrations 20261128140000 et 20261128140100 (§6) |
+| Politique de confidentialité, ligne « Documents professionnels » | Validation Gabrielle | HARD STOP n°4 | Proposition §6.7 |
+| Purge des inactifs : réalignement avant planification | Avant planification | Dev + décision | Verrouillée (§6.5) |
+| Nom d'objet opaque à l'upload (audit immuable) | À planifier | Dev web + iOS | À faire (§6.6) |
