@@ -47,7 +47,7 @@ export default function AdminMandatsFacturation() {
       if (deliveryStatus !== 'sent') return deliveryStatus;
 
       // Texte et lien posés par le serveur (est_admin()) : fn_creer_notification
-      // n'est plus appelable par un compte (migration 20261128120000).
+      // n'est plus appelable par un compte (migration 20261128150000).
       const notifRes = await supabase.rpc('fn_admin_relancer_mandat_facturation', { p_soignant_id: s.id });
       if (notifRes.error) return 'partial';
       return 'sent';

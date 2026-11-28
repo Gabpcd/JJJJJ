@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- B9 : notifications écrites par les clients et classement des soignants
--- (migration 20261128120000_borner_notifications_et_classement).
+-- (migration 20261128150000_borner_notifications_et_classement).
 --
 -- ⚠️  JAMAIS EN PROD. Staging CI : job « sql-transaction » de validate-pr.yml,
 --     après les migrations candidates, sous SAVEPOINT puis ROLLBACK global ;
@@ -51,7 +51,7 @@ BEGIN
       ('public.fn_creer_notification(uuid,text,text,text,text,text,text,uuid)', 'bc337810f500768fed6748fac74265e8', false),
       ('public.fn_alerter_pool_urgence(uuid)', '5b86dde9fb3450ac0e654512e3819dfc', true),
       ('public.fn_admin_relancer_mandat_facturation(uuid)', 'fe171f70cf862988022d487ea962d104', true),
-      ('public.fn_top_soignants(text,integer)', 'dd2dd814b3ed617b09652dd59decc133', true)
+      ('public.fn_top_soignants(text,integer)', '50122640d61db0021246adba36f8a2d3', true)
     ) AS t(signature, empreinte, authenticated)
   LOOP
     IF (SELECT md5(p.prosrc) FROM pg_proc p WHERE p.oid = to_regprocedure(v_attendu.signature)) IS DISTINCT FROM v_attendu.empreinte

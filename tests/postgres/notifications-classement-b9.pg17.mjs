@@ -1,4 +1,4 @@
-// B9 : notifications écrites par les clients et classement des soignants (migration 20261128120000), sur une vraie
+// B9 : notifications écrites par les clients et classement des soignants (migration 20261128150000), sur une vraie
 // base chargée avec supabase/schema/public.sql :
 //   1. constat avant la migration, sur les corps LIVE : un établissement connecté écrit une notification arbitraire
 //      (titre, corps, lien externe) à un soignant sans aucun lien avec lui, et lit dans le classement l'identifiant,
@@ -27,7 +27,7 @@ function sqlstate(erreur) {
   return /\bERROR:\s+([0-9A-Z]{5}):/.exec(String(erreur?.message ?? ''))?.[1];
 }
 
-export const MIGRATION = 'supabase/migrations/20261128120000_borner_notifications_et_classement.sql';
+export const MIGRATION = 'supabase/migrations/20261128150000_borner_notifications_et_classement.sql';
 export const SUITE = 'tests/security/notifications-classement-b9.test.sql';
 const ETAB = 'b9c1c0ff-0000-4000-8000-000000000001';
 const SOIGNANT = 'b9c1c0ff-0000-4000-8000-000000000002';
@@ -87,7 +87,7 @@ ${FIXTURES}
 SELECT (SELECT count(*)::int FROM public.fn_top_soignants('AUXILIAIRE_PUERICULTURE', 50)) AS lignes_etablissement;`;
 
 const REDEFINITION = [{ schema: 'public', nom: 'fn_top_soignants',
-  avant: '1565a9c0a7908e833f8bdae9f96f852e', apres: 'dd2dd814b3ed617b09652dd59decc133' }];
+  avant: '1565a9c0a7908e833f8bdae9f96f852e', apres: '50122640d61db0021246adba36f8a2d3' }];
 
 test('dump épinglé AVANT la migration ; dump courant AVANT ou APRÈS (sans base)', () => {
   const avant = racineAvant(DUMP_AVANT_B9_NOTIFICATIONS);

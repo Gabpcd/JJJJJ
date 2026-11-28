@@ -1,4 +1,4 @@
-// B9 : notifications écrites par les clients et classement des soignants (20261128120000), contrôle hors réseau.
+// B9 : notifications écrites par les clients et classement des soignants (20261128150000), contrôle hors réseau.
 // Ne remplace ni la suite SQL du staging (tests/security/notifications-classement-b9.test.sql, ROLLBACK) ni le banc
 // PostgreSQL 17 / PGlite (tests/postgres/notifications-classement-b9.pg17.mjs) ; verrouille :
 //   * la forme de la migration (horodatage, aucun BEGIN/COMMIT, délimiteurs nommés, préflight, post-condition) ;
@@ -18,7 +18,7 @@ const RACINE = fileURLToPath(new URL('../../', import.meta.url));
 const read = path => readFileSync(join(RACINE, path), 'utf8');
 const md5 = body => createHash('md5').update(body, 'utf8').digest('hex');
 
-const MIGRATION = '20261128120000_borner_notifications_et_classement.sql';
+const MIGRATION = '20261128150000_borner_notifications_et_classement.sql';
 const PRECEDENTE = '20261127100000'; // dernière version connue avant celle-ci (suppression du compte soignant, #1200)
 const sql = read(`supabase/migrations/${MIGRATION}`);
 const suite = read('tests/security/notifications-classement-b9.test.sql');

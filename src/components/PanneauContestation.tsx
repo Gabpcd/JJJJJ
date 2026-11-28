@@ -146,7 +146,7 @@ export function PanneauContestation({
       // l'établissement conteste. L'ancien appel client fn_creer_notification
       // (CONTESTATION_PRESENCE) faisait doublon ; il supposait aussi que tout compte
       // connecté puisse notifier n'importe qui. EXECUTE est retiré à authenticated
-      // par la migration 20261128120000 (B9) ; le natif n'a jamais fait cet appel.
+      // par la migration 20261128150000 (B9) ; le natif n'a jamais fait cet appel.
       // Ce bloc garde la hauteur de l'ancien appel : des tests Swift relisent ce
       // fichier par numéro de ligne (PresencesEtabRulesTests, LibellesWeb.swift,
       // textes-web-ios-rendus.json). Retirer des lignes ici impose de recaler ces

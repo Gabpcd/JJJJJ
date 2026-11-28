@@ -1073,7 +1073,7 @@ jobs:
         # Re-baseline du 27/11/2026 (#1204) : corps LIVE de fn_creer_notification et fn_top_soignants, GRANT compris.
         run: git fetch --no-tags --depth=1 origin 1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9
       - name: Notifications et classement (B9) — failles reproduites puis fermées sur le schéma du dépôt (base dédiée)
-        # Migration 20261128120000 : notification arbitraire et classement nominatif reproduits sur le corps LIVE, puis la
+        # Migration 20261128150000 : notification arbitraire et classement nominatif reproduits sur le corps LIVE, puis la
         # suite SQL du staging telle quelle, puis le même constat refusé.
         run: |
           psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE notifications_b9_banc'

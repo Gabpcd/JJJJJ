@@ -1924,7 +1924,7 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
   **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
   `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
   destinataire et le type, avec un rejet explicite.
-  **Basculé le 28 novembre 2026** (migration `20261128120000_borner_notifications_et_classement`, go écrit de
+  **Basculé le 28 novembre 2026** (migration `20261128150000_borner_notifications_et_classement`, go écrit de
   Gabrielle du 24/11/2026) : la première option. Définition live relue (corps inchangé, md5
   `bc337810f500768fed6748fac74265e8`) ; `REVOKE EXECUTE` à `PUBLIC`, `anon` et `authenticated`, `service_role`
   conservé ; appelants serveur intacts (fonctions `SECURITY DEFINER` de `postgres`, préflight qui refuse tout

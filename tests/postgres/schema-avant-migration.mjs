@@ -37,8 +37,9 @@ export const DUMP_AVANT_EFFACEMENT_PIECES = Object.freeze({
 });
 
 /**
- * Dump avant la migration 20261128120000 (B9, notifications et classement) : re-baseline du 27/11/2026 (#1204),
- * identique à main au 28/11/2026.
+ * Dump avant la migration 20261128150000 (B9, notifications et classement) : re-baseline du 27/11/2026 (#1204),
+ * toujours le dump de main au 28/11/2026. Les migrations 20261128140000 et 20261128140100 (#1207), appliquées avant,
+ * n'y figurent pas encore ; elles ne touchent aucun objet de la migration B9.
  */
 export const DUMP_AVANT_B9_NOTIFICATIONS = Object.freeze({
   commit: '1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9',

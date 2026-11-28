@@ -2437,7 +2437,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
   une notification arbitraire (destinataire, type, titre, corps, `lien`). `docs/audit-fonctionnel-pre-lancement.md`
   l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification avait été ajouté). Numéros de ligne du
   dump d'avant la re-baseline qui suit la migration ci-dessous.
-- **Corrigé le 28 novembre 2026** (B9, migration `20261128120000_borner_notifications_et_classement`, depuis la
+- **Corrigé le 28 novembre 2026** (B9, migration `20261128150000_borner_notifications_et_classement`, depuis la
   définition live) : `REVOKE EXECUTE` à `PUBLIC`, `anon` et `authenticated`, corps inchangé, `service_role` et les
   appelants serveur conservés. Le web n'appelle plus la fonction : contestation retirée (doublon du trigger), alerte
   du pool d'urgence par `fn_alerter_pool_urgence`, relance du mandat par `fn_admin_relancer_mandat_facturation`.

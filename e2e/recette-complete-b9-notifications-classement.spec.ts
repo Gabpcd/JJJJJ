@@ -3,7 +3,7 @@ import { simulerEtablissement, entrer as entrerEtablissement, preuve as preuveEt
   from './helpers/recette-complete-etablissement';
 import { simulerSoignant, entrer as entrerSoignant, aller, preuve as preuveSoignant } from './helpers/recette-complete-soignant';
 
-// B9, migration 20261128120000 : fn_creer_notification n'est plus appelable par un compte. Simulation fermée
+// B9, migration 20261128150000 : fn_creer_notification n'est plus appelable par un compte. Simulation fermée
 // (réponses simulées, aucun envoi, aucune base) : chaque parcours web qui l'appelait passe par sa RPC bornée, et le
 // classement affiche le prénom et l'initiale renvoyés par le serveur. La preuve d'autorisation reste la suite SQL.
 test.setTimeout(240_000);

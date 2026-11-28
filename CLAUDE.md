@@ -406,7 +406,7 @@ Stratégie, architecture et lots : `docs/SEO_STRATEGIE_ACQUISITION.md`. Règles 
 
 **Patterns backend (Lot 13)** :
 1. **Avant tout `fn_creer_notification` avec un nouveau type** : vérifier `notifications_type_check` (le type `CONTESTATION_PRESENCE` était utilisé par le front mais absent du CHECK → notifs de contestation muettes en prod, jamais d'erreur visible côté client).
-   **Depuis le 28/11/2026, aucun compte ne l'appelle** (migration `20261128120000`, B9 : EXECUTE retiré à
+   **Depuis le 28/11/2026, aucun compte ne l'appelle** (migration `20261128150000`, B9 : EXECUTE retiré à
    `authenticated`, qui pouvait écrire une notification arbitraire à n'importe qui). Une notification déclenchée
    par un client passe par une RPC bornée qui pose elle-même destinataire, texte et lien (modèles :
    `fn_alerter_pool_urgence`, `fn_admin_relancer_mandat_facturation`) ; jamais de `GRANT` de la primitive.

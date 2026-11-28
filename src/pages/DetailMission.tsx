@@ -132,7 +132,7 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
 
       // Notifications in-app posées par le serveur (texte, lien, destinataires de
       // fn_soignants_urgence, sans doublon) : fn_creer_notification n'est plus
-      // appelable par un compte (migration 20261128120000). Un soignant déjà
+      // appelable par un compte (migration 20261128150000). Un soignant déjà
       // prévenu pour cette mission, y compris par la notification automatique à
       // la création d'une mission urgente, ne l'est pas une seconde fois. Bloc de
       // la hauteur de l'ancien appel : des annotations Swift citent ce fichier par

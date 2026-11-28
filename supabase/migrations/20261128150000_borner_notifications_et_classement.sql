@@ -257,7 +257,7 @@ DECLARE
 BEGIN
   -- Cohorte de l'appelant : administrateur → comptes réels ; soignant inscrit → sa
   -- cohorte (est_compte_test) ; tout autre appelant (établissement, compte sans profil,
-  -- profil supprimé) → aucune ligne (migration 20261128120000).
+  -- profil supprimé) → aucune ligne (migration 20261128150000).
   IF public.est_admin() THEN
     v_cohorte_test := false;
   ELSE
@@ -302,13 +302,13 @@ INSERT INTO private.security_definer_inventory (signature, categorie, definition
 SELECT v.signature, v.categorie, pg_catalog.md5(p.prosrc), v.justification, pg_catalog.now()
   FROM (VALUES
     ('fn_creer_notification(uuid,text,text,text,text,text,text,uuid)', 'SERVICE_ONLY_REVOQUE',
-     'Primitive d''écriture des notifications, appelée par les fonctions serveur (déclencheurs, RPC bornées, crons). EXECUTE retiré à PUBLIC, anon et authenticated : aucun compte ne choisit destinataire, texte ou lien. Source : 20261128120000_borner_notifications_et_classement.sql'),
+     'Primitive d''écriture des notifications, appelée par les fonctions serveur (déclencheurs, RPC bornées, crons). EXECUTE retiré à PUBLIC, anon et authenticated : aucun compte ne choisit destinataire, texte ou lien. Source : 20261128150000_borner_notifications_et_classement.sql'),
     ('fn_alerter_pool_urgence(uuid)', 'MIXTE_TENANT_ADMIN',
-     'Alerte du pool d''urgence : administrateur ou établissement de la mission (garde NULL-safe), mission urgente ouverte, destinataires de fn_soignants_urgence, texte et lien posés par le serveur, sans doublon. Source : 20261128120000_borner_notifications_et_classement.sql'),
+     'Alerte du pool d''urgence : administrateur ou établissement de la mission (garde NULL-safe), mission urgente ouverte, destinataires de fn_soignants_urgence, texte et lien posés par le serveur, sans doublon. Source : 20261128150000_borner_notifications_et_classement.sql'),
     ('fn_admin_relancer_mandat_facturation(uuid)', 'ADMIN_EST_ADMIN_VALIDE',
-     'Relance du mandat de facturation : est_admin(), soignant non supprimé, texte et lien fixes. Source : 20261128120000_borner_notifications_et_classement.sql'),
+     'Relance du mandat de facturation : est_admin(), soignant non supprimé, texte et lien fixes. Source : 20261128150000_borner_notifications_et_classement.sql'),
     ('fn_top_soignants(text,integer)', 'RPC_UTILISATEUR_AUTH_INTERNE',
-     'Classement : soignant inscrit (sa cohorte de test ou réelle) ou administrateur (cohorte réelle), sinon aucune ligne ; prénom et initiale du nom, sans identifiant ; borné à cinquante. Source : 20261128120000_borner_notifications_et_classement.sql')
+     'Classement : soignant inscrit (sa cohorte de test ou réelle) ou administrateur (cohorte réelle), sinon aucune ligne ; prénom et initiale du nom, sans identifiant ; borné à cinquante. Source : 20261128150000_borner_notifications_et_classement.sql')
   ) AS v(signature, categorie, justification)
   JOIN pg_catalog.pg_proc p ON p.oid = pg_catalog.to_regprocedure('public.' || v.signature)
 ON CONFLICT (signature) DO UPDATE
@@ -328,7 +328,7 @@ BEGIN
       ('public.fn_creer_notification(uuid,text,text,text,text,text,text,uuid)', 'bc337810f500768fed6748fac74265e8', false),
       ('public.fn_alerter_pool_urgence(uuid)', '5b86dde9fb3450ac0e654512e3819dfc', true),
       ('public.fn_admin_relancer_mandat_facturation(uuid)', 'fe171f70cf862988022d487ea962d104', true),
-      ('public.fn_top_soignants(text,integer)', 'dd2dd814b3ed617b09652dd59decc133', true)
+      ('public.fn_top_soignants(text,integer)', '50122640d61db0021246adba36f8a2d3', true)
     ) AS t(signature, empreinte, authenticated)
   LOOP
     SELECT p.oid, p.prosrc, p.prosecdef, p.proconfig, pg_catalog.pg_get_userbyid(p.proowner) AS proprietaire

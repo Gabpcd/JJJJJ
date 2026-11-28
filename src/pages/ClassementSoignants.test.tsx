@@ -13,7 +13,7 @@ vi.mock('@/contexts/NotificationContext', () => ({
 }));
 
 describe('ClassementSoignants', () => {
-  // Depuis la migration 20261128120000 (B9), fn_top_soignants renvoie le prénom et l'initiale du nom, sans
+  // Depuis la migration 20261128150000 (B9), fn_top_soignants renvoie le prénom et l'initiale du nom, sans
   // identifiant ni nombre d'évaluations ; la page affiche les deux champs tels quels.
   it('affiche le prénom et l\'initiale du nom renvoyés par fn_top_soignants', async () => {
     rpcMock.mockResolvedValueOnce({
