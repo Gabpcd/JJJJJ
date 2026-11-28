@@ -4,6 +4,31 @@ Workflow : `.github/workflows/ios-native-app-store.yml` (« iOS Swift — soumis
 Gardes : `scripts/mobile/ios-native-app-store.mjs`, testées par `tests/node/ios-native-app-store.node.mjs`
 (job `validate-pr`, étape « Gardes de la soumission App Store »). Décisions : `DECISIONS_LOT6.md`.
 
+## État au 28/11/2026 : 2.0.0 (32) en vente, publication progressive en cours
+
+| Étape | Constat | Preuve |
+|---|---|---|
+| Build | 2.0.0 (32) envoyé sur TestFlight le 26/11/2026 depuis `main` `f599cab3` ; CI iOS verte sur ce commit (run 45799922589, tentative 3) | run `ios-native-testflight.yml` 45800013175 |
+| Répétition | mode `verifier` vert le 27/11/2026 à 08:17 UTC sur `main` `82a70607` : toutes les gardes, source comprise ; compte de démonstration connecté en production puis déconnecté, rôle soignant | run 45964361667 |
+| Soumission | mode `soumettre`, publication `automatique`, progressive ; soumis à la revue le 27/11/2026 à 08:19 UTC ; tag `mobile-native-ios-32` posé sur `f599cab3` | run 45964533350 |
+| Fiche de vérification | la lane a créé la version 2.0.0 par l'API ; Apple y a repris la fiche de 1.0.7 (description, compte de démonstration) : aucune copie par la lane, aucune écriture de `demoAccountRequired` ; notes complétées par le bloc 2.0 soignant (`config/ios-review-notes-2.0-soignant.txt`, PR #1199) en tête, 3 659 unités UTF-16 sur 3 900 | journal du run 45964533350 |
+| Revue | approuvée ; en vente sur l'App Store FR depuis le 27/11/2026 vers 20:19 UTC | heure transmise, non relue dans l'API |
+| Publication | progressive sur sept jours, en cours : `READY_FOR_DISTRIBUTION`, `releaseType = AFTER_APPROVAL`, `phasedReleaseState = ACTIVE` le 28/11/2026 à 01:21 UTC | run `mobile-store-status.yml` 46092658355 |
+
+2.0.0 remplace sur iOS la coquille Capacitor 1.0.7 (24) : jusqu'à la fin de la publication progressive, un appareil
+en mise à jour automatique non encore servi reste en 1.0.7 (section « Après la soumission »).
+
+Restent ouverts : captures de l'app Swift (`LOT6_PLAN.md`, T5 ; le workflow ne touche pas aux captures, celles de
+la fiche en ligne n'ont pas été relues), écran d'après mise à jour (T6), recette sur iPhone du build 32 (liens
+universels, push de production : `RECETTE_DEVICE_LOT4.md` et `RECETTE_DEVICE_LOT5.md` non remplis), réponses
+« Confidentialité de l'app » et classification non relues, taux de crash (Sentry) et de reconnexion non relevés.
+
+**Prochaine version (lecture du code, non rejouée).** Relancer avec le build 32 finit sur « déjà soumis ». Pour une
+version supérieure à 2.0.0 encore à créer, le pré-vol lit la fiche de la dernière version distribuée et exige que ce
+soit la coquille figée 1.0.7 (`ReviewNotes.choisir_source`, section « Choix de la source ») : avec 2.0.0 distribuée,
+il refuserait. Les blocs `config/ios-review-notes-2.0-*.txt` et le séparateur nomment aussi 1.0.7. À adapter par une
+PR avant la prochaine soumission.
+
 ## Ce que fait le workflow, et ce qu'il ne fait jamais
 
 Il soumet à la revue Apple un build de l'app `app.jolene` (App Store Connect `6774672845`) **déjà envoyé
@@ -34,7 +59,9 @@ Lancer d'abord en `verifier` : c'est la répétition à blanc de la soumission, 
 1. **Aucun port en attente, dans aucun lot (1 à 5)**, sur `main` : les cinq listes
    `DemoWorldTests.portsEnAttenteLot1` à `portsEnAttenteLot5` sont vides. Au 26/11/2026, c'est le cas : le
    dernier, `recovery` (« Mot de passe oublié ? », reste de L1-T10), est câblé, et la garde `lots` passe sur
-   l'arbre de `main`. Un port remis en attente ferait refuser toute soumission ; c'est voulu.
+   l'arbre de `main`. Un port remis en attente ferait refuser toute soumission ; c'est voulu. Des listes vides ne
+   suffisent pas : l'espace établissement doit aussi être ouvert en production (garde `etablissement`, lot 5, T14,
+   #1190) ; une liste `portsEnAttenteLot5` vide ne le prouve pas.
 2. Un build a été envoyé **depuis ce `main`** par `ios-native-testflight.yml` (build 32 ou plus), **il y a
    moins de 14 jours** (rétention de l'artefact de provenance, garde `provenance`). Notez son numéro.
 3. Le dernier run de « iOS Swift — socle natif » (`ios-swift-ci.yml`) sur le commit dont ce build est issu
@@ -83,6 +110,11 @@ la lane, comparent donc la tentative des gardes à la tentative en cours et refu
 
 Chaque refus s'affiche sous la forme `[garde] message (voir docs/mobile-swift/APP_STORE.md, garde « … »)`
 et arrête le workflow avant toute écriture chez Apple. Aucune garde ne se désactive par une option.
+
+Ordre du job `gardes` : `entrees` et `notes` (sous-commande `entrees`), gardes du dépôt, `provenance`, `ci-ios`, puis
+les quatre gardes de la source du build (sous-commande `source`, dans cet ordre : `etablissement`, `lots`,
+`apple-4.2`, `ota` ; tous les refus sont rassemblés en un seul échec), backend, `build`, et enfin le pré-vol du compte
+de démonstration et des notes. « Lots 1 à 5 clos » et « espace établissement ouvert » sont deux gardes distinctes.
 
 | Garde | Ce qu'elle vérifie | Si elle échoue |
 |---|---|---|
@@ -384,7 +416,8 @@ parle donc pas.
 Les trois missions (IDE, `TOUS`, sur candidature, à l'adresse de l'établissement de revue, à Paris, début entre
 J+7 et J+21) sont créées et entretenues par la PR #1198 : la phrase « three demo assignments in Paris » n'est
 vraie qu'une fois cette PR mergée et son cron passé. **Ordre à tenir** : merger #1198 et attendre son cron
-avant le run `soumettre`.
+avant le run `soumettre`. (#1198 a été mergée le 27/11/2026 à 01:44 UTC, avant le run `soumettre` de 08:17 UTC ;
+le passage de son cron avant ce run n'a pas été relu.)
 
 **Autres arrêts.** Une version modifiable autre que `2.0.0` (deliver la renommerait, avec sa fiche) arrête la
 lane au pré-vol. Une version distribuée au numéro non numérique, non antérieure à 2.0.0, deux versions au numéro
@@ -425,15 +458,22 @@ par l'API reprenne ou non la fiche de 1.0.7 (les deux cas sont traités) ; qu'Ap
 de la fiche, l'écriture de `demoAccountRequired` et celle des notes dans l'état de la version, sans rien modifier
 d'autre ; le décompte exact des caractères chez Apple (marge de 100).
 
+**Constaté au run `soumettre` du 27/11/2026 (run 45964533350).** La version 2.0.0 créée par l'API a repris la fiche
+de 1.0.7, identifiants et « Connexion requise » compris : ni copie ni écriture de `demoAccountRequired` n'ont eu lieu
+(aucune des deux lignes de journal correspondantes), si bien que la réponse d'Apple pour une version sans fiche
+(`data: null`) et l'acceptation d'une copie restent non prouvées. Apple a accepté l'écriture des notes (3 659 unités
+UTF-16, relues identiques), puis la soumission. Le décompte exact chez Apple n'est pas prouvé : 3 659 reste sous les
+4 000 de toute façon.
+
 ## Vérification locale
 
 ```bash
 node --test tests/node/ios-native-app-store.node.mjs
-node scripts/mobile/ios-native-app-store.mjs source .   # gardes lots, apple-4.2 et ota sur l'arbre courant
+node scripts/mobile/ios-native-app-store.mjs source .   # gardes etablissement, lots, apple-4.2 et ota sur l'arbre courant
 ruby fastlane/ios_review_submission.test.rb              # revue en cours et contexte des lanes
 ruby fastlane/ios_review_notes.test.rb                   # notes, fiche et connexion simulée du compte de démonstration
 ```
 
-Sur l'arbre de `main` au 26/11/2026, la deuxième commande passe : aucun port en attente, espace établissement
-ouvert, Apple 4.2 et absence de mise à jour à chaud vérifiés. Les lanes elles-mêmes ne tournent que dans le
-workflow.
+Sur l'arbre de `main` au 28/11/2026 (`5dfe7e9b`), la deuxième commande passe : aucun port en attente (listes
+vides depuis #1179), espace établissement ouvert en production (#1190), Apple 4.2 et absence de mise à jour à chaud
+vérifiés. Les lanes elles-mêmes ne tournent que dans le workflow.

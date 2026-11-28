@@ -3,16 +3,17 @@
 > Préparé le 24 novembre 2026 sur `lot6/preparation` (base `main` `f6e6be49`). Décisions et sources
 > officielles : `docs/mobile-swift/DECISIONS_LOT6.md` (les renvois A1…A12 et G1…G14 pointent vers son
 > tableau des sources). Mode d'emploi de la soumission : `docs/mobile-swift/APP_STORE.md`.
-> Rien n'a été publié, soumis ni déclenché pour écrire ce plan.
+> Rien n'a été publié, soumis ni déclenché pour écrire ce plan. État relu le 28/11/2026 (mentions datées) :
+> 2.0.0 (32) soumise le 27/11, approuvée et en vente en publication progressive ; Android 1.0.8 (25) publiée.
 
 ## 1. Où on en est
 
-| Question | Réponse au 24/11/2026 |
-|---|---|
-| Peut-on soumettre l'app Swift aujourd'hui ? | Non. Quatorze ports sont en attente sur `main` : `recovery` au lot 1, onze au lot 4, deux au lot 5. La garde `lots` exige les cinq listes vides et refuse le build 31 et tout build fait depuis `main`. |
-| Que manque-t-il côté code ? | Le câblage de `recovery` (réinitialisation native du mot de passe, ci-dessous), la clôture des lots 4 et 5, une CI iOS verte sur le commit du build, puis un nouvel envoi TestFlight (build 32 ou plus). Le reste du chemin est écrit et testé sur cette branche. |
-| Que manque-t-il côté consoles ? | Les saisies de la fondatrice dans App Store Connect (§3). |
-| Peut-on publier Android aujourd'hui ? | Pas avant le merge de cette branche : sur `main`, le mode `native` construit et soumet aussi la coquille iOS. Ensuite, par un build natif 1.0.8 (25) ; pas par OTA (§5). |
+| Question | Réponse au 24/11/2026 | Au 28/11/2026 |
+|---|---|---|
+| Peut-on soumettre l'app Swift aujourd'hui ? | Non. Quatorze ports sont en attente sur `main` : `recovery` au lot 1, onze au lot 4, deux au lot 5. La garde `lots` exige les cinq listes vides et refuse le build 31 et tout build fait depuis `main`. | **Fait.** Listes vides depuis #1179 (25/11), espace établissement ouvert en production par #1190 (26/11). 2.0.0 (32) soumise le 27/11 à 08:19 UTC (run 45964533350), approuvée, en vente sur l'App Store FR depuis le 27/11 vers 20:19 UTC, en publication progressive (T9). |
+| Que manque-t-il côté code ? | Le câblage de `recovery` (réinitialisation native du mot de passe, ci-dessous), la clôture des lots 4 et 5, une CI iOS verte sur le commit du build, puis un nouvel envoi TestFlight (build 32 ou plus). Le reste du chemin est écrit et testé sur cette branche. | Rien pour la soumission de 2.0.0 : CI iOS verte sur `f599cab3` (run 45799922589), build 32 envoyé le 26/11 (run 45800013175). Restent T5 et T6, et l'adaptation du pré-vol à une version postérieure à 2.0.0 (`APP_STORE.md`, « État au 28/11/2026 »). |
+| Que manque-t-il côté consoles ? | Les saisies de la fondatrice dans App Store Connect (§3). | La 2.0.0 a repris la fiche de 1.0.7 ; description, confidentialité, classification et captures non relues (§3, actions 2, 4, 5, 6). |
+| Peut-on publier Android aujourd'hui ? | Pas avant le merge de cette branche : sur `main`, le mode `native` construit et soumet aussi la coquille iOS. Ensuite, par un build natif 1.0.8 (25) ; pas par OTA (§5). | **Fait** : 1.0.8 (25) livrée le 25/11 et publiée en production (T10, `DECISIONS_LOT6.md` D10). |
 
 ## 2. Périmètre « Lot 6 » du plan général : état de chaque élément
 
@@ -25,17 +26,22 @@ Plan §5 « Lot 6 », l.225 à l.234.
 | `check-mobile-build-alignment.mjs` pointé vers le nouveau projet | **fait** | Android ↔ `build.gradle`, iOS ↔ `ios-native/Config/Base.xcconfig`, coquille iOS gelée |
 | `delivery-plan.mjs` : `ios-native` dans les chemins natifs, aucun diff `ios-native` en mode ota | **fait** | plus : iOS refusé dans tous les modes, OTA refusée sur le runtime 24 (D5) |
 | `release-state.mjs` : tags scindés sans exiger les deux | **fait** | D4 |
-| Captures iPhone et iPad refaites depuis l'app Swift | **à faire** | tranche T5 |
-| App Privacy recalculée | **à faire** (fondatrice) | §3, action 4 ; base : `ios-native/Jolene/PrivacyInfo.xcprivacy` (22 types de données) |
-| Notes de version annonçant la reconnexion et Face ID | **fait, à valider** | `config/mobile-release-notes-ios.txt` (D7) |
-| Notes pour la revue | **fait**, validé par Claude sur délégation de Gabrielle (26/11/2026) ; compte des champs « Sign-in required » **vérifié par le run `verifier`** (connexion en production et rôle) ; données des comptes de revue **à vérifier** | §3, action 3 ; blocs `config/ios-review-notes-2.0-soignant.txt` et `-etablissement.txt`, choisis par le rôle vérifié, écrits en tête des notes par la lane ; fiche de vérification copiée de 1.0.7 si la 2.0.0 n'a pas d'identifiants (`APP_STORE.md`) |
-| Écran d'accueil après la mise à jour | **à faire** | aucun écran de ce type dans `ios-native/` ; tranche T6 |
-| Déploiement progressif sur 7 jours | **fait** | lane `ios submit_native`, `phased_release: true` (A3) |
+| Captures iPhone et iPad refaites depuis l'app Swift | **à faire** (28/11 : 2.0.0 soumise sans toucher aux captures) | tranche T5 |
+| App Privacy recalculée | **à faire** (fondatrice) ; réponses d'App Store Connect non relues au 28/11 | §3, action 4 ; base : `ios-native/Jolene/PrivacyInfo.xcprivacy` (22 types de données), identique au 28/11 au manifeste de la coquille (`docs/STORE_METADATA_FR.md`) |
+| Notes de version annonçant la reconnexion et Face ID | **fait** ; écrites comme « Nouveautés » de 2.0.0 le 27/11 ; validation de la fondatrice non consignée | `config/mobile-release-notes-ios.txt` (D7) |
+| Notes pour la revue | **fait**, validé par Claude sur délégation de la fondatrice (26/11/2026) ; compte des champs « Sign-in required » **vérifié par le run `verifier`** (connexion en production, rôle soignant, 27/11) ; écrites en tête des notes de 2.0.0 au run `soumettre` du 27/11 (bloc soignant) ; données des comptes de revue **à vérifier** | §3, action 3 ; blocs `config/ios-review-notes-2.0-soignant.txt` et `-etablissement.txt`, choisis par le rôle vérifié, écrits en tête des notes par la lane ; fiche de vérification copiée de 1.0.7 si la 2.0.0 n'a pas d'identifiants (`APP_STORE.md` ; le 27/11, Apple l'avait déjà reprise) |
+| Écran d'accueil après la mise à jour | **à faire** | aucun écran de ce type dans `ios-native/` au 28/11 ; tranche T6 |
+| Déploiement progressif sur 7 jours | **fait** ; en cours depuis le 27/11 (`phasedReleaseState = ACTIVE` le 28/11) | lane `ios submit_native`, `phased_release: true` (A3) ; run `mobile-store-status.yml` 46092658355 |
 | Suivi par `mobile-store-status.yml` | **fait** (existant) | lit l'état de la version et de la publication progressive, en lecture seule |
 | Bêta externe, 14 jours de bêta (lots 3 et 4) | **abandonné** sur décision du 24/11 | D1 |
-| **Prérequis de soumission : réinitialisation native du mot de passe (`recovery`)** | **manquant**, sans tranche | `DemoWorldTests.portsEnAttenteLot1 = ["recovery"]` ; voir ci-dessous |
+| **Prérequis de soumission : réinitialisation native du mot de passe (`recovery`)** | **fait** le 25/11/2026 (#1179) ; manquant au 24/11 | `DemoWorldTests.portsEnAttenteLot1 = []` ; « Mot de passe oublié ? » sur `LoginScreen.swift` ; voir ci-dessous |
+| **Prérequis de soumission : espace établissement ouvert en production** | **fait** le 26/11/2026 (#1190, lot 5, T14) | garde `etablissement` (`APP_STORE.md`) ; `DECISIONS_LOT5.md`, section T14 |
 
-**Manque connu, bloquant pour la soumission : `recovery`.** La réinitialisation native du mot de passe
+**Levé le 25/11/2026 : `recovery`.** #1179 a câblé la réinitialisation native du mot de passe et vidé les
+listes des lots 4 et 5 ; la garde `lots` passe sur `main` et a passé sur la source du build 32. Le constat du
+24/11 est conservé ci-dessous.
+
+**Manque connu au 24/11, bloquant pour la soumission : `recovery`.** La réinitialisation native du mot de passe
 (« Mot de passe oublié ? » sur la connexion, `SupabaseRecoveryGateway`, `ResetPasswordScreen`,
 quarantaine de la session de récupération) est absente de l'app Swift : `UnwiredRecoveryPort` dans les
 deux mondes, aucun « Mot de passe oublié ? » sous `ios-native/Jolene`. Reste de L1-T10, elle n'a de
@@ -51,32 +57,37 @@ Critères de sortie du plan (l.228 à l.234) :
 
 | Critère | État |
 |---|---|
-| Garde Apple 4.2 écrite et respectée | **écrite** (gardes `apple-4.2` et `lots`, rejouées sur la source du build, et `ci-ios` : CI de l'app Swift verte sur ce commit) ; respectée à chaque soumission |
+| Garde Apple 4.2 écrite et respectée | **écrite** (gardes `apple-4.2` et `lots`, rejouées sur la source du build, et `ci-ios` : CI de l'app Swift verte sur ce commit) ; respectée à chaque soumission ; **respectée** par le build 32 (run 45964533350) ; 2.0.0 approuvée par Apple le 27/11 |
 | Garde fastlane : version > 1.0.7, build > 24, `uses_non_exempt_encryption = false` | **fait** (garde `build`, lane, `ios_review_submission.rb`) |
 | AASA inchangée | **fait** : aucun changement de `public/.well-known/apple-app-site-association` depuis le 07/09/2026, antérieur à 1.0.7 (24) |
-| Liens universels vérifiés sur le build de production (reset, invitation, PSC, Stripe Connect) | **à faire**, sur iPhone, avec le build à soumettre — non vérifié |
+| Liens universels vérifiés sur le build de production (reset, invitation, PSC, Stripe Connect) | **à faire**, sur iPhone, avec le build à soumettre — non vérifié ; au 28/11, le build 32 est en vente et `RECETTE_DEVICE_LOT4.md` et `RECETTE_DEVICE_LOT5.md` ne sont pas remplis |
 | Push de production reçu sur un token enregistré par 2.0.0 | **à faire**, sur iPhone — non vérifié |
-| Publication progressive non interrompue, crash-free ≥ 99,5 %, taux de reconnexion suivi | **après la mise en vente** ; exige le secret `SENTRY_DSN_IOS`, absent aujourd'hui |
+| Publication progressive non interrompue, crash-free ≥ 99,5 %, taux de reconnexion suivi | **en cours** depuis le 27/11/2026 (sept jours) ; le secret `SENTRY_DSN_IOS` existe depuis le 24/11 et le build 32 l'a reçu ; taux de crash et de reconnexion non relevés |
 | Retour arrière écrit et testé une fois | **écrit, non testé** (T7 ; écart, D6) |
 | Aucune soumission automatique | **fait** (tests de `ios-native-app-store.yml`) |
 
 ## 3. Ce que seule la fondatrice peut faire dans App Store Connect, dans l'ordre
 
-Le code ne fait aucune de ces saisies. Le workflow de soumission ne touche que le champ « Nouveautés ».
+Le code ne fait aucune de ces saisies. Le workflow de soumission ne touche que le champ « Nouveautés » (et, depuis
+le 26/11, le champ « Notes » des informations pour la vérification, D7).
+
+État au 28/11/2026 : 2.0.0 soumise le 27/11 et en vente ; les actions 1, 3 (notes), 7 (garde `build` verte sur
+le build 32), 8 et 9 sont faites ou sans objet, l'action 10 est en cours ; les actions 2, 4, 5 et 6 n'ont pas été
+relues ; 8 bis n'est pas fait.
 
 | # | Action | Pourquoi | Source |
 |---|---|---|---|
-| 1 | Créer le secret GitHub `SENTRY_DSN_IOS` (hors App Store Connect, mais avant le build à soumettre) | sans lui, l'app part sans Sentry et le taux de crash de la publication progressive n'est pas mesurable | `SENTRY_IOS.md` |
-| 2 | Fiche de la version 2.0.0 : vérifier nom, sous-titre, description, mots-clés, URL de support et de confidentialité ; adapter le texte promotionnel si besoin | la version reprend la fiche de 1.0.7 ; la description doit décrire l'app livrée | A1 (2.3) ; textes de référence : `docs/STORE_METADATA_FR.md` |
-| 3 | Notes pour la revue et compte de démonstration : mettre à jour les notes (app réécrite en natif ; rôles administrateur et groupe renvoyés vers jolene.app ; un pointage réel exige d'être sur place) ; vérifier que les comptes de revue soignant et établissement se connectent en production et montrent des missions, un contrat et une présence | Apple exige des identifiants valides au moment de la soumission, un backend actif et la description précise des nouveautés | A1 (2.1(a), 2.3.1(a)), A10 |
+| 1 | Créer le secret GitHub `SENTRY_DSN_IOS` (hors App Store Connect, mais avant le build à soumettre) — **fait** le 24/11/2026, reçu par le build 32 | sans lui, l'app part sans Sentry et le taux de crash de la publication progressive n'est pas mesurable | `SENTRY_IOS.md` |
+| 2 | Fiche de la version 2.0.0 : vérifier nom, sous-titre, description, mots-clés, URL de support et de confidentialité ; adapter le texte promotionnel si besoin — **non relue** : Apple a repris la fiche de 1.0.7 à la création de la 2.0.0 ; écart de description signalé dans `docs/STORE_METADATA_FR.md` (note du 28/11) | la version reprend la fiche de 1.0.7 ; la description doit décrire l'app livrée | A1 (2.3) ; textes de référence : `docs/STORE_METADATA_FR.md` |
+| 3 | Notes pour la revue et compte de démonstration : mettre à jour les notes (app réécrite en natif ; rôles administrateur et groupe renvoyés vers jolene.app ; un pointage réel exige d'être sur place) ; vérifier que les comptes de revue soignant et établissement se connectent en production et montrent des missions, un contrat et une présence — **notes faites** par la lane le 27/11 ; connexion du compte soignant prouvée au pré-vol ; compte établissement et données des comptes non vérifiés ici | Apple exige des identifiants valides au moment de la soumission, un backend actif et la description précise des nouveautés | A1 (2.1(a), 2.3.1(a)), A10 |
 | 4 | Confidentialité de l'app : relire les réponses contre le manifeste de l'app Swift (22 types de données, aucune donnée de pistage) et corriger les écarts avec la coquille | réponses exigées pour toute mise à jour, à tenir exactes | A4 |
 | 5 | Classification : vérifier que le questionnaire à cinq paliers est rempli | une app non classée ne se publie pas ; les nouvelles questions étaient à remplir avant le 31/01/2026 | A5, A6 |
 | 6 | Captures : remplacer les captures iPhone et iPad par des captures de l'app Swift | les captures doivent montrer l'app en usage ; format iPad exigé puisque l'app tourne sur iPad | A1 (2.3.3), A2 |
 | 7 | Conformité export : rien à saisir si le build affiche « false » ; la garde `build` le vérifie | — | A11 (non vérifié) |
-| 8 | Lancer la soumission : Actions → « iOS Swift — soumission App Store » → d'abord en mode `verifier` (gardes seules), puis en mode `soumettre` avec le numéro du build, la phrase de confirmation et le mode de publication | geste manuel décidé le 24/11 | D1, `APP_STORE.md` |
+| 8 | Lancer la soumission : Actions → « iOS Swift — soumission App Store » → d'abord en mode `verifier` (gardes seules), puis en mode `soumettre` avec le numéro du build, la phrase de confirmation et le mode de publication — **fait** le 27/11/2026 : `verifier` (run 45964361667) puis `soumettre` (run 45964533350), build 32, publication automatique | geste manuel décidé le 24/11 | D1, `APP_STORE.md` |
 | 8 bis | Propriétaire du dépôt : créer un environnement GitHub restreint à `main` et y placer les secrets App Store Connect (réglage hors code, non fait) | sans lui, « depuis `main` seulement » n'est garanti que par le fichier du workflow | `APP_STORE.md`, « Secrets et droits » |
-| 9 | Si la mise en vente est « manuelle » : cliquer « Release this version » après l'approbation | la version attend sinon en « Pending Developer Release » | A8 |
-| 10 | Pendant les sept jours : suivre Sentry et `mobile-store-status.yml` ; mettre la publication progressive en pause si besoin (30 jours au plus) | sans bêta, c'est le premier signal d'usage réel | A3 |
+| 9 | Si la mise en vente est « manuelle » : cliquer « Release this version » après l'approbation — **sans objet** (publication automatique) | la version attend sinon en « Pending Developer Release » | A8 |
+| 10 | Pendant les sept jours : suivre Sentry et `mobile-store-status.yml` ; mettre la publication progressive en pause si besoin (30 jours au plus) — **en cours** depuis le 27/11/2026 | sans bêta, c'est le premier signal d'usage réel | A3 |
 
 ## 4. Ce que seule la fondatrice peut faire dans Play Console, dans l'ordre
 
@@ -98,6 +109,10 @@ jour à partir du 01/02/2027 (G2). À lire dans Play Console (explorateur d'app 
 build.
 
 ## 5. Publier Android aujourd'hui
+
+> **Fait le 25/11/2026** : PR de release #1182, livraison native par `mobile-delivery.yml` (run 45607727980),
+> tags `mobile-native-source-android-25` et `mobile-native-android-25` ; le 28/11, `mobile-store-status.yml`
+> (run 46092658355) lit 1.0.8 (25) publiée en production. La suite de cette section décrit la situation du 24/11.
 
 **Par OTA : impossible.** Trois raisons, chacune suffisante :
 
@@ -135,9 +150,9 @@ Courtes, dans l'ordre. T1 à T4 sont sur cette branche.
 | T5 | Captures App Store depuis l'app Swift en mode démo (détail ci-dessous) | à faire | PNG contrôlés en dimensions |
 | T6 | Écran d'accueil après la mise à jour (reconnexion, Face ID), sans texte juridique nouveau | à faire | XCUITest démo |
 | T7 | Retour arrière iOS : procédure ci-dessous, à tester une fois ou à abandonner | écrit, non testé | — |
-| T8 | Câblage de `recovery` (lot 1), clôture des lots 4 et 5, CI iOS verte sur le commit, envoi TestFlight du build à soumettre (soumis dans les 14 jours), recette sur iPhone (liens universels, push de production) | dépend de `recovery` et des lots 4 et 5 | `RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md` |
-| T9 | Soumission (geste de la fondatrice), puis suivi de la publication progressive | après T8 et §3 | tag `mobile-native-ios-N`, `mobile-store-status.yml` |
-| T10 | PR de release Android 1.0.8 (25), puis livraison native (§5) | indépendant d'iOS | tag `mobile-native-android-25` |
+| T8 | Câblage de `recovery` (lot 1), clôture des lots 4 et 5, CI iOS verte sur le commit, envoi TestFlight du build à soumettre (soumis dans les 14 jours), recette sur iPhone (liens universels, push de production) | **fait**, sauf la recette sur iPhone : `recovery` et lots 4 et 5 (#1179), espace établissement (#1190), CI iOS verte sur `f599cab3` (run 45799922589), build 32 envoyé le 26/11 (run 45800013175), soumis le lendemain ; recette sur iPhone **non faite** | runs cités ; `RECETTE_DEVICE_LOT4.md`, `RECETTE_DEVICE_LOT5.md` (non remplis au 28/11) |
+| T9 | Soumission (geste de la fondatrice), puis suivi de la publication progressive | **soumission faite** le 27/11/2026 à 08:19 UTC, approuvée, en vente depuis le 27/11 vers 20:19 UTC ; publication progressive **en cours** | tag `mobile-native-ios-32` (sur `f599cab3`), run 45964533350 ; `mobile-store-status.yml` run 46092658355 |
+| T10 | PR de release Android 1.0.8 (25), puis livraison native (§5) | **fait** le 25/11/2026 | #1182, run 45607727980, tag `mobile-native-android-25` |
 
 ### T5 — Captures App Store (à faire)
 

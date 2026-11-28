@@ -3,7 +3,8 @@
 > Rédigé le 24 novembre 2026 sur la branche `lot6/preparation`. Ce mémo fait foi pour le lot 6 ;
 > `docs/PLAN_APP_NATIVE_SWIFT.md` n'est amendé que par renvois datés. Plan en tranches et état de
 > chaque élément : `docs/mobile-swift/LOT6_PLAN.md`. Mode d'emploi de la soumission :
-> `docs/mobile-swift/APP_STORE.md`.
+> `docs/mobile-swift/APP_STORE.md`. État relu le 28/11/2026 : section « État constaté le 28/11/2026 » et
+> mentions datées en italique.
 
 ## D1 — Décision de la fondatrice (24/11/2026)
 
@@ -19,9 +20,11 @@ Conséquences :
    `docs/mobile-swift/BETA_LOT4.md` reste un squelette non rempli.
 2. **La soumission se fait dès que les lots 4 et 5 sont sur `main`.** La condition est vérifiée par le code,
    sur la source du build soumis (D8), pas par une date. *Précision après la revue de #1177 (M2) : le code
-   exige aussi qu'il ne reste aucun port en attente des lots 1 à 3. Aujourd'hui, `recovery` (lot 1) reste
-   en attente : la soumission est bloquée tant qu'il n'est pas câblé ou accepté par écrit (« En attente »,
-   n° 8).*
+   exige aussi qu'il ne reste aucun port en attente des lots 1 à 3. Au 24/11, `recovery` (lot 1) restait
+   en attente : la soumission était bloquée tant qu'il n'était pas câblé ou accepté par écrit (« En attente »,
+   n° 8).* *Levé le 25/11/2026 : #1179 a câblé `recovery` et clos les lots 4 et 5 ; les cinq listes sont vides.
+   Depuis #1190 (26/11), le code exige aussi l'espace établissement ouvert en production (garde `etablissement`,
+   D8). La soumission a eu lieu le 27/11 (« État constaté le 28/11/2026 », ci-dessous).*
 3. **La soumission reste un geste manuel** : un workflow lancé à la main depuis `main`, avec une phrase de
    confirmation. Aucun merge, aucun push, aucune fin de workflow ne soumet quoi que ce soit.
 
@@ -38,7 +41,19 @@ progressive : 1 % des appareils en mise à jour automatique le premier jour (sou
 | TestFlight contient 2.0.0 builds 25 à 31 | constat transmis ; sept runs réussis de `ios-native-testflight.yml` relus par l'API GitHub, artefacts `ios-native-testflight-29…31-<commit>` |
 | Aucune OTA depuis le 5 octobre | aucun run `ota` ni `native` de `mobile-delivery.yml` depuis ; un run du 24/11 à 12:25 UTC n'a exécuté que le job `plan` (vérification, rien construit ni publié) |
 | Sur `main` (`f6e6be49`), le lot 4 a onze ports non câblés et le lot 5 deux | `DemoWorldTests.portsEnAttenteLot4` et `portsEnAttenteLot5` |
-| Le secret facultatif `SENTRY_DSN_IOS` n'existe pas | liste des noms de secrets du dépôt (`gh secret list`) ; les builds 25 à 31 sont donc partis sans Sentry |
+| Le secret facultatif `SENTRY_DSN_IOS` n'existe pas | liste des noms de secrets du dépôt (`gh secret list`) ; les builds 25 à 31 sont donc partis sans Sentry. *Créé le 24/11/2026 à 20:12 UTC, après ce constat (ci-dessous).* |
+
+## État constaté le 28/11/2026 (lecture seule)
+
+| Fait | Source |
+|---|---|
+| Lots 1 à 5 clos : `portsEnAttenteLot1` à `portsEnAttenteLot5` vides, `recovery` câblé | #1179 (25/11) ; `node scripts/mobile/ios-native-app-store.mjs source .` vert sur `main` `5dfe7e9b` |
+| Espace établissement ouvert en production, coupe-circuit distant `ios_natif_etab_espace_actif` | #1190 (26/11), `DECISIONS_LOT5.md` section T14 ; garde `etablissement` |
+| Secret `SENTRY_DSN_IOS` présent depuis le 24/11/2026 ; le build 32 l'a reçu (variable masquée, donc non vide, au journal de l'envoi) | `gh secret list` (noms et dates seulement) ; run 45800013175. Arrivée d'événements chez Sentry non vérifiée |
+| Build 2.0.0 (32) envoyé sur TestFlight le 26/11 depuis `main` `f599cab3` | run `ios-native-testflight.yml` 45800013175 |
+| Soumis à la revue le 27/11/2026 à 08:19 UTC, publication automatique et progressive ; tag `mobile-native-ios-32` | runs `verifier` 45964361667 puis `soumettre` 45964533350 (`APP_STORE.md`, « État au 28/11/2026 ») |
+| Approuvé, en vente sur l'App Store FR depuis le 27/11 vers 20:19 UTC, en publication progressive (`phasedReleaseState = ACTIVE`) ; remplace la coquille 1.0.7 (24) sur iOS | run `mobile-store-status.yml` 46092658355 (28/11, 01:21 UTC) ; heure de mise en vente transmise, non relue dans l'API |
+| Android 1.0.8 (25) publié en production (`RELEASE_LIFECYCLE_STATE_PUBLISHED`, qui ne distingue pas un déploiement complet d'un déploiement partiel) | #1182 (25/11), run `mobile-delivery.yml` 45607727980, tags `mobile-native-android-25` et `mobile-native-source-android-25` ; run 46092658355 |
 
 ## D2 — Deux chaînes séparées
 
@@ -134,6 +149,10 @@ une décision à part (« En attente », n° 6).
   s'arrête avant la lane et le tag (revue M3 de #1177).
 - Gardes en lecture seule, dans l'ordre : `entrees`, `notes`, gardes du dépôt du TestFlight, `provenance`,
   `ci-ios`, `lots`, `apple-4.2`, `ota`, backend de production déployé, `build`. Détail : `APP_STORE.md`.
+  *Mis à jour le 28/11/2026 : la source du build passe aussi la garde `etablissement` (#1190), jouée avant
+  `lots` ; après `build`, le job joue le pré-vol des notes et du compte de démonstration (#1197), qui connecte ce
+  compte à la production puis le déconnecte : le job se dit donc « sans écriture chez Apple », plus « en lecture
+  seule ».*
 - La lane refuse de tourner hors du job `soumettre` de ce workflow, sans le verdict des gardes de la même
   tentative ou sans la phrase exacte ; une relance partielle est refusée (revue m5 et m8 de #1177).
 - Écriture chez Apple : la lane `ios submit_native`, protégée par la garde existante
@@ -172,7 +191,11 @@ run TestFlight), exige qu'il appartienne à `main`, puis lit cette source :
   (revue M2 de #1177 : la première version n'exigeait que les lots 4 et 5 et laissait passer
   `recovery`, lot 1). Ce sont les listes que les lots eux-mêmes vident à leur clôture (`PRINCIPES.md`
   §2). Aucune exception en dur : `recovery` bloque la soumission tant qu'il n'est pas câblé ou accepté
-  par une décision écrite de la fondatrice (`LOT6_PLAN.md` §2).
+  par une décision écrite de la fondatrice (`LOT6_PLAN.md` §2). *25/11/2026 : `recovery` câblé par #1179 ;
+  les cinq listes sont vides, aucune exception n'a été nécessaire.*
+- **`etablissement`** (ajoutée par #1190, lot 5, T14) : la table `OuvertureEspaceEtablissement.pour(mode:)` rend
+  `.ouvert` pour `.production`, l'app la câble dans `AppContainer.swift` et les rôles établissement sont servis.
+  Des listes vides ne prouvent pas que l'espace est ouvert : c'est une garde distincte (`APP_STORE.md`).
 - **`apple-4.2`** (source A1) : les ports `dashboard`, `mesMissions`, `presence` et `pointage` sont câblés ;
   les écrans natifs du tableau de bord, de Mes missions et du pointage existent et les onglets les
   montent ; le client appelle `fn_dashboard_soignant_complet` et `fn_scanner_code_pointage` ; la racine de
@@ -180,7 +203,9 @@ run TestFlight), exige qu'il appartienne à `main`, puis lit cette source :
 
 Vérifié à blanc le 24/11 : le build 31 (`95a987f2`) et `main` sont refusés par `lots` seulement (treize
 ports en attente aux lots 4 et 5, auxquels la garde corrigée ajoute `recovery` au lot 1), aucun refus
-`apple-4.2` ni `ota`.
+`apple-4.2` ni `ota`. Rejoué le 27/11 sur la source du build 32 (`f599cab3`) par les runs 45964361667 et
+45964533350 : vert (lots 1 à 5 clos, espace établissement ouvert en production, Apple 4.2, aucune mise à jour à
+chaud). Le 28/11, `source .` passe aussi sur `main` (`5dfe7e9b`).
 
 ## D9 — Captures App Store
 
@@ -189,28 +214,43 @@ pour l'app Swift (source A1, 2.3.3). La production des captures depuis l'app Swi
 livrée par cette branche : un XCUITest ne peut être ni compilé ni exécuté sans `xcodebuild`, et son job
 ne peut pas tourner avant d'être sur `main`. La marche à suivre est écrite dans `LOT6_PLAN.md`, tranche
 T5 : cible de test à part, hors des éclats de `ios-swift-ci.yml`, job lancé à la main.
+*28/11/2026 : toujours non livré. La soumission de 2.0.0 n'a pas touché aux captures (`skip_screenshots: true`
+dans la lane) ; celles de la fiche en ligne n'ont pas été relues.*
 
 ## D10 — Version Android
 
 La branche laisse Android en 1.0.7 (24). Le passage à 1.0.8 (25) touche `android/app/build.gradle`,
 `config/mobile-release.json` et le texte « Nouveautés » de Google Play (500 caractères au plus, source
 G12) : c'est une PR de release, à ouvrir quand le contenu web à livrer est recetté sur Android.
+*Fait le 25/11/2026 : PR de release #1182, livraison native par `mobile-delivery.yml` (run 45607727980), tags
+`mobile-native-source-android-25` et `mobile-native-android-25`. Le 28/11, `mobile-store-status.yml` lit 1.0.8 (25)
+publiée en production (run 46092658355). La recette Android sur appareil de ce contenu n'est pas consignée ici.*
 
 ## En attente de la fondatrice
 
-1. Valider le texte de `config/mobile-release-notes-ios.txt`.
-2. Choisir la mise en vente après approbation : automatique (défaut) ou manuelle.
+État des points relu le 28/11/2026, en italique.
+
+1. Valider le texte de `config/mobile-release-notes-ios.txt`. *Ce texte, inchangé depuis #1177, a été écrit
+   comme « Nouveautés » de 2.0.0 le 27/11 (résumé de deliver, run 45964533350) ; aucune validation écrite n'est
+   consignée ici.*
+2. Choisir la mise en vente après approbation : automatique (défaut) ou manuelle. *Fait : `automatique` au run
+   `soumettre` du 27/11.*
 3. Créer le secret `SENTRY_DSN_IOS` avant le build à soumettre, sinon aucun taux de crash ne sera mesuré
-   pendant la publication progressive (`docs/mobile-swift/SENTRY_IOS.md`).
-4. Faire dans App Store Connect et Play Console les saisies listées dans `LOT6_PLAN.md` §3 et §4.
+   pendant la publication progressive (`docs/mobile-swift/SENTRY_IOS.md`). *Fait : secret créé le 24/11/2026,
+   reçu par le build 32 ; arrivée des événements chez Sentry non vérifiée.*
+4. Faire dans App Store Connect et Play Console les saisies listées dans `LOT6_PLAN.md` §3 et §4. *En partie :
+   la 2.0.0 a repris la fiche de 1.0.7 (description, compte de démonstration) et la lane a écrit les notes pour
+   la revue ; captures, confidentialité, classification et description n'ont pas été relues (`LOT6_PLAN.md` §3).*
 5. Publication Android à 100 % dès l'approbation (lane actuelle, `release_status: 'completed'`, source
-   G13) ou déploiement par étapes (source G7) : inchangé par défaut.
+   G13) ou déploiement par étapes (source G7) : inchangé par défaut. *1.0.8 (25) est publiée (D10) ; aucun
+   choix d'étapes n'est consigné.*
 6. OTA Android pendant le chantier Swift : garder la règle stricte (défaut) ou la rendre indifférente aux
    chemins sans effet sur Android.
-7. Retour arrière iOS : le tester une fois, ou l'abandonner explicitement.
+7. Retour arrière iOS : le tester une fois, ou l'abandonner explicitement. *Toujours ouvert : procédure de
+   `LOT6_PLAN.md`, T7, non testée.*
 8. `recovery` (réinitialisation native du mot de passe, lot 1) : le faire câbler avant la soumission
    (recommandé), ou accepter par écrit de soumettre sans lui. Tant que rien n'est décidé, la garde `lots`
-   refuse (`LOT6_PLAN.md` §2).
+   refuse (`LOT6_PLAN.md` §2). *Sans objet depuis le 25/11/2026 : `recovery` câblé par #1179.*
 9. Réglage du dépôt : environnement GitHub restreint à `main` pour les secrets Apple et Google
    (`APP_STORE.md`, « Secrets et droits »).
 
