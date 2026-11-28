@@ -1155,6 +1155,12 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
        par la fixture et échouer la garde Node. La garde exige aussi que chaque fonction admise soit `STABLE` dans
        `public.sql`, ou sans aucune écriture (`INSERT`, `UPDATE`, `DELETE`, `PERFORM`, `EXECUTE`) dans son corps.
        `fn_soignant_pour_etablissement` est VOLATILE déclarée et son corps n'écrit rien.
+     - Limite de la garde Node (revue du delta de #1196, d3) : la vraie barrière est la liste blanche, qui ne s'élargit
+       que par une revue humaine ; la garde Node n'est qu'un indice. Elle ne suit pas les appels : un corps VOLATILE
+       qui ferait `SELECT fn_qui_ecrit() INTO v` ou `RETURN fn_qui_ecrit()` passerait. Postgres n'arrête pas non plus
+       une fonction `STABLE` qui appelle une fonction VOLATILE d'écriture : la lecture seule d'une fonction non
+       volatile ne vaut que pour ses propres commandes. Un corps délimité autrement que par `$$` (par exemple
+       `$body$`) n'est pas trouvé par l'expression régulière et fait échouer la garde : c'est un échec sûr.
    - **diagnostic DEBUG des écrans établissement** : `SupabaseErrorMapping.map` note le dernier échec serveur
      (`DiagnosticDernierEchec` : `postgrest=<code>;message=<masqué>`, `http=<statut>`, `reseau=<code>`,
      `decodage=<clé>`). L'espace établissement le pose, hors démo, comme valeur d'accessibilité de
@@ -1163,19 +1169,23 @@ partie de la tête d'assemblage de la vague D ; aucune exécution contre le STAG
      adresses masqués), publiée par le filtre du journal du job. Revue de #1196 :
      - M2 et m4 : `record(_:)` est `nonisolated`. Il interroge l'app sous `MainActor.assumeIsolated`, sur le fil
        principal seulement. Un appel imbriqué pendant la collecte est écarté, jamais enregistré. La collecte est
-       bornée : deux requêtes au plus, la seconde sautée au-delà de 5 s, rien si l'app n'est plus au premier plan.
-       L'échec d'origine est ensuite enregistré tel quel, seul.
+       bornée : deux interrogations de l'app (l'élément `debug-dernier-echec`, puis la recherche des `*-error`, cinq
+       éléments au plus), la seconde sautée au-delà de 5 s, rien si l'app n'est plus au premier plan ; une requête en
+       cours n'est jamais interrompue (revue du delta, d1). L'échec d'origine est ensuite enregistré tel quel, seul.
      - m3 : « dernier-echec=aucun » ne prouve pas l'absence d'échec serveur. La valeur n'est jamais effacée (elle peut
        dater d'un écran antérieur du même processus), et seuls les échecs passés par `SupabaseErrorMapping.map` sont
        notés : un refus en corps HTTP 200 ou une erreur avalée (`candidaturesEnAttente`) ne l'est pas.
      - m5 : sont masqués les uuid, les adresses, les numéros de téléphone, toute suite d'au moins six chiffres (code de
        pointage, SIRET, téléphone collé) et les empreintes hexadécimales. Les noms de la cohorte sont fictifs
-       (« Recette », « Lot cinq ») ; un nom réel cité par un message ne serait pas masqué.
+       (« Recette », « Lot cinq ») ; un nom réel cité par un message ne serait pas masqué. Un numéro écrit avec une
+       espace après l'indicatif (« +33 6 12 34 56 78 ») est masqué lui aussi (revue du delta, d4).
 
-## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, NON MERGÉE)
+## Tranche T14 — ouverture de l'espace établissement en production (25/11/2026, mergée le 26/11/2026)
 
-Branche `lot5/l5-t14-ouverture-production`, rebasée sur `main` (`570df5db`, après le merge de #1188, corrections
-juridiques du point 4). Parcours STAGING n° 5 vert le 26/11/2026 (point 4).
+Branche `lot5/l5-t14-ouverture-production`, mergée par #1190 le 26/11/2026 (`6f6a245c` sur `main`), depuis la base
+`d0bd46e3` : rebasée d'abord après le merge de #1188 (`570df5db`, corrections juridiques du point 4), puis sur `main`
+après #1191 à #1196 (revue du delta de #1190, m2). Parcours STAGING n° 5 vert le 26/11/2026 (point 4). Premier build
+signé qui la contient : 2.0.0 (32), en vente sur l'App Store depuis le 27/11/2026.
 
 1. **Décision proposée** : `OuvertureEspaceEtablissement.pour(mode:)` rend `.ouvert` pour `.production` (démo et
    staging inchangés). C'est la seule ligne de code qui change le comportement ; aucun texte affiché n'est ajouté ni
@@ -1230,11 +1240,13 @@ juridiques du point 4). Parcours STAGING n° 5 vert le 26/11/2026 (point 4).
      « Troisième parcours STAGING », #1191) ; le quatrième (45737490974) sur un défaut du test, corrigé par #1196.
      **Non prouvé par ce parcours** : `Jolene diagnostic stockage-session : stockage=memoire;sonde=-34018` aux deux
      phases, le trousseau refuse toujours le build non signé et le repli mémoire DEBUG/staging a servi ; le critère
-     « restauration après arrêt » n'est donc pas prouvé (build signé requis, à décider). **Suivi, non corrigé ici** : la
-     ligne `Jolene diagnostic échec : attente « Initial session emitted after attempting to refresh the local stored
+     « restauration après arrêt » n'est donc pas prouvé (build signé requis, à décider). **Suivi d5** : la ligne
+     `Jolene diagnostic échec : attente « Initial session emitted after attempting to refresh the local stored
      session… » | dernier-echec=élément absent` est publiée aux deux phases alors que les tests passent (incident
-     enregistré sans faire échouer le test ; cause non établie). Le parcours a tourné sur `main` `d0bd46e3`, pas sur la
-     tête de cette branche.
+     enregistré sans faire échouer le test ; cause non établie). Depuis le 28/11/2026, la ligne porte la nature de
+     l'incident (`incident=assertion`, `systeme`…, d'après `XCTIssue.type`) et le commentaire de `record(_:)` dit
+     qu'elle est écrite pour tout incident ; le préfixe, lu par le filtre du workflow, est inchangé. Le parcours a
+     tourné sur `main` `d0bd46e3`, pas sur la tête de cette branche.
    - **Validation juridique de la fondatrice** (HARD STOP n°4) : **validé le 25/11/2026**. À une liste de neuf points
      juridiques avec recommandations, la fondatrice a répondu « Oui, tout valider » (réponse rapportée par la session
      de coordination, non relue ici). Pour T14, cela couvre, mot pour mot de la liste :
@@ -1253,8 +1265,10 @@ juridiques du point 4). Parcours STAGING n° 5 vert le 26/11/2026 (point 4).
      (§2 c) à la liste validée le 24/11/2026 (#1179, section 6, groupes A à E) ou à #1188 ; les autres (bandeaux, pied
      de page, compte à rebours, signature OTP et certificat de l'écran contrat partagé, dont « Signé avec succès…
      (art. 1366-1367 Code civil) », « RPPS vérifié », « PSC actif » et « Audit trail complet disponible sur demande »)
-     sont **à soumettre à la fondatrice** (§3), sans rien trancher. La validation du 25/11 a été donnée dans la
-     conversation de travail et consignée par la session principale ; elle reste à poster dans la PR.
+     ont été soumis à la fondatrice (§3) et validés le 26/11/2026 : « Oui, je valide », retranscrit avec sa portée et
+     ses limites dans le commentaire 7180796336 de #1190. La validation du 25/11 (« Oui, tout valider ») est citée dans
+     la décision de merge de #1188 (commentaire 7174390075). Les deux ont été données dans la conversation de travail
+     et retranscrites par la session, pas postées par la fondatrice elle-même (revue du delta de #1190, m1).
    - **Drapeaux** : les sept clés `ios_natif_etab_{accueil,missions,publier,presences,pointage,messages,compte}_actif`
      présentes et à 1 en production, et `fn_param_bool` exécutable par `authenticated`. Lues le 25/11/2026 par une
      requête en lecture seule : sept lignes à 1 (catégorie `OPERATIONS`, bornes 0 et 1), migration `20261102204450`
@@ -1323,6 +1337,8 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
      publication (salarié : « brut » qualifie la rémunération du contrat de travail) ; repris mot pour mot du web,
      mais absent des groupes A à E ;
    - tout texte ajouté après la liste.
+   **Mis à jour le 28/11/2026** : ces choix et ce libellé sont repris mot pour mot dans la liste de neuf points
+   validée le 25/11/2026 (section T14, point 4) ; l'espace établissement est ouvert en production depuis #1190.
    **Textes validés le 24/11/2026** (plus en attente) : la liste de la revue B8 du tour 2 (section 6, groupes A à E),
    validée explicitement par la fondatrice (« Oui, je valide », point 1 de l'intégration de la vague D) : statut et
    rappel DPAE de l'écran contrat, avis du plancher du taux, renvoi « Contester cette présence », mention de signature
@@ -1343,5 +1359,7 @@ Reprise du §6 de `LOT5_PLAN.md` (« Ce qui exige Gabrielle ») ; rien de ce qui
    de `fn_generer_qr_mission` ; consigné dans `PORTE_LOT5.md` seulement avec son accord explicite.
 10. **Périmètre d'acceptation (D25)** : acceptation native limitée aux missions `SALARIE` hors `MEDECIN` ; refusé,
     T6 passe en B9 (escrow).
-11. **T14 (ouverture en production)** : validation juridique obtenue le 25/11/2026 (section T14, point 4) ; go de
-    merge (parcours STAGING n° 5 vert le 26/11/2026 ; #1188, prérequis, est mergée).
+11. **T14 (ouverture en production)** : fait, plus en attente. Validations juridiques du 25/11/2026 et du
+    26/11/2026 (section T14, point 4) ; prérequis remplis (parcours STAGING n° 5 vert le 26/11/2026, #1188 mergée) ;
+    go de merge de la fondatrice (délégation du 24/11/2026, décision de merge de #1190, commentaire 7188367300) ;
+    mergée le 26/11/2026 (#1190) et livrée dans 2.0.0 (32) (revue du delta de #1190, m6).

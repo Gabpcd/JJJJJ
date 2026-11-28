@@ -6,9 +6,9 @@ import XCTest
 
 /// Manifeste des lectures du parcours STAGING du lot 5 (`scripts/mobile/staging-lot5-lectures.json`), produit depuis
 /// les constantes réelles des passerelles : le pré-vol de `staging-lot5-fixture.mjs` rejoue ces lectures sous le JWT
-/// d'E1 avec la clé de l'app, avant le XCUITest (quatrième parcours STAGING, 26/11/2026). Un `select`, une table, un
-/// filtre ou une fonction qui change dans le Swift sans le manifeste fait échouer ce test : régénérer avec
-/// `JOLENE_ECRIRE_MANIFESTE_LECTURES=1 swift test --filter LecturesParcoursEtabManifesteTests` et versionner le résultat.
+/// d'E1 avec la clé de l'app, avant le XCUITest (quatrième parcours STAGING, 26/11/2026). Régénérer avec
+/// `JOLENE_ECRIRE_MANIFESTE_LECTURES=1 swift test --filter LecturesParcoursEtabManifesteTests` et versionner le résultat ;
+/// ce qui fait échouer ce test, et ce qui ne le fait pas, est dit ci-dessous (revue du delta de #1196, d2).
 /// Seulement des lectures : aucune écriture (acceptation, notation, validation) n'y figure. Jetons de place : `{E1}`,
 /// `{S1}`, `{M1}`, `{M2}`, `{CANDIDATURE}`, `{CONTRAT}`.
 ///

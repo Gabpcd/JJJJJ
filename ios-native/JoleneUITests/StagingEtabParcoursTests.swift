@@ -207,12 +207,16 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
     /// par l'app (`debug-dernier-echec`, DEBUG) et les états d'erreur affichés (`*-error`), masqués (`masquer`), puis
     /// l'échec d'origine est enregistré tel quel. Revue de #1196 :
     /// - M2 : un appel imbriqué pendant la collecte est écarté (il n'enregistre rien) ; la collecte est bornée
-    ///   (`budgetDiagnostic`, deux requêtes au plus) ; l'échec d'origine est le seul enregistré, sans modification ;
+    ///   (`budgetDiagnostic`, deux interrogations de l'app ; une requête en cours n'est jamais interrompue, voir
+    ///   `diagnostiquer`) ; l'échec d'origine est le seul enregistré, sans modification ;
     /// - m4 : XCTest appelle `record` hors de tout acteur ; l'override est `nonisolated` et n'interroge l'app que sur le
     ///   fil principal, sous `MainActor.assumeIsolated`, comme `JoleneUITestCase.tearDownWithError` ; ailleurs, il
     ///   enregistre seulement ;
     /// - m3 : « dernier-echec=aucun » dit seulement qu'aucun échec n'est passé par `SupabaseErrorMapping.map` depuis le
-    ///   lancement de l'app, pas qu'aucun échec serveur n'a eu lieu (refus en corps HTTP 200, erreurs avalées).
+    ///   lancement de l'app, pas qu'aucun échec serveur n'a eu lieu (refus en corps HTTP 200, erreurs avalées) ;
+    /// - d5 : la ligne est écrite pour TOUT incident enregistré, y compris un incident qui ne fait pas échouer le test
+    ///   (parcours n° 5, run 45754181214 : « Initial session emitted… » aux deux phases, tests passés ; cause non
+    ///   établie). Le champ `incident=` nomme sa nature (`XCTIssue.type`) ; seul le statut du test dit s'il a échoué.
     nonisolated override func record(_ issue: XCTIssue) {
         guard Thread.isMainThread else { super.record(issue); return }
         // nil : appel imbriqué pendant la collecte, écarté sans rien enregistrer à la place de l'échec d'origine.
@@ -227,8 +231,10 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
         super.record(issue)
     }
 
-    /// Ligne de diagnostic d'un échec, masquée ; deux requêtes au plus, sautées si l'app n'est plus au premier plan ou si
-    /// le budget est dépassé.
+    /// Ligne de diagnostic d'un incident, masquée. Deux interrogations de l'app au plus (revue du delta de #1196, d1) :
+    /// l'élément `debug-dernier-echec` (existence puis valeur), puis la recherche des `*-error` (identifiant et libellé
+    /// de cinq éléments au plus). Rien si l'app n'est plus au premier plan ; le budget n'est contrôlé qu'avant la
+    /// seconde, qui est sautée au-delà ; une requête en cours n'est jamais interrompue.
     private func diagnostiquer(_ issue: XCTIssue) -> String {
         let debut = Date()
         let attente = issue.compactDescription.prefix(160)
@@ -243,18 +249,33 @@ final class StagingEtabParcoursTests: JoleneUITestCase {
                 .allElementsBoundByIndex.prefix(5).map { "\($0.identifier)=\($0.label)" }
             erreurs = trouvees.isEmpty ? "aucune" : trouvees.joined(separator: ", ")
         }
-        return Self.masquer("attente « \(attente) » | dernier-echec=\(echec) | erreurs=\(erreurs)")
+        return Self.masquer("attente « \(attente) » | incident=\(Self.nature(issue.type)) | dernier-echec=\(echec) | "
+                            + "erreurs=\(erreurs)")
     }
 
-    /// Masquage de la ligne publiée (revue de #1196, m5) : uuid, adresses, numéros de téléphone, toute suite d'au moins
-    /// six chiffres (code de pointage, SIRET, téléphone collé) et empreintes hexadécimales ; retours à la ligne aplatis.
+    /// Nature d'un incident enregistré (revue de #1196, d5) : un incident n'est pas toujours un échec du test.
+    nonisolated static func nature(_ type: XCTIssue.IssueType) -> String {
+        switch type {
+        case .assertionFailure: return "assertion"
+        case .thrownError: return "erreur-levee"
+        case .uncaughtException: return "exception"
+        case .performanceRegression: return "performance"
+        case .system: return "systeme"
+        case .unmatchedExpectedFailure: return "echec-attendu-absent"
+        @unknown default: return "autre"
+        }
+    }
+
+    /// Masquage de la ligne publiée (revue de #1196, m5) : uuid, adresses, numéros de téléphone (y compris
+    /// « +33 6 12 34 56 78 », espace après l'indicatif : revue du delta, d4), toute suite d'au moins six chiffres (code de
+    /// pointage, SIRET, téléphone collé) et empreintes hexadécimales ; retours à la ligne aplatis.
     /// Les noms de la cohorte sont fictifs (« Recette », « Lot cinq ») ; un nom réel cité par un message n'est pas masqué.
     nonisolated static func masquer(_ texte: String) -> String {
         texte.replacingOccurrences(of: #"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"#,
                                    with: "<uuid>", options: .regularExpression)
             .replacingOccurrences(of: #"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#, with: "<adresse>", options: .regularExpression)
             .replacingOccurrences(of: #"\b[0-9A-Fa-f]{32,}\b"#, with: "<empreinte>", options: .regularExpression)
-            .replacingOccurrences(of: #"(\+33|\b0)[1-9]([ .-]?[0-9]{2}){4}\b"#, with: "<telephone>", options: .regularExpression)
+            .replacingOccurrences(of: #"(\+33[ .-]?|\b0)[1-9]([ .-]?[0-9]{2}){4}\b"#, with: "<telephone>", options: .regularExpression)
             .replacingOccurrences(of: #"[0-9]{6,}"#, with: "<nombre>", options: .regularExpression)
             .replacingOccurrences(of: "\n", with: " ")
     }
