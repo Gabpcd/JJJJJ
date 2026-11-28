@@ -2426,19 +2426,24 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
 ## Interdite côté natif : `fn_creer_notification`
 
 - **Statut natif** : **jamais** (`RPC_JAMAIS_SUIVIES` ; `DECISIONS_LOT2.md` décision 9).
-- **Pourquoi** : après une contestation de présence, le web appelle `fn_creer_notification` (`PanneauContestation.tsx`
-  l.147-155, type `CONTESTATION_PRESENCE`) pour prévenir l'autre partie. L'insertion du litige déclenche déjà
-  `trg_notifier_creation_litige` (`AFTER INSERT ON litiges`, `public.sql` l.76080) : l'appel client crée un doublon
-  et suppose le droit, pour tout compte authentifié, d'écrire une notification arbitraire à un destinataire de son
+- **Pourquoi** : après une contestation de présence, le web appelait `fn_creer_notification` (`PanneauContestation.tsx`,
+  type `CONTESTATION_PRESENCE`) pour prévenir l'autre partie. L'insertion du litige déclenche déjà
+  `trg_notifier_creation_litige` (`AFTER INSERT ON litiges`, `public.sql` l.76080) : l'appel client créait un doublon
+  et supposait le droit, pour tout compte authentifié, d'écrire une notification arbitraire à un destinataire de son
   choix (`fn_creer_notification` l.27450). Le natif ne reproduit pas cet appel ; la relecture du litige suffit.
 - **Constat B9** (revue fraîche de T0, `DECISIONS_LOT2.md` « En attente de Gabrielle ») : la fonction est
-  `SECURITY DEFINER` (l.27450-27475), toujours GRANT `authenticated` (`public.sql` l.82276), et son seul contrôle
-  est `auth.uid() IS NULL` (refus des appels anonymes hors cron, l.27461-27463) : tout compte connecté peut écrire
+  `SECURITY DEFINER` (l.27450-27475), GRANT `authenticated` (`public.sql` l.82276), et son seul contrôle
+  est `auth.uid() IS NULL` (refus des appels anonymes hors cron, l.27461-27463) : tout compte connecté pouvait écrire
   une notification arbitraire (destinataire, type, titre, corps, `lien`). `docs/audit-fonctionnel-pre-lancement.md`
-  l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification a été ajouté). À confirmer sur la
-  définition live par une PR backend séparée ; la garde rougit si le GRANT disparaît ou si le destinataire est
-  contrôlé.
-- **Garde** : `verifierExclusions` refuse son entrée dans `RPC_SUIVIES` ; la garde des littéraux Swift la signale.
+  l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification avait été ajouté). Numéros de ligne du
+  dump d'avant la re-baseline qui suit la migration ci-dessous.
+- **Corrigé le 28 novembre 2026** (B9, migration `20261128150000_borner_notifications_et_classement`, depuis la
+  définition live) : `REVOKE EXECUTE` à `PUBLIC`, `anon` et `authenticated`, corps inchangé, `service_role` et les
+  appelants serveur conservés. Le web n'appelle plus la fonction : contestation retirée (doublon du trigger), alerte
+  du pool d'urgence par `fn_alerter_pool_urgence`, relance du mandat par `fn_admin_relancer_mandat_facturation`.
+- **Garde** : `verifierExclusions` refuse son entrée dans `RPC_SUIVIES` ; la garde des littéraux Swift la signale ;
+  la garde « `RPC_JAMAIS_SUIVIES` : `fn_creer_notification` » vérifie qu'aucun appel web ne revient et que le
+  `REVOKE` est posé (migration, puis dump re-baseliné).
 
 ## Interdite côté natif : `fn_lier_iban_verifie_document`
 

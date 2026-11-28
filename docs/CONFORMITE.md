@@ -400,7 +400,8 @@ d'inactivité par une décision documentée.
    service ; l'audit d'un changement d'identité fait par un cron ou une migration reste muet.
 5. **Copies de bulletins de paie** : durée de conservation à instruire.
 6. **Garde du staging** `tests/fixtures/staging-delete-account/safe-v55.json` : empreinte de
-   `fn_supprimer_mon_compte` à recaler au prochain bootstrap du staging.
+   `fn_supprimer_mon_compte` recalée le 28/11/2026 (#1206). Le catalogue audité intègre le corps
+   établissement de #1198 ; le corps de #1207 est le seul successeur déclaré ; aucun autre corps n'est admis.
 7. **Justificatifs de réclamation et d'annulation** : les fichiers sont effacés, mais
    `reclamations_score.justificatif_storage_path` et `evenements_score_soignant.justificatif_storage_path`
    gardent leur chemin (nom d'origine assaini) et `reclamations_score.texte_libre` reste (catégories

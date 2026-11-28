@@ -117,7 +117,7 @@ export function PanneauContestation({
   const estResolu = !!litige && STATUTS_RESOLUS.includes(litige.statut as typeof STATUTS_RESOLUS[number]);
 
   const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
-  const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
+  // Libellé du rôle de l'appelant : retiré avec l'appel client fn_creer_notification (B9).
   const autreRoleLabel = role === 'SOIGNANT' ? 'établissement' : 'soignant';
 
   const creerContestation = async () => {
@@ -140,17 +140,17 @@ export function PanneauContestation({
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      // Notify the other party
-      const destId = role === 'SOIGNANT' ? etablissementId : soignantId;
-      const destType = role === 'SOIGNANT' ? 'ETABLISSEMENT' : 'SOIGNANT';
-      const lien = role === 'SOIGNANT' ? '/etablissement/presences' : '/soignant/presences';
-      await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: destId, p_type_destinataire: destType,
-        p_type: 'CONTESTATION_PRESENCE',
-        p_titre: 'Présence contestée',
-        p_corps: `Le ${roleLabel} a contesté une présence validée.`,
-        p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
-      });
+      // Notification de l'autre partie : posée par le serveur, plus par le client.
+      // trg_notifier_creation_litige (AFTER INSERT ON litiges) écrit LITIGE_OUVERT
+      // pour l'établissement quand le soignant conteste, et pour le soignant quand
+      // l'établissement conteste. L'ancien appel client fn_creer_notification
+      // (CONTESTATION_PRESENCE) faisait doublon ; il supposait aussi que tout compte
+      // connecté puisse notifier n'importe qui. EXECUTE est retiré à authenticated
+      // par la migration 20261128150000 (B9) ; le natif n'a jamais fait cet appel.
+      // Ce bloc garde la hauteur de l'ancien appel : des tests Swift relisent ce
+      // fichier par numéro de ligne (PresencesEtabRulesTests, LibellesWeb.swift,
+      // textes-web-ios-rendus.json). Retirer des lignes ici impose de recaler ces
+      // citations dans le même changement.
 
       toast.success('Contestation envoyée');
       setMotif('');

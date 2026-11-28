@@ -1924,6 +1924,15 @@ n'est implémenté par les tranches iOS ; chaque point bloque seulement la tranc
   **Proposition** (PR backend séparée, B9, depuis la définition live) : retirer l'appel web (le trigger
   `trg_notifier_creation_litige` notifie déjà) puis `REVOKE EXECUTE … FROM authenticated`, ou contrôler le
   destinataire et le type, avec un rejet explicite.
+  **Basculé le 28 novembre 2026** (migration `20261128150000_borner_notifications_et_classement`, go écrit de
+  Gabrielle du 24/11/2026) : la première option. Définition live relue (corps inchangé, md5
+  `bc337810f500768fed6748fac74265e8`) ; `REVOKE EXECUTE` à `PUBLIC`, `anon` et `authenticated`, `service_role`
+  conservé ; appelants serveur intacts (fonctions `SECURITY DEFINER` de `postgres`, préflight qui refuse tout
+  appelant exécuté sous un rôle utilisateur). Les trois appels web sont retirés : contestation (doublon du
+  trigger), alerte du pool d'urgence (`fn_alerter_pool_urgence`, texte et destinataires posés par le serveur),
+  relance du mandat (`fn_admin_relancer_mandat_facturation`, `est_admin()`). Preuves : suite
+  `tests/security/notifications-classement-b9.test.sql` (staging) et banc
+  `tests/postgres/notifications-classement-b9.pg17.mjs`, qui reproduit d'abord la faille sur le corps live.
 - **Gardes NULL des fonctions `SECURITY DEFINER` — renvoi unique à l'audit du 3 novembre 2026** : les listes
   partielles de constats de T0 (gardes ternaires de `fn_presences_detail_mission` et `fn_etat_pointage_mission`,
   chaînes de pointage à distance du système ①, « Motif à auditer ») sont remplacées par l'audit des gardes NULL du

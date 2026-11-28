@@ -130,22 +130,22 @@ function AlerterPoolUrgence({ missionId, mission, user, afficherNotification }: 
         return;
       }
 
+      // Notifications in-app posées par le serveur (texte, lien, destinataires de
+      // fn_soignants_urgence, sans doublon) : fn_creer_notification n'est plus
+      // appelable par un compte (migration 20261128150000). Un soignant déjà
+      // prévenu pour cette mission, y compris par la notification automatique à
+      // la création d'une mission urgente, ne l'est pas une seconde fois. Bloc de
+      // la hauteur de l'ancien appel : des annotations Swift citent ce fichier par
+      // numéro de ligne (EtabMissionsPresentation.swift, DetailMission.tsx:1085).
+      const { error: alerteError } = await supabase.rpc('fn_alerter_pool_urgence', { p_mission_id: missionId });
+      if (alerteError) throw alerteError;
+
       const { data: session } = await supabase.auth.getSession();
       const token = session?.session?.access_token;
-      // Send notification + email to all soignants in parallel
+      // E-mail et SMS en parallèle (best-effort)
       const supabaseUrl = SUPABASE_URL;
       const results = await Promise.allSettled(
         (soignants as any[]).map(async (s) => {
-          await supabase.rpc('fn_creer_notification', {
-            p_destinataire_id: s.soignant_id,
-            p_type_destinataire: 'SOIGNANT',
-            p_type: 'MISSION_URGENTE',
-            p_titre: `🚨 Mission urgente : ${mission.intitule}`,
-            p_corps: `${mission.intitule} — ${formatParis(mission.debut_le, 'dd/MM à HH:mm')}. Premier arrivé, premier servi !`,
-            p_lien: `/soignant/missions/${missionId}`,
-            p_type_ressource: 'MISSION',
-            p_id_ressource: missionId,
-          });
           if (token) {
             fetch(`${supabaseUrl}/functions/v1/send-email`, {
               method: 'POST',

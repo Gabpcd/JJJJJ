@@ -13,15 +13,15 @@ vi.mock('@/contexts/NotificationContext', () => ({
 }));
 
 describe('ClassementSoignants', () => {
-  it('affiche le prénom et le nom renvoyés par fn_top_soignants', async () => {
+  // Depuis la migration 20261128150000 (B9), fn_top_soignants renvoie le prénom et l'initiale du nom, sans
+  // identifiant ni nombre d'évaluations ; la page affiche les deux champs tels quels.
+  it('affiche le prénom et l\'initiale du nom renvoyés par fn_top_soignants', async () => {
     rpcMock.mockResolvedValueOnce({
       data: [{
-        id: 'soignant-1',
         prenom: 'Marie',
-        nom: 'Dupont',
+        nom: 'D.',
         profession: 'IDE',
         note_moyenne: 4.9,
-        nb_evaluations: 12,
         score_fiabilite: 98,
         total_missions_terminees: 24,
       }],
@@ -30,7 +30,7 @@ describe('ClassementSoignants', () => {
 
     render(<ClassementContent />);
 
-    expect(await screen.findByText('Marie Dupont')).toBeInTheDocument();
+    expect(await screen.findByText('Marie D.')).toBeInTheDocument();
     expect(rpcMock).toHaveBeenCalledWith('fn_top_soignants', {
       p_profession: null,
       p_limit: 10,

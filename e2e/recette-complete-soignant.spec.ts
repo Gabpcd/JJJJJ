@@ -203,7 +203,7 @@ test('SOIGNANT — préférences notifications enregistrées et relues',async({p
 test('SOIGNANT — listes peuplées et filtres locaux notifications, classement et parrainage',async({page},info)=>{
  const state=await simulerSoignant(page);
  state.tables.set('notifications',[{id:'notification-recette',destinataire_id:ids.user,titre:'Votre document est vérifié',corps:'La pièce simulée a été examinée.',type:'DOCUMENT_VALIDE',lien:'/soignant/mes-documents',lue:false,cree_le:new Date().toISOString()}]);
- state.overrides.set('fn_top_soignants',[{id:'classement-recette',prenom:'Alice',nom:'Simulation',profession:'IDE',note_moyenne:4.8,total_missions_terminees:12,score_fiabilite:90,niveau:'OR',total_evaluations:8}]);
+ state.overrides.set('fn_top_soignants',[{prenom:'Alice',nom:'S.',profession:'IDE',note_moyenne:4.8,total_missions_terminees:12,score_fiabilite:90}]); // forme du serveur depuis 20261128150000 (B9)
  state.overrides.set('fn_obtenir_mes_parrainages',{filleuls:[{filleul_id:'filleul-recette',prenom:'Noémie',cree_le:'2026-09-20T10:00:00Z',premiere_mission_le:null,statut:'INSCRIT',gmv_cumule_filleul:0,reste_gmv_avant_prime:1000,seuil_gmv:1000,seuil_atteint:false}]});
  await entrer(page,'connexion');await aller(page,'/soignant/notifications');await expect(page.getByText('Votre document est vérifié',{exact:true})).toBeVisible();
  await page.locator('main').getByRole('button',{name:'Missions',exact:true}).click();await expect(page.getByText('Votre document est vérifié',{exact:true})).not.toBeVisible();

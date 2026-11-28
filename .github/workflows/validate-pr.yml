@@ -184,6 +184,9 @@ jobs:
       - name: Suppression du compte soignant (B9) — fichiers et noms lus par l’IA effacés, corps LIVE, purge Storage et câblage sans réseau
         run: node --test tests/node/suppression-compte-soignant-effacement.node.mjs tests/node/rgpd-purge-stockage.node.mjs
 
+      - name: Notifications et classement (B9) — REVOKE, RPC bornées, classement cloisonné et câblage sans réseau
+        run: node --test tests/node/notifications-classement-b9.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
@@ -759,7 +762,7 @@ jobs:
           fi
           # Les sept sources ont déjà été exécutées, puis comparées aux 90
           # statements du registre et au catalogue revu après installation V2.
-          # Les bancs PG17 rejouent leurs sources ; les 69 suites ci-dessous
+          # Les bancs PG17 rejouent leurs sources ; les 71 suites ci-dessous
           # restent exécutées sur staging, sous SAVEPOINT/ROLLBACK.
           if [ "${PAIEMENTS_INSTALLATION_MODE:-}" = 'installed' ]; then
             test "$CONNECT_INSTALLATION_MODE" != 'installed'
@@ -835,6 +838,7 @@ jobs:
             tests/security/agents-croissance-brouillons.test.sql
             tests/security/suppression-compte-soignant-preuves.test.sql
             tests/security/suppression-compte-soignant-effacement.test.sql
+            tests/security/notifications-classement-b9.test.sql
             tests/security/revue-store-missions-isolees.test.sql
             tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
@@ -1065,6 +1069,15 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE effacement_pieces_banc'
           PGDATABASE=effacement_pieces_banc node --test tests/postgres/suppression-compte-soignant-effacement.pg17.mjs
+      - name: Dump de schéma épinglé, antérieur à la migration B9 notifications et classement
+        # Re-baseline du 27/11/2026 (#1204) : corps LIVE de fn_creer_notification et fn_top_soignants, GRANT compris.
+        run: git fetch --no-tags --depth=1 origin 1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9
+      - name: Notifications et classement (B9) — failles reproduites puis fermées sur le schéma du dépôt (base dédiée)
+        # Migration 20261128150000 : notification arbitraire et classement nominatif reproduits sur le corps LIVE, puis la
+        # suite SQL du staging telle quelle, puis le même constat refusé.
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE notifications_b9_banc'
+          PGDATABASE=notifications_b9_banc node --test tests/postgres/notifications-classement-b9.pg17.mjs
       - name: Alignement staging — résolution des alias du catalogue
         run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
       - name: Factures — émission atomique et reprise email PostgreSQL 17 isolé
