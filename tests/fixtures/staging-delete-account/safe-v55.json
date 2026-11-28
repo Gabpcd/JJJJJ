@@ -21,9 +21,9 @@
   },
   "catalogueQuerySha256": "babeb6089a5c6ab88a718ad136c300851c8e041c7bc8b0fdcc8add5b90ff42a7",
   "catalogueSuccesseur": {
-    "migration": "supabase/migrations/20261126100100_missions_revue_store.sql",
-    "signature": "public.fn_supprimer_mon_compte_etablissement()",
-    "definition_md5": "dfa336f2895335c770f4bee6ba9cbc05"
+    "migration": "supabase/migrations/20261128140100_suppression_compte_soignant_effacement_pieces.sql",
+    "signature": "public.fn_supprimer_mon_compte()",
+    "definition_md5": "9c95849e4777bfa195bab4bcb831aab0"
   },
   "catalogue": {
     "psc_constraints": [
@@ -68,7 +68,7 @@
       },
       {
         "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
-        "definition_md5": "3eb0bafbbdd5b6816a2c0bc8d85a94c4",
+        "definition_md5": "dfa336f2895335c770f4bee6ba9cbc05",
         "owner": "postgres",
         "signature": "public.fn_supprimer_mon_compte_etablissement()"
       },

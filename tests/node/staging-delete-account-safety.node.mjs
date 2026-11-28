@@ -76,17 +76,29 @@ test('SQL definition/ACL drift blocks; returned data is never reflected in error
   await assert.rejects(h.run(), error => error.message === 'DELETE_ACCOUNT_SAFETY_RPC_DRIFT');
 });
 
-test('reviewed successor body (missions de revue) is admitted; any other body, ACL or routine still blocks', async () => {
+test('reviewed successor body (effacement des pièces, #1207) is admitted; any other body, ACL or routine still blocks', async () => {
+  // Catalogue audité : le successeur revu de #1198 (missions de revue, établissement) y est intégré, déployé sur le
+  // staging depuis le 26/11/2026 ; un seul successeur reste déclaré, celui de #1207 (suppression du compte soignant).
   const next = fixture.catalogueSuccesseur;
-  assert.equal(next.migration, 'supabase/migrations/20261126100100_missions_revue_store.sql');
+  assert.equal(next.migration, 'supabase/migrations/20261128140100_suppression_compte_soignant_effacement_pieces.sql');
+  assert.equal(next.signature, 'public.fn_supprimer_mon_compte()');
   assert.ok(readFileSync(new URL(`../../${next.migration}`, import.meta.url), 'utf8')
     .includes(`CREATE OR REPLACE FUNCTION ${next.signature}\nRETURNS jsonb`));
+  const etablissement = 'public.fn_supprimer_mon_compte_etablissement()';
+  assert.equal(fixture.catalogue.routines.find(row => row.signature === etablissement).definition_md5, 'dfa336f2895335c770f4bee6ba9cbc05');
+  assert.ok(readFileSync(new URL('../../supabase/migrations/20261126100100_missions_revue_store.sql', import.meta.url), 'utf8')
+    .includes(`CREATE OR REPLACE FUNCTION ${etablissement}\nRETURNS jsonb`));
   const withBody = (value, signature, md5, patch = {}) => ({ ...value, routines: value.routines.map(row =>
     row.signature === signature ? { ...row, definition_md5: md5, ...patch } : row) });
+  // Staging avant la synchronisation de #1207, puis après (même état que la production au 28/11/2026).
+  await harness().run();
   await harness({ catalogue: value => withBody(value, next.signature, next.definition_md5) }).run();
   for (const catalogue of [value => withBody(value, next.signature, 'f'.repeat(32)),
     value => withBody(value, next.signature, next.definition_md5, { acl: '{postgres=X/postgres,anon=X/postgres}' }),
-    value => withBody(value, 'public.fn_supprimer_mon_compte()', next.definition_md5)]) {
+    value => withBody(value, etablissement, next.definition_md5),
+    // Corps établissement d'avant #1198 : n'est plus admis, avec ou sans le successeur.
+    value => withBody(value, etablissement, '3eb0bafbbdd5b6816a2c0bc8d85a94c4'),
+    value => withBody(withBody(value, etablissement, '3eb0bafbbdd5b6816a2c0bc8d85a94c4'), next.signature, next.definition_md5)]) {
     await assert.rejects(harness({ catalogue }).run(), error => error.message === 'DELETE_ACCOUNT_SAFETY_RPC_DRIFT');
   }
 });
