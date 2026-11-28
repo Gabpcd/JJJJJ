@@ -83,6 +83,9 @@ SELECT cron.schedule('anonymiser_gps', '0 4 * * 0',
   $$SELECT public.fn_anonymiser_gps_anciennes();$$);
 
 -- Mensuel 1er du mois 05:00 UTC : purge comptes inactifs > 2 ans
+-- ⚠️ NE PAS PLANIFIER : verrouillée depuis la migration 20261128140100 (erreur
+-- RGPD_PURGE_INACTIFS_VERROUILLEE), à réaligner d'abord sur la suppression de
+-- compte (docs/CONFORMITE.md §6.5).
 SELECT cron.schedule('purge_inactifs', '0 5 1 * *',
   $$SELECT public.fn_rgpd_purge_automatique_inactifs();$$);
 

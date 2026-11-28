@@ -181,6 +181,9 @@ jobs:
       - name: Suppression du compte soignant (B9) — pièces vérifiées, corps LIVE et câblage sans réseau
         run: node --test tests/node/suppression-compte-soignant-preuves.node.mjs
 
+      - name: Suppression du compte soignant (B9) — fichiers et noms lus par l’IA effacés, corps LIVE, purge Storage et câblage sans réseau
+        run: node --test tests/node/suppression-compte-soignant-effacement.node.mjs tests/node/rgpd-purge-stockage.node.mjs
+
       - name: Isolation du draft contrat SQL sans réseau
         run: node --test tests/node/contrat-v11-sql-proof.node.mjs
 
@@ -831,6 +834,7 @@ jobs:
             tests/security/dpae-contrats-cddu-vacation.test.sql
             tests/security/agents-croissance-brouillons.test.sql
             tests/security/suppression-compte-soignant-preuves.test.sql
+            tests/security/suppression-compte-soignant-effacement.test.sql
             tests/security/revue-store-missions-isolees.test.sql
             tests/non-regression/sql/contestation-paiement-soignant.test.sql
           )
@@ -1051,6 +1055,16 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE suppression_preuves_banc'
           PGDATABASE=suppression_preuves_banc node --test tests/postgres/suppression-compte-soignant-preuves.pg17.mjs
+      - name: Dump de schéma épinglé, antérieur aux migrations 20261128140000 et 20261128140100
+        # Re-baseline du 27/11/2026 (#1204) : corps LIVE de fn_supprimer_mon_compte et du CHECK du journal, vérifiés
+        # par blob et SHA-256 (tests/postgres/schema-avant-migration.mjs, DUMP_AVANT_EFFACEMENT_PIECES).
+        run: git fetch --no-tags --depth=1 origin 1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9
+      - name: Suppression du compte soignant — fichiers et noms lus par l’IA effacés sur le schéma du dépôt (base dédiée)
+        # Migrations 20261128140000 et 20261128140100 : constat sur les corps LIVE (noms lus, fichier, attestation restent ;
+        # audit d’identité muet), puis la suite SQL du staging telle quelle ; file pg_net observée, aucun appel à la suppression.
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c 'CREATE DATABASE effacement_pieces_banc'
+          PGDATABASE=effacement_pieces_banc node --test tests/postgres/suppression-compte-soignant-effacement.pg17.mjs
       - name: Alignement staging — résolution des alias du catalogue
         run: node --test tests/postgres/align-staging-catalogue.pg17.mjs
       - name: Factures — émission atomique et reprise email PostgreSQL 17 isolé

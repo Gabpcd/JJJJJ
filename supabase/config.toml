@@ -171,6 +171,11 @@ verify_jwt = false
 [functions.process-stripe-refunds]
 verify_jwt = false
 
+# Purge RGPD des fichiers des comptes soignants supprimés (cron horaire,
+# x-jolene-cron-secret vérifié par _shared/cron-service-auth.ts ; migration 20261128140100).
+[functions.purge-stockage-rgpd]
+verify_jwt = false
+
 [functions.weekly-invoicing-cron]
 verify_jwt = false
 

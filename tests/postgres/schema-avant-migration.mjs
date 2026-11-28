@@ -26,6 +26,16 @@ export const DUMP_AVANT_REVUE_ET_SUPPRESSION = Object.freeze({
   sha256: '6e2a0f85ec1ea1812bb31c72b662b69d11419a231e68649d74bd86a60bd2a2bf',
 });
 
+/**
+ * Dump avant les migrations 20261128140000 et 20261128140100 (effacement des pièces à la suppression du compte
+ * soignant) : re-baseline du 27/11/2026 après #1198 et #1200 (#1204).
+ */
+export const DUMP_AVANT_EFFACEMENT_PIECES = Object.freeze({
+  commit: '1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9',
+  blob: 'dc04e5dac3dbd7d63a22bc7c6f8b9ae06e28005b',
+  sha256: '8ed217585fbbf50683fa87bd01c2c1aac9162cb3e796daf915e61488310f531c',
+});
+
 const git = args => execFileSync('git', args, { cwd: RACINE, encoding: 'utf8', maxBuffer: 1 << 28,
   stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' } });
 

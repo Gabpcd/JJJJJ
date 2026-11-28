@@ -7,7 +7,7 @@
     "local_total_after_admin_2fa_retirement": 77,
     "local_total_after_copies_bulletins": 78,
     "local_total_after_apns_probe": 79,
-    "local_verify_jwt_false": 73
+    "local_verify_jwt_false": 74, "local_total_after_purge_stockage_rgpd": 80
   },
   "entries": [
     {"slug":"admin-invoke","verify_jwt":true,"auth_class":"PLATFORM_JWT","guard_all":[],"justification":"Gateway JWT Supabase puis garde admin dans la fonction."},
@@ -98,6 +98,7 @@
         "verifyAdminOrServiceRole"
       ],
       "justification": "Sonde APNs réservée admin/service_role ; aucun appareil réel, aucun secret renvoyé."
-    }
+    },
+    {"slug":"purge-stockage-rgpd","verify_jwt":false,"auth_class":"CRON_SECRET","guard_all":["verifyCronServiceAuth","isCronAuthProbe"],"justification":"Purge RGPD des fichiers des comptes soignants supprimés : secret cron dédié, sonde auth-only sans effet ; confirmation par la base (migration 20261128140100)."}
   ]
 }

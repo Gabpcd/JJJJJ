@@ -12,6 +12,8 @@ const suppressionMigration = read('supabase/migrations/20261001131013_conserver_
 const suppressionSignature = 'fn_supprimer_mon_compte()';
 const suppressionAvant = '71254d2065c67c11ce0460368f20d01f';
 const suppressionApres = 'f3af23aeeb4e30aba07e422c0e819aeb';
+const effacementMigration = read('supabase/migrations/20261128140100_suppression_compte_soignant_effacement_pieces.sql');
+const suppressionEffacement = 'bd8df04463ed3b683de237d78b6ecea3';
 const avoirsMigration = read('supabase/migrations/20261017191635_exclure_avoirs_des_impayes.sql');
 const suppressionEtablissementSignature = 'fn_supprimer_mon_compte_etablissement()';
 const suppressionEtablissementAvant = '8d1a6220cdc135d36d2d472fcde230ee';
@@ -28,7 +30,7 @@ const rechercheSignature = 'fn_rechercher_soignants_etab(text,text[],text,intege
 const rechercheAvant = '5a1fc4a4651f794ca8d95c3f6885195a';
 const rechercheApres = '62d0bf39f1600b82a93a522a411f1bd7';
 const successors = new Map([
-  [suppressionSignature, { old_md5: suppressionAvant, definition_md5: suppressionApres }],
+  [suppressionSignature, { old_md5: suppressionApres, definition_md5: suppressionEffacement }],
   [suppressionEtablissementSignature, { old_md5: suppressionEtablissementImputation, definition_md5: suppressionEtablissementRevue }],
   [litigeSalarieSignature, { old_md5: litigeSalarieAvant, definition_md5: litigeSalarieApres }],
   [rechercheSignature, { old_md5: rechercheAvant, definition_md5: rechercheApres }],
@@ -86,9 +88,20 @@ test('le successeur suppression soignant vérifié remplace le corps historique 
   assert.equal(historical.definition_md5, suppressionAvant);
   assert.equal(md5(sourceBody(read('supabase/migrations/20260925150546_suppression_compte_preuve_privee.sql'), 'fn_supprimer_mon_compte')), suppressionAvant);
   assert.equal(md5(sourceBody(suppressionMigration, 'fn_supprimer_mon_compte')), suppressionApres);
-  assert.equal(md5(sourceBody(read('supabase/schema/public.sql'), 'fn_supprimer_mon_compte')), suppressionApres);
   assert.ok(suppressionMigration.includes(`('${suppressionSignature}', '${suppressionAvant}', '${suppressionApres}'`));
-  assert.equal(replayEntries.find(entry => entry.signature === suppressionSignature).definition_md5, suppressionApres);
+  assert.equal(replayEntries.find(entry => entry.signature === suppressionSignature).definition_md5, suppressionEffacement);
+});
+
+test('effacement des pièces : le successeur suppression soignant part du corps LIVE de 20261001131013', () => {
+  const name = 'fn_supprimer_mon_compte';
+  // Préflight sur le corps LIVE, post-condition sur le corps installé, inventaire mis à jour par la migration.
+  assert.ok(effacementMigration.includes(`('public.${suppressionSignature}', '${suppressionApres}', 'search_path=public, extensions', true)`));
+  assert.ok(effacementMigration.includes(`('public.${suppressionSignature}', '${suppressionEffacement}', true)`));
+  assert.equal(md5(sourceBody(effacementMigration, name)), suppressionEffacement);
+  assert.match(effacementMigration, /UPDATE private\.security_definer_inventory i\n   SET definition_md5 = pg_catalog\.md5\(p\.prosrc\)/);
+  // Snapshot de schéma : corps LIVE jusqu'au re-snapshot qui suit le merge, puis successeur.
+  assert.ok([suppressionApres, suppressionEffacement].includes(md5(sourceBody(read('supabase/schema/public.sql'), name))));
+  assert.deepEqual(successors.get(suppressionSignature), { old_md5: suppressionApres, definition_md5: suppressionEffacement });
 });
 
 test('le successeur avoirs lie exactement les corps suppression établissement avant et après', () => {
