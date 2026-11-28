@@ -123,6 +123,17 @@ async function preparer(page: Page, options: { refuser?: boolean; retarder?: boo
 async function accessible(page: Page, controle: Locator) {
   await controle.scrollIntoViewIfNeeded();
   await expect(controle).toBeVisible();
+  // scrollIntoViewIfNeeded ignore le cadre fixe : un contrôle « dans le viewport » peut rester sous le header ou la barre
+  // du bas (ex. défilement ramené au bas de page après un changement d'onglet). Comme un utilisateur, on fait défiler
+  // juste ce qu'il faut ; si la page ne peut pas le dégager, l'exigence ci-dessous échoue toujours.
+  await controle.evaluate(el => {
+    const visible = (selector: string) => [...document.querySelectorAll(selector)].find(e => e.getClientRects().length > 0);
+    const haut = visible('.admin-shell > header')?.getBoundingClientRect().bottom ?? 0;
+    const bas = visible('nav[aria-label="Navigation mobile admin"]')?.getBoundingClientRect().top ?? innerHeight;
+    const r = el.getBoundingClientRect();
+    if (r.top < haut) window.scrollBy({ top: r.top - haut - 8, behavior: 'instant' });
+    else if (r.bottom > bas) window.scrollBy({ top: r.bottom - bas + 8, behavior: 'instant' });
+  });
   await expect.poll(() => controle.evaluate(el => {
     const r = el.getBoundingClientRect();
     const visible = (selector: string) => [...document.querySelectorAll(selector)].find(e => e.getClientRects().length > 0);
