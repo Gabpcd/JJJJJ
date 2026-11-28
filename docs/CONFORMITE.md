@@ -304,10 +304,11 @@ sur ces deux artefacts uniquement, puis merge + cascade section D.
 
 ## 6. Suppression du compte soignant — effacement, anonymisation, conservation (28/11/2026)
 
-> Décision prise par Claude sur délégation de Gabrielle (décider et documenter), migrations
-> `20261128140000` et `20261128140100`. **Aucun texte montré à l'utilisateur n'est modifié** : la
-> mise à jour proposée de la politique de confidentialité (§6.7) relève du HARD STOP n°4 et attend
-> la validation de Gabrielle.
+> Choix de conservation instruit et proposé par Claude, sources primaires à l'appui, appliqué aux
+> données seulement (migrations `20261128140000` et `20261128140100`) sur délégation de Gabrielle
+> (décider et documenter). **Aucun texte montré à l'utilisateur n'est modifié** : la mise à jour
+> proposée de la politique de confidentialité (§6.7) relève du HARD STOP n°4 et attend la
+> validation de Gabrielle, qui peut aussi revenir sur ce choix.
 
 ### 6.1 Sources primaires (relues le 28/11/2026, versions en vigueur)
 
@@ -400,6 +401,22 @@ d'inactivité par une décision documentée.
 5. **Copies de bulletins de paie** : durée de conservation à instruire.
 6. **Garde du staging** `tests/fixtures/staging-delete-account/safe-v55.json` : empreinte de
    `fn_supprimer_mon_compte` à recaler au prochain bootstrap du staging.
+7. **Justificatifs de réclamation et d'annulation** : les fichiers sont effacés, mais
+   `reclamations_score.justificatif_storage_path` et `evenements_score_soignant.justificatif_storage_path`
+   gardent leur chemin (nom d'origine assaini) et `reclamations_score.texte_libre` reste (catégories
+   dont l'urgence médicale) : sort à décider (preuve d'une contestation de score, art. 17.3 e, ou
+   effacement), revue de la revue fraîche n°3 de la PR #1207.
+8. **Revue d'une pièce supprimée physiquement** (`pol_doc_delete`, pièce EN_ATTENTE ou REJETE) :
+   sa revue `TELEVERSEMENT_DOCUMENT` n'est plus rattachable par l'identifiant de la pièce ; aucune
+   voie applicative ne fait ce DELETE aujourd'hui.
+9. **Surveillance du cron** `jolene_rgpd_purge_stockage` : ses alertes viennent du job lui-même ;
+   l'ajouter au contrôle de santé des crons (un job inactif ne lève rien).
+10. **Empreinte de la file** : SHA-256 non salé de `bucket/chemin`, conservé après purge ; un lecteur
+    de la base peut confirmer un nom de fichier deviné. HMAC (clé Vault) ou empreinte aléatoire
+    après purge à envisager.
+11. **Rattrapage** : sur une base qui aurait déjà des comptes supprimés (aucun en production au
+    28/11/2026), la suppression des heures externes recrée une ligne `suivi_conversion_3200h` que
+    le rattrapage ne retire pas (la suppression de compte, elle, la retire).
 
 ### 6.7 Texte utilisateur — proposition (HARD STOP n°4, non implémentée)
 
