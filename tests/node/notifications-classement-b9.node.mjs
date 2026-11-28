@@ -106,6 +106,10 @@ test('RPC de remplacement : gardes, texte serveur, droits explicites, empreintes
   // Porte exigée de tout émetteur de diffusion de mission (tests/security/revue-store-missions-isolees.test.sql, A1).
   assert.ok(alerte.includes('WHERE private.fn_comptes_meme_cohorte_test(u.soignant_id, v_mission.etablissement_id)'), 'prédicat de cohorte canonique');
   assert.match(alerte, /n\.type = 'MISSION_URGENTE'\s+AND n\.id_ressource = p_mission_id/, 'aucun doublon');
+  // Contrôle « déjà notifié » atomique face à deux alertes simultanées (revue B8) : verrou avant toute lecture.
+  assert.ok(alerte.indexOf("pg_advisory_xact_lock(\n    pg_catalog.hashtextextended('fn_alerter_pool_urgence:' || p_mission_id::text, 0))") > 0
+    && alerte.indexOf('pg_advisory_xact_lock') < alerte.indexOf('FROM public.notifications n'), 'verrou par mission avant le contrôle de doublon');
+  assert.ok(sql.includes("pg_catalog.to_regprocedure('private.fn_comptes_meme_cohorte_test(uuid,uuid)') IS NULL"), 'préflight : prédicat de cohorte');
   assert.ok(alerte.includes("'/soignant/missions/' || p_mission_id::text"));
   const relance = corps(sql, 'fn_admin_relancer_mandat_facturation');
   assert.match(relance, /IF NOT public\.est_admin\(\) THEN\s+RAISE EXCEPTION 'Accès réservé aux administrateurs' USING ERRCODE = '42501';/);

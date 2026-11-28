@@ -49,7 +49,7 @@ BEGIN
   FOR v_attendu IN
     SELECT * FROM (VALUES
       ('public.fn_creer_notification(uuid,text,text,text,text,text,text,uuid)', 'bc337810f500768fed6748fac74265e8', false),
-      ('public.fn_alerter_pool_urgence(uuid)', 'b47952a9d741ae48085a743c641224c5', true),
+      ('public.fn_alerter_pool_urgence(uuid)', '5b86dde9fb3450ac0e654512e3819dfc', true),
       ('public.fn_admin_relancer_mandat_facturation(uuid)', 'fe171f70cf862988022d487ea962d104', true),
       ('public.fn_top_soignants(text,integer)', 'dd2dd814b3ed617b09652dd59decc133', true)
     ) AS t(signature, empreinte, authenticated)

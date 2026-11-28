@@ -8,7 +8,7 @@
 --    corps, lien) à n'importe quel utilisateur, lien externe compris (hameçonnage sous le
 --    nom de Jolene). Constat B9 de docs/mobile-swift/DECISIONS_LOT2.md (« Constat T0 —
 --    fn_creer_notification »), dont ce correctif applique la proposition.
---    Appelants relus : neuf fonctions SECURITY DEFINER (propriétaire postgres : triggers de
+--    Appelants relus : dix fonctions SECURITY DEFINER (propriétaire postgres : six triggers de
 --    litige, de message, de mission et d'anti-fraude, fn_valider_presence[s_lot],
 --    fn_proposer_accord_partie, fn_relancer_candidatures_en_attente) et une fonction
 --    SECURITY INVOKER non exécutable par authenticated (fn_notifier_documents_expirants).
@@ -86,6 +86,7 @@ BEGIN
   IF pg_catalog.to_regprocedure('public.est_admin()') IS NULL
      OR pg_catalog.to_regprocedure('public.mon_etablissement_id()') IS NULL
      OR pg_catalog.to_regprocedure('public.fn_documents_ok_pour_mission(uuid,text)') IS NULL
+     OR pg_catalog.to_regprocedure('private.fn_comptes_meme_cohorte_test(uuid,uuid)') IS NULL
      OR pg_catalog.to_regprocedure('public.fn_alerter_pool_urgence(uuid)') IS NOT NULL
      OR pg_catalog.to_regprocedure('public.fn_admin_relancer_mandat_facturation(uuid)') IS NOT NULL
   THEN
@@ -159,6 +160,11 @@ BEGIN
   IF v_mission.statut IS DISTINCT FROM 'OUVERTE' OR v_mission.est_urgente IS NOT TRUE THEN
     RAISE EXCEPTION 'Alerte du pool réservée aux missions urgentes ouvertes' USING ERRCODE = '22023';
   END IF;
+
+  -- Une alerte à la fois par mission : le contrôle « déjà notifié » et l'écriture
+  -- restent atomiques face à deux alertes simultanées (administrateur et établissement).
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('fn_alerter_pool_urgence:' || p_mission_id::text, 0));
 
   v_titre := '🚨 Mission urgente : ' || v_mission.intitule;
   v_corps := v_mission.intitule || ' — '
@@ -320,7 +326,7 @@ BEGIN
   FOR v_attendu IN
     SELECT * FROM (VALUES
       ('public.fn_creer_notification(uuid,text,text,text,text,text,text,uuid)', 'bc337810f500768fed6748fac74265e8', false),
-      ('public.fn_alerter_pool_urgence(uuid)', 'b47952a9d741ae48085a743c641224c5', true),
+      ('public.fn_alerter_pool_urgence(uuid)', '5b86dde9fb3450ac0e654512e3819dfc', true),
       ('public.fn_admin_relancer_mandat_facturation(uuid)', 'fe171f70cf862988022d487ea962d104', true),
       ('public.fn_top_soignants(text,integer)', 'dd2dd814b3ed617b09652dd59decc133', true)
     ) AS t(signature, empreinte, authenticated)
