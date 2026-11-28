@@ -155,7 +155,7 @@ final class DemoPaiementsTests: JoleneUITestCase {
 
     @discardableResult
     private func ouvrirRevenus() -> XCUIElement {
-        tabButton("tab-revenus", label: "Revenus").tap()
+        toucherOnglet("tab-revenus", label: "Revenus")
         let ecran = element("revenus-screen")
         require("La section des paiements à confirmer est affichée", timeout: 30) {
             self.containerVisible(ecran) && self.element("revenus-paiements-declares").exists

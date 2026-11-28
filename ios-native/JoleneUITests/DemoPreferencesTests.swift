@@ -125,7 +125,7 @@ final class DemoPreferencesTests: JoleneUITestCase {
 extension JoleneUITestCase {
     /// Onglet Profil, puis l'entrée « Notifications » de la section « Réglages » (défilement borné).
     func prefsOuvrirEntree() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let entree = element("profile-preferences-notifications")

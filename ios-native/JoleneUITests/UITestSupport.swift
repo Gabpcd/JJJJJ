@@ -217,8 +217,8 @@ class JoleneUITestCase: XCTestCase {
     /// trace (`traceUncharged`) que `require`, mais une condition encore fausse au terme du délai rend `false` au lieu
     /// d'échouer. Un budget de blocage dépassé échoue toujours, comme dans `require` : un gel n'est jamais absorbé par un
     /// rejeu de geste (revue B8 de la vague 5, 5ᵉ tour, M1). Réservée au choix de rejouer un geste perdu
-    /// (`toucherSeConnecter`, `dragSliderPastMinimum`) ; la preuve passe ensuite par `require` ou par l'assertion de
-    /// l'appelant.
+    /// (`toucherSeConnecter`, `toucherEtRejouerSiPerdu`, `dragSliderPastMinimum`) ; la preuve passe ensuite par `require`
+    /// ou par l'assertion de l'appelant.
     func attendreSansEchec(_ description: String, timeout: TimeInterval,
                            stallBudget: TimeInterval = JoleneUITestCase.defaultStallBudget,
                            file: StaticString = #filePath, line: UInt = #line, condition: () -> Bool) -> Bool {
@@ -349,6 +349,18 @@ class JoleneUITestCase: XCTestCase {
         attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
     }
 
+    /// Consigne un geste resté sans effet que le socle n'a PAS rejoué : toucher reçu (état relu changé) sans effet dans la
+    /// fenêtre, ou témoin du rejeu illisible (`toucherOnglet`). Même format que `consignerRejeu`, ligne « Nature : geste
+    /// non rejoué », annoncée à part par le relevé d'`ios-swift-ci.yml` : un rejeu désactivé ne passe pas inaperçu dans un
+    /// job vert (revue B8 de #1203, M1 et m5).
+    func consignerNonRejeu(_ attente: String, issue: String, file: StaticString, line: UInt) {
+        let fichier = (String(describing: file) as NSString).lastPathComponent
+        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Nature : geste non rejoué", "Issue : \(issue)"]
+            .joined(separator: "\n")
+        XCTContext.runActivity(named: "Geste non rejoué — « \(attente) » : \(issue)") { _ in }
+        attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
+    }
+
     // MARK: Actions
 
     /// Touche « Se connecter » puis exige la session (`sessionPrete`) sur `timeout` décomptées au total. Un toucher resté
@@ -375,6 +387,58 @@ class JoleneUITestCase: XCTestCase {
             submit.tap()
         }
         require(description, timeout: timeout - fenetre, file: file, line: line, condition: sessionPrete)
+    }
+
+    /// Fenêtre de constat d'un toucher avant de décider d'un rejeu (`toucherEtRejouerSiPerdu`). Les témoins d'un toucher
+    /// reçu (onglet sélectionné, case cochée, étoile désactivée pendant l'appel) apparaissent sans attendre le réseau.
+    static let fenetreToucher: TimeInterval = 5
+
+    /// Socle générique du rejeu d'un toucher perdu, sur le modèle de `toucherSeConnecter` et de
+    /// `DemoPreferencesTests.prefsBasculer`. Série 45799922589 (main `f599cab3`), UI lot 1 — ipad-landscape : tentative 1,
+    /// `DemoFavorisTests.swift:33`, étoile touchée puis 15 s sans sauvegarde ; tentative 2, `DemoFiltresTests.swift:95`,
+    /// onglet Profil touché puis 15 s sans hub. Verts sur les autres formats et à la tentative suivante : toucher
+    /// synthétisé perdu, pas un défaut de l'app.
+    ///
+    /// Le geste `toucher` est fait une fois. Si `effet` n'est pas constaté sur `fenetre` (`attendreSansEchec` : blocages
+    /// décomptés, budgetés et tracés comme dans `require`), le geste est rejoué UNE seule fois, et seulement si
+    /// `rienNAChange` relit l'état d'avant le toucher : aucun écran intermédiaire, contrôle toujours actif, aucune
+    /// erreur. Un toucher reçu, même lent, n'est donc jamais rejoué. Chaque rejeu est consigné (`consignerRejeu`, relevé
+    /// « Geste rejoué » de la CI) ; un effet absent sans rejeu permis l'est aussi (`consignerNonRejeu`). Rien n'est prouvé ici :
+    /// l'appelant exige l'effet ensuite (`require`), avec le message d'avant ; une double bascule y échouerait. Réservé
+    /// aux gestes dont l'état relu prouve l'absence d'effet (onglets, cases, chips, étoiles) : jamais un envoi, un
+    /// paiement, une signature ou une candidature sans relecture qui prouve que rien n'est parti.
+    func toucherEtRejouerSiPerdu(_ attente: String, fenetre: TimeInterval = JoleneUITestCase.fenetreToucher,
+                                 file: StaticString = #filePath, line: UInt = #line,
+                                 toucher: () -> Void, rienNAChange: () -> Bool, effet: () -> Bool) {
+        toucher()
+        if attendreSansEchec("\(attente) (premier toucher)", timeout: fenetre, file: file, line: line, condition: effet) {
+            return
+        }
+        guard rienNAChange() else {
+            consignerNonRejeu(attente, issue: "effet absent en \(Self.seconds(fenetre)), mais état relu changé ou contrôle "
+                              + "inactif : aucun rejeu", file: file, line: line)
+            return
+        }
+        consignerRejeu(attente, issue: "toucher sans effet en \(Self.seconds(fenetre)), état relu inchangé : "
+                       + "un seul nouveau toucher", file: file, line: line)
+        toucher()
+    }
+
+    /// Touche `cible`, puis exige `effet` sous `description`, sur `timeout` décomptées au total, comme un `require` posé
+    /// juste après le toucher (même message d'échec ; revue B8 de la vague 5, 5ᵉ tour, m1 : le délai n'est pas allongé).
+    /// Un toucher perdu est rejoué une fois (`toucherEtRejouerSiPerdu`) : seulement si `cible` est encore atteignable et
+    /// que `rienNAChange` relit l'état d'avant le toucher.
+    func toucherPuisExiger(_ cible: XCUIElement, _ description: String,
+                           timeout: TimeInterval = JoleneUITestCase.defaultTimeout,
+                           fenetre: TimeInterval = JoleneUITestCase.fenetreToucher,
+                           file: StaticString = #filePath, line: UInt = #line,
+                           rienNAChange: () -> Bool, effet: () -> Bool) {
+        let premiere = min(fenetre, timeout / 2)
+        toucherEtRejouerSiPerdu(description, fenetre: premiere, file: file, line: line,
+                                toucher: { cible.tap() },
+                                rienNAChange: { self.visible(cible) && rienNAChange() },
+                                effet: effet)
+        require(description, timeout: timeout - premiere, file: file, line: line, condition: effet)
     }
 
     /// Un `tap()` natif, jamais `press(forDuration:)` pour activer : la navigation attendue est vérifiée ensuite.
@@ -499,6 +563,233 @@ class JoleneUITestCase: XCTestCase {
         }
         return buttons[label]
     }
+
+    /// Touche un onglet de la barre (`tabButton`). Un toucher perdu est rejoué UNE fois (`toucherEtRejouerSiPerdu`) :
+    /// seulement si l'onglet sélectionné avant le toucher est lisible, n'est pas l'onglet visé, et reste le même 5 s plus
+    /// tard, barres de navigation inchangées et onglet visé toujours atteignable (`lireBarreOnglets`). La sélection change
+    /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
+    /// toucher le ramènerait à sa racine). Onglet visé déjà lu sélectionné (lecture juste ou non), sélection illisible, ou
+    /// ambiguë (plus d'un onglet lu « Selected ») : un seul toucher, jamais de rejeu ; une sélection illisible ou ambiguë
+    /// est consignée (`consignerNonRejeu`), pour qu'un rejeu désactivé se voie au relevé de la CI, et
+    /// `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
+    /// Cas laissé armé (revue B8 de #1203, delta court, m1) : sur l'iPad, espace établissement, la page de la barre peut
+    /// masquer l'onglet courant (ouvrir Compte depuis Accueil fait passer en page 2) ; un seul onglet est alors lu
+    /// « Selected », et ce peut être l'onglet lu en trop par iPadOS (Présences), pas l'onglet courant. Le rejeu reste
+    /// possible, sans danger : l'effet est lu sur l'onglet VISÉ, et l'instantané doit être identique à celui d'avant.
+    /// Rien n'est exigé ici, pas même la sélection : l'appelant exige le contenu de l'onglet, avec son message et
+    /// son délai d'avant. Ce délai ne court qu'après la fenêtre, donc au plus 5 s plus tard, et seulement quand la
+    /// sélection n'a pas été constatée.
+    func toucherOnglet(_ identifier: String, label: String, file: StaticString = #filePath, line: UInt = #line) {
+        let onglet = tabButton(identifier, label: label)
+        let symbole = Self.tabSymbols[identifier]
+        let avant = lireBarreOnglets()
+        guard let selection = avant.selection else {
+            consignerNonRejeu("Le témoin du rejeu d'onglet est lisible avant le toucher de \(label)",
+                              issue: "aucun bouton d'onglet lu « Selected » (\(avant.onglets.count) lu(s)) : un seul toucher, "
+                                  + "rejeu d'onglet désactivé", file: file, line: line)
+            onglet.tap()
+            return
+        }
+        // Plus d'un onglet lu « Selected » (iPadOS 26.2, iPad portrait et paysage, espace établissement : un onglet reste
+        // lu sélectionné quel que soit l'onglet courant, runs 45967481048 et 45995190132) : témoin ambigu, aucun rejeu.
+        let selectionnes = avant.libellesSelectionnes
+        guard selectionnes.count == 1 else {
+            consignerNonRejeu("Témoin d'onglet ambigu avant le toucher de \(label)",
+                              issue: "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
+                                  + "un seul toucher, rejeu d'onglet désactivé", file: file, line: line)
+            onglet.tap()
+            return
+        }
+        // Onglet visé déjà lu « Selected », que la lecture soit juste ou non : un seul toucher, jamais de rejeu.
+        guard !avant.estSelectionne(identifier, symbole: symbole, label: label) else {
+            onglet.tap()
+            return
+        }
+        toucherEtRejouerSiPerdu("L'onglet \(label) est lu « Selected » (avant le toucher : \(selection.label))",
+                                file: file, line: line,
+                                toucher: { onglet.tap() },
+                                rienNAChange: { self.lireBarreOnglets() == avant && self.visible(onglet) },
+                                effet: { self.lireBarreOnglets().estSelectionne(identifier, symbole: symbole, label: label) })
+    }
+
+    /// Ramène à sa racine un onglet souvent déjà COURANT, pile chargée (écran du test empilé sur le hub). Run 45995190132,
+    /// UI lot 1 — ipad-landscape, `DemoLitigesTests.swift:239` : Profil touché, onglet déjà sélectionné (jamais rejoué,
+    /// par conception), puis 15 s sans la liste du profil. Cause NON établie, hypothèses : toucher de l'onglet ou retour
+    /// perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre » ; l'échec est à la ligne de la
+    /// racine, pas à celle du retrait de l'écran, donc l'écran des litiges a été lu retiré, ou pas lu du tout, juste après
+    /// le toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult de ce job.
+    ///
+    /// 1. Toucher de l'onglet (`toucherOnglet`), puis 3 s (`attendreSansEchec`) pour la racine : `racine` affichée, aucun
+    ///    écran de `empiles`. Qu'un toucher sur l'onglet courant ramène sa pile à la racine ou non, les deux sont normaux.
+    /// 2. Sinon, tant qu'un écran de `empiles` est lu (le plus haut d'abord), retour par le SEUL bouton retour du système
+    ///    (`BackButton`), puis 5 s pour que cet écran disparaisse. Juste avant le toucher, UN instantané doit montrer
+    ///    l'écran empilé encore présent et `BackButton` dans une barre de navigation (`lireRetourSysteme`) : jamais un
+    ///    autre bouton de la barre (`nav-messages`, seul bouton de la racine du Profil, déjà touché à la place du retour,
+    ///    `DemoMessagerieTests.retour`). Un retour vers la racine est idempotent : resté sans effet (même écran toujours
+    ///    lu), il est rejoué UNE fois au plus par appel, et consigné (`consignerRejeu`) ; encore sans effet, l'écran est
+    ///    exigé retiré (`require`, échec net). Bouton retour du système absent : échec net.
+    /// 3. Ni racine ni écran connu : aucun geste (revue B8 de #1203, M1 : un retour à l'aveugle dépilerait un écran inconnu
+    ///    ou un autre onglet, et masquerait le défaut). Consigné (`consignerNonRejeu`), avec les barres de navigation lues ;
+    ///    l'appelant exige ensuite la racine, avec son message d'avant, et échoue s'il le faut : rien n'est masqué.
+    func revenirALaRacine(_ identifier: String, label: String, racine: String, empiles: [String],
+                          file: StaticString = #filePath, line: UInt = #line) {
+        toucherOnglet(identifier, label: label, file: file, line: line)
+        let empile = { empiles.first { self.element($0).exists } }
+        let aLaRacine = { empile() == nil && self.containerVisible(self.element(racine)) }
+        if attendreSansEchec("L'onglet \(label) revient à sa racine", timeout: 3, file: file, line: line, condition: aLaRacine) {
+            return
+        }
+        var precedent: String?
+        var rejoue = false
+        for _ in 0...(2 * empiles.count) {
+            guard let ecran = empile() else { break }
+            if ecran == precedent {
+                guard !rejoue else {
+                    require("L'écran \(ecran) est retiré", file: file, line: line) { !self.element(ecran).exists }
+                    continue
+                }
+                rejoue = true
+                consignerRejeu("L'écran \(ecran) est retiré par le retour", issue: "retour sans effet en 5 s (écran "
+                               + "toujours lu) : un seul nouveau retour", file: file, line: line)
+            }
+            // Bouton lu une fois par tour, sur un instantané où l'écran empilé est encore présent.
+            var lu = RetourSystemeLu()
+            _ = attendreSansEchec("Le bouton retour du système est lu sur \(ecran)", timeout: 5, file: file, line: line) {
+                lu = self.lireRetourSysteme(sur: ecran)
+                return lu.lisible && (!lu.ecranPresent || lu.boutonPresent)
+            }
+            guard lu.lisible else {
+                XCTFail("Le bouton retour du système est lu sur \(ecran) — instantané de l'app illisible pendant 5 s : "
+                        + "aucun retour à l'aveugle", file: file, line: line)
+                return
+            }
+            guard lu.ecranPresent else {
+                precedent = nil // écran retiré de lui-même pendant la lecture : aucun retour à faire pour lui
+                continue
+            }
+            guard lu.boutonPresent else {
+                XCTFail("Le bouton retour du système (BackButton) est disponible sur \(ecran) — absent de l'instantané "
+                        + "pendant 5 s : aucun autre bouton de la barre n'est touché", file: file, line: line)
+                return
+            }
+            app.navigationBars.buttons.matching(identifier: "BackButton").firstMatch.tap()
+            precedent = ecran
+            _ = attendreSansEchec("L'écran \(ecran) est retiré par le retour", timeout: 5, file: file, line: line) {
+                !self.element(ecran).exists
+            }
+        }
+        guard !aLaRacine(), empile() == nil else { return }
+        let barres = lireBarreOnglets().barresDeNavigation.map { "« \($0) »" }.joined(separator: ", ")
+        consignerNonRejeu("L'onglet \(label) revient à sa racine",
+                          issue: "\(racine) absent et aucun écran connu lu (\(empiles.joined(separator: ", "))) ; barres "
+                              + "de navigation lues : \(barres.isEmpty ? "aucune" : barres) : aucun geste", file: file, line: line)
+    }
+
+    /// Sur UN instantané : l'écran `ecran` est présent, et une barre de navigation porte le bouton retour du système
+    /// (identifiant `BackButton`, actif, cadre dans la fenêtre). Aucun autre bouton n'est jamais retenu comme retour.
+    func lireRetourSysteme(sur ecran: String) -> RetourSystemeLu {
+        var lu = RetourSystemeLu()
+        guard let racine = try? app.snapshot() else { return lu }
+        lu.lisible = true
+        let fenetre = racine.frame
+        func parcourir(_ element: XCUIElementSnapshot, dansUneBarre: Bool) {
+            if element.identifier == ecran { lu.ecranPresent = true }
+            let barre = dansUneBarre || element.elementType == .navigationBar
+            if barre, element.elementType == .button, element.identifier == "BackButton", element.isEnabled,
+               !element.frame.isEmpty, fenetre.intersects(element.frame) {
+                lu.boutonPresent = true
+            }
+            element.children.forEach { parcourir($0, dansUneBarre: barre) }
+        }
+        parcourir(racine, dansUneBarre: false)
+        return lu
+    }
+
+    /// Boutons d'onglet (dans l'élément `TabBar`, ou identifiés par l'un des symboles de `tabSymbols` dans la barre haute
+    /// de l'iPad), avec leur état `Selected`, et identifiants des barres de navigation, lus dans UN instantané de l'app,
+    /// comme `lirePageDeLaBarre`. Instantané impossible : rien de lisible, donc aucun rejeu.
+    func lireBarreOnglets() -> EtatBarreOnglets {
+        var etat = EtatBarreOnglets()
+        guard let racine = try? app.snapshot() else { return etat }
+        let symboles = Set(Self.tabSymbols.keys).union(Self.tabSymbols.values)
+        func parcourir(_ element: XCUIElementSnapshot, dansLaBarre: Bool) {
+            let barre = dansLaBarre || element.elementType == .tabBar
+            if element.elementType == .navigationBar { etat.barresDeNavigation.append(element.identifier) }
+            if element.elementType == .button, barre || symboles.contains(element.identifier) {
+                etat.onglets.append(BoutonOngletLu(identifiant: element.identifier, label: element.label,
+                                                   selectionne: element.isSelected))
+            }
+            element.children.forEach { parcourir($0, dansLaBarre: barre) }
+        }
+        parcourir(racine, dansLaBarre: false)
+        return etat
+    }
+
+    /// Preuve, sur le format courant, que le témoin de `toucherOnglet` est lisible (revue B8 de #1203, M1) : l'onglet
+    /// courant est lu « Selected », aucun autre onglet ne l'est, et chaque onglet de `presents` est exposé dans
+    /// l'instantané. Sans cette preuve, un témoin illisible désactiverait le rejeu d'onglet sans aucun échec. La lecture
+    /// est jointe en texte (`<préfixe>-temoin-onglet-<identifiant>.txt`).
+    ///
+    /// `espaceEtablissement` : seule exception à l'exclusivité, l'espace établissement sur iPad, en portrait ET en
+    /// paysage. Runs 45967481048 (portrait) et 45995190132 (paysage), iPadOS 26.2, `TabView` standard sans trait posé
+    /// par l'app : « Présences » y reste lu « Selected » quel que soit l'onglet courant, alors qu'à l'écran seul l'onglet
+    /// courant est en surbrillance. Anomalie d'accessibilité ATTRIBUÉE à iPadOS, par élimination, sans reproduction sur
+    /// un `TabView` minimal ; témoin : côté soignant, sur le même simulateur, l'exclusivité passe
+    /// (`DemoConsultationTests`). Là seulement, des onglets lus en trop sont tolérés s'ils forment un ensemble STABLE :
+    /// déduit de la première lecture du test (jamais codé en dur), il doit se retrouver, onglet courant mis à part, à
+    /// chaque lecture suivante. La règle dépend donc de l'ordre : une première lecture faite sur l'onglet lu en trop
+    /// apprendrait un ensemble vide et ferait échouer la suite (faux rouge, jamais faux vert) ; aucun test actuel ne la
+    /// fait. L'onglet courant reste exigé « Selected ». L'ensemble est consigné au relevé de la CI (« Témoin d'onglet
+    /// ambigu »). `toucherOnglet` ne rejoue jamais quand plus d'un onglet est lu « Selected ».
+    func exigerTemoinOnglet(_ identifier: String, label: String, presents: [(String, String)] = [],
+                            espaceEtablissement: Bool = false,
+                            file: StaticString = #filePath, line: UInt = #line) {
+        let symbole = Self.tabSymbols[identifier]
+        var lu = EtatBarreOnglets()
+        _ = attendreSansEchec("Le témoin du rejeu d'onglet lit « \(label) » sélectionné", timeout: 5, file: file, line: line) {
+            lu = self.lireBarreOnglets()
+            return lu.estSelectionne(identifier, symbole: symbole, label: label)
+        }
+        let lecture = lu.onglets.map { "\($0.label) [\($0.identifiant)]\($0.selectionne ? " Selected" : "")" }
+            .joined(separator: ", ")
+        attachText("Onglet courant : \(label) (\(identifier))\nBoutons d'onglet lus : \(lecture)",
+                   name: "\(proofPrefix)-temoin-onglet-\(identifier).txt")
+        XCTAssertTrue(lu.estSelectionne(identifier, symbole: symbole, label: label),
+                      "témoin du rejeu d'onglet illisible sur ce format : « \(label) » n'est pas lu sélectionné (\(lecture))",
+                      file: file, line: line)
+        let enTrop = Set(lu.onglets.filter { $0.selectionne && !$0.designe(identifier, symbole: symbole, label: label) }
+            .map(\.label))
+        if espaceEtablissement && proofPrefix.hasPrefix("ipad-") {
+            if let ensemble = ongletsLusEnTrop {
+                XCTAssertEqual(enTrop, ensemble.subtracting([label]),
+                               "témoin d'onglet ambigu instable : onglets lus « Selected » en plus de « \(label) » différents de "
+                                   + "la première lecture du test (\(ensemble.sorted().joined(separator: ", "))) (\(lecture))",
+                               file: file, line: line)
+            } else {
+                ongletsLusEnTrop = enTrop
+                if !enTrop.isEmpty {
+                    let orientation = proofPrefix == "ipad-portrait" ? "portrait" : "paysage"
+                    consignerNonRejeu("Témoin d'onglet ambigu (iPad \(orientation), établissement) : "
+                                          + enTrop.sorted().joined(separator: ", "),
+                                      issue: "lu(s) « Selected » en plus de l'onglet courant \(label), anomalie attribuée à "
+                                          + "iPadOS : toléré tant que l'ensemble reste stable dans le test ; aucun rejeu "
+                                          + "d'onglet tant que plus d'un onglet est lu « Selected »",
+                                      file: file, line: line)
+                }
+            }
+        } else {
+            XCTAssertTrue(enTrop.isEmpty, "un autre onglet que « \(label) » est lu sélectionné (\(lecture))", file: file, line: line)
+        }
+        for (autre, libelle) in presents {
+            let symboleAutre = Self.tabSymbols[autre]
+            XCTAssertTrue(lu.onglets.contains { $0.designe(autre, symbole: symboleAutre, label: libelle) },
+                          "l'onglet « \(libelle) » n'est pas exposé au témoin (\(lecture))", file: file, line: line)
+        }
+    }
+
+    /// Onglets lus « Selected » en plus de l'onglet courant à la première lecture du test (`exigerTemoinOnglet`, espace
+    /// établissement sur iPad, portrait et paysage) : chaque test a sa propre instance, donc son propre ensemble.
+    private var ongletsLusEnTrop: Set<String>?
 
     static let pageSuivante = "Page suivante"
     static let pagePrecedente = "Page précédente"
@@ -821,6 +1112,45 @@ class JoleneUITestCase: XCTestCase {
         add(screenshot)
         attachText(app.debugDescription, name: "\(name)-accessibilite.txt")
     }
+}
+
+/// Boutons d'onglet et barres de navigation, lus dans un même instantané (`lireBarreOnglets`) : témoin d'un toucher
+/// d'onglet resté sans effet (`toucherOnglet`), prouvé lisible par `exigerTemoinOnglet`.
+struct EtatBarreOnglets: Equatable {
+    /// Boutons d'onglet dans l'ordre de l'arbre (deux nœuds par onglet sur iPad).
+    var onglets: [BoutonOngletLu] = []
+    var barresDeNavigation: [String] = []
+
+    /// Premier bouton d'onglet lu « Selected », de libellé non vide.
+    var selection: BoutonOngletLu? { onglets.first { $0.selectionne && !$0.label.isEmpty } }
+
+    /// Libellés distincts des onglets lus « Selected » (deux nœuds par onglet sur iPad) : plus d'un, témoin ambigu.
+    var libellesSelectionnes: Set<String> { Set(onglets.filter { $0.selectionne && !$0.label.isEmpty }.map(\.label)) }
+
+    /// L'onglet désigné (règle de `BoutonOngletLu.designe`) est lu « Selected », seul ou non.
+    func estSelectionne(_ identifier: String, symbole: String?, label: String) -> Bool {
+        onglets.contains { $0.selectionne && $0.designe(identifier, symbole: symbole, label: label) }
+    }
+}
+
+/// Bouton d'onglet lu : identifiant (`tab-*` ou symbole SF), libellé et état « Selected ».
+struct BoutonOngletLu: Equatable {
+    let identifiant: String
+    let label: String
+    let selectionne: Bool
+
+    /// Même règle que `boutonOnglet` : l'identifiant `tab-*`, puis son symbole SF (`tabSymbols`), puis le libellé.
+    func designe(_ identifier: String, symbole: String?, label attendu: String) -> Bool {
+        identifiant == identifier || (symbole != nil && identifiant == symbole) || label == attendu
+    }
+}
+
+/// Écran empilé et bouton retour du système (`BackButton`), lus dans un même instantané (`lireRetourSysteme`).
+struct RetourSystemeLu {
+    /// Instantané obtenu : sans lui, rien n'est lu, et aucun retour n'est fait.
+    var lisible = false
+    var ecranPresent = false
+    var boutonPresent = false
 }
 
 /// Page affichée de la barre d'onglets haute de l'iPad : cadres lus dans un même instantané (`lirePageDeLaBarre`).

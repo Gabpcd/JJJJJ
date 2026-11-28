@@ -127,7 +127,7 @@ final class DemoMesMissionsTests: JoleneUITestCase {
         launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "1", "JOLENE_DEMO_MES_MISSIONS_PAGE": "4",
                                  "JOLENE_FORCE_CALENDRIER_REFUS": "1"])
         connexionDemo()
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         let scroll = element("mes-missions-scroll")
         let erreur = element("mes-missions-error")
 
@@ -213,7 +213,7 @@ final class DemoMesMissionsTests: JoleneUITestCase {
     func testMesMissionsSessionExpireePuisVidesVersExplorer() throws {
         launchDemo(environment: ["JOLENE_FORCE_MES_MISSIONS_ECHEC": "session", "JOLENE_FORCE_MES_MISSIONS_VIDE": "1"])
         connexionDemo()
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         let scroll = element("mes-missions-scroll")
         let expiree = element("mes-missions-session-expired")
 
@@ -297,7 +297,7 @@ final class DemoMesMissionsTests: JoleneUITestCase {
 
     /// Ouvre l'onglet Mes missions et attend la première ligne d'À venir ; rend le conteneur de défilement.
     private func ouvrirMesMissions() -> XCUIElement {
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         require("Mes missions affiche ses missions à venir", timeout: 30) {
             self.containerVisible(self.element("mes-missions-screen")) && self.element("mes-mission-demo-assignee-001").exists
                 && !self.element("mes-missions-loading").exists

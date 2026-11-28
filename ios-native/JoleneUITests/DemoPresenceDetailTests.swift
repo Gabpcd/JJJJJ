@@ -157,7 +157,7 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
         record("\(proofPrefix)-accueil-oubli-depart")
 
         // Onglet Profil : l'Accueil du scénario `accueil-pointage` et la page Présences n'ont émis aucune requête.
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         sentinelleSansRequete(depuisMonEspace: false)
     }
 
@@ -183,7 +183,7 @@ final class DemoPresenceDetailTests: JoleneUITestCase {
 
     /// Profil › Mon espace › Mes présences › Historique.
     private func ouvrirHistorique() {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let liste = element("profile-list")
         require("Le profil est affiché") { self.containerVisible(liste) }
         let ligne = element("profil-presences")

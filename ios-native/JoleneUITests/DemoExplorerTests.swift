@@ -228,7 +228,7 @@ final class DemoExplorerTests: JoleneUITestCase {
         back.tap()
         require("La liste est de retour") { self.containerVisible(self.element("missions-list")) }
 
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let sentinel = element("network-sentinel")
         require("La sentinelle réseau est exposée") { sentinel.exists }
         XCTAssertEqual(sentinel.label, "0 requête", "le détail et sa carte n'émettent aucune requête en démonstration")
@@ -265,7 +265,7 @@ final class DemoExplorerTests: JoleneUITestCase {
         if app.keyboards.firstMatch.exists, !visible(submit) { scrollTo(submit, in: scroll) }
         toucherSeConnecter(submit, "La session est prête : la barre d'onglets est affichée") { self.tabBarExists }
 
-        tabButton("tab-explorer", label: "Explorer").tap()
+        toucherOnglet("tab-explorer", label: "Explorer")
         attendreCompteur(Attendus.total, timeout: 30)
         for chip in ["chip-urgentes", "chip-weekend", "chip-nuit", "chip-jour"] {
             XCTAssertTrue(element(chip).exists, "La chip \(chip) est affichée")
@@ -290,8 +290,22 @@ final class DemoExplorerTests: JoleneUITestCase {
         }
     }
 
-    private func basculer(_ chip: String, attendu: Int, selectionnee: Bool) {
-        tap(chip)
+    /// Bascule une chip rapide. La sélection suit le toucher reçu (`MissionsListModel.appliquer` pose les filtres avant
+    /// la relecture, qui retire la liste) : un toucher perdu est rejoué une fois (`toucherEtRejouerSiPerdu`), seulement si
+    /// la chip garde sa sélection, la liste et son compteur, et reste active.
+    private func basculer(_ chip: String, attendu: Int, selectionnee: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let cible = element(chip)
+        require("Le contrôle \(chip) est atteignable", file: file, line: line) { self.visible(cible) && cible.isEnabled }
+        let compteur = element("missions-count")
+        let compteurAvant = compteur.exists ? compteur.label : nil
+        toucherEtRejouerSiPerdu("La chip \(chip) est \(selectionnee ? "sélectionnée" : "désélectionnée")", file: file, line: line,
+                                toucher: { cible.tap() },
+                                rienNAChange: {
+                                    cible.isSelected != selectionnee && self.visible(cible) && cible.isEnabled
+                                        && self.containerVisible(self.element("missions-list"))
+                                        && (compteur.exists ? compteur.label : nil) == compteurAvant
+                                },
+                                effet: { cible.isSelected == selectionnee })
         attendreCompteur(attendu)
         require("La chip \(chip) est \(selectionnee ? "sélectionnée" : "désélectionnée")") {
             self.element(chip).isSelected == selectionnee

@@ -78,7 +78,7 @@ final class DemoEtabSessionTests: JoleneUITestCase {
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_FLAG_ios_natif_etab_presences_actif", "false"])
         connecter(email: Self.emailEtablissement)
         XCTAssertEqual(tabLabels, Self.ongletsEtablissement, "l'onglet coupé garde sa place dans la barre")
-        tabButton("tab-etab-presences", label: "Présences").tap()
+        toucherOnglet("tab-etab-presences", label: "Présences")
         let renvoi = element("etab-renvoi-web")
         require("L'onglet Présences coupé affiche le renvoi web") { self.containerVisible(renvoi) }
         XCTAssertFalse(element("etab-presences-screen").exists, "l'écran natif coupé n'est jamais monté")
@@ -112,16 +112,24 @@ final class DemoEtabSessionTests: JoleneUITestCase {
 
     // MARK: Étapes
 
-    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String) {
-        tabButton(identifiant, label: label).tap()
-        require("L'onglet \(label) affiche son contenu") { self.containerVisible(self.element(contenu)) }
+    /// Onglet ouvert, contenu exigé, puis témoin du rejeu d'onglet exigé lisible sur ce format (revue B8 de #1203, M1) :
+    /// l'onglet courant est lu « Selected ». La présence des cinq onglets n'est pas exigée : en iPad portrait, la barre
+    /// paginée n'expose que la page affichée (`amenerOngletDansLaPage`). Sur iPad, en portrait et en paysage, un ensemble
+    /// stable d'onglets lus en trop est toléré (anomalie attribuée à iPadOS 26.2, runs 45967481048 et 45995190132 :
+    /// `espaceEtablissement`).
+    private func ouvrirOnglet(_ identifiant: String, label: String, contenu: String,
+                              file: StaticString = #filePath, line: UInt = #line) {
+        toucherOnglet(identifiant, label: label, file: file, line: line)
+        require("L'onglet \(label) affiche son contenu", file: file, line: line) { self.containerVisible(self.element(contenu)) }
+        exigerTemoinOnglet(identifiant, label: label, espaceEtablissement: true, file: file, line: line)
     }
 
-    private func ouvrirCompte() {
-        tabButton("tab-etab-compte", label: "Compte").tap()
-        require("Le compte de l'établissement est affiché") {
+    private func ouvrirCompte(file: StaticString = #filePath, line: UInt = #line) {
+        toucherOnglet("tab-etab-compte", label: "Compte", file: file, line: line)
+        require("Le compte de l'établissement est affiché", file: file, line: line) {
             self.containerVisible(self.element("etab-compte-screen")) && self.element("etab-compte-nom").exists
         }
+        exigerTemoinOnglet("tab-etab-compte", label: "Compte", espaceEtablissement: true, file: file, line: line)
     }
 }
 

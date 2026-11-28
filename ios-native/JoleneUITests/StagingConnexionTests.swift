@@ -81,7 +81,7 @@ final class StagingConnexionTests: JoleneUITestCase {
         }
         XCTAssertFalse(element("login-error").exists, "aucune erreur de connexion")
         XCTAssertFalse(element("access-blocked").exists, "le compte TEST est un soignant servi nativement")
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         let role = element("profile-role")
         require("Le rôle est affiché") { role.exists && !role.label.isEmpty }
         XCTAssertTrue(role.label.contains("SOIGNANT"), "rôle renvoyé par fn_get_my_role : SOIGNANT")
@@ -97,7 +97,7 @@ final class StagingConnexionTests: JoleneUITestCase {
         XCTAssertFalse(element("login-scroll").exists, "aucune saisie demandée après restauration")
 
         // 5. Déconnexion : retour à l'écran de connexion sans message d'erreur.
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         tap("logout-button")
         require("La déconnexion ramène à l'écran de connexion", timeout: 30) { self.visible(self.element("login-scroll")) }
         XCTAssertFalse(tabBarExists)

@@ -2263,3 +2263,46 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   - la valeur est relue après le dégagement : un toucher reçu en retard n'est jamais rejoué ;
   - les `require` des appelants (préférences et `DemoPushTests`) restent inchangés : une double bascule y échouerait.
 - **Non vérifié en CI** : la position du `Switch` imbriqué sous iOS 26.2, et l'absence de rejeu sur les autres formats.
+
+### Touchers perdus sur les onglets et les bascules (série 45799922589, main `f599cab3`)
+
+- **Fait.** UI lot 1 — ipad-landscape : tentative 1, `DemoFavorisTests.swift:33` (étoile touchée, 15 s sans sauvegarde) ;
+  tentative 2, `DemoFiltresTests.swift:95` (onglet Profil touché, 15 s sans hub). Verts ailleurs : toucher perdu.
+- **Correctif** (`UITestSupport.swift`, aucun code de l'app) : `toucherEtRejouerSiPerdu` généralise le modèle de
+  `toucherSeConnecter` et de `prefsBasculer` : un seul rejeu, seulement si l'état relu après 5 s est celui d'avant le
+  toucher, consigné (`consignerRejeu`) ; la preuve reste le `require` de l'appelant, avec le même message.
+  `toucherOnglet` l'applique aux 80 touchers d'onglet (témoin : onglet sélectionné et barres de navigation, lus dans un
+  instantané ; sélection illisible ou onglet déjà choisi, jamais de rejeu) ; `toucherPuisExiger` aux étoiles (valeur,
+  étoile active, aucune erreur), aux cases cochées de l'annulation et de la série, aux chips d'Explorer et aux jours
+  de la publication. Les interrupteurs de la complétion et de la publication gardent trois essais, désormais budgétés
+  et consignés.
+- **Témoin prouvé, pas supposé** (revue B8 de #1203, M1) : `exigerTemoinOnglet` exige sur les trois formats, côté
+  soignant (`DemoConsultationTests`, cinq onglets exposés) et établissement (`DemoEtabSessionTests`), que l'onglet
+  courant soit lu « Selected », et lui seul, sauf l'exception ci-dessous. Un témoin illisible pendant un test est
+  consigné (`consignerNonRejeu`, « Nature : geste non rejoué »), comme tout geste sans effet non rejoué ; le relevé de
+  la CI les annonce « Geste non rejoué » (m5).
+- **Anomalie attribuée à iPadOS 26.2, iPad portrait ET paysage, espace établissement** (runs 45967481048 et
+  45995190132, `TabView` standard sans trait posé par l'app) : « Présences » reste lu « Selected » quel que soit l'onglet
+  courant, alors qu'à l'écran seul l'onglet courant est en surbrillance (capture vérifiée en paysage). Attribution par
+  élimination, non reproduite sur un `TabView` minimal ; témoin : côté soignant, sur le même simulateur, l'exclusivité
+  passe. Règle : l'onglet courant reste exigé « Selected » partout ; l'exclusivité aussi, sauf sur iPad dans l'espace
+  établissement, où seul un ensemble stable d'onglets en trop est toléré (déduit de la première lecture du test,
+  consigné « Témoin d'onglet ambigu »). Quand plus d'un onglet est lu « Selected », `toucherOnglet` ne rejoue jamais
+  (consigné). Quand la page de la barre masque l'onglet courant, un seul onglet peut être lu « Selected » (l'onglet en
+  trop) : le rejeu reste alors armé, sans danger, car l'effet est lu sur l'onglet visé et l'instantané doit être
+  identique (revue B8 de #1203, delta court, m1).
+- **Onglet courant touché pour revenir à la racine** (run 45995190132, `DemoLitigesTests.swift:239` : Profil touché,
+  déjà courant, donc jamais rejoué, puis 15 s sans la liste du profil). Cause NON établie ; hypothèses : toucher de
+  l'onglet ou retour perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre ». L'échec est
+  à la ligne de la racine, pas à celle du retrait : l'écran des litiges a été lu retiré, ou pas lu, juste après le
+  toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult. `revenirALaRacine` :
+  - attend la racine 3 s ;
+  - puis, tant qu'un écran connu reste empilé, touche le SEUL bouton retour du système (`BackButton`), après avoir lu
+    sur un même instantané l'écran encore présent et ce bouton dans la barre ; jamais un autre bouton (`nav-messages`,
+    seul bouton de la racine du Profil ; revue B8 de #1203, M2, même règle pour `DemoMessagerieTests.boutonRetour`) ;
+  - rejoue un retour sans effet une fois au plus par appel, consigné, puis exige l'écran retiré ;
+  - sans racine ni écran connu, ne fait aucun geste (M1) : consigné avec les barres lues, l'appelant échoue sur son
+    message d'avant.
+  Appliqué aux 9 nettoyages « Profil remis à sa racine » (bulletins, évaluations, recherches, litiges, réclamations,
+  parrainage, pool urgence, série, messagerie).
+- **Restent sans rejeu** : 14 entrées du hub Profil et 25 sélections (onglets internes, segments, motifs).

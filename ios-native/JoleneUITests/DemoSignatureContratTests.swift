@@ -250,7 +250,7 @@ final class DemoSignatureContratTests: JoleneUITestCase {
 
     /// Profil › Mon espace › Mes contrats (même chemin que `DemoContratsTests`), puis la carte du contrat.
     private func openContrat(_ id: String) {
-        tabButton("tab-profil", label: "Profil").tap()
+        toucherOnglet("tab-profil", label: "Profil")
         require("La liste du profil est affichée") { self.containerVisible(self.element("profile-list")) }
         let entree = element("profil-contrats")
         if !visible(entree) { scrollTo(entree, in: element("profile-list")) }

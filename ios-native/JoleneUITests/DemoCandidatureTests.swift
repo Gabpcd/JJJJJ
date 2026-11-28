@@ -50,7 +50,7 @@ final class DemoCandidatureTests: JoleneUITestCase {
         documents.tap()
         require("Mes documents natif est ouvert", timeout: 30) { self.containerVisible(self.element("documents-screen")) }
 
-        tabButton("tab-missions", label: "Mes missions").tap()
+        toucherOnglet("tab-missions", label: "Mes missions")
         tap("missions-tab-candidatures")
         require("La candidature de la session est dans Mes missions › Candidatures", timeout: 30) {
             self.element("missions-tab-candidatures").isSelected && self.element("mes-mission-demo-mission-014").exists

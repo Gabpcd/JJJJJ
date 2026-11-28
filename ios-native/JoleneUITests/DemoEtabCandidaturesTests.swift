@@ -83,7 +83,7 @@ final class DemoEtabCandidaturesTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirCandidatures(mission id: String, intitule: String) {
-        if !containerVisible(element("etab-missions-screen")) { tabButton("tab-etab-missions", label: "Missions").tap() }
+        if !containerVisible(element("etab-missions-screen")) { toucherOnglet("tab-etab-missions", label: "Missions") }
         require("La liste des missions est relue") {
             self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
         }

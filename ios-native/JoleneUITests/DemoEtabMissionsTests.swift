@@ -86,7 +86,7 @@ final class DemoEtabMissionsTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirMissions() {
-        tabButton("tab-etab-missions", label: "Missions").tap()
+        toucherOnglet("tab-etab-missions", label: "Missions")
         require("La liste des missions est relue") {
             self.containerVisible(self.element("etab-missions-screen")) && self.element("etab-missions-count").exists
         }

@@ -103,7 +103,7 @@ final class DemoEtabContratsTests: JoleneUITestCase {
     func testPointageOnlySansEntreeContrats() throws {
         launchDemo(extraArguments: espaceEtablissement + ["-JOLENE_DEMO_ROLE_ETAB", "POINTAGE_ONLY"])
         connecter(email: DemoEtabSessionTests.emailEtablissement)
-        tabButton("tab-etab-missions", label: "Missions").tap()
+        toucherOnglet("tab-etab-missions", label: "Missions")
         require("La liste des missions est relue") { self.containerVisible(self.element("etab-missions-screen")) }
         requireAbsence("Aucune entrée « Contrats » sans la permission contrats") { self.element("etab-missions-contrats").exists }
         record("\(proofPrefix)-etab-contrats-pointage-only")
@@ -112,7 +112,7 @@ final class DemoEtabContratsTests: JoleneUITestCase {
     // MARK: Étapes
 
     private func ouvrirContrats() {
-        tabButton("tab-etab-missions", label: "Missions").tap()
+        toucherOnglet("tab-etab-missions", label: "Missions")
         require("La liste des missions est relue") { self.containerVisible(self.element("etab-missions-screen")) }
         let entree = element("etab-missions-contrats")
         require("L'entrée « Contrats » est rendue") { entree.exists }

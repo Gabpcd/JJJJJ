@@ -184,13 +184,7 @@ final class DemoEvaluationsScoreTests: JoleneUITestCase {
 
     /// Profil remis à sa racine (l'écran y est empilé), puis sentinelle réseau.
     private func verifierAucuneRequete(ecran: String) {
-        tabButton("tab-profil", label: "Profil").tap()
-        if element(ecran).exists {
-            let back = app.navigationBars.buttons.firstMatch
-            require("Le bouton retour est disponible") { self.visible(back) }
-            back.tap()
-            require("L'écran \(ecran) est retiré") { !self.element(ecran).exists }
-        }
+        revenirALaRacine("tab-profil", label: "Profil", racine: "profile-list", empiles: [ecran])
         let liste = element("profile-list")
         require("La liste du profil est affichée") { self.containerVisible(liste) }
         let sentinelle = element("network-sentinel")
