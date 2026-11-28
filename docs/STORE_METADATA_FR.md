@@ -12,10 +12,11 @@ doivent jamais être ajoutés au dépôt, à une PR ou à une capture.
 > publication progressive (`docs/mobile-swift/APP_STORE.md`, « État au
 > 28/11/2026 »). Sur Google Play, c'est toujours la coquille Capacitor,
 > en 1.0.8 (25). À la création de la version 2.0.0 par l'API, Apple a repris
-> la fiche de 1.0.7 : la description en ligne est celle ci-dessous, écrite
-> pour l'app web embarquée. Les écarts avec l'app native sont signalés plus
-> bas, pour la prochaine mise à jour de la fiche ; rien n'a été changé chez
-> Apple.
+> la fiche de 1.0.7 : la description en ligne devrait donc être celle
+> ci-dessous, écrite pour l'app web embarquée (fiche en ligne non relue, le
+> journal du run ne la recopie pas). Les écarts avec l'app native sont
+> signalés plus bas, pour la prochaine mise à jour de la fiche ; rien n'a été
+> changé chez Apple.
 
 ## Positionnement
 

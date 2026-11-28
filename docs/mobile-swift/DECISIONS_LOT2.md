@@ -2309,7 +2309,8 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   passe. Règle : l'onglet courant reste exigé « Selected » partout ; l'exclusivité aussi, sauf sur iPad dans l'espace
   établissement, où seul un ensemble stable d'onglets en trop est toléré (déduit de la première lecture du test,
   consigné « Témoin d'onglet ambigu »). Quand plus d'un onglet est lu « Selected », `toucherOnglet` ne rejoue jamais
-  (consigné). Ces deux consignations ont leur nature propre (`consignerTemoinAmbigu`, « Nature : témoin ambigu ») : le
+  (consigné). Sur iPad, ces deux consignations ont leur nature propre (`consignerTemoinAmbigu`, « Nature : témoin
+  ambigu » ; hors iPad, un témoin ambigu reste un « Geste non rejoué », revue B8 de #1205, m1) : le
   relevé de la CI les compte à part et les regroupe en une ligne et une annotation `::notice` par test, avec leur
   nombre. Chaque toucher d'onglet de l'espace établissement sur iPad en produisait une annotation « Geste non rejoué »
   (21 dans un seul job en paysage), au-delà des 10 avertissements que GitHub affiche par étape : une vraie « Attente

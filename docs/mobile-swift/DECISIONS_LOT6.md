@@ -239,7 +239,7 @@ publiée en production (run 46092658355). La recette Android sur appareil de ce 
    pendant la publication progressive (`docs/mobile-swift/SENTRY_IOS.md`). *Fait : secret créé le 24/11/2026,
    reçu par le build 32 ; arrivée des événements chez Sentry non vérifiée.*
 4. Faire dans App Store Connect et Play Console les saisies listées dans `LOT6_PLAN.md` §3 et §4. *En partie :
-   la 2.0.0 a repris la fiche de 1.0.7 (description, compte de démonstration) et la lane a écrit les notes pour
+   la 2.0.0 a repris la fiche de 1.0.7 (compte de démonstration ; description présumée reprise, non relue) et la lane a écrit les notes pour
    la revue ; captures, confidentialité, classification et description n'ont pas été relues (`LOT6_PLAN.md` §3).*
 5. Publication Android à 100 % dès l'approbation (lane actuelle, `release_status: 'completed'`, source
    G13) ou déploiement par étapes (source G7) : inchangé par défaut. *1.0.8 (25) est publiée (D10) ; aucun

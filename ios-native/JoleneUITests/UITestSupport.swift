@@ -363,7 +363,7 @@ class JoleneUITestCase: XCTestCase {
 
     /// Consigne un témoin d'onglet ambigu (plus d'un onglet lu « Selected ») : un seul toucher, aucun rejeu. Attendu sur
     /// iPad dans l'espace établissement sous iPadOS 26.2 (`exigerTemoinOnglet`), où chaque toucher d'onglet en produit
-    /// un. Ligne « Nature : témoin ambigu », comptée à part par le relevé d'`ios-swift-ci.yml`, qui regroupe ces traces
+    /// un ; réservé aux formats iPad (hors iPad, `consignerNonRejeu` garde l'avertissement). Ligne « Nature : témoin ambigu », comptée à part par le relevé d'`ios-swift-ci.yml`, qui regroupe ces traces
     /// en une ligne et une annotation par test : elles ne masquent plus les autres annotations (revue B8 de #1203, m2).
     func consignerTemoinAmbigu(_ attente: String, issue: String, file: StaticString, line: UInt) {
         let fichier = (String(describing: file) as NSString).lastPathComponent
@@ -582,8 +582,8 @@ class JoleneUITestCase: XCTestCase {
     /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
     /// toucher le ramènerait à sa racine). Onglet visé déjà lu sélectionné (lecture juste ou non), sélection illisible, ou
     /// ambiguë (plus d'un onglet lu « Selected ») : un seul toucher, jamais de rejeu ; une sélection illisible est
-    /// consignée (`consignerNonRejeu`) et une sélection ambiguë à part (`consignerTemoinAmbigu`, regroupée par test au
-    /// relevé), pour qu'un rejeu désactivé se voie au relevé de la CI, et
+    /// consignée (`consignerNonRejeu`), une sélection ambiguë aussi hors iPad, et à part sur iPad, où elle est attendue
+    /// (`consignerTemoinAmbigu`, regroupée par test au relevé), pour qu'un rejeu désactivé se voie au relevé de la CI, et
     /// `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
     /// Cas laissé armé (revue B8 de #1203, delta court, m1) : sur l'iPad, espace établissement, la page de la barre peut
     /// masquer l'onglet courant (ouvrir Compte depuis Accueil fait passer en page 2) ; un seul onglet est alors lu
@@ -607,9 +607,16 @@ class JoleneUITestCase: XCTestCase {
         // lu sélectionné quel que soit l'onglet courant, runs 45967481048 et 45995190132) : témoin ambigu, aucun rejeu.
         let selectionnes = avant.libellesSelectionnes
         guard selectionnes.count == 1 else {
-            consignerTemoinAmbigu("Témoin d'onglet ambigu avant le toucher de \(label)",
-                                  issue: "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
-                                      + "un seul toucher, rejeu d'onglet désactivé", file: file, line: line)
+            let attente = "Témoin d'onglet ambigu avant le toucher de \(label)"
+            let issue = "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
+                + "un seul toucher, rejeu d'onglet désactivé"
+            // Attendu sur iPad seulement : ailleurs, un rejeu désactivé reste un avertissement « Geste non rejoué »
+            // (revue B8 de #1205, m1).
+            if proofPrefix.hasPrefix("ipad-") {
+                consignerTemoinAmbigu(attente, issue: issue, file: file, line: line)
+            } else {
+                consignerNonRejeu(attente, issue: issue, file: file, line: line)
+            }
             onglet.tap()
             return
         }
