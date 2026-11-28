@@ -4,7 +4,7 @@ import Supabase
 
 /// `BulletinsPort` (L4-T10), port de `listerCopiesBulletins`, `ouvrirCopieBulletin` et `signalerCopieBulletin`
 /// (`src/lib/copiesBulletins.ts` l.90-96, l.215-255) côté soignant :
-/// - `fn_lister_copies_bulletins(p_etablissement_id, p_mission_id)` (`public.sql` l.40397, GRANT `authenticated`) : les
+/// - `fn_lister_copies_bulletins(p_etablissement_id, p_mission_id)` (`public.sql` l.40488, GRANT `authenticated`) : les
 ///   deux paramètres à `null` (copies du soignant connecté) ; réponse validée STRICTEMENT (`CopieBulletinValidation`) :
 ///   une ligne invalide refuse la liste (« La liste des copies ne peut pas être vérifiée. Réessayez. ») ; 42501
 ///   `COPIE_ACCES_REFUSE` ou toute autre erreur → texte du web (« Impossible de charger les copies… »), jamais « session
@@ -14,7 +14,7 @@ import Supabase
 ///   `BulletinsTelechargement`) ; 410 `COPIE_RETIREE` → `RefusCopieBulletin.retiree` ; 401 → session expirée ; tout autre
 ///   statut, un `application/json` en 200 ou un relais en échec → `RefusCopieBulletin.indisponible`. Une copie `RETIREE`
 ///   n'est jamais demandée. Ni les octets, ni le corps, ni le code machine ne sont journalisés ;
-/// - `fn_signaler_copie_bulletin(p_copie_id, p_motif)` (l.56774) : `{ok:true}` exigé, puis relecture de la liste
+/// - `fn_signaler_copie_bulletin(p_copie_id, p_motif)` (l.56909) : `{ok:true}` exigé, puis relecture de la liste
 ///   (`DESTINATAIRE` la rend `RETIREE`) ; 42501 `COPIE_ACCES_REFUSE` / 22023 `COPIE_MOTIF_INVALIDE` → texte du web
 ///   (« Le signalement n’a pas été confirmé. Réessayez. »).
 /// Une seule requête par appel, aucun renvoi.

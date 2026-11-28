@@ -123,7 +123,7 @@ actor DemoComptesInscription {
         parcours = nil
     }
 
-    /// `INSERT … ON CONFLICT (user_id) DO NOTHING` puis relecture de la ligne (`public.sql` l.30666-30675).
+    /// `INSERT … ON CONFLICT (user_id) DO NOTHING` puis relecture de la ligne (`public.sql` l.30757-30766).
     func demarrer(_ intention: IntentionInscription, variante: VarianteBrouillonDemo? = nil) -> ParcoursInscription {
         if let parcours { return parcours }
         let brouillon = variante?.brouillon(profession: intention.profession) ?? FormulaireInscription(profession: intention.profession)
@@ -158,13 +158,13 @@ public struct DemoInscriptionGateway: InscriptionPort {
     static let horodatage = "2026-11-02T00:00:00+00:00"
 
     /// Refus de `fn_demarrer_inscription` (22023), verbatim serveur.
-    // source: supabase/schema/public.sql:30651
+    // source: supabase/schema/public.sql:30742
     static let refusTypeOuConditions = "Vérifiez le type de compte et les conditions acceptées."
-    // source: supabase/schema/public.sql:30655
+    // source: supabase/schema/public.sql:30746
     static let refusProfession = "Choisissez votre profession."
 
     /// Refus de `fn_enregistrer_parcours_inscription` (P0002) et de `register-soignant` (T8), verbatim serveur.
-    // source: supabase/schema/public.sql:32993
+    // source: supabase/schema/public.sql:33084
     static let refusInscriptionIntrouvable = "Inscription introuvable."
     // source: supabase/functions/register-soignant/index.ts:237
     static let refusChampsManquants = "Champs obligatoires manquants (prénom, nom, profession)."

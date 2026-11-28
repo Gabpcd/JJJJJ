@@ -62,8 +62,8 @@ final class InscriptionVerbatimTests: XCTestCase {
             (T.reprendreInscription, parcours, 97, 97), (T.choisirEspace, parcours, 100, 100),
             (T.jeSuisSoignant, parcours, 115, 115), (T.jeRepresenteEtablissement, parcours, 121, 121),
             (T.espaceIndisponible, parcours, 80, 80), (T.reessayer, parcours, 107, 107), (T.seDeconnecter, parcours, 126, 126),
-            (DemoInscriptionGateway.refusTypeOuConditions, schema, 30651, 30651),
-            (DemoInscriptionGateway.refusProfession, schema, 30655, 30655),
+            (DemoInscriptionGateway.refusTypeOuConditions, schema, 30742, 30742),
+            (DemoInscriptionGateway.refusProfession, schema, 30746, 30746),
         ]
     }
 
