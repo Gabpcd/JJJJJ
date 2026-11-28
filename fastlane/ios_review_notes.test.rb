@@ -533,10 +533,10 @@ module IosReviewNotesTest
         end
         # Type MIME et encodage pris dans des listes fermées, jamais la valeur du serveur.
         { 'application/json' => 'application/json', 'TEXT/HTML; charset=utf-8' => 'text/html', 'text/plain' => 'text/plain',
-          'application/vnd.pgrst.object+json' => 'autre', "application/#{USER_ID}" => 'autre', "valeur #{DEMO_NOM}" => 'autre', '' => 'absent' }.each do |brut, ferme|
+          'application/vnd.pgrst.object+json' => 'application/vnd.pgrst.object+json', "application/#{USER_ID}" => 'autre', "valeur #{DEMO_NOM}" => 'autre', '' => 'absent' }.each do |brut, ferme|
           assert(d.call('{}', { 'content-type' => brut }).include?("type : #{ferme} ;"), brut)
         end
-        { 'gzip' => 'gzip', 'BR' => 'br', 'deflate' => 'deflate', 'identity' => 'identity', '' => 'aucun', 'zstd' => 'autre', USER_ID => 'autre' }.each do |brut, ferme|
+        { 'gzip' => 'gzip', 'BR' => 'br', 'deflate' => 'deflate', 'identity' => 'identity', '' => 'aucun', 'zstd' => 'zstd', 'x-zstd' => 'autre', USER_ID => 'autre' }.each do |brut, ferme|
           assert(d.call('{}', { 'content-encoding' => brut }).include?("encodage : #{ferme} ;"), brut)
         end
         assert(d.call('{}', nil).end_with?('type : absent ; corps : 2 octets ; encodage : aucun ; Content-Range : non'))
@@ -570,7 +570,8 @@ module IosReviewNotesTest
         end
         assert(C::TransportHttps.construire(uri, { 'apikey' => CLE }, '{}')['accept-encoding'] == 'identity', 'Net::HTTP::Post.new restored')
         # Une réponse encore encodée est refusée à chaque étape, motif fermé ; à la déconnexion, elle n'est pas confirmée.
-        { token: /réponse encodée \(connexion, HTTP 200 ; encodage : gzip\)/, role: /réponse encodée \(lecture du rôle, HTTP 200 ; encodage : br\)/ }.each do |etape, motif|
+        { token: /réponse encodée \(connexion, HTTP 200 ; encodage : gzip\) ; session éventuellement ouverte, non révoquée ; rien/,
+          role: /réponse encodée \(lecture du rôle, HTTP 200 ; encodage : br\) ; rien/ }.each do |etape, motif|
           reponses = { token: [200, { access_token: JETON }.to_json], role: [200, { role: 'SOIGNANT' }.to_json] }
           reponses[etape] = reponses[etape] + [{ 'Content-Encoding' => etape == :token ? 'gzip' : 'BR' }]
           rejects(motif) { C.new(url: URL, cle: CLE, transport: http(**reponses)).verifier!(nom: DEMO_NOM, mot_de_passe: DEMO_MDP) }
@@ -646,6 +647,16 @@ module IosReviewNotesTest
         assert(transport.calls.last[:url].end_with?('/auth/v1/logout?scope=local'))
         rejects(/rôle illisible \(HTTP 200 ; JSON racine : tableau ; éléments : 0 ;/) { verifier.call(http(role: [200, '[]'])) }
         rejects(/déconnexion non confirmée \(HTTP 500\)/) { verifier.call(http(logout: [500, ''])) }
+        # Rôle refusé PUIS déconnexion en échec : les deux motifs dans un seul refus fermé (revue B8 n° 2 de #1202, m1).
+        rejects(/\Acompte de démo : réponse encodée \(lecture du rôle, HTTP 200 ; encodage : gzip\) ; déconnexion non confirmée \(réseau : Errno::ECONNRESET\) ; rien n'est écrit ni soumis \(voir /) do
+          verifier.call(http(role: [200, '{}', { 'content-encoding' => 'gzip' }], logout: Errno::ECONNRESET.new))
+        end
+        rejects(/\Acompte de démo : connexion OK, rôle illisible \(HTTP 401 ; [^)]*\) ; déconnexion non confirmée \(HTTP 500\) ; rien n'est écrit/) do
+          verifier.call(http(role: [401, '{"message":"JWT expired"}'], logout: [500, '']))
+        end
+        error = rejects(/rôle illisible \(HTTP 401/) { verifier.call(http(role: [401, '{}'])) }
+        assert(!error.message.include?('déconnexion'), 'logout confirmed: the role refusal alone')
+        assert(C.completer_refus('autre forme', 'x') == 'autre forme ; x')
         rejects(/déconnexion non confirmée \(réseau : Errno::ECONNRESET\)/) { verifier.call(http(logout: Errno::ECONNRESET.new)) }
         rejects(/identifiants absents/) { C.new(url: URL, cle: CLE, transport: http).verifier!(nom: ' ', mot_de_passe: DEMO_MDP) }
       },
