@@ -304,7 +304,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_dashboard_soignant_complet"() RETURNS "j
   - **Refus propres à cette RPC** : toujours `success:false, ok:false, error` ; les refus de planning portent
     en plus la clé `code` (jamais `error_code` : ni ce corps ni `fn_conflit_planning_soignant` ne la posent, le
     décodeur lit `code` et ne se rabat pas sur `error_code`).
-    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24625-24720 :
+    1. `{success:false, ok:false, error:'Accès réservé aux soignants authentifiés.'}` — l.24625-24629 :
        `auth.uid()` nul ou `est_soignant()` faux.
     2. `{success:false, ok:false, error:'Action de candidature invalide.'}` — l.24634-24640 : `p_action` hors
        `POSTULER, ACCEPTER, SWIPE_LIKE, URGENCE, PROPOSITION`.
@@ -1424,7 +1424,7 @@ CREATE OR REPLACE FUNCTION "public"."fn_confirmer_presence_mission"("p_mission_i
   « Confirmation impossible. » (refus sans message et erreur d'envoi seulement, jamais après un succès serveur). Titre et description du bloc, tutoyés sur le web, passent au vouvoiement
   (décision 9, `LOT1_PLAN.md` §3 T6c).
 - **Titre du push** (pas un texte d'écran) : « Ta mission demain — Je serai là ✓ » est le titre du push
-  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30552/30471) ; aucune assertion d'écran ne le cherche.
+  serveur `RAPPEL_MISSION` (`fn_demander_confirmations_presence` l.30552/30562) ; aucune assertion d'écran ne le cherche.
 
 ## fn_desactiver_mon_token_push
 
@@ -2435,8 +2435,9 @@ CREATE OR REPLACE FUNCTION "public"."fn_generer_code_secours_mission"("p_mission
   `SECURITY DEFINER` (l.27450-27475), GRANT `authenticated` (`public.sql` l.82276), et son seul contrôle
   est `auth.uid() IS NULL` (refus des appels anonymes hors cron, l.27461-27463) : tout compte connecté pouvait écrire
   une notification arbitraire (destinataire, type, titre, corps, `lien`). `docs/audit-fonctionnel-pre-lancement.md`
-  l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification avait été ajouté). Numéros de ligne du
-  dump d'avant la re-baseline qui suit la migration ci-dessous.
+  l.177 la marque pourtant « ✅ FIXÉ » (seul ce contrôle d'authentification avait été ajouté). Numéros de ligne
+  historiques du constat (dump re-baseliné par #1097, 1er novembre 2026), figés à dessein : le GRANT `authenticated`
+  n'existe plus au dump depuis la re-baseline de #1209.
 - **Corrigé le 28 novembre 2026** (B9, migration `20261128150000_borner_notifications_et_classement`, depuis la
   définition live) : `REVOKE EXECUTE` à `PUBLIC`, `anon` et `authenticated`, corps inchangé, `service_role` et les
   appelants serveur conservés. Le web n'appelle plus la fonction : contestation retirée (doublon du trigger), alerte
