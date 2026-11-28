@@ -225,8 +225,11 @@ test('étages src/ et supabase/functions/ : REVUE_STORE jamais posée, chaque en
   assert.match(pool, /supabase\.rpc\('fn_pool_urgence_etablissement'/);
   assert.match(pool, /supabase\.functions\.invoke\('send-push'/);
   const detail = read('src/pages/DetailMission.tsx');
-  assert.ok(detail.indexOf("'fn_soignants_urgence'") > 0 && detail.indexOf("'fn_soignants_urgence'") < detail.indexOf("p_type: 'MISSION_URGENTE'"),
-    'alerte pool d’une mission : destinataires lus par fn_soignants_urgence (éligibilité)');
+  // Depuis 20261128120000 (B9), les notifications de l'alerte sont écrites par fn_alerter_pool_urgence, qui relit
+  // fn_soignants_urgence et le prédicat de cohorte côté serveur ; e-mails et SMS suivent la même liste.
+  assert.ok(detail.indexOf("'fn_soignants_urgence'") > 0 && detail.indexOf("'fn_soignants_urgence'") < detail.indexOf("'fn_alerter_pool_urgence'")
+    && !detail.includes("p_type: 'MISSION_URGENTE'"),
+    'alerte pool d’une mission : destinataires lus par fn_soignants_urgence (éligibilité), notifications par le serveur');
   // La suite vérifie ces portes sur la base.
   assert.ok(suite.includes("('public.fn_soignants_urgence(uuid)', 'fn_soignant_eligible_mission(')"));
   assert.ok(suite.includes("('public.fn_pool_urgence_etablissement(uuid)', 'private.fn_soignant_contactable_par_etablissement(s.id, p_etablissement_id)')"));

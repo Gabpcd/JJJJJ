@@ -117,7 +117,6 @@ export function PanneauContestation({
   const estResolu = !!litige && STATUTS_RESOLUS.includes(litige.statut as typeof STATUTS_RESOLUS[number]);
 
   const roleActeur = role === 'SOIGNANT' ? 'SOIGNANT' : 'ADMIN_ETABLISSEMENT';
-  const roleLabel = role === 'SOIGNANT' ? 'soignant' : 'établissement';
   const autreRoleLabel = role === 'SOIGNANT' ? 'établissement' : 'soignant';
 
   const creerContestation = async () => {
@@ -140,17 +139,9 @@ export function PanneauContestation({
         p_ip: null, p_navigateur: navigator.userAgent,
       });
 
-      // Notify the other party
-      const destId = role === 'SOIGNANT' ? etablissementId : soignantId;
-      const destType = role === 'SOIGNANT' ? 'ETABLISSEMENT' : 'SOIGNANT';
-      const lien = role === 'SOIGNANT' ? '/etablissement/presences' : '/soignant/presences';
-      await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: destId, p_type_destinataire: destType,
-        p_type: 'CONTESTATION_PRESENCE',
-        p_titre: 'Présence contestée',
-        p_corps: `Le ${roleLabel} a contesté une présence validée.`,
-        p_lien: lien, p_type_ressource: 'presence', p_id_ressource: presenceId,
-      });
+      // L'autre partie est prévenue par le serveur : trg_notifier_creation_litige
+      // (LITIGE_OUVERT) à l'insertion du litige. fn_creer_notification n'est plus
+      // appelable par un compte (migration 20261128120000), comme sur le natif.
 
       toast.success('Contestation envoyée');
       setMotif('');

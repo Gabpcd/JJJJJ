@@ -775,12 +775,20 @@ test('RPC_JAMAIS_SUIVIES : fn_creer_notification refusée (décision 9) et fiche
   assert.ok(RPC_JAMAIS_SUIVIES.includes('fn_creer_notification'));
   assert.throws(() => verifierExclusions([...RPC_SUIVIES, { name: 'fn_creer_notification', statut: 'a_venir', lot: 2 }]), /jamais/);
   const schema = read(SOURCES.schema);
-  // Témoins : le trigger notifie déjà l'établissement à l'ouverture d'un litige ; le web appelle encore la RPC.
+  // Témoins : le trigger notifie déjà l'autre partie à l'ouverture d'un litige. Basculé le 28/11/2026 (B9, migration
+  // 20261128120000) : le web n'appelle plus la RPC (contestation retirée, pool et mandat par des RPC bornées) et
+  // EXECUTE est retiré à authenticated.
   assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"."litiges"'));
-  assert.ok(read('src/components/PanneauContestation.tsx').includes("supabase.rpc('fn_creer_notification'"),
-    `le web n appelle plus fn_creer_notification : fiche « Interdite côté natif : fn_creer_notification » et constat B9 à ${BASCULE_MAIN}`);
+  const appelsWeb = ['src/components/PanneauContestation.tsx', 'src/pages/DetailMission.tsx', 'src/pages/admin/AdminMandatsFacturation.tsx']
+    .filter(f => /\.rpc\(\s*['"]fn_creer_notification['"]/.test(read(f)));
+  assert.deepEqual(appelsWeb, [], 'appel web de fn_creer_notification revenu : EXECUTE est retiré à authenticated (migration 20261128120000)');
+  assert.ok(read('src/pages/DetailMission.tsx').includes("supabase.rpc('fn_alerter_pool_urgence'"));
+  assert.ok(read('src/pages/admin/AdminMandatsFacturation.tsx').includes("supabase.rpc('fn_admin_relancer_mandat_facturation'"));
+  assert.ok(read('supabase/migrations/20261128120000_borner_notifications_et_classement.sql')
+    .includes('REVOKE ALL ON FUNCTION public.fn_creer_notification(uuid, text, text, text, text, text, text, uuid) FROM authenticated;'));
   const fiche = sectionContrats('Interdite côté natif : `fn_creer_notification`');
-  for (const temoin of ['trg_notifier_creation_litige', 'CONTESTATION_PRESENCE', 'PanneauContestation.tsx']) {
+  for (const temoin of ['trg_notifier_creation_litige', 'CONTESTATION_PRESENCE', 'PanneauContestation.tsx',
+    'Corrigé le 28 novembre 2026', '20261128120000', 'fn_alerter_pool_urgence', 'fn_admin_relancer_mandat_facturation']) {
     assert.ok(fiche.includes(temoin), `fiche fn_creer_notification : ${temoin} absent`);
   }
 });
@@ -1426,9 +1434,13 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
   assert.ok(validation.includes('IF v_mission IS NULL OR v_mission.soignant_assigne_id != v_uid THEN'));
   assert.ok(validation.includes("p_terminal_id, 'CODE_SECOURS');"), 'fn_valider_code_secours : présence CODE_SECOURS plus insérée');
   assert.ok(!/perimetre|distance|rayon|p_lat IS (?:NOT )?NULL/i.test(validation), `fn_valider_code_secours contrôle désormais la position : chaîne 3 du constat B9 à ${BASCULE_MAIN}`);
-  // (a) fn_creer_notification : tout compte authentifié écrit une notification arbitraire (destinataire, titre,
-  // corps, lien) ; seul contrôle : auth.uid() non nul. L'audit pré-lancement la marque « FIXÉ ».
-  assert.ok(grantAuthenticated('fn_creer_notification'), `fn_creer_notification : plus de GRANT authenticated, constat B9 et fiche à ${BASCULE_MAIN}`);
+  // (a) fn_creer_notification : tout compte authentifié écrivait une notification arbitraire (destinataire, titre,
+  // corps, lien) ; seul contrôle : auth.uid() non nul. L'audit pré-lancement la marque « FIXÉ ». Basculé le 28/11/2026 :
+  // EXECUTE retiré à authenticated par la migration 20261128120000, corps inchangé. Le dump garde le GRANT tant
+  // qu'il n'est pas re-baseliné après le déploiement ; ensuite, plus de GRANT.
+  const revoqueeNotif = read('supabase/migrations/20261128120000_borner_notifications_et_classement.sql')
+    .includes('REVOKE ALL ON FUNCTION public.fn_creer_notification(uuid, text, text, text, text, text, text, uuid) FROM authenticated;');
+  assert.ok(revoqueeNotif, 'fn_creer_notification : REVOKE authenticated de la migration 20261128120000 absent');
   const notif = corpsSql(schema, enteteFn('fn_creer_notification'));
   assert.ok(notif.includes('IF auth.uid() IS NULL AND NOT fn_est_contexte_cron_ou_admin() THEN'));
   assert.ok(!/p_destinataire_id\s*(?:<>|!=|=|IS DISTINCT FROM|IS NOT DISTINCT FROM)/.test(notif) && notif.includes('p_lien'),
@@ -1440,7 +1452,8 @@ test('B9 RLS/auth : constats de T0 (système ① appelable, gardes ternaires, fn
   for (const temoin of ['fn_creer_notification', 'l.82276', '`auth.uid() IS NULL`', 'FIXÉ', 'docs/audit-fonctionnel-pre-lancement.md',
     'fn_codes_pointage_mission', 'fn_generer_qr_mission', 'fn_generer_code_secours_mission',
     'pointer à distance', 'REVOKE EXECUTE', 'FROM authenticated', 'neuf RPC ①', 'SyncHorsLigne', 'IS DISTINCT FROM', 'COALESCE',
-    'un gap connu reste verrouillé', 'définition live', 'PR backend séparée', 'fn_presences_detail_mission', 'fn_etat_pointage_mission']) {
+    'un gap connu reste verrouillé', 'définition live', 'PR backend séparée', 'fn_presences_detail_mission', 'fn_etat_pointage_mission',
+    'Basculé le 28 novembre 2026', '20261128120000_borner_notifications_et_classement', 'fn_alerter_pool_urgence']) {
     assert.ok(b9.includes(temoin), `En attente de Gabrielle › B9 : ${temoin} absent`);
   }
   assert.ok(!/Deux chaînes|huit RPC/.test(b9), 'En attente de Gabrielle › B9 : décompte périmé (neuf RPC ①)');

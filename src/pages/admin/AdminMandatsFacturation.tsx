@@ -46,17 +46,10 @@ export default function AdminMandatsFacturation() {
       const deliveryStatus = getEmailDeliveryStatus(emailRes.data, emailRes.error);
       if (deliveryStatus !== 'sent') return deliveryStatus;
 
-      const notifRes = await supabase.rpc('fn_creer_notification', {
-        p_destinataire_id: s.id,
-        p_type_destinataire: 'SOIGNANT',
-        p_type: 'RAPPEL_DOCUMENTS',
-        p_titre: 'Signez votre mandat de facturation',
-        p_corps: 'Votre mandat de facturation attend votre signature. Il permet la génération de vos factures d\'honoraires ; pour une mission explicitement éligible au paiement accéléré, il fait partie des prérequis.',
-        p_lien: '/soignant/mandat-facturation',
-        p_type_ressource: null,
-        p_id_ressource: null,
-      } as any);
-      if (notifRes.error || (notifRes.data as any)?.error) return 'partial';
+      // Texte et lien posés par le serveur (est_admin()) : fn_creer_notification
+      // n'est plus appelable par un compte (migration 20261128120000).
+      const notifRes = await supabase.rpc('fn_admin_relancer_mandat_facturation', { p_soignant_id: s.id });
+      if (notifRes.error) return 'partial';
       return 'sent';
     } catch (error) {
       console.error('relance mandat error', error);

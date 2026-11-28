@@ -8655,6 +8655,10 @@ export type Database = {
         Args: { p_etablissement_id: string; p_motif?: string }
         Returns: Json
       }
+      fn_admin_relancer_mandat_facturation: {
+        Args: { p_soignant_id: string }
+        Returns: string
+      }
       fn_admin_reset_test_account: { Args: { p_role: string }; Returns: Json }
       fn_admin_resoudre_alerte: { Args: { p_alerte_id: string }; Returns: Json }
       fn_admin_resoudre_litige:
@@ -8753,6 +8757,7 @@ export type Database = {
       fn_alerte_reclamations_pending_old: { Args: never; Returns: Json }
       fn_alerter_mediation_prioritaire: { Args: never; Returns: Json }
       fn_alerter_paiements_retard: { Args: never; Returns: Json }
+      fn_alerter_pool_urgence: { Args: { p_mission_id: string }; Returns: Json }
       fn_alertes_dashboard_etab: { Args: never; Returns: Json }
       fn_analytics_etablissement: {
         Args: { p_etablissement_id: string; p_mois?: number }
@@ -10573,8 +10578,6 @@ export type Database = {
       fn_top_soignants: {
         Args: { p_limit?: number; p_profession?: string }
         Returns: {
-          id: string
-          nb_evaluations: number
           nom: string
           note_moyenne: number
           prenom: string

@@ -36,6 +36,16 @@ export const DUMP_AVANT_EFFACEMENT_PIECES = Object.freeze({
   sha256: '8ed217585fbbf50683fa87bd01c2c1aac9162cb3e796daf915e61488310f531c',
 });
 
+/**
+ * Dump avant la migration 20261128120000 (B9, notifications et classement) : re-baseline du 27/11/2026 (#1204),
+ * identique à main au 28/11/2026.
+ */
+export const DUMP_AVANT_B9_NOTIFICATIONS = Object.freeze({
+  commit: '1bfb14e8c3bf2ccf08a0d6164300a1acb067d2d9',
+  blob: 'dc04e5dac3dbd7d63a22bc7c6f8b9ae06e28005b',
+  sha256: '8ed217585fbbf50683fa87bd01c2c1aac9162cb3e796daf915e61488310f531c',
+});
+
 const git = args => execFileSync('git', args, { cwd: RACINE, encoding: 'utf8', maxBuffer: 1 << 28,
   stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' } });
 
