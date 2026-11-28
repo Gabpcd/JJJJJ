@@ -113,8 +113,12 @@ final class DemoEtabMessagerieTests: JoleneUITestCase {
         return ecran
     }
 
+    /// Retour par le seul bouton retour du système (`BackButton`, touchable), jamais par « le premier bouton d'une
+    /// barre », comme `DemoMessagerieTests.retour` (revue B8 de #1203, n° 5). Aucun autre bouton n'est aujourd'hui posé
+    /// dans les barres de la messagerie établissement ; un bouton ajouté plus tard ne pourra pas être touché à la place
+    /// du retour. Absent, le retour échoue net (« Le bouton retour est disponible »).
     private func retour(depuis identifiant: String) {
-        let back = app.navigationBars.buttons.firstMatch
+        let back = app.navigationBars.buttons.matching(identifier: "BackButton").firstMatch
         require("Le bouton retour est disponible") { self.visible(back) }
         back.tap()
         require("L'écran \(identifiant) est retiré") { !self.element(identifiant).exists }

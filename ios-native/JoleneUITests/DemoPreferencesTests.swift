@@ -176,10 +176,13 @@ extension JoleneUITestCase {
     /// toucher reçu change la valeur relue (« 0 » ↔ « 1 ») : sans ce changement en 3 s, la ligne est de nouveau dégagée
     /// (un toucher tombé sur une barre ramène le défilement en haut), puis touchée, trois essais au plus, chaque rejeu
     /// consigné (`consignerRejeu`) au nom de l'appelant. La valeur est relue après le dégagement : un toucher reçu en
-    /// retard n'est jamais rejoué. L'état attendu reste exigé par l'appelant (`require`) ; une double bascule y échouerait.
+    /// retard n'est pas rejoué s'il est arrivé avant cette relecture ; arrivé après, il l'est, et la double bascule fait
+    /// échouer l'appelant, ou laisse un état final juste avec deux rejeux consignés (revue B8 de #1195, m9). L'état
+    /// attendu reste exigé par l'appelant (`require`). Un défaut « il faut toucher deux fois » serait absorbé : il ne
+    /// laisse qu'un rejeu consigné, sans échec (m10) ; des rejeux récurrents au même appelant le signaleraient.
     func prefsBasculer(_ identifiant: String, dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let cible = element(identifiant)
-        prefsDegager(cible, dans: ecran)
+        prefsDegager(cible, dans: ecran, file: file, line: line)
         require("L'interrupteur \(identifiant) est activable", file: file, line: line) { cible.isEnabled }
         let valeurAvant = cible.value as? String
         let attente = "Le toucher de l'interrupteur \(identifiant) est reçu"
@@ -194,9 +197,9 @@ extension JoleneUITestCase {
             guard essai < 3 else { return }
             consignerRejeu(attente, issue: "toucher \(essai)/3 sans effet observable en 3 s (valeur « \(valeurAvant ?? "nil") » "
                            + "inchangée) : ligne dégagée puis toucher rejoué", file: file, line: line)
-            prefsDegager(cible, dans: ecran)
+            prefsDegager(cible, dans: ecran, file: file, line: line)
             require("L'interrupteur \(identifiant) est activable", file: file, line: line) { cible.isEnabled }
-            // Toucher reçu en retard (pendant le dégagement) : jamais rejoué, sinon double bascule.
+            // Toucher reçu en retard, avant cette relecture : pas rejoué, sinon double bascule.
             if (cible.value as? String) != valeurAvant { return }
         }
     }
@@ -212,15 +215,18 @@ extension JoleneUITestCase {
         return nil
     }
 
-    /// Défilement borné jusqu'à la cible, puis dégagement des barres (glissements courts et bornés).
-    func prefsDegager(_ cible: XCUIElement, dans ecran: XCUIElement) {
-        scrollTo(cible, in: ecran)
+    /// Défilement borné jusqu'à la cible, puis dégagement des barres (glissements courts et bornés). Un échec est
+    /// rapporté à la ligne de l'appelant, rejeu de `prefsBasculer` compris (revue B8 de #1195, m11).
+    func prefsDegager(_ cible: XCUIElement, dans ecran: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        scrollTo(cible, in: ecran, file: file, line: line)
         var essais = 0
         while essais < 8, let barre = prefsBarreQuiRecouvre(cible) {
             if barre == .navigation { drag(ecran, fromY: 0.4, toY: 0.6) } else { drag(ecran, fromY: 0.6, toY: 0.4) }
             essais += 1
         }
-        require("La cible est atteignable hors des barres") { self.visible(cible) && self.prefsBarreQuiRecouvre(cible) == nil }
+        require("La cible est atteignable hors des barres", file: file, line: line) {
+            self.visible(cible) && self.prefsBarreQuiRecouvre(cible) == nil
+        }
     }
 }
 

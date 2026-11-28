@@ -7,6 +7,17 @@ contient uniquement des éléments publiables. Les mots de passe des
 comptes de review doivent être saisis directement dans les consoles et ne
 doivent jamais être ajoutés au dépôt, à une PR ou à une capture.
 
+> **Note du 28/11/2026.** Sur l'App Store, Jolene est désormais l'app Swift
+> native 2.0.0 (32) (`ios-native/`), en vente depuis le 27/11/2026 en
+> publication progressive (`docs/mobile-swift/APP_STORE.md`, « État au
+> 28/11/2026 »). Sur Google Play, c'est toujours la coquille Capacitor,
+> en 1.0.8 (25). À la création de la version 2.0.0 par l'API, Apple a repris
+> la fiche de 1.0.7 : la description en ligne devrait donc être celle
+> ci-dessous, écrite pour l'app web embarquée (fiche en ligne non relue, le
+> journal du run ne la recopie pas). Les écarts avec l'app native sont
+> signalés plus bas, pour la prochaine mise à jour de la fiche ; rien n'a été
+> changé chez Apple.
+
 ## Positionnement
 
 - **Nom** : `Jolene`
@@ -64,17 +75,78 @@ mission et le type d'établissement. Jolene est un service professionnel de
 mise en relation. L'application ne fournit ni diagnostic, ni conseil, ni soin
 médical aux patients.
 
+> **Écart relevé le 28/11/2026, à corriger à la prochaine mise à jour de la
+> fiche App Store** (texte publié non modifié ici). Dans l'app iOS native
+> 2.0.0, la facturation, le prélèvement SEPA, l'équipe et le pilotage de
+> l'établissement ne sont pas des écrans natifs : l'onglet Compte les ouvre sur
+> le site jolene.app (`ios-native/Packages/JoleneCore/Sources/JoleneCore/Etablissement/Compte/RenvoisWebEtab.swift`).
+> Il en va de même pour la modification, la duplication ou l'annulation d'une
+> mission et pour certains types de contrat (`config/ios-review-notes-2.0-soignant.txt`).
+> La puce « Suivez la facturation, les paiements et l'activité de votre
+> équipe » décrit donc le site, pas l'app iOS ; le « depuis un même espace » de
+> la puce précédente n'y vaut que pour ce qui est natif, certains types de
+> contrat ouvrant le site. Côté établissement, « suppression du compte depuis
+> l'application » ouvre aussi la page de suppression du site (connexion
+> redemandée). Sont natifs côté établissement : tableau de bord, missions,
+> candidatures, présences et pointage, contrats, messagerie. Ces écarts ne
+> concernent pas Google Play, dont l'app embarque le site.
+
 ### Notes App Review
 
+**App iOS native 2.0 (mise à jour du 28/11/2026).** Le texte remis au
+relecteur Apple est en anglais et versionné en deux variantes,
+`config/ios-review-notes-2.0-soignant.txt` et
+`config/ios-review-notes-2.0-etablissement.txt`. La lane de soumission place
+en tête du champ « Notes » celle du rôle vérifié du compte de démonstration,
+devant les notes de la version précédente (`docs/mobile-swift/APP_STORE.md`,
+« Notes pour la revue et compte de démonstration »). Le 27/11/2026, c'est la
+variante soignant qui a été écrite. Modifier ces fichiers par une PR, pas ce
+document.
+
+Ce que ces notes décrivent (libellés vérifiés dans `ios-native/` le 26/11/2026,
+`docs/mobile-swift/APP_STORE.md` ; rôles et renvois relus le 28/11/2026) :
+
+- l'app native ne sert que deux rôles : soignant (`SOIGNANT`) et établissement
+  (`ADMIN_ETABLISSEMENT`), seuls rôles admis pour le compte de démonstration
+  (`fastlane/ios_review_demo_account.rb`, `ROLES`). Les comptes administrateur
+  et groupe sont renvoyés vers le site jolene.app ; le bloc 2.0 ne propose aucun
+  compte administrateur (les notes de 1.0.7, gardées sous le séparateur, peuvent
+  encore en citer un) ;
+- deux comptes de revue, soignant et établissement, aux données fictives : l'un
+  dans les champs « Sign-in required », l'autre dans les notes de la version
+  précédente. Aucun mot de passe dans ce document ni dans le dépôt (public) ; la
+  lane ne lit les identifiants de la fiche qu'en mémoire et n'en journalise
+  aucun ;
+- côté établissement, sont natifs le tableau de bord, les missions, les
+  candidatures, les présences et le pointage, les contrats et la messagerie ;
+  la facturation et d'autres actions de gestion ouvrent le site jolene.app,
+  sans achat ;
+- le pointage demande la position (au premier plan seulement) et un code
+  affiché sur place par l'établissement ; la caméra ne sert qu'à photographier
+  un document ou à scanner un code ;
+- paiement, signature par SMS et Pro Santé Connect ne doivent pas être menés à
+  leur terme par la revue.
+
+**Coquille Capacitor (Google Play ; App Store jusqu'à 1.0.7).** Texte écrit
+pour l'app web embarquée, qui sert trois rôles. Les mots de passe se saisissent
+dans les champs sécurisés des consoles, jamais dans le dépôt.
+
 Jolene est une plateforme professionnelle de staffing en santé avec trois
-rôles. Les données visibles dans les comptes ci-dessous sont des données de
+rôles. Les données visibles dans les comptes de revue sont des données de
 démonstration destinées à la review.
 
-Comptes à renseigner dans les champs sécurisés App Store Connect :
+Comptes à renseigner dans les champs sécurisés de la console :
 
 - soignant : `marie.lefevre@jolene-demo.dev` ;
 - établissement : `etab@jolene.app` ;
-- administrateur complémentaire : `admin@jolene.app`.
+- administrateur complémentaire : un compte de démonstration administrateur
+  (adresse retirée de ce document le 28/11/2026).
+
+Les deux premières adresses restent citées ici parce que la migration
+`supabase/migrations/20261126100100_missions_revue_store.sql` désigne les
+comptes de revue par elles, et que la garde
+`tests/node/revue-store-missions.node.mjs` exige qu'elles soient déjà publiques
+dans ce document. Les retirer suppose une PR qui modifie cette garde.
 
 Parcours conseillé :
 
@@ -113,33 +185,52 @@ contient ni classement, ni promotion de prix, ni témoignage invérifiable.
 
 ### App Privacy Apple
 
-- **Tracking** : non ; aucun domaine de tracking déclaré.
+Source : `ios-native/Jolene/PrivacyInfo.xcprivacy`, manifeste de l'app Swift
+native, celle de la version 2.0.0 soumise le 27/11/2026. Relu le 28/11/2026 :
+22 types de données collectées, tous liés à l'utilisateur, aucun utilisé pour
+le pistage. Il est à cette date identique, octet pour octet, à
+`ios/App/App/PrivacyInfo.xcprivacy` (coquille Capacitor gelée à 1.0.7, plus
+livrée sur iOS). Les réponses « Confidentialité de l'app » saisies dans App
+Store Connect n'ont pas été relues (`docs/mobile-swift/LOT6_PLAN.md` §3,
+action 4) ; rien n'a été modifié chez Apple.
+
+- **Tracking** : non (`NSPrivacyTracking` faux) ; aucun domaine de tracking
+  déclaré.
 - **Coordonnées liées au compte, fonctionnalité de l'app** : nom, e-mail,
   téléphone, adresse physique.
+- **Santé liée au compte, fonctionnalité de l'app** : déclaration du Soignant
+  relative à ses vaccinations obligatoires et à sa visite de médecine du
+  travail, avec date de signature. Donnée liée au compte, utilisée uniquement
+  pour la fonctionnalité de conformité professionnelle. Aucun carnet de
+  vaccination, certificat médical, diagnostic ni donnée de patient n'est
+  demandé ou stocké.
 - **Informations financières liées au compte, fonctionnalité de l'app** :
   informations de paiement et autres informations financières.
 - **Localisation liée au compte, fonctionnalité de l'app** : localisation
-  précise, uniquement sur action volontaire.
+  précise et localisation approximative.
 - **Contenu utilisateur lié au compte, fonctionnalité de l'app** : photos ou
-  vidéos, messages, demandes au support et autres contenus/documents.
+  vidéos, e-mails ou messages texte, demandes au service client, autres
+  contenus de l'utilisateur.
 - **Historique de recherche lié au compte** : fonctionnalité et
   personnalisation du produit.
-- **Identifiants liés au compte** : identifiant utilisateur et identifiant de
-  l'appareil, pour la fonctionnalité.
-- **Utilisation liée au compte** : interactions produit, pour fonctionnalité et
-  analytics.
-- **Diagnostics liés au compte** : crashs et performances, pour fonctionnalité
+- **Identifiants liés au compte, fonctionnalité de l'app** : identifiant
+  utilisateur et identifiant de l'appareil.
+- **Achats liés au compte, fonctionnalité de l'app** : historique d'achats.
+- **Utilisation liée au compte** : interactions avec le produit, pour
+  fonctionnalité et analytics.
+- **Diagnostics liés au compte** : données de plantage, pour la fonctionnalité ;
+  données de performances et autres données de diagnostic, pour fonctionnalité
   et analytics.
-- **Santé** : déclaration du Soignant relative à ses vaccinations obligatoires
-  et à sa visite de médecine du travail, avec date de signature. Donnée liée au
-  compte, utilisée uniquement pour la fonctionnalité de conformité
-  professionnelle. Aucun carnet de vaccination, certificat médical, diagnostic
-  ni donnée de patient n'est demandé ou stocké.
+- **Autres données liées au compte, fonctionnalité de l'app** : autres types de
+  données.
 - **Activité physique** : aucune donnée collectée.
 
-Cette liste doit rester alignée mot pour mot avec
-`ios/App/App/PrivacyInfo.xcprivacy` et être revue après toute évolution de SDK
-ou de fonctionnalité.
+Le même manifeste déclare quatre catégories d'API à raison requise :
+`UserDefaults` (`CA92.1`), horodatage des fichiers (`C617.1`), temps depuis le
+démarrage (`35F9.1`) et espace disque (`E174.1`).
+
+Cette liste suit `ios-native/Jolene/PrivacyInfo.xcprivacy` et doit être revue
+après toute évolution de SDK ou de fonctionnalité de l'app native.
 
 ### Data safety Google Play
 
@@ -187,6 +278,11 @@ Jeu éditorial conseillé, sans données personnelles réelles :
 5. tableau de bord établissement — « Publiez et suivez vos besoins » ;
 6. candidatures et planning — « Votre équipe, au même endroit » ;
 7. facturation et paiements — « Une visibilité de bout en bout ».
+
+Pour l'app iOS native, la scène 7 n'a pas d'écran natif côté établissement
+(renvoi vers jolene.app, note du 28/11/2026 ci-dessus) : la remplacer dans le
+jeu iOS. Les captures de l'app native restent à produire
+(`docs/mobile-swift/LOT6_PLAN.md`, tranche T5).
 
 Apple accepte de une à dix captures. Produire au minimum le jeu iPhone 6,9
 pouces en portrait et, puisque le binaire prend en charge l'iPad, le jeu iPad

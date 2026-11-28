@@ -361,6 +361,18 @@ class JoleneUITestCase: XCTestCase {
         attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
     }
 
+    /// Consigne un témoin d'onglet ambigu (plus d'un onglet lu « Selected ») : un seul toucher, aucun rejeu. Attendu sur
+    /// iPad dans l'espace établissement sous iPadOS 26.2 (`exigerTemoinOnglet`), où chaque toucher d'onglet en produit
+    /// un ; réservé aux formats iPad (hors iPad, `consignerNonRejeu` garde l'avertissement). Ligne « Nature : témoin ambigu », comptée à part par le relevé d'`ios-swift-ci.yml`, qui regroupe ces traces
+    /// en une ligne et une annotation par test : elles ne masquent plus les autres annotations (revue B8 de #1203, m2).
+    func consignerTemoinAmbigu(_ attente: String, issue: String, file: StaticString, line: UInt) {
+        let fichier = (String(describing: file) as NSString).lastPathComponent
+        let rapport = ["Attente : \(attente)", "Appelant : \(fichier):\(line)", "Nature : témoin ambigu", "Issue : \(issue)"]
+            .joined(separator: "\n")
+        XCTContext.runActivity(named: "Témoin d'onglet ambigu — « \(attente) » : \(issue)") { _ in }
+        attachText(rapport, name: "\(proofPrefix)-attente-bloquee-\((fichier as NSString).deletingPathExtension)-\(line).txt")
+    }
+
     // MARK: Actions
 
     /// Touche « Se connecter » puis exige la session (`sessionPrete`) sur `timeout` décomptées au total. Un toucher resté
@@ -569,8 +581,9 @@ class JoleneUITestCase: XCTestCase {
     /// tard, barres de navigation inchangées et onglet visé toujours atteignable (`lireBarreOnglets`). La sélection change
     /// dès que le toucher est reçu, avant tout chargement du contenu : un onglet reçu n'est jamais retouché (un second
     /// toucher le ramènerait à sa racine). Onglet visé déjà lu sélectionné (lecture juste ou non), sélection illisible, ou
-    /// ambiguë (plus d'un onglet lu « Selected ») : un seul toucher, jamais de rejeu ; une sélection illisible ou ambiguë
-    /// est consignée (`consignerNonRejeu`), pour qu'un rejeu désactivé se voie au relevé de la CI, et
+    /// ambiguë (plus d'un onglet lu « Selected ») : un seul toucher, jamais de rejeu ; une sélection illisible est
+    /// consignée (`consignerNonRejeu`), une sélection ambiguë aussi hors iPad, et à part sur iPad, où elle est attendue
+    /// (`consignerTemoinAmbigu`, regroupée par test au relevé), pour qu'un rejeu désactivé se voie au relevé de la CI, et
     /// `exigerTemoinOnglet` prouve sur chaque format que le témoin est lisible (revue B8 de #1203, M1).
     /// Cas laissé armé (revue B8 de #1203, delta court, m1) : sur l'iPad, espace établissement, la page de la barre peut
     /// masquer l'onglet courant (ouvrir Compte depuis Accueil fait passer en page 2) ; un seul onglet est alors lu
@@ -594,9 +607,16 @@ class JoleneUITestCase: XCTestCase {
         // lu sélectionné quel que soit l'onglet courant, runs 45967481048 et 45995190132) : témoin ambigu, aucun rejeu.
         let selectionnes = avant.libellesSelectionnes
         guard selectionnes.count == 1 else {
-            consignerNonRejeu("Témoin d'onglet ambigu avant le toucher de \(label)",
-                              issue: "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
-                                  + "un seul toucher, rejeu d'onglet désactivé", file: file, line: line)
+            let attente = "Témoin d'onglet ambigu avant le toucher de \(label)"
+            let issue = "\(selectionnes.count) onglets lus « Selected » (\(selectionnes.sorted().joined(separator: ", "))) : "
+                + "un seul toucher, rejeu d'onglet désactivé"
+            // Attendu sur iPad seulement : ailleurs, un rejeu désactivé reste un avertissement « Geste non rejoué »
+            // (revue B8 de #1205, m1).
+            if proofPrefix.hasPrefix("ipad-") {
+                consignerTemoinAmbigu(attente, issue: issue, file: file, line: line)
+            } else {
+                consignerNonRejeu(attente, issue: issue, file: file, line: line)
+            }
             onglet.tap()
             return
         }
@@ -614,10 +634,12 @@ class JoleneUITestCase: XCTestCase {
 
     /// Ramène à sa racine un onglet souvent déjà COURANT, pile chargée (écran du test empilé sur le hub). Run 45995190132,
     /// UI lot 1 — ipad-landscape, `DemoLitigesTests.swift:239` : Profil touché, onglet déjà sélectionné (jamais rejoué,
-    /// par conception), puis 15 s sans la liste du profil. Cause NON établie, hypothèses : toucher de l'onglet ou retour
-    /// perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre » ; l'échec est à la ligne de la
-    /// racine, pas à celle du retrait de l'écran, donc l'écran des litiges a été lu retiré, ou pas lu du tout, juste après
-    /// le toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult de ce job.
+    /// par conception), puis 15 s sans la liste du profil. Cause NON établie, deux hypothèses : toucher de `nav-messages`
+    /// par l'ancien repli « premier bouton de la barre », ou toucher de l'onglet perdu avec une lecture fausse de
+    /// `litiges-screen`. Un retour seulement perdu est exclu : l'ancien code ne touchait le retour qu'après avoir lu
+    /// `litiges-screen`, puis exigeait son retrait (`548b1b685`) ; il aurait échoué sur ce retrait, ou rendu la racine
+    /// si l'onglet avait dépilé l'écran, jamais sur « La liste du profil est affichée » (revue B8 de #1203, n° 5). À
+    /// trancher par l'arbre d'accessibilité d'échec du xcresult de ce job.
     ///
     /// 1. Toucher de l'onglet (`toucherOnglet`), puis 3 s (`attendreSansEchec`) pour la racine : `racine` affichée, aucun
     ///    écran de `empiles`. Qu'un toucher sur l'onglet courant ramène sa pile à la racine ou non, les deux sont normaux.
@@ -626,7 +648,8 @@ class JoleneUITestCase: XCTestCase {
     ///    l'écran empilé encore présent et `BackButton` dans une barre de navigation (`lireRetourSysteme`) : jamais un
     ///    autre bouton de la barre (`nav-messages`, seul bouton de la racine du Profil, déjà touché à la place du retour,
     ///    `DemoMessagerieTests.retour`). Un retour vers la racine est idempotent : resté sans effet (même écran toujours
-    ///    lu), il est rejoué UNE fois au plus par appel, et consigné (`consignerRejeu`) ; encore sans effet, l'écran est
+    ///    lu), il est rejoué UNE fois au plus par appel, et consigné (`consignerRejeu`) juste avant le geste, jamais pour
+    ///    un rejeu abandonné (écran retiré pendant la lecture, échec net) ; encore sans effet, l'écran est
     ///    exigé retiré (`require`, échec net). Bouton retour du système absent : échec net.
     /// 3. Ni racine ni écran connu : aucun geste (revue B8 de #1203, M1 : un retour à l'aveugle dépilerait un écran inconnu
     ///    ou un autre onglet, et masquerait le défaut). Consigné (`consignerNonRejeu`), avec les barres de navigation lues ;
@@ -643,14 +666,10 @@ class JoleneUITestCase: XCTestCase {
         var rejoue = false
         for _ in 0...(2 * empiles.count) {
             guard let ecran = empile() else { break }
-            if ecran == precedent {
-                guard !rejoue else {
-                    require("L'écran \(ecran) est retiré", file: file, line: line) { !self.element(ecran).exists }
-                    continue
-                }
-                rejoue = true
-                consignerRejeu("L'écran \(ecran) est retiré par le retour", issue: "retour sans effet en 5 s (écran "
-                               + "toujours lu) : un seul nouveau retour", file: file, line: line)
+            let rejeu = ecran == precedent
+            if rejeu && rejoue {
+                require("L'écran \(ecran) est retiré", file: file, line: line) { !self.element(ecran).exists }
+                continue
             }
             // Bouton lu une fois par tour, sur un instantané où l'écran empilé est encore présent.
             var lu = RetourSystemeLu()
@@ -671,6 +690,13 @@ class JoleneUITestCase: XCTestCase {
                 XCTFail("Le bouton retour du système (BackButton) est disponible sur \(ecran) — absent de l'instantané "
                         + "pendant 5 s : aucun autre bouton de la barre n'est touché", file: file, line: line)
                 return
+            }
+            // Rejeu consigné seulement ici, juste avant le geste : écran retiré pendant la lecture ou échec net plus
+            // haut, aucun rejeu n'est compté (revue B8 de #1203, n° 5, m1).
+            if rejeu {
+                rejoue = true
+                consignerRejeu("L'écran \(ecran) est retiré par le retour", issue: "retour sans effet en 5 s (écran "
+                               + "toujours lu) : un seul nouveau retour", file: file, line: line)
             }
             app.navigationBars.buttons.matching(identifier: "BackButton").firstMatch.tap()
             precedent = ecran
@@ -769,12 +795,12 @@ class JoleneUITestCase: XCTestCase {
                 ongletsLusEnTrop = enTrop
                 if !enTrop.isEmpty {
                     let orientation = proofPrefix == "ipad-portrait" ? "portrait" : "paysage"
-                    consignerNonRejeu("Témoin d'onglet ambigu (iPad \(orientation), établissement) : "
-                                          + enTrop.sorted().joined(separator: ", "),
-                                      issue: "lu(s) « Selected » en plus de l'onglet courant \(label), anomalie attribuée à "
-                                          + "iPadOS : toléré tant que l'ensemble reste stable dans le test ; aucun rejeu "
-                                          + "d'onglet tant que plus d'un onglet est lu « Selected »",
-                                      file: file, line: line)
+                    consignerTemoinAmbigu("Témoin d'onglet ambigu (iPad \(orientation), établissement) : "
+                                              + enTrop.sorted().joined(separator: ", "),
+                                          issue: "lu(s) « Selected » en plus de l'onglet courant \(label), anomalie attribuée à "
+                                              + "iPadOS : toléré tant que l'ensemble reste stable dans le test ; aucun rejeu "
+                                              + "d'onglet tant que plus d'un onglet est lu « Selected »",
+                                          file: file, line: line)
                 }
             }
         } else {

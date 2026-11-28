@@ -63,12 +63,12 @@ jobs:
         run: node --test scripts/auth-staging/policy.node.test.mjs
       - name: Les tests StagingConnexionTests doivent exister (lot 0 semaine 2)
         run: |
-          if ! grep -rqE "final class StagingConnexionTests\s*:\s*XCTestCase" ios-native/JoleneUITests/; then
-            echo "::error::ios-native/JoleneUITests ne contient pas « final class StagingConnexionTests: XCTestCase ». Les tests de connexion STAGING (plan §11 jours 6-7) ne sont pas encore écrits : ce workflow refuse de tourner à vide plutôt que de passer silencieusement."
+          if ! grep -rqE "final class StagingConnexionTests\s*:\s*(XCTestCase|JoleneUITestCase)" ios-native/JoleneUITests/; then
+            echo "::error::ios-native/JoleneUITests ne contient pas « final class StagingConnexionTests: JoleneUITestCase ». Les tests de connexion STAGING (plan §11 jours 6-7) ne sont pas encore écrits : ce workflow refuse de tourner à vide plutôt que de passer silencieusement."
             exit 1
           fi
           echo "StagingConnexionTests trouvés :"
-          grep -rlE "final class StagingConnexionTests\s*:\s*XCTestCase" ios-native/JoleneUITests/
+          grep -rlE "final class StagingConnexionTests\s*:\s*(XCTestCase|JoleneUITestCase)" ios-native/JoleneUITests/
 
   connexion:
     name: Connexion STAGING — iPhone (XCUITest)

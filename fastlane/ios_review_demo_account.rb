@@ -55,9 +55,20 @@ module IosReviewSubmission
       { url: url, cle: cle }
     end
 
+    PREFIXE_REFUS = 'compte de démo : '
+    FIN_REFUS = " ; rien n'est écrit ni soumis (voir #{DOC_NOTES})"
+
     # Fonction pure : message d'un refus, toujours préfixé et fermé.
     def self.refus_ferme(motif)
-      "compte de démo : #{motif} ; rien n'est écrit ni soumis (voir #{DOC_NOTES})"
+      "#{PREFIXE_REFUS}#{motif}#{FIN_REFUS}"
+    end
+
+    # Fonction pure : un refus fermé complété d'un motif fermé, avant sa fin (revue B8 n° 2 de #1202, m1). Un message
+    # d'une autre forme est gardé tel quel, le complément ajouté à la suite.
+    def self.completer_refus(message, complement)
+      texte = message.to_s
+      return "#{texte} ; #{complement}" unless texte.start_with?(PREFIXE_REFUS) && texte.end_with?(FIN_REFUS)
+      refus_ferme("#{texte.delete_prefix(PREFIXE_REFUS).delete_suffix(FIN_REFUS)} ; #{complement}")
     end
 
     # Requêtes HTTPS de la vérification ; seul ce transport touche le réseau. Ni journal ni nouvelle tentative.
@@ -106,9 +117,10 @@ module IosReviewSubmission
 
     # Noms de clés que le diagnostic peut citer ; les autres ne sont que comptées.
     CLES_ROLE_CONNUES = %w[role user_id etablissement_id fn_get_my_role].freeze
-    # Vocabulaires fermés : jamais la valeur brute d'un en-tête du serveur.
-    MIMES = %w[application/json text/html text/plain].freeze
-    ENCODAGES = %w[gzip br deflate identity].freeze
+    # Vocabulaires fermés : jamais la valeur brute d'un en-tête du serveur. `application/vnd.pgrst.object+json`
+    # (PostgREST) et `zstd` (Cloudflare) y figurent pour un diagnostic précis (revue B8 n° 2 de #1202, n2).
+    MIMES = %w[application/json application/vnd.pgrst.object+json text/html text/plain].freeze
+    ENCODAGES = %w[gzip br deflate zstd identity].freeze
 
     def self.entete(entetes, nom)
       (entetes || {}).each { |cle, valeur| return valeur.to_s if cle.to_s.downcase == nom }
@@ -185,10 +197,18 @@ module IosReviewSubmission
       unless statut == 200 && jeton.is_a?(String) && !jeton.empty?
         raise Failure, refus(statut == 200 ? 'réponse illisible (HTTP 200)' : CompteDemo.motif_refus(statut, corps))
       end
+      # Le rôle refusé ne masque pas l'issue de la déconnexion, tentée dans tous les cas : une session du compte de
+      # démonstration restée ouverte est dite dans le même message (revue B8 n° 2 de #1202, m1).
       begin
         role = lire_role(jeton)
+      rescue Failure => echec_role
+        role = nil
       ensure
         sortie = deconnecter(jeton)
+      end
+      if echec_role
+        raise echec_role if sortie == :ok
+        raise Failure, CompteDemo.completer_refus(echec_role.message, "déconnexion non confirmée (#{sortie})")
       end
       raise Failure, refus("connexion OK, déconnexion non confirmée (#{sortie})") unless sortie == :ok
       ROLES.fetch(role) do
@@ -218,7 +238,10 @@ module IosReviewSubmission
       reponse = @transport.post("#{@url}#{chemin}", entetes, JSON.generate(corps))
       encodage = CompteDemo.encodage_ferme(CompteDemo.entete(reponse[2], 'content-encoding'))
       unless %w[aucun identity].include?(encodage)
-        raise Failure, refus("réponse encodée (#{etape}, HTTP #{reponse[0]} ; encodage : #{encodage})")
+        # Connexion acceptée (HTTP 200) mais corps illisible : le jeton n'est pas lu, la session éventuellement ouverte
+        # ne peut pas être révoquée (revue B8 n° 2 de #1202, n1).
+        session = etape == 'connexion' && reponse[0] == 200 ? ' ; session éventuellement ouverte, non révoquée' : ''
+        raise Failure, refus("réponse encodée (#{etape}, HTTP #{reponse[0]} ; encodage : #{encodage})#{session}")
       end
       reponse
     rescue Failure

@@ -50,13 +50,22 @@ export const DUMP_AVANT_B9_NOTIFICATIONS = Object.freeze({
 const git = args => execFileSync('git', args, { cwd: RACINE, encoding: 'utf8', maxBuffer: 1 << 28,
   stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0' } });
 
-/** Contenu vérifié du dump épinglé ; erreur explicite si le commit n'est pas dans le clone. */
+/**
+ * Contenu vérifié du dump épinglé ; erreur explicite si le commit n'est pas dans le clone. `rev-parse --verify --quiet`
+ * sort en 1, sans rien écrire, quand l'objet manque : seul ce cas est rapporté « commit absent ». git introuvable, dépôt
+ * illisible ou autre statut sont nommés à part (revue B8 de #1204, mineur 2).
+ */
 export function dumpEpingle({ commit, blob, sha256 }, lire = git) {
   let objet;
   try {
     objet = lire(['rev-parse', '--verify', '--quiet', `${commit}:${CHEMIN}`]).trim();
-  } catch {
-    throw new Error(`Dump épinglé introuvable : commit ${commit} absent du clone. En CI : git fetch --no-tags --depth=1 origin ${commit}`);
+  } catch (e) {
+    if (e?.status === 1) {
+      throw new Error(`Dump épinglé introuvable : commit ${commit} absent du clone. En CI : git fetch --no-tags --depth=1 origin ${commit}`);
+    }
+    if (e?.code === 'ENOENT') throw new Error('Dump épinglé illisible : git introuvable dans le PATH.');
+    const detail = String(e?.stderr ?? e?.message ?? '').trim().split('\n')[0].slice(0, 200);
+    throw new Error(`Dump épinglé illisible : git rev-parse a échoué (statut ${e?.status ?? 'inconnu'}${detail ? ` : ${detail}` : ''}).`);
   }
   if (objet !== blob) throw new Error(`Dump épinglé : blob ${objet} au lieu de ${blob} pour ${commit}:${CHEMIN}`);
   const contenu = lire(['cat-file', 'blob', blob]);

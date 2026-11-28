@@ -945,8 +945,9 @@ test('compte de démo : Accept-Encoding identity exact, réponse encodée refus�
   assert.match(compte, /CLES_ROLE_CONNUES = %w\[role user_id etablissement_id fn_get_my_role\]\.freeze/, 'liste blanche exacte des clés citées');
   assert.match(compte, /ENTETES_REPONSE = %w\[content-type content-encoding content-range\]\.freeze/);
   assert.match(compte, /ENTETES_INTERDITS = %w\[accept-encoding range\]\.freeze/);
-  assert.match(compte, /MIMES = %w\[application\/json text\/html text\/plain\]\.freeze/, 'type MIME pris dans une liste fermée');
-  assert.match(compte, /ENCODAGES = %w\[gzip br deflate identity\]\.freeze/, 'encodage pris dans une liste fermée');
+  // Revue n° 2 de #1202 (n2) : le MIME objet de PostgREST et zstd (Cloudflare) sont nommés, toujours en liste fermée.
+  assert.match(compte, /MIMES = %w\[application\/json application\/vnd\.pgrst\.object\+json text\/html text\/plain\]\.freeze/, 'type MIME pris dans une liste fermée');
+  assert.match(compte, /ENCODAGES = %w\[gzip br deflate zstd identity\]\.freeze/, 'encodage pris dans une liste fermée');
   // `identity` exact, posé à la construction et contrôlé ; aucun autre Accept-Encoding.
   assert.match(compte, /requete = Net::HTTP::Post\.new\(uri, \{ 'Accept-Encoding' => 'identity' \}\)\n/);
   assert.match(compte, /unless requete\['accept-encoding'\] == 'identity'/);
@@ -954,7 +955,12 @@ test('compte de démo : Accept-Encoding identity exact, réponse encodée refus�
   assert.doesNotMatch(actif, /set_debug_output|decode_content/, 'ni journal HTTP, ni dépendance au décodage de Net::HTTP');
   // Une réponse encore encodée est refusée dans `appeler`, seule entrée des trois appels.
   const appeler = compte.slice(compte.indexOf('    def appeler('), compte.indexOf('    def lire_role(jeton)'));
-  assert.match(appeler, /unless %w\[aucun identity\]\.include\?\(encodage\)\n\s+raise Failure, refus\("réponse encodée \(#\{etape\}, HTTP #\{reponse\[0\]\} ; encodage : #\{encodage\}\)"\)/);
+  // Revue n° 2 de #1202 (n1) : à la connexion (HTTP 200), le refus dit qu'une session a pu s'ouvrir ; motif littéral.
+  assert.match(appeler, /unless %w\[aucun identity\]\.include\?\(encodage\)\n(?:\s+#.*\n)*\s+session = etape == 'connexion' && reponse\[0\] == 200 \? ' ; session éventuellement ouverte, non révoquée' : ''\n\s+raise Failure, refus\("réponse encodée \(#\{etape\}, HTTP #\{reponse\[0\]\} ; encodage : #\{encodage\}\)#\{session\}"\)/);
+  // Revue n° 2 de #1202 (m1) : un rôle refusé garde l'issue de la déconnexion dans le même refus fermé.
+  const verifierCompte = compte.slice(compte.indexOf('    def verifier!('), compte.indexOf('    # Fonction pure : motif d\'un refus de connexion'));
+  assert.match(verifierCompte, /rescue Failure => echec_role\n\s+role = nil\n\s+ensure\n\s+sortie = deconnecter\(jeton\)/);
+  assert.match(verifierCompte, /raise echec_role if sortie == :ok\n\s+raise Failure, CompteDemo\.completer_refus\(echec_role\.message, "déconnexion non confirmée \(#\{sortie\}\)"\)/);
   for (const etape of ["etape: 'connexion'", "etape: 'lecture du rôle'", "etape: 'déconnexion'"]) assert.ok(compte.includes(etape), etape);
   // Lecture stricte, comme SupabaseRoleGateway.roleResult : objet racine, `role` texte, rien d'autre.
   const extraire = compte.slice(compte.indexOf('    def self.extraire_role(corps)'), compte.indexOf('    # Noms de clés que le diagnostic'));

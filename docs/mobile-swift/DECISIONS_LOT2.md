@@ -2223,8 +2223,9 @@ compromis :
   - **m1 — gel de 50 à 60 s qui se termine.** Si le fil principal reste bloqué environ 55 s puis se libère,
     l'attente rend la main vers 55 s, la vérification est rapide, et le processus est suspendu avec la ligne
     « attente des animations expirée ». Avant la garde, ce cas ne faisait pas non plus échouer de test : rien n'est
-    masqué, mais le diagnostic est faux. La marque « App animations complete notification not received » du journal,
-    relevée à côté par le résumé, permet de trancher.
+    masqué, mais le diagnostic est faux. La marque « App animations complete notification not received » du journal
+    permet de trancher. Le résumé ne la compte que pour les tests échoués, restés sans conclusion ou de plus de 5 min ;
+    pour un test court réussi, il faut lire le journal de l'éclat dans l'artefact léger du job (revue B8 de #1195, m8).
   - **m2 — garanties réduites après une suspension.** Gestes et lectures ne sont plus précédés de la fin des
     animations. Les constats passent presque tous par des attentes bornées (`require`, environ 1 200 appels ;
     `requireAbsence`), mais 48 assertions sont immédiates (`.exists`, `.isSelected`, `.isHittable`), dont 12
@@ -2240,6 +2241,12 @@ compromis :
     méthode échapperait à la garde sans rien signaler. Non vérifiable hors CI.
 - **Témoin indépendant de l'ordre** : `DemoGardeReposTests` arrête l'app restée en vie avant que la garde ne passe à
   son test. Il ne relève donc que les attentes de son propre lancement.
+- **Workflows STAGING hors de la borne** (revue B8 de #1195, m7). `ios-swift-staging.yml` lance `StagingConnexionTests`,
+  un `JoleneUITestCase` : la garde y est posée, mais le workflow ne passe pas par `ios-ci-resume-tests.mjs`. Ses
+  absorptions n'y sont ni résumées ni bornées par `SEUIL_ABSORPTIONS_PAR_JOB` ; elles ne restent visibles que dans le
+  journal xcodebuild de l'étape (ligne « Jolene diagnostic repos-xcuitest »). `ios-swift-lot5-staging.yml`
+  (`StagingEtabParcoursTests`) appelle le résumé, mais sans en propager le code de sortie (`|| true`) : le seuil n'y fait
+  jamais rougir le parcours. Accepté : ces parcours sont lancés à la main, un ou deux tests chacun, et lus en entier.
 
 ### Pour corriger la cause
 
@@ -2269,8 +2276,13 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
     touchée à nouveau ;
   - au plus trois essais, chaque rejeu consigné par `consignerRejeu` au nom de l'appelant (relevé « Geste rejoué » du
     résumé de la CI) ;
-  - la valeur est relue après le dégagement : un toucher reçu en retard n'est jamais rejoué ;
-  - les `require` des appelants (préférences et `DemoPushTests`) restent inchangés : une double bascule y échouerait.
+  - la valeur est relue après le dégagement : un toucher reçu en retard n'est pas rejoué s'il est arrivé avant cette
+    relecture ; arrivé après, il l'est, et la double bascule fait échouer l'appelant, ou laisse un état final juste
+    avec deux rejeux consignés (revue B8 de #1195, m9) ;
+  - les `require` des appelants (préférences et `DemoPushTests`) restent inchangés : une double bascule y échouerait ;
+  - limite connue (m10) : un défaut de l'app du type « il faut toucher deux fois » serait absorbé. Il ne laisserait
+    qu'un rejeu consigné, sans échec, comme dans `DemoPointageUITestCase.basculer`. Des rejeux récurrents au même
+    appelant le signaleraient au relevé « Geste rejoué » ; s'ils deviennent fréquents, les borner comme les absorptions.
 - **Non vérifié en CI** : la position du `Switch` imbriqué sous iOS 26.2, et l'absence de rejeu sur les autres formats.
 
 ### Touchers perdus sur les onglets et les bascules (série 45799922589, main `f599cab3`)
@@ -2297,19 +2309,30 @@ sans animation, ou après la fermeture). Aucune animation désignerait XCTest ou
   passe. Règle : l'onglet courant reste exigé « Selected » partout ; l'exclusivité aussi, sauf sur iPad dans l'espace
   établissement, où seul un ensemble stable d'onglets en trop est toléré (déduit de la première lecture du test,
   consigné « Témoin d'onglet ambigu »). Quand plus d'un onglet est lu « Selected », `toucherOnglet` ne rejoue jamais
-  (consigné). Quand la page de la barre masque l'onglet courant, un seul onglet peut être lu « Selected » (l'onglet en
+  (consigné). Sur iPad, ces deux consignations ont leur nature propre (`consignerTemoinAmbigu`, « Nature : témoin
+  ambigu » ; hors iPad, un témoin ambigu reste un « Geste non rejoué », revue B8 de #1205, m1) : le
+  relevé de la CI les compte à part et les regroupe en une ligne et une annotation `::notice` par test, avec leur
+  nombre. Chaque toucher d'onglet de l'espace établissement sur iPad en produisait une annotation « Geste non rejoué »
+  (21 dans un seul job en paysage), au-delà des 10 avertissements que GitHub affiche par étape : une vraie « Attente
+  bloquée absorbée » pouvait s'y perdre (revue B8 de #1203, m2). Quand la page de la barre masque l'onglet courant, un seul onglet peut être lu « Selected » (l'onglet en
   trop) : le rejeu reste alors armé, sans danger, car l'effet est lu sur l'onglet visé et l'instantané doit être
   identique (revue B8 de #1203, delta court, m1).
 - **Onglet courant touché pour revenir à la racine** (run 45995190132, `DemoLitigesTests.swift:239` : Profil touché,
-  déjà courant, donc jamais rejoué, puis 15 s sans la liste du profil). Cause NON établie ; hypothèses : toucher de
-  l'onglet ou retour perdu, ou toucher de `nav-messages` par l'ancien repli « premier bouton de la barre ». L'échec est
-  à la ligne de la racine, pas à celle du retrait : l'écran des litiges a été lu retiré, ou pas lu, juste après le
-  toucher. À trancher par l'arbre d'accessibilité d'échec du xcresult. `revenirALaRacine` :
+  déjà courant, donc jamais rejoué, puis 15 s sans la liste du profil). Cause NON établie ; deux hypothèses : toucher
+  de `nav-messages` par l'ancien repli « premier bouton de la barre », ou toucher de l'onglet perdu avec une lecture
+  fausse de `litiges-screen`. L'échec est à la ligne de la racine, pas à celle du retrait : l'écran des litiges a été
+  lu retiré, ou pas lu, juste après le toucher. Un retour seulement perdu est donc exclu : l'ancien code ne touchait le
+  retour qu'après avoir lu `litiges-screen`, puis exigeait son retrait ; il aurait échoué sur ce retrait, ou rendu la
+  racine si l'onglet avait dépilé l'écran (revue B8 de #1203, n° 5). À trancher par l'arbre d'accessibilité d'échec du
+  xcresult. `revenirALaRacine` :
   - attend la racine 3 s ;
   - puis, tant qu'un écran connu reste empilé, touche le SEUL bouton retour du système (`BackButton`), après avoir lu
     sur un même instantané l'écran encore présent et ce bouton dans la barre ; jamais un autre bouton (`nav-messages`,
-    seul bouton de la racine du Profil ; revue B8 de #1203, M2, même règle pour `DemoMessagerieTests.boutonRetour`) ;
-  - rejoue un retour sans effet une fois au plus par appel, consigné, puis exige l'écran retiré ;
+    seul bouton de la racine du Profil ; revue B8 de #1203, M2, même règle pour `DemoMessagerieTests.boutonRetour` et
+    `DemoEtabMessagerieTests.retour`) ;
+  - rejoue un retour sans effet une fois au plus par appel, consigné juste avant le geste (jamais pour un rejeu
+    abandonné : écran retiré pendant la lecture, ou échec net ; revue B8 de #1203, n° 5, m1), puis exige l'écran
+    retiré ;
   - sans racine ni écran connu, ne fait aucun geste (M1) : consigné avec les barres lues, l'appelant échoue sur son
     message d'avant.
   Appliqué aux 9 nettoyages « Profil remis à sa racine » (bulletins, évaluations, recherches, litiges, réclamations,
