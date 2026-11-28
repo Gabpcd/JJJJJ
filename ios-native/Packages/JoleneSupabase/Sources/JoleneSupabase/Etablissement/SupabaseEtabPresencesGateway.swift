@@ -34,11 +34,11 @@ public struct SupabaseEtabPresencesGateway: EtabPresencesPort {
     public static let etatRPC = PointageQuery.rpcEtat
     /// Sens de l'établissement vers le soignant (`SensNotation`, `NotationRapide.tsx` l.27).
     public static let sens = "ETAB_VERS_SOIGNANT"
-    // source: supabase/schema/public.sql l.66035 (fn_valider_presence)
+    // source: supabase/schema/public.sql l.66190 (fn_valider_presence)
     static let dejaValidee = "Déjà validée"
-    // source: supabase/schema/public.sql l.26350 (fn_contester_presence)
+    // source: supabase/schema/public.sql l.26441 (fn_contester_presence)
     static let motifObligatoire = "Le motif est obligatoire (3 caractères min.)"
-    /// Refus « déjà notée » du serveur (`public.sql` l.27930), reconnu comme le web (`includes('déjà notée')`).
+    /// Refus « déjà notée » du serveur (`public.sql` l.28021), reconnu comme le web (`includes('déjà notée')`).
     static let marqueDejaNotee = "déjà notée"
     static let longueurMinMotif = 3
     public static let lectureFallback = "Impossible de charger les présences. Réessayez."

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Charge de `fn_creer_mission_multi_jours_v4` (lot 5, T9 ; `supabase/schema/public.sql` l.27782 ; fiche
+/// Charge de `fn_creer_mission_multi_jours_v4` (lot 5, T9 ; `supabase/schema/public.sql` l.27873 ; fiche
 /// `docs/mobile-swift/CONTRATS_RPC_ETABLISSEMENT.md`) : **exactement** les seize paramètres de la signature SQL, aucun
 /// de plus, comme l'appel du web (`FormulaireMission.tsx` l.429-446). Le périmètre natif (D8) fixe sept d'entre eux :
 /// type de contrat recherché et mode de rémunération constants, rétrocession, nature de TVA et spécialité médicale
@@ -8,7 +8,7 @@ import Foundation
 /// son refus est affiché mot pour mot.
 ///
 /// - `p_description` : balises `[SERIE_ID:…]` et `[CONTRAT:…]` retirées comme le web (l.415), espaces de bord retirés,
-///   `null` si vide. Le serveur pose lui-même la balise de contrat (`fn_creer_mission_multi_jours_v2`, l.27634-27641) ;
+///   `null` si vide. Le serveur pose lui-même la balise de contrat (`fn_creer_mission_multi_jours_v2`, l.27725-27732) ;
 ///   une balise `[SERIE_ID:…]` saisie rattacherait la mission à une série (`CarteSerie.tsx`) et n'est jamais envoyée.
 /// - `p_niveau_urgence` : le niveau si la mission est urgente, sinon 0 (web l.430).
 /// - `p_accepte_non_specialises` : `!professionMissionExigeSpecialisationExacte(profession)` (web l.433).

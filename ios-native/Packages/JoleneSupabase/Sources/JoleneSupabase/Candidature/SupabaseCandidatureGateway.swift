@@ -39,9 +39,9 @@ import Supabase
 ///   ensuite le pool) ; refus `{success:false, error}` verbatim (documents avec `documents_requis_pour`) ; `choix_requis`
 ///   relayé tel quel, jamais rejoué ici (l'écran renvoie au détail de la mission).
 /// - Annulations (T7) : `fn_annuler_candidature_soignant(p_candidature_id, p_motif_categorie, p_texte_libre,
-///   p_justificatif_storage_path)` (`public.sql` l.18017 ; refus `{success:false, error_code, error}` → `.refusee`,
+///   p_justificatif_storage_path)` (`public.sql` l.18108 ; refus `{success:false, error_code, error}` → `.refusee`,
 ///   message serveur verbatim) puis relecture de la candidature `ANNULEE` ; `fn_annuler_mission_soignant(p_mission_id)`
-///   (l.18831 ; refus `{error}` seul → `.refusee`) puis relecture de la mission (plus attribuée au soignant) et audit
+///   (l.18922 ; refus `{error}` seul → `.refusee`) puis relecture de la mission (plus attribuée au soignant) et audit
 ///   `MISSION_ANNULATION` comme le web (l.903-914, best-effort). Conséquences (`points`, `libre`, `contestable`,
 ///   `penalite_score`) rendues telles quelles : aucun barème côté client (décision 4).
 public struct SupabaseCandidatureGateway: CandidaturePort {

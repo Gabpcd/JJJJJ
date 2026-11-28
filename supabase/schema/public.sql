@@ -13306,6 +13306,31 @@ $$;
 ALTER FUNCTION "public"."fn_admin_rejeter_etablissement"("p_etablissement_id" "uuid", "p_motif" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_admin_relancer_mandat_facturation"("p_soignant_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.est_admin() THEN
+    RAISE EXCEPTION 'Accès réservé aux administrateurs' USING ERRCODE = '42501';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.soignants s
+                  WHERE s.id = p_soignant_id AND s.supprime_le IS NULL) THEN
+    RAISE EXCEPTION 'Soignant introuvable' USING ERRCODE = 'P0002';
+  END IF;
+  RETURN public.fn_creer_notification(
+    p_soignant_id, 'SOIGNANT', 'RAPPEL_DOCUMENTS',
+    'Signez votre mandat de facturation',
+    'Votre mandat de facturation attend votre signature. Il permet la génération de vos factures d''honoraires ; pour une mission explicitement éligible au paiement accéléré, il fait partie des prérequis.',
+    '/soignant/mandat-facturation', NULL, NULL
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_admin_relancer_mandat_facturation"("p_soignant_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_admin_reset_test_account"("p_role" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -17870,6 +17895,72 @@ ALTER FUNCTION "public"."fn_alerter_paiements_retard"() OWNER TO "postgres";
 
 COMMENT ON FUNCTION "public"."fn_alerter_paiements_retard"() IS 'CP-C-2 C refonte seuils J+7/J+21 + factures commission + email_queue. Cron jobid 11. Blocage J+45 delegue a CP-C-3.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_alerter_pool_urgence"("p_mission_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_mission record;
+  v_titre text;
+  v_corps text;
+  v_soignant record;
+  v_notifies integer := 0;
+  v_deja integer := 0;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Non authentifié' USING ERRCODE = '28000';
+  END IF;
+
+  SELECT m.id, m.etablissement_id, m.intitule, m.debut_le, m.statut::text AS statut, m.est_urgente
+    INTO v_mission
+    FROM public.missions m
+   WHERE m.id = p_mission_id;
+  IF NOT FOUND
+     OR NOT (public.est_admin() OR COALESCE(v_mission.etablissement_id = public.mon_etablissement_id(), false))
+  THEN
+    RAISE EXCEPTION 'Mission introuvable ou hors de votre établissement' USING ERRCODE = '42501';
+  END IF;
+  IF v_mission.statut IS DISTINCT FROM 'OUVERTE' OR v_mission.est_urgente IS NOT TRUE THEN
+    RAISE EXCEPTION 'Alerte du pool réservée aux missions urgentes ouvertes' USING ERRCODE = '22023';
+  END IF;
+
+  -- Une alerte à la fois par mission : le contrôle « déjà notifié » et l'écriture
+  -- restent atomiques face à deux alertes simultanées (administrateur et établissement).
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('fn_alerter_pool_urgence:' || p_mission_id::text, 0));
+
+  v_titre := '🚨 Mission urgente : ' || v_mission.intitule;
+  v_corps := v_mission.intitule || ' — '
+    || pg_catalog.to_char(v_mission.debut_le AT TIME ZONE 'Europe/Paris', 'DD/MM "à" HH24:MI')
+    || '. Premier arrivé, premier servi !';
+
+  FOR v_soignant IN
+    SELECT DISTINCT u.soignant_id
+      FROM public.fn_soignants_urgence(p_mission_id) u
+     WHERE private.fn_comptes_meme_cohorte_test(u.soignant_id, v_mission.etablissement_id)
+  LOOP
+    IF EXISTS (SELECT 1 FROM public.notifications n
+                WHERE n.destinataire_id = v_soignant.soignant_id
+                  AND n.type = 'MISSION_URGENTE'
+                  AND n.id_ressource = p_mission_id) THEN
+      v_deja := v_deja + 1;
+      CONTINUE;
+    END IF;
+    PERFORM public.fn_creer_notification(
+      v_soignant.soignant_id, 'SOIGNANT', 'MISSION_URGENTE', v_titre, v_corps,
+      '/soignant/missions/' || p_mission_id::text, 'MISSION', p_mission_id
+    );
+    v_notifies := v_notifies + 1;
+  END LOOP;
+
+  RETURN pg_catalog.jsonb_build_object('success', true, 'notifies', v_notifies, 'deja_notifies', v_deja);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_alerter_pool_urgence"("p_mission_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_alertes_dashboard_etab"() RETURNS "jsonb"
@@ -55942,66 +56033,110 @@ CREATE OR REPLACE FUNCTION "public"."fn_rgpd_purge_automatique_inactifs"() RETUR
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
     AS $$
-DECLARE
-    v_date_limite TIMESTAMPTZ := NOW() - INTERVAL '2 years';
-    v_sg RECORD;
 BEGIN
-    FOR v_sg IN
-        SELECT s.id, s.email, s.derniere_activite_le
-        FROM soignants s
-        WHERE s.derniere_activite_le < v_date_limite
-          AND s.supprime_le IS NULL
-          AND NOT EXISTS (
-              SELECT 1 FROM missions m
-              WHERE m.soignant_assigne_id = s.id
-                AND m.statut IN ('ASSIGNEE', 'EN_COURS', 'LITIGE')
-          )
-    LOOP
-        -- Anonymiser les données personnelles
-        UPDATE soignants SET
-            prenom = 'ANONYMISE', nom = 'ANONYMISE',
-            email = 'purge_' || v_sg.id || '@anonymise.local',
-            telephone = NULL, date_naissance = NULL,
-            adresse_lat = NULL, adresse_lng = NULL,
-            supprime_le = NOW(), modifie_le = NOW()
-        WHERE id = v_sg.id;
-
-        -- Anonymiser les documents
-        UPDATE documents_soignants SET
-            s3_cle = 'PURGE', nom_fichier = 'PURGE',
-            supprime_le = NOW(), modifie_le = NOW()
-        WHERE soignant_id = v_sg.id;
-
-        -- Anonymiser les données de terminaux dans les présences
-        UPDATE presences SET
-            arrivee_id_terminal = NULL, depart_id_terminal = NULL,
-            arrivee_ip = NULL, depart_ip = NULL
-        WHERE soignant_id = v_sg.id;
-
-        -- Écrire dans le journal d'audit
-        PERFORM fn_ecrire_audit(
-            NULL, 'SYSTEME', 'RGPD_SUPPRESSION_DONNEES',
-            'soignant', v_sg.id, NULL,
-            jsonb_build_object(
-                'motif', 'Purge automatique : inactivité > 2 ans',
-                'derniere_activite', v_sg.derniere_activite_le
-            )
-        );
-
-        INSERT INTO demandes_rgpd (demandeur_id, type_demandeur, type_demande, statut, motif, termine_le)
-        VALUES (v_sg.id, 'SOIGNANT', 'PURGE_AUTOMATIQUE', 'TERMINEE',
-                'Purge auto inactivité > 2 ans (Art. 17 RGPD)', NOW());
-
-        soignant_purge_id := v_sg.id;
-        derniere_activite := v_sg.derniere_activite_le;
-        action_effectuee := 'ANONYMISE_ET_SUPPRIME';
-        RETURN NEXT;
-    END LOOP;
+  -- Verrou (migration 20261128140100) : l'ancien corps n'effaçait ni le numéro
+  -- de sécurité sociale, ni l'IBAN, ni l'adresse, ni les pièces, et écrasait le
+  -- chemin des pièces (s3_cle = 'PURGE'), rendant leurs fichiers introuvables.
+  -- Fonction non planifiée au 28/11/2026 : erreur nette plutôt qu'une purge
+  -- partielle silencieuse.
+  RAISE EXCEPTION 'RGPD_PURGE_INACTIFS_VERROUILLEE : purge des soignants inactifs à réaligner sur la suppression de compte (fn_supprimer_mon_compte) avant toute planification ; docs/CONFORMITE.md §6.5.'
+    USING ERRCODE = '0A000';
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_rgpd_purge_automatique_inactifs"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_rgpd_purges_stockage_confirmer"("p_ids" "uuid"[], "p_erreur" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+DECLARE
+  v_effaces uuid[];
+  v_echecs integer := 0;
+BEGIN
+  IF COALESCE(auth.role(), '') IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Rôle de service requis' USING ERRCODE = '42501';
+  END IF;
+  IF p_ids IS NULL OR pg_catalog.cardinality(p_ids) = 0 THEN
+    RETURN pg_catalog.jsonb_build_object('confirmes', 0, 'en_echec', 0);
+  END IF;
+  -- Effacement constaté côté base : l'objet a disparu de storage.objects.
+  -- La réponse de l'API Storage ne suffit jamais à elle seule.
+  WITH confirmes AS (
+    UPDATE private.rgpd_purges_stockage q
+       SET purge_le = pg_catalog.now(),
+           chemin = NULL,
+           reserve_jusqua = NULL,
+           derniere_erreur = NULL
+     WHERE q.id = ANY (p_ids)
+       AND q.purge_le IS NULL
+       AND NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = q.bucket AND o.name = q.chemin)
+    RETURNING q.soignant_id
+  )
+  SELECT pg_catalog.array_agg(c.soignant_id) INTO v_effaces FROM confirmes c;
+
+  -- Échec : réservation prolongée jusqu'au passage horaire suivant, pour qu'un
+  -- fichier en échec permanent ne reprenne pas la place des suivants.
+  UPDATE private.rgpd_purges_stockage q
+     SET reserve_jusqua = pg_catalog.now() + interval '50 minutes',
+         derniere_erreur = pg_catalog.left(COALESCE(NULLIF(pg_catalog.btrim(p_erreur), ''), 'OBJET_TOUJOURS_PRESENT'), 200)
+   WHERE q.id = ANY (p_ids) AND q.purge_le IS NULL;
+  GET DIAGNOSTICS v_echecs = ROW_COUNT;
+
+  INSERT INTO public.journaux_audit (acteur_id, type_acteur, action, type_ressource, id_ressource, details)
+  SELECT t.soignant_id, 'SYSTEME', 'RGPD_SUPPRESSION_DONNEES', 'soignant', t.soignant_id,
+         pg_catalog.jsonb_build_object(
+           'source', 'purge-stockage-rgpd',
+           'stockage_objets_effaces', t.n,
+           'stockage_objets_restants', (SELECT pg_catalog.count(*) FROM private.rgpd_purges_stockage r
+                                         WHERE r.soignant_id = t.soignant_id AND r.purge_le IS NULL))
+    FROM (SELECT e.soignant_id, pg_catalog.count(*) AS n
+            FROM pg_catalog.unnest(COALESCE(v_effaces, '{}'::uuid[])) AS e(soignant_id)
+           GROUP BY e.soignant_id) t;
+
+  RETURN pg_catalog.jsonb_build_object(
+    'confirmes', COALESCE(pg_catalog.cardinality(v_effaces), 0),
+    'en_echec', v_echecs
+  );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_rgpd_purges_stockage_confirmer"("p_ids" "uuid"[], "p_erreur" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_rgpd_purges_stockage_reserver"("p_limite" integer DEFAULT 100) RETURNS TABLE("id" "uuid", "bucket" "text", "chemin" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+#variable_conflict use_column
+BEGIN
+  IF COALESCE(auth.role(), '') IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Rôle de service requis' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  WITH choisis AS (
+    SELECT q.id
+      FROM private.rgpd_purges_stockage q
+     WHERE q.purge_le IS NULL
+       AND (q.reserve_jusqua IS NULL OR q.reserve_jusqua < pg_catalog.now())
+     ORDER BY q.tentatives, q.demande_le, q.id
+     LIMIT LEAST(GREATEST(COALESCE(p_limite, 100), 1), 500)
+     FOR UPDATE SKIP LOCKED
+  )
+  UPDATE private.rgpd_purges_stockage q
+     SET reserve_jusqua = pg_catalog.now() + interval '10 minutes',
+         tentatives = q.tentatives + 1
+    FROM choisis c
+   WHERE q.id = c.id
+  RETURNING q.id, q.bucket, q.chemin;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_rgpd_purges_stockage_reserver"("p_limite" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_rib_etablissement_courant_verifie"("p_etablissement_id" "uuid") RETURNS boolean
@@ -60662,6 +60797,7 @@ DECLARE
     v_bank_update text := COALESCE(current_setting('jolene.bank_server_update', true), '');
     v_liberal_transition text := COALESCE(current_setting('jolene.liberal_transition', true), '');
     v_siret_reset text := COALESCE(current_setting('jolene.siret_liberal_reset', true), '');
+    v_effacement jsonb;
 BEGIN
     IF v_uid IS NULL THEN RETURN jsonb_build_object('error', 'Non authentifié'); END IF;
     SELECT supprime_le INTO v_supprime_le FROM public.soignants WHERE id = v_uid FOR UPDATE;
@@ -60744,7 +60880,10 @@ BEGIN
         latitude = NULL, longitude = NULL, precision_gps_m = NULL,
         id_terminal = NULL, ip_address = NULL, distance_etablissement_m = NULL
     WHERE soignant_id = v_uid;
-    UPDATE documents_soignants SET supprime_le = NOW() WHERE soignant_id = v_uid;
+    -- Pièces (migration 20261128140100) : fichiers mis en file d'effacement,
+    -- contenu lu par l'IA et champs dérivés effacés, attestations d'heures
+    -- externes supprimées, revues anonymisées. Lève si un résidu subsiste.
+    v_effacement := private.fn_rgpd_effacer_pieces_soignant(v_uid, 'SUPPRESSION_COMPTE');
     UPDATE partages_rib SET actif = FALSE WHERE soignant_id = v_uid;
     UPDATE stripe_connect_onboarding SET
         stripe_account_id = 'SUPPRIME_' || LEFT(v_hash, 20), iban_last4 = NULL, erreur_onboarding = NULL
@@ -60784,7 +60923,8 @@ BEGIN
             'souscriptions_prevoyance','suivi_conversion_3200h',
             'mandats_facturation_signatures','cessions_creance','factures_honoraires','factor_advances',
             'email_queue','sms_envoyes','cotisations_sociales','conformite_travail',
-            'messages_litige'],
+            'messages_litige','heures_externes_soignants','file_revue_manuelle'],
+            'pieces', v_effacement,
             'tables_financieres_conservees', ARRAY['stripe_transfers','paiements_soignant']));
     INSERT INTO private.suppressions_compte_confirmees(utilisateur_id,type_profil,anonymise_le,email_anonymise)
     SELECT id,'SOIGNANT',supprime_le,email FROM public.soignants WHERE id=v_uid
@@ -62279,26 +62419,41 @@ $$;
 ALTER FUNCTION "public"."fn_top_etablissements_soignant"("p_limit" integer) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."fn_top_soignants"("p_profession" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "prenom" "text", "nom" "text", "profession" "text", "note_moyenne" numeric, "nb_evaluations" integer, "score_fiabilite" integer, "total_missions_terminees" integer)
+CREATE OR REPLACE FUNCTION "public"."fn_top_soignants"("p_profession" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20) RETURNS TABLE("prenom" "text", "nom" "text", "profession" "text", "note_moyenne" numeric, "score_fiabilite" integer, "total_missions_terminees" integer)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
 DECLARE
   v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 20), 1), 50);
+  v_cohorte_test boolean;
 BEGIN
+  -- Cohorte de l'appelant : administrateur → comptes réels ; soignant inscrit → sa
+  -- cohorte (est_compte_test) ; tout autre appelant (établissement, compte sans profil,
+  -- profil supprimé) → aucune ligne (migration 20261128150000).
+  IF public.est_admin() THEN
+    v_cohorte_test := false;
+  ELSE
+    SELECT s.est_compte_test
+      INTO v_cohorte_test
+      FROM public.soignants s
+     WHERE s.id = auth.uid()
+       AND s.supprime_le IS NULL;
+  END IF;
+  IF v_cohorte_test IS NULL THEN
+    RETURN;
+  END IF;
+
   RETURN QUERY
   SELECT
-    s.id,
     s.prenom,
-    s.nom,
+    NULLIF(upper(left(btrim(s.nom), 1)), '') || '.',
     s.profession::text,
     s.note_moyenne,
-    s.nb_evaluations,
     ROUND(COALESCE(s.score_fiabilite, 0))::integer,
     s.total_missions_terminees
   FROM public.soignants s
   WHERE s.supprime_le IS NULL
-    AND s.est_compte_test = false
+    AND s.est_compte_test = v_cohorte_test
     AND public.fn_documents_ok_pour_mission(s.id, 'TOUS')
     AND (p_profession IS NULL OR s.profession::text = p_profession)
   ORDER BY
@@ -70970,7 +71125,7 @@ CREATE TABLE IF NOT EXISTS "public"."journaux_audit" (
     "cle_s3_ressource" "text",
     "details" "jsonb",
     "cree_le" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['ANNULATION_EMPECHEMENT_IMPERIEUX'::"text", 'INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text", 'PRESENCE_RELANCE_VALIDATION'::"text", 'SUSPENSION_COMPTE'::"text", 'REACTIVATION_COMPTE'::"text"]))),
+    CONSTRAINT "journaux_audit_action_check" CHECK (("action" = ANY (ARRAY['ANNULATION_EMPECHEMENT_IMPERIEUX'::"text", 'INSCRIPTION'::"text", 'CONNEXION'::"text", 'DECONNEXION'::"text", 'MODIFICATION_PROFIL'::"text", 'SUPPRESSION_COMPTE'::"text", 'UPLOAD_DOCUMENT'::"text", 'TELECHARGEMENT_DOCUMENT'::"text", 'VERIFICATION_DOCUMENT'::"text", 'VERIFICATION_RPPS'::"text", 'CREATION_MISSION'::"text", 'MODIFICATION_MISSION'::"text", 'ANNULATION_MISSION'::"text", 'CANDIDATURE'::"text", 'ASSIGNATION'::"text", 'POINTAGE'::"text", 'SIGNATURE_CONTRAT'::"text", 'EVALUATION'::"text", 'PAIEMENT'::"text", 'FACTURATION'::"text", 'DONNEES_PERSO_CONSULTATION'::"text", 'DONNEES_PERSO_EXPORT'::"text", 'DONNEES_PERSO_SUPPRESSION'::"text", 'ADMIN_ACTION'::"text", 'SYSTEM'::"text", 'RIB_CONSULTE'::"text", 'RIB_PARTAGE'::"text", 'CONTRAT_SIGNE'::"text", 'DOCUMENT_CONSULTATION'::"text", 'DOCUMENT_TELEVERSEMENT'::"text", 'DONNEES_PERSO_MODIFICATION'::"text", 'EXPORT_RH_PAIE'::"text", 'FINANCE_FACTURE_PAYEE'::"text", 'MISSION_ASSIGNATION'::"text", 'MISSION_CREATION'::"text", 'RGPD_EXPORT_DONNEES'::"text", 'RGPD_SUPPRESSION_COMPTE'::"text", 'RGPD_SUPPRESSION_COMPTE_ETABLISSEMENT'::"text", 'DEGEL_APPLIED'::"text", 'OVERRIDE_CHAMP_POST_GEL'::"text", 'GEL_APPLIED'::"text", 'OVERRIDE_ANTI_SEED'::"text", 'CONNECT_METADATA_MANQUANTE'::"text", 'DOCUMENT_VERIFICATION_AUTO'::"text", 'FACTURE_COMMISSION_PAYEE_SKIP_ANOMALIE'::"text", 'FACTURE_HONORAIRES_PAYEE_SKIP_ANOMALIE'::"text", 'FINANCE_CHARGE_EXPIRED'::"text", 'FINANCE_CHARGE_FAILED'::"text", 'FINANCE_CHARGE_PENDING'::"text", 'FINANCE_CHARGE_REFUNDED'::"text", 'FINANCE_DISPUTE_CLOSE'::"text", 'FINANCE_DISPUTE_OUVERTE'::"text", 'FINANCE_PAYOUT_CANCELED'::"text", 'FINANCE_PAYOUT_CREATED'::"text", 'FINANCE_PAYOUT_FAILED'::"text", 'FINANCE_PAYOUT_PAID'::"text", 'FINANCE_SEPA_CAPTURE'::"text", 'FINANCE_TRANSFER_CONNECT'::"text", 'FINANCE_TRANSFER_CREATED'::"text", 'FINANCE_TRANSFER_FAILED'::"text", 'FINANCE_TRANSFER_REVERSED'::"text", 'FINANCE_TRANSFER_UPDATED'::"text", 'STRIPE_CHECKOUT_ORPHANED_RECOVERED'::"text", 'STRIPE_CONNECT_ACCOUNT_DELETED'::"text", 'ATTESTATION_SANTE_SIGNEE'::"text", 'EXCLUSION_CREEE'::"text", 'EXCLUSION_SUPPRIMEE'::"text", 'FACTURE_GENEREE'::"text", 'MISSION_ANNULATION_SERIE'::"text", 'MISSION_MODIFICATION'::"text", 'PAIEMENT_SOIGNANT_DECLARE_ETAB'::"text", 'RECLAMATION_CREEE'::"text", 'ADMIN_CONSULTATION_ETABLISSEMENT'::"text", 'ADMIN_CONSULTATION_SOIGNANT'::"text", 'DOCUMENT_SUPPRESSION'::"text", 'HEURES_EXTERNES_DECLAREES'::"text", 'MISSION_ANNULATION'::"text", 'NOTE_HONORAIRES_GENEREE'::"text", 'PRESENCE_CONTESTATION'::"text", 'PRESENCE_POINTAGE_ARRIVEE'::"text", 'PRESENCE_VALIDATION'::"text", 'PRESENCE_VALIDATION_LOT'::"text", 'RGPD_CONSENTEMENT_DONNE'::"text", 'PAIEMENT_MONTANT_ECART'::"text", 'FACTURE_COMMISSION_CREATED_VIA_STRIPE'::"text", 'TAUX_COMMISSION_MODIFIE'::"text", 'LITIGE_GEL_SCOPE_MODIFIE'::"text", 'PREFERENCE_NOTIFICATION_MODIFIEE'::"text", 'NOTIFICATION_SKIPPED'::"text", 'SERIE_EMAIL_ENVOYE'::"text", 'SERIE_EMAIL_SKIPPED'::"text", 'FILTRE_CREE'::"text", 'FILTRE_MODIFIE'::"text", 'FILTRE_SUPPRIME'::"text", 'ALERTE_ACTIVEE'::"text", 'ALERTE_DESACTIVEE'::"text", 'ALERTE_ENVOYEE'::"text", 'POOL_URGENCE_NOTIFICATIONS_ENVOYEES'::"text", 'POOL_URGENCE_ACCEPTATION_RAPIDE'::"text", 'POOL_URGENCE_VALIDATION_ETAB'::"text", 'POOL_URGENCE_REFUS_ETAB'::"text", 'POOL_URGENCE_SMS_TOGGLE'::"text", 'FAVORI_AJOUTE'::"text", 'FAVORI_RETIRE'::"text", 'SCORE_FIABILITE_PENALITE_LITIGE'::"text", 'PARRAINAGE_ETAB_APPLIQUE'::"text", 'PARRAINAGE_ETAB_VALIDE'::"text", 'CREDIT_PARRAINAGE_CREE'::"text", 'CREDIT_PARRAINAGE_APPLIQUE'::"text", 'PARRAINAGE_ETAB_ANOMALIE'::"text", 'PARRAINAGE_SOIGNANT_FILLEUL_ACTIF'::"text", 'PARRAINAGE_SOIGNANT_SEUIL_ATTEINT'::"text", 'PARRAINAGE_SOIGNANT_PRIME_VERSEE'::"text", 'PARRAINAGE_SOIGNANT_FRAUDE'::"text", 'INSCRIPTION_LISTE_ATTENTE_PREVOYANCE'::"text", 'SCORE_RECALCULE_V2'::"text", 'IBAN_RENSEIGNE'::"text", 'IBAN_MODIFIE'::"text", 'AVOIR_REMBOURSEMENT_CONFIRME'::"text", 'ETABLISSEMENT_MODIFICATION'::"text", 'LITIGE_ACCORD_CLOTURE'::"text", 'LITIGE_AUTO_CREATION'::"text", 'LITIGE_CLOTURE_AMIABLE'::"text", 'LITIGE_CREATION'::"text", 'LITIGE_ESCALADE_AUTO'::"text", 'LITIGE_FORCE_CREATION'::"text", 'LITIGE_OUVERTURE'::"text", 'LITIGE_OUVERTURE_LEGACY'::"text", 'LITIGE_RECATEGORISATION_LEGACY'::"text", 'LITIGE_REPONSE'::"text", 'LITIGE_RESOLUTION'::"text", 'PRESENCE_ALERTE_FRAUDE'::"text", 'RGPD_SUPPRESSION_DONNEES'::"text", 'TVA_MODIFICATION'::"text", 'API_KEY_CREEE'::"text", 'API_KEY_REVOQUEE'::"text", 'API_KEY_SUPPRIMEE'::"text", 'FACTURE_MARQUEE_EN_RETARD'::"text", 'HEURES_EXTERNES_VALIDATION_MANUELLE'::"text", 'MISSION_ANNULEE_PAR_SOIGNANT'::"text", 'MISSION_ANNULEE_PAR_ETABLISSEMENT'::"text", 'MISSION_LITIGE'::"text", 'MISSION_TYPE_CONTRAT_MODIFIE'::"text", 'MODERATION_DOCUMENT'::"text", 'COHERENCE_IDENTITE_VERIFIEE'::"text", 'MODERATION_EVALUATION'::"text", 'COHERENCE_DOCUMENTS_ALERTE'::"text", 'ESCROW_INITIE'::"text", 'ESCROW_DEBIT_INITIE'::"text", 'ESCROW_DEBITE'::"text", 'ESCROW_ETAB_GELE'::"text", 'ESCROW_ETAB_DEGELE'::"text", 'ESCROW_REMBOURSEMENT_ENFILE'::"text", 'ESCROW_REMBOURSE'::"text", 'ESCROW_DISPONIBLE'::"text", 'ESCROW_RELEASE_PAYE'::"text", 'ESCROW_RELEASE_ATTENTE_FONDS'::"text", 'PRESENCE_RELANCE_VALIDATION'::"text", 'SUSPENSION_COMPTE'::"text", 'REACTIVATION_COMPTE'::"text", 'IDENTITE_PROFIL_MODIFIEE'::"text", 'RGPD_SUPPRESSION_COMPTE_MEMBRE_ETABLISSEMENT'::"text", 'RGPD_SUPPRESSION_COMPTE_ADMIN_GROUPE'::"text"]))),
     CONSTRAINT "journaux_audit_type_acteur_check" CHECK (("type_acteur" = ANY (ARRAY['SOIGNANT'::"text", 'ADMIN_ETABLISSEMENT'::"text", 'ADMIN_PLATEFORME'::"text", 'ADMIN_GROUPE'::"text", 'SYSTEME'::"text", 'SERVICE_API'::"text", 'ADMIN'::"text", 'ETABLISSEMENT'::"text", 'SYSTEM'::"text", 'DEPRECATED_CALLER'::"text"])))
 );
 
@@ -81909,6 +82064,12 @@ GRANT ALL ON FUNCTION "public"."fn_admin_rejeter_etablissement"("p_etablissement
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_admin_relancer_mandat_facturation"("p_soignant_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_admin_relancer_mandat_facturation"("p_soignant_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_admin_relancer_mandat_facturation"("p_soignant_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_admin_reset_test_account"("p_role" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_admin_reset_test_account"("p_role" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_admin_reset_test_account"("p_role" "text") TO "service_role";
@@ -82097,6 +82258,12 @@ GRANT ALL ON FUNCTION "public"."fn_alerter_mediation_prioritaire"() TO "service_
 
 REVOKE ALL ON FUNCTION "public"."fn_alerter_paiements_retard"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_alerter_paiements_retard"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_alerter_pool_urgence"("p_mission_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_alerter_pool_urgence"("p_mission_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_alerter_pool_urgence"("p_mission_id" "uuid") TO "authenticated";
 
 
 
@@ -82934,7 +83101,6 @@ GRANT ALL ON FUNCTION "public"."fn_creer_notation_mission"("p_mission_id" "uuid"
 
 REVOKE ALL ON FUNCTION "public"."fn_creer_notification"("p_destinataire_id" "uuid", "p_type_destinataire" "text", "p_type" "text", "p_titre" "text", "p_corps" "text", "p_lien" "text", "p_type_ressource" "text", "p_id_ressource" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_creer_notification"("p_destinataire_id" "uuid", "p_type_destinataire" "text", "p_type" "text", "p_titre" "text", "p_corps" "text", "p_lien" "text", "p_type_ressource" "text", "p_id_ressource" "uuid") TO "service_role";
-GRANT ALL ON FUNCTION "public"."fn_creer_notification"("p_destinataire_id" "uuid", "p_type_destinataire" "text", "p_type" "text", "p_titre" "text", "p_corps" "text", "p_lien" "text", "p_type_ressource" "text", "p_id_ressource" "uuid") TO "authenticated";
 
 
 
@@ -85350,6 +85516,16 @@ GRANT ALL ON FUNCTION "public"."fn_rgpd_purge_automatique_inactifs"() TO "servic
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_rgpd_purges_stockage_confirmer"("p_ids" "uuid"[], "p_erreur" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_rgpd_purges_stockage_confirmer"("p_ids" "uuid"[], "p_erreur" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."fn_rgpd_purges_stockage_reserver"("p_limite" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_rgpd_purges_stockage_reserver"("p_limite" integer) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_rib_etablissement_courant_verifie"("p_etablissement_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_rib_etablissement_courant_verifie"("p_etablissement_id" "uuid") TO "service_role";
 
@@ -85796,8 +85972,8 @@ GRANT ALL ON FUNCTION "public"."fn_top_etablissements_soignant"("p_limit" intege
 
 
 REVOKE ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) TO "service_role";
+GRANT ALL ON FUNCTION "public"."fn_top_soignants"("p_profession" "text", "p_limit" integer) TO "authenticated";
 
 
 

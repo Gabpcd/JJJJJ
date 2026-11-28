@@ -312,7 +312,7 @@ final class IbanTests: XCTestCase {
             (T.mettreAJour, Self.section, 369),
             (T.enregistrer, Self.section, 369),
             (T.erreurGenerique, "src/lib/erreurs.ts", 532),
-            ("'error', '\(T.ribCorrespondant)'", "supabase/schema/public.sql", 32839),
+            ("'error', '\(T.ribCorrespondant)'", "supabase/schema/public.sql", 32930),
         ]
         var lignes: [String: [String]] = [:]
         for (texte, fichier, ligne) in attendus {

@@ -2,7 +2,7 @@ import Foundation
 
 /// `IbanPort` du monde démo (lot 3, T14b), sans réseau : serveur simulé en mémoire (un acteur par lancement) qui
 /// applique, dans leur ordre, les refus de `fn_enregistrer_mon_iban` et de `fn_lier_iban_verifie_document`
-/// (`supabase/schema/public.sql` l.32788-32847, l.39961-40080), puis la même règle de relecture que le monde Supabase
+/// (`supabase/schema/public.sql` l.32879-32938, l.40052-40171), puis la même règle de relecture que le monde Supabase
 /// (`IbanRelecture`) : aucun succès fabriqué. Le RIB vérifié de la démo porte le seul IBAN d'exemple ISO 13616
 /// (`FR7630006000011234567890189`, blueprint §2.7) ; le titulaire attendu est le prénom et le nom du profil fictif
 /// (`demo-profil-complet.json`). Refuse tout contexte qui n'est pas celui du profil fictif (`.demoOnly`).
@@ -20,7 +20,7 @@ public actor DemoIbanGateway: IbanPort {
     /// IBAN du RIB vérifié de la démo (exemple ISO 13616).
     public static let ibanRibDemo = "FR7630006000011234567890189"
     /// Refus du serveur portant un `error`, verbatim.
-    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32823
+    static let titulaireNonConcordant = "Le titulaire doit correspondre exactement à votre identité vérifiée." // source: public.sql:32914
 
     private let scenario: Scenario
     private var etat: ConsultationIban
@@ -76,7 +76,7 @@ public actor DemoIbanGateway: IbanPort {
         return (prenom, nom)
     }
 
-    /// `btrim(regexp_replace(fn_normaliser_nom(x), '[^a-z0-9]+', ' ', 'g'))` (l.32804-32812), accents retirés par
+    /// `btrim(regexp_replace(fn_normaliser_nom(x), '[^a-z0-9]+', ' ', 'g'))` (l.32895-32903), accents retirés par
     /// repliement (le serveur translittère les seules lettres accentuées du français).
     static func normaliser(_ texte: String) -> String {
         let replie = texte.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
