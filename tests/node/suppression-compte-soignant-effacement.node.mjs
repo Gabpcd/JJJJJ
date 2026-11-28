@@ -130,10 +130,17 @@ test('effacement : contenu lu, noms de fichier et attestations effacés, post-co
   const effacer = corps(sql2, 'private', 'fn_rgpd_effacer_pieces_soignant');
   const miseAJour = effacer.slice(effacer.indexOf('UPDATE public.documents_soignants d'), effacer.indexOf('GET DIAGNOSTICS v_pieces'));
   for (const colonne of ['resultat_ia', 'nom_extrait_ia', 'prenom_extrait_ia', 'coherence_nom', 'score_confiance_ia',
-    'motif_rejet', 'libelle', 'revoque_raison', 's3_version_id']) {
+    'motif_rejet', 'libelle', 's3_version_id', 'verification_attempt_id']) {
     assert.match(miseAJour, new RegExp(`\\n\\s+${colonne} = NULL`), `${colonne} effacé`);
   }
   assert.match(miseAJour, /nom_fichier = 'fichier-efface'/);
+  assert.doesNotMatch(miseAJour, /revoque_raison/, 'raison de révocation (REMPLACEMENT ou RETRAIT) conservée : CHECK de cohérence');
+  // Chemins référencés : même classement que le préfixe, jamais hors du préfixe ni d’un dossier connu.
+  assert.equal(effacer.match(/AND private\.fn_rgpd_decision_objet_soignant\([^;]*?\) = 'EFFACER'/g)?.length, 3, 'trois origines classées');
+  // Revues : pièces et cohérence d’identité seulement ; alertes de fraude et suspensions conservées.
+  assert.doesNotMatch(effacer, /donnees_originales ->> 'soignant_id'/);
+  assert.match(effacer, /f\.type_entite = 'TELEVERSEMENT_DOCUMENT' AND f\.id_entite = ANY/);
+  assert.match(effacer, /WHERE r\.revue_id = ANY \(COALESCE\(v_revues, '\{\}'::uuid\[\]\)\);/);
   assert.match(miseAJour, /s3_cle = p_soignant_id::text \|\| '\/documents\/efface\/' \|\| d\.id::text/);
   assert.match(effacer, /DELETE FROM public\.heures_externes_soignants h WHERE h\.soignant_id = p_soignant_id;/);
   assert.match(effacer, /UPDATE public\.file_revue_manuelle f/);
@@ -155,9 +162,14 @@ test('Storage : aucune suppression SQL, buckets conservés jamais purgés, confi
   assert.match(decision, /p_bucket NOT IN \('jolene-documents', 'attestations-heures-externes', 'justificatifs'\)/);
   assert.doesNotMatch(decision, /contrats-signes|copies-bulletins-paie/);
   assert.match(decision, /= 'retrocession' THEN 'CONSERVER'/);
+  assert.match(decision, /substr\(p_nom, 38\) ~ '\^avatar-\[0-9\]\+\\\.\(webp\|jpg\|jpeg\|png\|heic\)\$' THEN 'EFFACER'/, 'photos de profil effacées');
+  assert.match(read('src/components/AvatarUpload.tsx'), /const path = `\$\{user\.id\}\/\$\{assetPrefix\}-\$\{Date\.now\(\)\}\.webp`;/, 'chemin web des photos');
   const confirmer = corps(sql2, 'public', 'fn_rgpd_purges_stockage_confirmer');
   assert.match(confirmer, /AND NOT EXISTS \(SELECT 1 FROM storage\.objects o WHERE o\.bucket_id = q\.bucket AND o\.name = q\.chemin\)/);
   assert.match(confirmer, /chemin = NULL/);
+  assert.match(confirmer, /SET reserve_jusqua = pg_catalog\.now\(\) \+ interval '50 minutes'/, 'échec repoussé au passage suivant');
+  assert.match(corps(sql2, 'public', 'fn_rgpd_purges_stockage_reserver'), /ORDER BY q\.tentatives, q\.demande_le, q\.id/, 'nouveaux fichiers avant les échecs');
+  assert.match(corps(sql2, 'private', 'fn_rgpd_signaler_purge_stockage'), /COALESCE\(a\.details -> 'soignants', '\[\]'::jsonb\) \|\| \(EXCLUDED\.details -> 'soignants'\)/, 'alerte cumulative');
   for (const rpc of [confirmer, corps(sql2, 'public', 'fn_rgpd_purges_stockage_reserver')]) {
     assert.match(rpc, /IF COALESCE\(auth\.role\(\), ''\) IS DISTINCT FROM 'service_role' THEN\n\s+RAISE EXCEPTION 'Rôle de service requis' USING ERRCODE = '42501';/);
   }

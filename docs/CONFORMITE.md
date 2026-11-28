@@ -327,19 +327,24 @@ sur ces deux artefacts uniquement, puis merge + cascade section D.
 
 | Donnée du soignant supprimé | Sort | Base | Durée |
 |---|---|---|---|
-| Fichiers des pièces (identité, diplôme, RPPS/ADELI, RCP, RIB, URSSAF, KBIS…), versions remplacées, attestations d'heures externes, justificatifs de réclamation et d'annulation de candidature | **Effacés** (API Storage, cron horaire, alerte à 24 h) | art. 17.1 a : la vérification est faite, la finalité épuisée ; aucune obligation légale ne pèse sur Jolene pour ces copies (la DPAE et la vigilance sont des obligations de l'employeur, L1221-10) | aucune |
-| Données lues par l'IA (noms, prénoms, résultat, score, cohérence, texte de rejet rédigé par l'IA), nom de fichier d'origine, libellé, raison de révocation ; attestations d'heures externes ; motifs, données d'origine et notes de la revue manuelle et de ses décisions | **Effacés** dans la transaction de suppression (exception, donc suppression annulée, si un résidu subsiste) | art. 17.1 a, art. 5.1 c | aucune |
+| Fichiers des pièces (identité, diplôme, RPPS/ADELI, RCP, RIB, URSSAF, KBIS…), versions remplacées, photos de profil, attestations d'heures externes, justificatifs de réclamation et d'annulation de candidature | **Effacés** (API Storage, cron horaire, alerte à 24 h) | art. 17.1 a : la vérification est faite, la finalité épuisée ; aucune obligation légale ne pèse sur Jolene pour ces copies (la DPAE et la vigilance sont des obligations de l'employeur, L1221-10) | aucune |
+| Données lues par l'IA (noms, prénoms, résultat, score, cohérence, texte de rejet rédigé par l'IA), nom de fichier d'origine, libellé, tentative de vérification en cours ; attestations d'heures externes ; motifs, données d'origine et notes de la revue manuelle des pièces et de la cohérence d'identité, et de ses décisions | **Effacés** dans la transaction de suppression (exception, donc suppression annulée, si un résidu subsiste) | art. 17.1 a, art. 5.1 c | aucune |
 | Trace de vérification de chaque pièce (type, statut, dates de vérification et de validité, vérificateur), rattachée à l'identifiant d'un profil anonymisé, sans copie ni contenu lu | **Conservée, pseudonymisée** | art. 17.3 e : preuve de la vérification si une mise en relation est contestée — *choix de conformité Jolene* | 5 ans (C. civ. 2224) ; purge non automatisée (§6.6) |
 | Factures et avoirs (lignes et PDF, dont le nom du soignant sur une facture émise en son nom) | **Conservés** | art. 17.3 b : L123-22 et L102 B | 10 ans |
 | Relevés de rétrocession (bucket `justificatifs`, dossier `retrocession`) | **Conservés** | art. 17.3 b : pièce justificative d'un montant d'honoraires (L123-22) | 10 ans |
 | Contrats de mission signés (bucket `contrats-signes`) | **Conservés** (inchangé) | art. 17.3 e : C. civ. 2224 | 5 ans |
 | Numéro de DPAE sur la mission | **Conservé** avec la mission (inchangé) | déclaration faite par l'employeur (L1221-10) ; Jolene ne garde que la référence, art. 17.3 e | comme la mission |
 | Copies de bulletins de paie (bucket `copies-bulletins-paie`, déposées par l'établissement) | Inchangées, **hors périmètre** | à instruire (§6.6) | — |
+| Alertes de fraude au pointage et revues de suspension (file de revue manuelle) | **Conservées** (inchangé) | art. 17.3 e : preuve en cas de litige | comme le litige |
 | Journal d'audit | **Conservé, immuable** | art. 17.3 e ; identifiants pseudonymes, compteurs, noms de champs (exception relevée §6.6) | jusqu'à 5 ans (politique de confidentialité, art. 4) |
 
-Un fichier du préfixe du soignant hors des dossiers connus n'est **jamais effacé à l'aveugle** :
-il est conservé et une alerte CRITICAL (`RGPD_PURGE_STOCKAGE_DOSSIER_INCONNU`, sans nom de
-fichier) demande son classement.
+Un fichier du préfixe du soignant hors des dossiers connus, ou un chemin de pièce saisi hors de ce
+préfixe, n'est **jamais effacé à l'aveugle** : il est conservé et une alerte CRITICAL
+(`RGPD_PURGE_STOCKAGE_DOSSIER_INCONNU`, sans nom de fichier, identifiants des soignants concernés
+cumulés) demande son classement. Dossiers effacés : `jolene-documents` `<id>/documents/`,
+`<id>/heures-externes/`, `<id>/seed/` (pièces de démonstration), `<id>/avatar-<horodatage>.<ext>` ;
+`attestations-heures-externes` `<id>/` ; `justificatifs` `<id>/reclamations/`,
+`<id>/annulations-candidature/`. Conservé : `justificatifs` `<id>/retrocession/`.
 
 ### 6.3 Mécanisme
 
@@ -351,7 +356,8 @@ fichier) demande son classement.
   suppression. Le cron `jolene_rgpd_purge_stockage` (minute 41 de chaque heure) appelle l'edge
   `purge-stockage-rgpd`, qui efface par l'API Storage ; la base ne tient un fichier pour effacé que
   s'il a disparu de `storage.objects`, efface alors son chemin de la file (empreinte SHA-256
-  conservée) et écrit l'audit `RGPD_SUPPRESSION_DONNEES`. Délai : au plus une heure en marche
+  conservée) et écrit l'audit `RGPD_SUPPRESSION_DONNEES`. Un fichier en échec attend le passage
+  suivant et passe derrière les nouveaux. Délai : au plus une heure en marche
   normale, bien en deçà du mois de l'art. 12.3 ; alerte CRITICAL au-delà de 24 h.
 - Preuves : `tests/security/suppression-compte-soignant-effacement.test.sql` (staging et
   PostgreSQL 17), `tests/node/suppression-compte-soignant-effacement.node.mjs`,

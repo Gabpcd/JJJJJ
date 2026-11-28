@@ -13,8 +13,8 @@
 --   * les noms et prénoms lus par l'IA et leurs champs dérivés :
 --     documents_soignants.resultat_ia, nom_extrait_ia, prenom_extrait_ia,
 --     coherence_nom, score_confiance_ia, motif_rejet (texte rédigé par l'IA),
---     nom_fichier et s3_cle (nom de fichier d'origine), libelle,
---     revoque_raison ; heures_externes_soignants (résultat IA, nom de
+--     nom_fichier et s3_cle (nom de fichier d'origine), libelle ;
+--     heures_externes_soignants (résultat IA, nom de
 --     l'employeur, fichier) ; file de revue manuelle (motif repris du texte IA,
 --     chemins et instantanés en données d'origine) et décisions de revue.
 -- Production au 28/11/2026 : aucun compte soignant supprimé, donc aucun résidu
@@ -88,6 +88,7 @@ BEGIN
       ('public.fn_proteger_document_verification()', '3d0a5c7f64f8e8e13cc08d16c5fc73a3', 'search_path=pg_catalog, public', true),
       ('public.dec_proteger_validation_documents()', 'ca164f7e032b08f791132e2f691a8024', 'search_path=pg_catalog, public', true),
       ('public.fn_proteger_heures_externes_soignants()', '42712bf3859e84061bbf0bf2e531ee75', 'search_path=pg_catalog, public', true),
+      ('public.fn_proteger_tentative_verification_document()', '454c5a96a63212715ce02e05252792bb', 'search_path=pg_catalog, public', true),
       ('public.fn_invalider_preuves_identite_sur_changement()', 'bb93c49d6187ee007b964acab6bf0809', 'search_path=pg_catalog, public', true)
     ) AS t(signature, empreinte, config, definer)
   LOOP
@@ -160,9 +161,14 @@ COMMENT ON TABLE private.rgpd_purges_stockage IS
   'Fichiers Storage d''un compte soignant supprimé, à effacer par l''edge purge-stockage-rgpd (API Storage). Chemin effacé après purge confirmée ; empreinte SHA-256 conservée (preuve, idempotence). docs/CONFORMITE.md §6. Migration 20261128140100.';
 
 -- ── 2. Classement d'un objet du préfixe soignant ───────────────────────────
--- Une seule source : EFFACER (copie fournie par le soignant, aucune obligation
--- de conservation), CONSERVER (pièce justificative financière), INCONNU (jamais
--- effacé à l'aveugle, alerte), NULL (hors du préfixe ou d'un bucket examiné).
+-- Une seule source, pour les objets du préfixe comme pour les chemins
+-- référencés par les pièces et les heures externes : EFFACER (copie fournie
+-- par le soignant ou photo de profil, aucune obligation de conservation),
+-- CONSERVER (pièce justificative financière), INCONNU (jamais effacé à
+-- l'aveugle, alerte), NULL (hors du préfixe ou d'un bucket examiné).
+-- Photos de profil : web src/components/AvatarUpload.tsx (<uid>/avatar-<ms>.webp),
+-- iOS AvatarProfil (<uid>/avatar-<ms>.jpg). Pièces de démonstration des comptes
+-- de test : <uid>/seed/.
 CREATE OR REPLACE FUNCTION private.fn_rgpd_decision_objet_soignant(p_bucket text, p_nom text, p_soignant_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -174,9 +180,11 @@ AS $fn_rgpd_decision_objet_soignant$
       OR p_bucket NOT IN ('jolene-documents', 'attestations-heures-externes', 'justificatifs')
       OR NOT pg_catalog.starts_with(p_nom, p_soignant_id::text || '/') THEN NULL
     WHEN p_bucket = 'attestations-heures-externes' THEN 'EFFACER'
+    WHEN p_bucket = 'jolene-documents'
+      AND pg_catalog.substr(p_nom, 38) ~ '^avatar-[0-9]+\.(webp|jpg|jpeg|png|heic)$' THEN 'EFFACER'
     WHEN pg_catalog.strpos(pg_catalog.substr(p_nom, 38), '/') = 0 THEN 'INCONNU'
     WHEN p_bucket = 'jolene-documents'
-      AND pg_catalog.split_part(p_nom, '/', 2) IN ('documents', 'heures-externes') THEN 'EFFACER'
+      AND pg_catalog.split_part(p_nom, '/', 2) IN ('documents', 'heures-externes', 'seed') THEN 'EFFACER'
     WHEN p_bucket = 'justificatifs'
       AND pg_catalog.split_part(p_nom, '/', 2) IN ('reclamations', 'annulations-candidature') THEN 'EFFACER'
     WHEN p_bucket = 'justificatifs'
@@ -196,7 +204,12 @@ AS $fn_rgpd_signaler_purge_stockage$
   ON CONFLICT (source, type_alerte) WHERE resolu_le IS NULL
   DO UPDATE SET occurrences = a.occurrences + 1,
                 derniere_occurrence = pg_catalog.now(),
-                details = EXCLUDED.details;
+                details = CASE WHEN EXCLUDED.details ? 'soignants'
+                  THEN EXCLUDED.details || pg_catalog.jsonb_build_object('soignants',
+                    (SELECT COALESCE(pg_catalog.jsonb_agg(DISTINCT s.valeur), '[]'::jsonb)
+                       FROM pg_catalog.jsonb_array_elements(
+                         COALESCE(a.details -> 'soignants', '[]'::jsonb) || (EXCLUDED.details -> 'soignants')) AS s(valeur)))
+                  ELSE EXCLUDED.details END;
 $fn_rgpd_signaler_purge_stockage$;
 
 -- ── 4. Effacement des pièces d'un compte soignant supprimé ─────────────────
@@ -233,7 +246,9 @@ BEGIN
 
   -- 1. Fichiers en file : pièces référencées (toutes versions, y compris
   --    remplacées ou déjà supprimées), attestations d'heures externes, objets
-  --    des dossiers à effacer du préfixe (versions orphelines).
+  --    des dossiers à effacer du préfixe (versions orphelines, photos) ; tous
+  --    passent par le même classement : un chemin référencé hors du préfixe
+  --    ou d'un dossier connu n'est jamais mis en file.
   INSERT INTO private.rgpd_purges_stockage (soignant_id, bucket, chemin, empreinte, origine, motif)
   SELECT p_soignant_id, f.bucket, f.chemin,
          pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(f.bucket || '/' || f.chemin, 'UTF8')), 'hex'),
@@ -246,6 +261,7 @@ BEGIN
          AND NULLIF(pg_catalog.btrim(d.s3_cle), '') IS NOT NULL
          AND d.s3_cle <> 'PURGE'
          AND d.s3_cle IS DISTINCT FROM (p_soignant_id::text || '/documents/efface/' || d.id::text)
+         AND private.fn_rgpd_decision_objet_soignant(d.s3_bucket, d.s3_cle, p_soignant_id) = 'EFFACER'
       UNION
       SELECT CASE WHEN pg_catalog.strpos(h.attestation_url, '/heures-externes/') > 0
                   THEN 'jolene-documents' ELSE 'attestations-heures-externes' END,
@@ -253,7 +269,10 @@ BEGIN
         FROM public.heures_externes_soignants h
        WHERE h.soignant_id = p_soignant_id
          AND NULLIF(pg_catalog.btrim(h.attestation_url), '') IS NOT NULL
-         AND pg_catalog.strpos(h.attestation_url, '://') = 0
+         AND private.fn_rgpd_decision_objet_soignant(
+               CASE WHEN pg_catalog.strpos(h.attestation_url, '/heures-externes/') > 0
+                    THEN 'jolene-documents' ELSE 'attestations-heures-externes' END,
+               h.attestation_url, p_soignant_id) = 'EFFACER'
       UNION
       SELECT o.bucket_id, o.name, 'PREFIXE'
         FROM storage.objects o
@@ -270,13 +289,26 @@ BEGIN
             FROM storage.objects o
            WHERE o.bucket_id IN ('jolene-documents', 'attestations-heures-externes', 'justificatifs')
              AND pg_catalog.starts_with(o.name, p_soignant_id::text || '/')) x;
-  v_inconnus := v_inconnus + (SELECT pg_catalog.count(*)::integer FROM public.heures_externes_soignants h
-                               WHERE h.soignant_id = p_soignant_id AND pg_catalog.strpos(h.attestation_url, '://') > 0);
+  -- Chemins référencés hors classement (autre préfixe, autre bucket) dont
+  -- l'objet existe, et attestations d'heures sans chemin Storage : à classer.
+  v_inconnus := v_inconnus
+    + (SELECT pg_catalog.count(*)::integer FROM storage.objects o
+        WHERE (o.bucket_id, o.name) IN (
+                SELECT d.s3_bucket, d.s3_cle FROM public.documents_soignants d WHERE d.soignant_id = p_soignant_id
+                UNION
+                SELECT CASE WHEN pg_catalog.strpos(h.attestation_url, '/heures-externes/') > 0
+                            THEN 'jolene-documents' ELSE 'attestations-heures-externes' END, h.attestation_url
+                  FROM public.heures_externes_soignants h WHERE h.soignant_id = p_soignant_id)
+          AND private.fn_rgpd_decision_objet_soignant(o.bucket_id, o.name, p_soignant_id) IS NULL)
+    + (SELECT pg_catalog.count(*)::integer FROM public.heures_externes_soignants h
+        WHERE h.soignant_id = p_soignant_id AND pg_catalog.strpos(h.attestation_url, '://') > 0);
   IF v_inconnus > 0 THEN
     -- Aucun nom de fichier dans l'alerte : il peut contenir le nom de la personne.
+    -- Les soignants concernés s'accumulent sur l'alerte active (fn_rgpd_signaler_purge_stockage).
     PERFORM private.fn_rgpd_signaler_purge_stockage('RGPD_PURGE_STOCKAGE_DOSSIER_INCONNU',
       'Fichiers d''un compte soignant supprimé hors des dossiers connus : conservés, à classer (docs/CONFORMITE.md §6).',
-      pg_catalog.jsonb_build_object('soignant_id', p_soignant_id, 'objets', v_inconnus, 'motif', p_motif));
+      pg_catalog.jsonb_build_object('soignants', pg_catalog.jsonb_build_array(p_soignant_id),
+        'objets_derniere_suppression', v_inconnus, 'motif', p_motif));
   END IF;
 
   -- 2. Pièces : contenu effacé, trace de vérification pseudonyme conservée ;
@@ -291,7 +323,7 @@ BEGIN
            nom_fichier = 'fichier-efface',
            libelle = NULL,
            motif_rejet = NULL,
-           revoque_raison = NULL,
+           verification_attempt_id = NULL,
            resultat_ia = NULL,
            nom_extrait_ia = NULL,
            prenom_extrait_ia = NULL,
@@ -310,13 +342,15 @@ BEGIN
   PERFORM pg_catalog.set_config('jolene.system_update', v_system_update, true);
   PERFORM pg_catalog.set_config('jolene.document_server_update', v_document_server_update, true);
 
-  -- 3. File de revue manuelle et décisions : motifs (repris du texte IA),
-  --    données d'origine (chemins, instantanés) et notes effacés ; revue close.
+  -- 3. File de revue manuelle et décisions des pièces et de la cohérence
+  --    d'identité : motifs (repris du texte IA), données d'origine (chemins,
+  --    instantanés) et notes effacés ; revue close. Les alertes de fraude et
+  --    les revues de suspension ne sont pas touchées (preuve, art. 17.3 e).
   SELECT pg_catalog.array_agg(f.id) INTO v_revues
     FROM public.file_revue_manuelle f
-   WHERE f.id_entite = p_soignant_id
-      OR f.id_entite = ANY (COALESCE(v_documents, '{}'::uuid[]))
-      OR (f.donnees_originales ->> 'soignant_id') = p_soignant_id::text;
+   WHERE (f.type_entite = 'TELEVERSEMENT_DOCUMENT' AND f.id_entite = ANY (COALESCE(v_documents, '{}'::uuid[])))
+      OR (f.id_entite = p_soignant_id AND f.type_entite IN ('COHERENCE_IDENTITE', 'VERIFICATION_SOIGNANT'))
+      OR (f.id_entite = p_soignant_id AND f.type_entite = 'SOIGNANT' AND f.service_en_echec = 'COHERENCE_IDENTITE');
   UPDATE public.file_revue_manuelle f
      SET motif_echec = 'Compte supprimé : contenu effacé (RGPD art. 17).',
          donnees_originales = pg_catalog.jsonb_build_object('rgpd_efface_le', pg_catalog.now()),
@@ -327,9 +361,7 @@ BEGIN
   UPDATE private.revue_manuelle_decisions r
      SET motif = 'Compte supprimé : motif effacé (RGPD art. 17).',
          source_snapshot = '{}'::jsonb
-   WHERE r.revue_id = ANY (COALESCE(v_revues, '{}'::uuid[]))
-      OR r.id_entite = p_soignant_id
-      OR r.id_entite = ANY (COALESCE(v_documents, '{}'::uuid[]));
+   WHERE r.revue_id = ANY (COALESCE(v_revues, '{}'::uuid[]));
 
   -- 4. Post-condition : aucun contenu lu, aucun nom de fichier, aucune
   --    attestation d'heures ne subsiste ; sinon toute la suppression est annulée.
@@ -339,7 +371,7 @@ BEGIN
                      OR d.nom_fichier IS DISTINCT FROM 'fichier-efface'
                      OR d.s3_cle IS DISTINCT FROM (p_soignant_id::text || '/documents/efface/' || d.id::text)
                      OR pg_catalog.num_nonnulls(d.resultat_ia, d.nom_extrait_ia, d.prenom_extrait_ia, d.coherence_nom,
-                          d.score_confiance_ia, d.motif_rejet, d.libelle, d.revoque_raison, d.s3_version_id) > 0))
+                          d.score_confiance_ia, d.motif_rejet, d.libelle, d.s3_version_id, d.verification_attempt_id) > 0))
      OR EXISTS (SELECT 1 FROM public.heures_externes_soignants h WHERE h.soignant_id = p_soignant_id)
   THEN
     RAISE EXCEPTION 'RGPD_EFFACEMENT_PIECES_INCOMPLET : contenu de pièce ou attestation d''heures conservé après effacement (docs/CONFORMITE.md §6).'
@@ -438,7 +470,7 @@ BEGIN
       FROM private.rgpd_purges_stockage q
      WHERE q.purge_le IS NULL
        AND (q.reserve_jusqua IS NULL OR q.reserve_jusqua < pg_catalog.now())
-     ORDER BY q.demande_le, q.id
+     ORDER BY q.tentatives, q.demande_le, q.id
      LIMIT LEAST(GREATEST(COALESCE(p_limite, 100), 1), 500)
      FOR UPDATE SKIP LOCKED
   )
@@ -482,8 +514,10 @@ BEGIN
   )
   SELECT pg_catalog.array_agg(c.soignant_id) INTO v_effaces FROM confirmes c;
 
+  -- Échec : réservation prolongée jusqu'au passage horaire suivant, pour qu'un
+  -- fichier en échec permanent ne reprenne pas la place des suivants.
   UPDATE private.rgpd_purges_stockage q
-     SET reserve_jusqua = NULL,
+     SET reserve_jusqua = pg_catalog.now() + interval '50 minutes',
          derniere_erreur = pg_catalog.left(COALESCE(NULLIF(pg_catalog.btrim(p_erreur), ''), 'OBJET_TOUJOURS_PRESENT'), 200)
    WHERE q.id = ANY (p_ids) AND q.purge_le IS NULL;
   GET DIAGNOSTICS v_echecs = ROW_COUNT;
@@ -762,12 +796,12 @@ BEGIN
     SELECT * FROM (VALUES
       ('public.fn_supprimer_mon_compte()', 'bd8df04463ed3b683de237d78b6ecea3', true),
       ('public.fn_rgpd_purge_automatique_inactifs()', 'f843b17f0b27a40a632bd0afe458ed4a', false),
-      ('private.fn_rgpd_decision_objet_soignant(text,text,uuid)', 'abd7447ec585b6124ff994666041575e', false),
-      ('private.fn_rgpd_signaler_purge_stockage(text,text,jsonb)', '36de9ed067b8c6bea3b73ae74127bee5', false),
-      ('private.fn_rgpd_effacer_pieces_soignant(uuid,text)', 'bcc0304b6b669591774299f97b8e790a', true),
+      ('private.fn_rgpd_decision_objet_soignant(text,text,uuid)', 'faf8ebe0eaa34a058efe4613f09c2970', false),
+      ('private.fn_rgpd_signaler_purge_stockage(text,text,jsonb)', '7a374675f7efa00b309bb0ac0704d673', false),
+      ('private.fn_rgpd_effacer_pieces_soignant(uuid,text)', 'e0edecd5f37b1b0bae56a16ac59fbf9c', true),
       ('private.fn_lancer_purge_stockage_rgpd()', '3b73447190e48ad1c885b024873991bf', true),
-      ('public.fn_rgpd_purges_stockage_reserver(integer)', 'bc4e7456f0d65e860c6cba82cb166378', true),
-      ('public.fn_rgpd_purges_stockage_confirmer(uuid[],text)', '824984aea961efe24d74e1eada7a9475', true)
+      ('public.fn_rgpd_purges_stockage_reserver(integer)', '1f0972eaa4c3592d1fcf8be21931efef', true),
+      ('public.fn_rgpd_purges_stockage_confirmer(uuid[],text)', '8ede4e993193615f7e4502bcd17cc76d', true)
     ) AS t(signature, empreinte, definer)
   LOOP
     IF (SELECT pg_catalog.md5(p.prosrc) FROM pg_catalog.pg_proc p WHERE p.oid = pg_catalog.to_regprocedure(v_attendu.signature))
