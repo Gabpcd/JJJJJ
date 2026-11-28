@@ -19,7 +19,7 @@ const read = path => readFileSync(join(RACINE, path), 'utf8');
 const md5 = body => createHash('md5').update(body, 'utf8').digest('hex');
 
 const MIGRATION = '20261128150000_borner_notifications_et_classement.sql';
-const PRECEDENTE = '20261127100000'; // dernière version connue avant celle-ci (suppression du compte soignant, #1200)
+const PRECEDENTE = '20261128140100'; // dernière version de main avant celle-ci (effacement des pièces, #1207)
 const sql = read(`supabase/migrations/${MIGRATION}`);
 const suite = read('tests/security/notifications-classement-b9.test.sql');
 const banc = read('tests/postgres/notifications-classement-b9.pg17.mjs');
