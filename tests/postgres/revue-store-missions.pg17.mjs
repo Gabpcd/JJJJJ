@@ -11,7 +11,7 @@
 // jeton de service fictif dans vault : les branches push et e-mail s'exécutent et sont observées.
 // Schéma chargé : le dump d'une révision épinglée antérieure aux migrations (tests/postgres/schema-avant-migration.mjs),
 // jamais le dump courant, qui contient les corps APRÈS migration dès la re-baseline suivant le déploiement (#1204) ;
-// un test sans base vérifie que le dump courant est, pour les fonctions redéfinies, tout AVANT ou tout APRÈS.
+// un test sans base vérifie que le dump courant porte, pour les fonctions redéfinies, tous les corps APRÈS.
 // Le chargeur du banc installe la dernière définition de chaque fonction private de TOUTES les migrations, donc
 // déjà celles des migrations candidates : les définitions antérieures (état LIVE) sont rejouées avant d'appliquer
 // les migrations, dont le préflight vérifie l'empreinte LIVE.
@@ -115,19 +115,29 @@ export const REDEFINITIONS_PUBLIQUES = [
   ['fn_supprimer_mon_compte_etablissement', 'a43978aee09ef1ae4a157dbee9911b2f', 'a5dd6e6858e7ad641f4bd353753f3223'],
 ].map(([nom, avant, apres]) => ({ schema: 'public', nom, avant, apres }));
 
-test('dump épinglé tout AVANT les migrations ; dump courant tout AVANT ou tout APRÈS (sans base)', () => {
+test('dump épinglé tout AVANT les migrations ; dump courant tout APRÈS (sans base)', () => {
   const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
   try {
     assert.equal(etatDuDumpCourant(REDEFINITIONS_PUBLIQUES, readFileSync(join(avant.racine, 'supabase/schema/public.sql'), 'utf8')).etat, 'AVANT');
   } finally {
     avant.nettoyer();
   }
+  // Les deux migrations sont en production et re-baselinées (#1204) : le dump courant doit porter les corps APRÈS.
+  // Un dump revenu en arrière, ou une redéfinition ultérieure non reportée ici, échoue (revue B8 de #1204, mineur 1).
   const courant = etatDuDumpCourant(REDEFINITIONS_PUBLIQUES);
-  assert.ok(['AVANT', 'APRES'].includes(courant.etat), `dump courant incohérent avec les migrations : ${JSON.stringify(courant.fonctions)}`);
-  console.log(`Dump courant : corps ${courant.etat === 'APRES' ? 'post-condition (re-baseline faite)' : 'LIVE d’avant (re-baseline à venir)'}.`);
+  assert.equal(courant.etat, 'APRES', `dump courant sans les corps post-condition des migrations : ${JSON.stringify(courant.fonctions)}`);
+  console.log('Dump courant : corps post-condition (re-baseline faite).');
   // Le dump épinglé n'est accepté que vérifié : commit présent, blob attendu, SHA-256 attendu.
   const epingle = DUMP_AVANT_REVUE_ET_SUPPRESSION;
-  assert.throws(() => dumpEpingle(epingle, () => { throw new Error('absent'); }), /--depth=1 origin 739f3fcb4/);
+  assert.throws(() => dumpEpingle(epingle, () => { throw Object.assign(new Error('absent'), { status: 1 }); }), /--depth=1 origin 739f3fcb4/);
+  // Toute autre panne de git est nommée, jamais rapportée « commit absent » (revue B8 de #1204, mineur 2).
+  assert.throws(() => dumpEpingle(epingle, () => { throw Object.assign(new Error('spawn git ENOENT'), { code: 'ENOENT' }); }), /git introuvable/);
+  assert.throws(() => dumpEpingle(epingle, () => {
+    throw Object.assign(new Error('Command failed'), { status: 128, stderr: 'fatal: not a git repository\n' });
+  }), /statut 128 : fatal: not a git repository/);
+  for (const panne of [{ status: 128 }, { code: 'ENOENT' }]) {
+    assert.throws(() => dumpEpingle(epingle, () => { throw Object.assign(new Error('x'), panne); }), e => !/absent du clone/.test(e.message));
+  }
   assert.throws(() => dumpEpingle(epingle, args => (args[0] === 'rev-parse' ? `${'0'.repeat(40)}\n` : '')), /blob/);
   assert.throws(() => dumpEpingle(epingle, args => (args[0] === 'rev-parse' ? `${epingle.blob}\n` : 'dump altéré')), /SHA-256/);
 });

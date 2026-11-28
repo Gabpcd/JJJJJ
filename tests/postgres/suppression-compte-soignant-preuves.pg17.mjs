@@ -6,7 +6,7 @@
 //      staging l'exécute (BEGIN … ROLLBACK), puis aucun résidu.
 // Schéma chargé : le dump d'une révision épinglée antérieure à la migration (tests/postgres/schema-avant-migration.mjs),
 // jamais le dump courant, qui contient le corps APRÈS migration dès la re-baseline suivant le déploiement (#1204) ;
-// un test sans base vérifie que le dump courant est AVANT ou APRÈS, rien d'autre.
+// un test sans base vérifie que le dump courant porte le corps APRÈS, rien d'autre.
 // Moteurs : PostgreSQL 17 éphémère de la CI (job « Paiements — verrous PostgreSQL 17 éphémère », base dédiée
 // suppression_preuves_banc) ou PGlite local (`JOLENE_PGLITE_MODULES=<dossier node_modules contenant @electric-sql/pglite>`).
 // Aucun réseau, aucune donnée hors du dépôt. La preuve sur le schéma réel reste la suite sur le staging.
@@ -77,15 +77,17 @@ COMMIT;`;
 const REDEFINITION = [{ schema: 'public', nom: 'fn_invalider_preuves_identite_sur_changement',
   avant: '121864acbb7a1bd4c800de32eaa75292', apres: 'bb93c49d6187ee007b964acab6bf0809' }];
 
-test('dump épinglé AVANT la migration ; dump courant AVANT ou APRÈS (sans base)', () => {
+test('dump épinglé AVANT la migration ; dump courant APRÈS (sans base)', () => {
   const avant = racineAvant(DUMP_AVANT_REVUE_ET_SUPPRESSION);
   try {
     assert.equal(etatDuDumpCourant(REDEFINITION, readFileSync(join(avant.racine, 'supabase/schema/public.sql'), 'utf8')).etat, 'AVANT');
   } finally {
     avant.nettoyer();
   }
+  // La migration est en production et re-baselinée (#1204) : le dump courant doit porter le corps APRÈS (revue B8 de
+  // #1204, mineur 1). Un dump revenu en arrière, ou une redéfinition ultérieure non reportée ici, échoue.
   const courant = etatDuDumpCourant(REDEFINITION);
-  assert.ok(['AVANT', 'APRES'].includes(courant.etat), `dump courant incohérent avec la migration : ${JSON.stringify(courant.fonctions)}`);
+  assert.equal(courant.etat, 'APRES', `dump courant sans le corps post-condition de la migration : ${JSON.stringify(courant.fonctions)}`);
 });
 
 test('suppression du compte soignant : pièces vérifiées, anonymisation aboutie, protections intactes', { timeout: 900_000 }, async () => {
