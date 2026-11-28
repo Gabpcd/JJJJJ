@@ -88,7 +88,12 @@ test('aucun appel client de fn_creer_notification (web, natif, edge)', () => {
   assert.deepEqual(appels, [], 'appel client de fn_creer_notification');
   assert.ok(read('src/pages/DetailMission.tsx').includes("supabase.rpc('fn_alerter_pool_urgence', { p_mission_id: missionId })"));
   assert.ok(read('src/pages/admin/AdminMandatsFacturation.tsx').includes("supabase.rpc('fn_admin_relancer_mandat_facturation', { p_soignant_id: s.id })"));
-  assert.ok(!read('src/components/PanneauContestation.tsx').includes('CONTESTATION_PRESENCE'), 'contestation : notification laissée au trigger');
+  const panneau = read('src/components/PanneauContestation.tsx');
+  assert.doesNotMatch(panneau, /p_type:\s*'CONTESTATION_PRESENCE'/, 'contestation : notification laissée au trigger');
+  // Numérotation conservée : des tests Swift relisent ce fichier par ligne (PresencesEtabRulesTests l.108 et l.365).
+  const lignes = panneau.split('\n');
+  assert.equal(lignes[108 - 1].trim(), 'const peutContester = dansFenetre && !litige;');
+  assert.match(lignes[365 - 1], /Contester cette présence/);
   assert.ok(schema.includes('CREATE OR REPLACE TRIGGER "trg_notifier_creation_litige" AFTER INSERT ON "public"."litiges"'));
 });
 
